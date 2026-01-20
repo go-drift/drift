@@ -455,10 +455,12 @@ func androidSkiaLinkerFlags(skiaDir string) string {
 	return strings.Join([]string{
 		"-L" + skiaDir,
 		"-ldrift_skia",
+		"-lc++_shared",
 		"-lGLESv2",
 		"-lEGL",
 		"-landroid",
 		"-llog",
+		"-lm",
 	}, " ")
 }
 

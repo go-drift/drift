@@ -27,7 +27,7 @@ func NewTemplateData(appName, androidPackage, iosBundleID string) *TemplateData 
 	return &TemplateData{
 		AppName:     appName,
 		PackageName: androidPackage,
-		JNIPackage:  strings.ReplaceAll(androidPackage, ".", "_"),
+		JNIPackage:  strings.ReplaceAll(strings.ReplaceAll(androidPackage, "_", "_1"), ".", "_"),
 		PackagePath: strings.ReplaceAll(androidPackage, ".", "/"),
 		BundleID:    iosBundleID,
 		URLScheme:   sanitizeURLScheme(appName),

@@ -19,9 +19,9 @@ package skia
 #cgo CXXFLAGS: -I${SRCDIR}
 
 // Android: link libdrift_skia.a (bridge + Skia combined)
-#cgo android,arm64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/android/arm64 -ldrift_skia -lGLESv2 -lEGL -landroid -llog
-#cgo android,arm LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/android/arm -ldrift_skia -lGLESv2 -lEGL -landroid -llog
-#cgo android,amd64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/android/amd64 -ldrift_skia -lGLESv2 -lEGL -landroid -llog
+#cgo android,arm64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/android/arm64 -ldrift_skia -lc++_shared -lGLESv2 -lEGL -landroid -llog -lm
+#cgo android,arm LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/android/arm -ldrift_skia -lc++_shared -lGLESv2 -lEGL -landroid -llog -lm
+#cgo android,amd64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/android/amd64 -ldrift_skia -lc++_shared -lGLESv2 -lEGL -landroid -llog -lm
 
 // iOS device (GOOS=ios)
 #cgo ios,arm64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/ios/arm64 -ldrift_skia -lc++ -framework Metal -framework CoreGraphics -framework Foundation -framework UIKit
