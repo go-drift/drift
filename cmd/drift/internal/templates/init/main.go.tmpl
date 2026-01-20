@@ -1,0 +1,68 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/drift"
+	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/theme"
+	"github.com/go-drift/drift/pkg/widgets"
+)
+
+func main() {
+	drift.NewApp(App()).Run()
+}
+
+func App() core.Widget {
+	return app{}
+}
+
+type app struct{}
+
+func (a app) CreateElement() core.Element {
+	return core.NewStatefulElement(a, nil)
+}
+
+func (a app) Key() any {
+	return nil
+}
+
+func (a app) CreateState() core.State {
+	return &appState{}
+}
+
+type appState struct {
+	core.StateBase
+	counter int
+}
+
+func (s *appState) InitState() {
+	s.counter = 0
+}
+
+func (s *appState) Build(ctx core.BuildContext) core.Widget {
+	_, colors, textTheme := theme.UseTheme(ctx)
+
+	return widgets.NewContainer(
+		widgets.Centered(
+			widgets.ColumnOf(
+				widgets.MainAxisAlignmentCenter,
+				widgets.CrossAxisAlignmentCenter,
+				widgets.MainAxisSizeMin,
+				widgets.TextOf("Hello from Drift!", textTheme.HeadlineMedium),
+				widgets.VSpace(16),
+				widgets.NewButton("Increment Counter", func() {
+					s.SetState(func() {
+						s.counter = s.counter + 1
+					})
+				}).WithColor(colors.Primary, colors.OnPrimary),
+				widgets.VSpace(16),
+				widgets.Text{
+					Content: fmt.Sprintf("You have tapped the button %d times", s.counter),
+					Style:   rendering.TextStyle{Color: colors.OnBackground, FontSize: 16},
+				},
+			),
+		),
+	).WithColor(colors.Background).Build()
+}

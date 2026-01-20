@@ -1,0 +1,182 @@
+package workspace
+
+import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-drift/drift/cmd/drift/internal/config"
+	"github.com/go-drift/drift/cmd/drift/internal/scaffold"
+	"github.com/go-drift/drift/cmd/drift/internal/templates"
+)
+
+// Workspace represents a generated build workspace.
+type Workspace struct {
+	Root       string
+	BuildDir   string
+	BridgeDir  string
+	AndroidDir string
+	IOSDir     string
+	XtoolDir   string
+	Config     *config.Resolved
+	Overlay    string
+}
+
+// Prepare generates a workspace for the requested platform.
+func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, error) {
+	buildDir, err := buildDir(root, cfg, platform)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.RemoveAll(buildDir); err != nil {
+		return nil, fmt.Errorf("failed to clear build directory: %w", err)
+	}
+	if err := os.MkdirAll(buildDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create build directory: %w", err)
+	}
+
+	ws := &Workspace{
+		Root:       root,
+		BuildDir:   buildDir,
+		BridgeDir:  filepath.Join(buildDir, "bridge"),
+		AndroidDir: filepath.Join(buildDir, "android"),
+		IOSDir:     filepath.Join(buildDir, "ios"),
+		XtoolDir:   filepath.Join(buildDir, "xtool"),
+		Config:     cfg,
+		Overlay:    filepath.Join(buildDir, "overlay.json"),
+	}
+
+	if err := os.MkdirAll(ws.BridgeDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create bridge directory: %w", err)
+	}
+
+	settings := scaffold.Settings{
+		AppName: cfg.AppName,
+		AppID:   cfg.AppID,
+		Bundle:  cfg.AppID,
+	}
+
+	switch platform {
+	case "android":
+		if err := scaffold.WriteAndroid(buildDir, settings); err != nil {
+			return nil, err
+		}
+	case "ios":
+		if err := scaffold.WriteIOS(buildDir, settings); err != nil {
+			return nil, err
+		}
+	case "xtool":
+		if err := scaffold.WriteXtool(buildDir, settings); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unknown platform %q", platform)
+	}
+
+	if err := writeBridgeFiles(ws.BridgeDir, cfg); err != nil {
+		return nil, err
+	}
+
+	if err := writeOverlay(ws.Overlay, ws.BridgeDir, root); err != nil {
+		return nil, err
+	}
+
+	return ws, nil
+}
+
+func buildDir(root string, cfg *config.Resolved, platform string) (string, error) {
+	moduleRoot, err := moduleBuildRoot(cfg)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha1.Sum([]byte(root))
+	shortHash := hex.EncodeToString(hash[:6])
+
+	return filepath.Join(moduleRoot, platform, shortHash), nil
+}
+
+// BuildRoot returns the cache root for the module.
+func BuildRoot(cfg *config.Resolved) (string, error) {
+	return moduleBuildRoot(cfg)
+}
+
+func moduleBuildRoot(cfg *config.Resolved) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve home directory: %w", err)
+	}
+
+	moduleSlug := strings.ReplaceAll(cfg.ModulePath, "/", "_")
+	return filepath.Join(home, ".drift", "build", moduleSlug), nil
+}
+
+func writeBridgeFiles(dir string, cfg *config.Resolved) error {
+	bridgeFiles, err := templates.GetBridgeFiles()
+	if err != nil {
+		return fmt.Errorf("failed to list bridge templates: %w", err)
+	}
+
+	data := templates.NewTemplateData(cfg.AppName, cfg.AppID, cfg.AppID)
+
+	for _, file := range bridgeFiles {
+		content, err := templates.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read bridge template %s: %w", file, err)
+		}
+
+		processed, err := templates.ProcessTemplate(string(content), data)
+		if err != nil {
+			return fmt.Errorf("failed to render bridge template %s: %w", file, err)
+		}
+
+		base := templates.FileName(file)
+		if strings.HasSuffix(base, ".tmpl") {
+			base = strings.TrimSuffix(base, ".tmpl")
+		}
+
+		destFile := filepath.Join(dir, base)
+		if err := os.WriteFile(destFile, []byte(processed), 0o644); err != nil {
+			return fmt.Errorf("failed to write bridge file %s: %w", destFile, err)
+		}
+	}
+
+	return nil
+}
+
+func writeOverlay(overlayPath, bridgeDir, projectRoot string) error {
+	bridgeFiles, err := templates.GetBridgeFiles()
+	if err != nil {
+		return fmt.Errorf("failed to list bridge templates: %w", err)
+	}
+
+	replace := make(map[string]string, len(bridgeFiles))
+	for _, file := range bridgeFiles {
+		base := templates.FileName(file)
+		if strings.HasSuffix(base, ".tmpl") {
+			base = strings.TrimSuffix(base, ".tmpl")
+		}
+		virtualName := "drift_bridge_" + base
+		replace[filepath.Join(projectRoot, virtualName)] = filepath.Join(bridgeDir, base)
+	}
+
+	payload := map[string]map[string]string{
+		"Replace": replace,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal overlay: %w", err)
+	}
+
+	if err := os.WriteFile(overlayPath, data, 0o644); err != nil {
+		return fmt.Errorf("failed to write overlay: %w", err)
+	}
+
+	return nil
+}

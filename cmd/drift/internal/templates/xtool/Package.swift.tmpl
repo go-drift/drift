@@ -1,0 +1,37 @@
+// swift-tools-version:5.9
+import PackageDescription
+import Foundation
+
+// Compute package directory from this file's location
+let packageDir = URL(fileURLWithPath: #file).deletingLastPathComponent().path
+
+let package = Package(
+    name: "{{.AppName}}",
+    platforms: [.iOS(.v14)],
+    products: [
+        .library(name: "{{.AppName}}", targets: ["{{.AppName}}"]),
+    ],
+    targets: [
+        .systemLibrary(name: "CDrift", path: "Libraries/CDrift"),
+        .systemLibrary(name: "CSkia", path: "Libraries/CSkia"),
+        .target(
+            name: "{{.AppName}}",
+            dependencies: ["CDrift", "CSkia"],
+            path: "Sources/Runner",
+            exclude: ["Resources/Info.plist"],
+            resources: [.process("Resources/LaunchScreen.storyboard")],
+            linkerSettings: [
+                .linkedFramework("Metal"),
+                .linkedFramework("MetalKit"),
+                .linkedFramework("CoreGraphics"),
+                .linkedFramework("Foundation"),
+                .linkedFramework("UIKit"),
+                .linkedFramework("QuartzCore"),
+                .linkedLibrary("c++"),
+                .linkedLibrary("drift"),
+                .linkedLibrary("drift_skia"),
+                .unsafeFlags(["-L\(packageDir)/Libraries/CDrift", "-L\(packageDir)/Libraries/CSkia"]),
+            ]
+        )
+    ]
+)

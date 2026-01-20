@@ -1,0 +1,158 @@
+package widgets
+
+import (
+	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/rendering"
+)
+
+// Text displays a string with a single style.
+//
+// # Text Wrapping and Line Limits
+//
+// The Wrap and MaxLines fields control how text flows and truncates:
+//
+//   - Wrap=false (default): Text renders on a single line, extending beyond
+//     the constraint width. Use for labels, buttons, and short text.
+//
+//   - Wrap=true: Text wraps at the constraint width, creating multiple lines.
+//     Use for paragraphs, descriptions, and content that should fit a container.
+//
+//   - MaxLines: Limits the number of visible lines. When Wrap=true and text
+//     exceeds MaxLines, it truncates. When MaxLines=0 (default), no limit applies.
+//
+// Common patterns:
+//
+//	// Single line, may overflow
+//	Text{Content: "Label", Wrap: false}
+//
+//	// Wrapping paragraph
+//	Text{Content: longText, Wrap: true}
+//
+//	// Preview text limited to 2 lines
+//	Text{Content: description, Wrap: true, MaxLines: 2}
+type Text struct {
+	// Content is the text string to display.
+	Content string
+	// Style controls the font, size, color, and other text properties.
+	Style rendering.TextStyle
+	// MaxLines limits the number of visible lines (0 = unlimited).
+	// Lines beyond this limit are not rendered.
+	MaxLines int
+	// Wrap enables text wrapping at the constraint width.
+	// When false, text renders on a single line.
+	Wrap bool
+}
+
+func (t Text) CreateElement() core.Element {
+	return core.NewRenderObjectElement(t, nil)
+}
+
+func (t Text) Key() any {
+	return nil
+}
+
+func (t Text) WithWrap(wrap bool) Text {
+	t.Wrap = wrap
+	return t
+}
+
+func (t Text) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
+	text := &renderText{text: t.Content, style: t.Style, maxLines: t.MaxLines, wrap: t.Wrap}
+	text.SetSelf(text)
+	return text
+}
+
+func (t Text) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
+	if text, ok := renderObject.(*renderText); ok {
+		text.text = t.Content
+		text.style = t.Style
+		text.maxLines = t.MaxLines
+		text.wrap = t.Wrap
+		text.MarkNeedsLayout()
+		text.MarkNeedsPaint()
+	}
+}
+
+type renderText struct {
+	layout.RenderBoxBase
+	text     string
+	style    rendering.TextStyle
+	layout   *rendering.TextLayout
+	maxLines int
+	wrap     bool
+	cache    textLayoutCache
+}
+
+type textLayoutCache struct {
+	text     string
+	style    rendering.TextStyle
+	maxWidth float64
+	maxLines int
+	wrap     bool
+}
+
+func (r *renderText) Layout(constraints layout.Constraints) {
+	maxWidth := float64(0) // Default: no wrapping
+	if r.wrap {
+		maxWidth = constraints.MaxWidth
+	}
+	current := textLayoutCache{
+		text:     r.text,
+		style:    r.style,
+		maxWidth: maxWidth,
+		maxLines: r.maxLines,
+		wrap:     r.wrap,
+	}
+	if r.layout != nil && r.cache == current {
+		r.SetSize(constraints.Constrain(r.layout.Size))
+		return
+	}
+	r.cache = current
+
+	manager, _ := rendering.DefaultFontManagerErr()
+	if manager == nil {
+		// Error already reported by DefaultFontManagerErr
+		r.layout = nil
+		r.SetSize(constraints.Constrain(rendering.Size{}))
+		return
+	}
+
+	layout, err := rendering.LayoutTextWithConstraints(r.text, r.style, manager, maxWidth)
+	if err != nil {
+		r.layout = nil
+		r.SetSize(constraints.Constrain(rendering.Size{}))
+		return
+	}
+
+	if r.maxLines > 0 && len(layout.Lines) > r.maxLines {
+		layout.Lines = layout.Lines[:r.maxLines]
+		maxLineWidth := 0.0
+		for _, line := range layout.Lines {
+			maxLineWidth = max(maxLineWidth, line.Width)
+		}
+		layout.Size = rendering.Size{Width: maxLineWidth, Height: layout.LineHeight * float64(len(layout.Lines))}
+	}
+
+	r.layout = layout
+	r.SetSize(constraints.Constrain(layout.Size))
+}
+
+func (r *renderText) Paint(ctx *layout.PaintContext) {
+	if r.layout == nil {
+		return
+	}
+	ctx.Canvas.Save()
+	size := r.Size()
+	ctx.Canvas.ClipRect(rendering.Rect{Left: 0, Top: 0, Right: size.Width, Bottom: size.Height})
+	ctx.Canvas.DrawText(r.layout, rendering.Offset{})
+	ctx.Canvas.Restore()
+}
+
+func (r *renderText) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+	if !withinBounds(position, r.Size()) {
+		return false
+	}
+	result.Add(r)
+	return true
+}

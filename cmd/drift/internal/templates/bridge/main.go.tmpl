@@ -1,0 +1,49 @@
+package main
+
+// #include <stdint.h>
+import "C"
+
+import (
+	"sync"
+
+	"github.com/go-drift/drift/pkg/engine"
+	"github.com/go-drift/drift/pkg/navigation"
+)
+
+var appInitOnce sync.Once
+
+//export DriftAppInit
+func DriftAppInit() C.int {
+	appInitOnce.Do(main)
+	return 0
+}
+
+//export DriftPointerEvent
+func DriftPointerEvent(phase C.int, x C.double, y C.double) {
+	if phase < 0 || phase > 3 {
+		return
+	}
+	engine.HandlePointerEvent(engine.PointerEvent{
+		X:     float64(x),
+		Y:     float64(y),
+		Phase: engine.PointerPhase(phase),
+	})
+}
+
+//export DriftSetDeviceScale
+func DriftSetDeviceScale(scale C.double) {
+	engine.SetDeviceScale(float64(scale))
+}
+
+//export DriftBackButtonPressed
+func DriftBackButtonPressed() C.int {
+	if navigation.HandleBackButton() {
+		return 1
+	}
+	return 0
+}
+
+//export DriftRequestFrame
+func DriftRequestFrame() {
+	engine.RequestFrame()
+}

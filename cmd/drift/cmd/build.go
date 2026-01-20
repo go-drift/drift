@@ -1,0 +1,655 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	"github.com/go-drift/drift/cmd/drift/internal/config"
+	"github.com/go-drift/drift/cmd/drift/internal/workspace"
+	"github.com/go-drift/drift/cmd/drift/internal/xtool"
+)
+
+func init() {
+	RegisterCommand(&Command{
+		Name:  "build",
+		Short: "Build for iOS or Android",
+		Long: `Build the Drift application for the specified platform.
+
+Supported platforms:
+  android   Build for Android (APK)
+  ios       Build for iOS (requires macOS)
+  xtool     Build for iOS using xtool (Linux/macOS, no Xcode required)
+
+Flags:
+  --release          Build a release version (default: debug)
+  --device           Build for physical iOS device (default: simulator)
+  --team-id TEAM_ID  Apple Developer Team ID for code signing (required for device)
+
+For xtool builds:
+  drift build xtool                Build debug for device
+  drift build xtool --release      Build release for device
+
+To find your Team ID, run: grep -r "DEVELOPMENT_TEAM" ~/Library/MobileDevice/Provisioning\ Profiles/
+Or check Xcode -> Settings -> Accounts -> select team -> View Details`,
+		Usage: "drift build <platform> [--release] [--device] [--team-id TEAM_ID]",
+		Run:   runBuild,
+	})
+}
+
+type iosBuildOptions struct {
+	release bool
+	device  bool
+	teamID  string
+}
+
+type xtoolBuildOptions struct {
+	release bool
+	device  bool
+}
+
+func runBuild(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("platform is required (android, ios, or xtool)\n\nUsage: drift build <platform>")
+	}
+
+	platform := strings.ToLower(args[0])
+	iosOpts := iosBuildOptions{}
+	xtoolOpts := xtoolBuildOptions{}
+	release := false
+
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--release":
+			release = true
+			iosOpts.release = true
+			xtoolOpts.release = true
+		case "--device":
+			iosOpts.device = true
+			xtoolOpts.device = true
+		case "--team-id":
+			if i+1 < len(args) {
+				iosOpts.teamID = args[i+1]
+				i++
+			}
+		}
+	}
+
+	root, err := config.FindProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	cfg, err := config.Resolve(root)
+	if err != nil {
+		return err
+	}
+
+	ws, err := workspace.Prepare(root, cfg, platform)
+	if err != nil {
+		return err
+	}
+
+	switch platform {
+	case "android":
+		return buildAndroid(ws, release)
+	case "ios":
+		return buildIOS(ws, iosOpts)
+	case "xtool":
+		return buildXtool(ws, xtoolOpts)
+	default:
+		return fmt.Errorf("unknown platform %q (use android, ios, or xtool)", platform)
+	}
+}
+
+// buildAndroid builds the Android application.
+func buildAndroid(ws *workspace.Workspace, release bool) error {
+	fmt.Println("Building for Android...")
+
+	ndkHome := os.Getenv("ANDROID_NDK_HOME")
+	if ndkHome == "" {
+		ndkHome = os.Getenv("ANDROID_NDK_ROOT")
+	}
+	if ndkHome == "" {
+		return fmt.Errorf("ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set")
+	}
+
+	hostTag := "linux-x86_64"
+	if runtime.GOOS == "darwin" {
+		hostTag = "darwin-x86_64"
+		if runtime.GOARCH == "arm64" {
+			hostTag = "darwin-arm64"
+		}
+	}
+
+	toolchain := filepath.Join(ndkHome, "toolchains", "llvm", "prebuilt", hostTag, "bin")
+	sysrootLib := filepath.Join(ndkHome, "toolchains", "llvm", "prebuilt", hostTag, "sysroot", "usr", "lib")
+
+	abis := []struct {
+		abi      string
+		goarch   string
+		goarm    string
+		cc       string
+		triple   string
+		skiaArch string
+	}{
+		{"arm64-v8a", "arm64", "", "aarch64-linux-android21-clang", "aarch64-linux-android", "arm64"},
+		{"armeabi-v7a", "arm", "7", "armv7a-linux-androideabi21-clang", "arm-linux-androideabi", "arm"},
+		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
+	}
+
+	jniLibsDir := filepath.Join(ws.AndroidDir, "app", "src", "main", "jniLibs")
+
+	for _, abi := range abis {
+		fmt.Printf("  Compiling for %s...\n", abi.abi)
+
+		// Find Skia library for this architecture
+		_, skiaDir, err := findSkiaLib(ws.Root, "android", abi.skiaArch)
+		if err != nil {
+			return err
+		}
+
+		outDir := filepath.Join(jniLibsDir, abi.abi)
+		if err := os.MkdirAll(outDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+
+		cmd := exec.Command("go", "build",
+			"-overlay", ws.Overlay,
+			"-buildmode=c-shared",
+			"-o", filepath.Join(outDir, "libdrift.so"),
+			".")
+		cmd.Dir = ws.Root
+		cmd.Env = append(os.Environ(),
+			"CGO_ENABLED=1",
+			"GOOS=android",
+			"GOARCH="+abi.goarch,
+			"CC="+filepath.Join(toolchain, abi.cc),
+			"CXX="+filepath.Join(toolchain, abi.cc+"++"),
+			"CGO_LDFLAGS="+androidSkiaLinkerFlags(skiaDir),
+		)
+		if abi.goarm != "" {
+			cmd.Env = append(cmd.Env, "GOARM="+abi.goarm)
+		}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to build for %s: %w", abi.abi, err)
+		}
+
+		cppShared := filepath.Join(sysrootLib, abi.triple, "libc++_shared.so")
+		if _, err := os.Stat(cppShared); err == nil {
+			if err := copyFile(cppShared, filepath.Join(outDir, "libc++_shared.so")); err != nil {
+				return fmt.Errorf("failed to copy libc++_shared.so: %w", err)
+			}
+		}
+
+		os.Remove(filepath.Join(outDir, "libdrift.h"))
+	}
+
+	fmt.Println("  Building APK...")
+
+	gradlew := "./gradlew"
+	if runtime.GOOS == "windows" {
+		gradlew = "gradlew.bat"
+	}
+
+	androidDir := ws.AndroidDir
+	if _, err := os.Stat(filepath.Join(androidDir, gradlew)); err != nil {
+		fmt.Println("  Note: Gradle wrapper not found, falling back to 'gradle' from PATH")
+		gradlew = "gradle"
+		if _, lookErr := exec.LookPath(gradlew); lookErr != nil {
+			return fmt.Errorf("gradle not found in PATH; install Gradle or add a wrapper in %s", androidDir)
+		}
+	}
+
+	buildTask := "assembleDebug"
+	if release {
+		buildTask = "assembleRelease"
+	}
+
+	cmd := exec.Command(gradlew, buildTask)
+	cmd.Dir = androidDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("gradle build failed: %w", err)
+	}
+
+	apkDir := filepath.Join(ws.AndroidDir, "app", "build", "outputs", "apk")
+	variant := "debug"
+	if release {
+		variant = "release"
+	}
+	apkPath := filepath.Join(apkDir, variant, fmt.Sprintf("app-%s.apk", variant))
+
+	fmt.Println()
+	fmt.Printf("Build successful: %s\n", apkPath)
+
+	return nil
+}
+
+// buildIOS builds the iOS application.
+// If opts.device is true, builds for physical device (iphoneos SDK), otherwise simulator.
+func buildIOS(ws *workspace.Workspace, opts iosBuildOptions) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("iOS builds require macOS")
+	}
+
+	target := "iOS Simulator"
+	if opts.device {
+		target = "iOS Device"
+	}
+	fmt.Printf("Building for %s...\n", target)
+	fmt.Println("  Compiling Go code...")
+
+	// Select SDK and architecture based on target
+	var sdk, arch string
+	if opts.device {
+		sdk = "iphoneos"
+		arch = "arm64" // Physical iOS devices are always arm64
+	} else {
+		sdk = "iphonesimulator"
+		arch = runtime.GOARCH
+		switch runtime.GOARCH {
+		case "amd64", "arm64":
+			// OK
+		default:
+			return fmt.Errorf("unsupported host architecture %q for iOS simulator", runtime.GOARCH)
+		}
+	}
+
+	clangPath, err := xcrunToolPath(sdk, "clang")
+	if err != nil {
+		return fmt.Errorf("failed to locate clang for %s: %w", sdk, err)
+	}
+
+	clangXXPath, err := xcrunToolPath(sdk, "clang++")
+	if err != nil {
+		return fmt.Errorf("failed to locate clang++ for %s: %w", sdk, err)
+	}
+
+	sdkRoot, err := xcrunSDKPath(sdk)
+	if err != nil {
+		return fmt.Errorf("failed to locate %s SDK: %w", sdk, err)
+	}
+
+	iosDir := filepath.Join(ws.IOSDir, "Runner")
+	if err := os.MkdirAll(iosDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create build directory: %w", err)
+	}
+
+	// Different Skia builds are needed for simulator vs device
+	skiaPlatform := "ios-simulator"
+	if opts.device {
+		skiaPlatform = "ios"
+	}
+
+	skiaLib, skiaDir, err := findSkiaLib(ws.Root, skiaPlatform, arch)
+	if err != nil {
+		return err
+	}
+
+	libPath := filepath.Join(iosDir, "libdrift.a")
+
+	// CGO needs explicit SDK flags for iOS cross-compilation
+	iosArch := "x86_64"
+	if arch == "arm64" {
+		iosArch = "arm64"
+	}
+
+	// Version min flag differs between simulator and device
+	versionMinFlag := "-mios-simulator-version-min=14.0"
+	if opts.device {
+		versionMinFlag = "-miphoneos-version-min=14.0"
+	}
+
+	cgoCflags := fmt.Sprintf("-isysroot %s -arch %s %s", sdkRoot, iosArch, versionMinFlag)
+	cgoCxxflags := fmt.Sprintf("-isysroot %s -arch %s %s -std=c++17 -x objective-c++", sdkRoot, iosArch, versionMinFlag)
+
+	cmd := exec.Command("go", "build",
+		"-overlay", ws.Overlay,
+		"-buildmode=c-archive",
+		"-o", libPath,
+		".")
+	cmd.Dir = ws.Root
+	cmd.Env = append(os.Environ(),
+		"CGO_ENABLED=1",
+		"GOOS=ios",
+		"GOARCH="+arch,
+		"CC="+clangPath,
+		"CXX="+clangXXPath,
+		"SDKROOT="+sdkRoot,
+		"CGO_CFLAGS="+cgoCflags,
+		"CGO_CXXFLAGS="+cgoCxxflags,
+		"CGO_LDFLAGS="+iosSkiaLinkerFlags(skiaDir),
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to build Go library: %w", err)
+	}
+
+	if err := copyFile(skiaLib, filepath.Join(iosDir, "libdrift_skia.a")); err != nil {
+		return fmt.Errorf("failed to copy Skia library: %w", err)
+	}
+
+	configuration := "Debug"
+	if opts.release {
+		configuration = "Release"
+	}
+
+	xcodeproj := filepath.Join(ws.IOSDir, "Runner.xcodeproj")
+	if _, err := os.Stat(xcodeproj); os.IsNotExist(err) {
+		fmt.Println()
+		fmt.Println("Note: No Xcode project found in the generated workspace.")
+		fmt.Printf("  Create one using Xcode in %s and re-run the build.\n", ws.IOSDir)
+		return fmt.Errorf("xcode project setup required")
+	}
+
+	var buildArgs []string
+	if opts.device {
+		// Device build requires team ID for code signing
+		if opts.teamID == "" {
+			fmt.Println()
+			fmt.Println("Error: --team-id is required for device builds.")
+			fmt.Println()
+			fmt.Println("To find your Team ID:")
+			fmt.Println("  1. Open Xcode -> Settings -> Accounts")
+			fmt.Println("  2. Select your Apple ID and team")
+			fmt.Println("  3. The Team ID is shown in parentheses, e.g., 'My Team (ABC123XYZ)'")
+			fmt.Println()
+			fmt.Println("Then run: drift build ios --device --team-id ABC123XYZ")
+			return fmt.Errorf("team ID required for device builds")
+		}
+
+		buildArgs = []string{
+			"-project", xcodeproj,
+			"-scheme", "Runner",
+			"-configuration", configuration,
+			"-destination", "generic/platform=iOS",
+			"-allowProvisioningUpdates",
+			"DEVELOPMENT_TEAM=" + opts.teamID,
+			"build",
+		}
+	} else {
+		buildArgs = []string{
+			"-project", xcodeproj,
+			"-scheme", "Runner",
+			"-configuration", configuration,
+			"-destination", "generic/platform=iOS Simulator",
+		}
+		buildArgs = append(buildArgs, simulatorArchBuildSettings()...)
+		buildArgs = append(buildArgs, "build")
+	}
+
+	cmd = exec.Command("xcodebuild", buildArgs...)
+	cmd.Dir = ws.IOSDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("xcodebuild failed: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Build successful!")
+
+	return nil
+}
+
+func xcrunToolPath(sdk, tool string) (string, error) {
+	output, err := exec.Command("xcrun", "--sdk", sdk, "--find", tool).Output()
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(string(output))
+	if path == "" {
+		return "", fmt.Errorf("xcrun returned empty path for %s", tool)
+	}
+	return path, nil
+}
+
+func xcrunSDKPath(sdk string) (string, error) {
+	output, err := exec.Command("xcrun", "--sdk", sdk, "--show-sdk-path").Output()
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(string(output))
+	if path == "" {
+		return "", fmt.Errorf("xcrun returned empty sdk path")
+	}
+	return path, nil
+}
+
+func simulatorArchBuildSettings() []string {
+	switch runtime.GOARCH {
+	case "amd64":
+		return []string{"ARCHS=x86_64"}
+	case "arm64":
+		return []string{"ARCHS=arm64"}
+	default:
+		return nil
+	}
+}
+
+func iosSkiaLinkerFlags(skiaDir string) string {
+	return strings.Join([]string{
+		"-L" + skiaDir,
+		"-ldrift_skia",
+		"-lc++",
+		"-framework Metal",
+		"-framework CoreGraphics",
+		"-framework Foundation",
+		"-framework UIKit",
+	}, " ")
+}
+
+func androidSkiaLinkerFlags(skiaDir string) string {
+	return strings.Join([]string{
+		"-L" + skiaDir,
+		"-ldrift_skia",
+		"-lGLESv2",
+		"-lEGL",
+		"-landroid",
+		"-llog",
+	}, " ")
+}
+
+func findSkiaLib(projectRoot, platform, arch string) (string, string, error) {
+	homeDir, _ := os.UserHomeDir()
+
+	// Find drift module root from this source file's location
+	// build.go is at cmd/drift/cmd/build.go, so go up 3 levels
+	_, thisFile, _, _ := runtime.Caller(0)
+	driftRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..")
+
+	candidates := []string{
+		// Drift module's third_party (source builds take priority)
+		filepath.Join(driftRoot, "third_party", "drift_skia", platform, arch),
+		// Project-relative (user customization)
+		filepath.Join(projectRoot, "third_party", "drift_skia", platform, arch),
+		// Global fallback for downloaded prebuilt binaries
+		filepath.Join(homeDir, ".drift", "drift_skia", platform, arch),
+	}
+
+	for _, dir := range candidates {
+		lib := filepath.Join(dir, "libdrift_skia.a")
+		if _, err := os.Stat(lib); err == nil {
+			return lib, dir, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("drift skia library not found for %s/%s\n\nRun the fetch script to download prebuilt binaries:\n  $(go env GOPATH)/pkg/mod/github.com/go-drift/drift@*/scripts/fetch_skia_release.sh", platform, arch)
+}
+
+// copyFile copies a file from src to dst.
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+// copyDir recursively copies a directory from src to dst.
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Calculate destination path
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		// Copy file
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, data, info.Mode())
+	})
+}
+
+// buildXtool builds the iOS application using xtool (Linux/macOS, no Xcode).
+func buildXtool(ws *workspace.Workspace, opts xtoolBuildOptions) error {
+	fmt.Println("Building for iOS using xtool...")
+
+	// Detect xtool SDK
+	cfg, err := xtool.Detect()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("  Compiling Go code...")
+
+	// Prepare libraries directory
+	cdriftDir := filepath.Join(ws.XtoolDir, "Libraries", "CDrift")
+	cskiaDir := filepath.Join(ws.XtoolDir, "Libraries", "CSkia")
+
+	if err := os.MkdirAll(cdriftDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create CDrift directory: %w", err)
+	}
+	if err := os.MkdirAll(cskiaDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create CSkia directory: %w", err)
+	}
+
+	// Find Skia library for iOS device (arm64)
+	skiaLib, _, err := findSkiaLib(ws.Root, "ios", "arm64")
+	if err != nil {
+		return err
+	}
+
+	// Build Go code as static library
+	libPath := filepath.Join(cdriftDir, "libdrift.a")
+	headerPath := filepath.Join(cdriftDir, "libdrift.h")
+
+	cmd := exec.Command("go", "build",
+		"-overlay", ws.Overlay,
+		"-buildmode=c-archive",
+		"-o", libPath,
+		".")
+	cmd.Dir = ws.Root
+	cmd.Env = append(os.Environ(), cfg.CGOEnv()...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to build Go library: %w", err)
+	}
+
+	// Add archive index for Darwin linker (ld64 requires it)
+	ranlibCmd := exec.Command("llvm-ranlib", libPath)
+	ranlibCmd.Stdout = os.Stdout
+	ranlibCmd.Stderr = os.Stderr
+	if err := ranlibCmd.Run(); err != nil {
+		// Try regular ranlib as fallback
+		ranlibCmd = exec.Command("ranlib", libPath)
+		ranlibCmd.Stdout = os.Stdout
+		ranlibCmd.Stderr = os.Stderr
+		if err := ranlibCmd.Run(); err != nil {
+			return fmt.Errorf("failed to run ranlib on library (install llvm): %w", err)
+		}
+	}
+
+	// The c-archive build mode generates a header file next to the archive
+	// Move it if it ended up in the wrong place
+	generatedHeader := filepath.Join(ws.Root, "libdrift.h")
+	if _, err := os.Stat(generatedHeader); err == nil {
+		if err := os.Rename(generatedHeader, headerPath); err != nil {
+			return fmt.Errorf("failed to move header file: %w", err)
+		}
+	}
+
+	// Copy Skia library
+	fmt.Println("  Copying Skia library...")
+	if err := copyFile(skiaLib, filepath.Join(cskiaDir, "libdrift_skia.a")); err != nil {
+		return fmt.Errorf("failed to copy Skia library: %w", err)
+	}
+
+	// Build Swift package using xtool (handles cross-compilation properly)
+	fmt.Println("  Building Swift package with xtool...")
+
+	xtoolArgs := cfg.XtoolBuildArgs(opts.release)
+	cmd = exec.Command(cfg.XtoolPath, xtoolArgs...)
+	cmd.Dir = ws.XtoolDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("xtool build failed: %w", err)
+	}
+
+	// xtool creates the app bundle - find it
+	// xtool outputs to: xtool/<appname>.app
+	appName := ws.Config.AppName
+	xtoolAppDir := filepath.Join(ws.XtoolDir, "xtool", appName+".app")
+
+	// Verify xtool output exists
+	if _, err := os.Stat(xtoolAppDir); err != nil {
+		return fmt.Errorf("xtool app bundle not found at %s: %w", xtoolAppDir, err)
+	}
+
+	// Copy to standard location for easier access
+	appDir := filepath.Join(ws.XtoolDir, "Runner.app")
+	if err := os.RemoveAll(appDir); err != nil {
+		return fmt.Errorf("failed to clean app bundle: %w", err)
+	}
+	if err := copyDir(xtoolAppDir, appDir); err != nil {
+		return fmt.Errorf("failed to copy app bundle: %w", err)
+	}
+
+	// Sign if --device flag and zsign is available
+	if opts.device && cfg.HasZsign() {
+		fmt.Println("  Signing with zsign...")
+		// User needs to provide certificate and profile paths via environment
+		certPath := os.Getenv("XTOOL_CERT")
+		profilePath := os.Getenv("XTOOL_PROFILE")
+		if certPath != "" && profilePath != "" {
+			if err := cfg.Sign(appDir, certPath, profilePath); err != nil {
+				return err
+			}
+		} else {
+			fmt.Println("  Warning: XTOOL_CERT and XTOOL_PROFILE not set, skipping code signing")
+		}
+	}
+
+	fmt.Println()
+	fmt.Printf("Build successful: %s\n", appDir)
+
+	return nil
+}

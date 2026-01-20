@@ -1,0 +1,84 @@
+# Build outputs
+build/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+tmp
+
+.xtool-wrappers
+
+# Generated C headers from Go
+libdrift.h
+libdrift_go.h
+
+.claude
+ignored
+
+META-INF
+
+third_party
+
+dist
+bin
+
+# iOS
+embedder/ios/libdrift.h
+embedder/ios/libdrift.a
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+
+showcase/android/app/.cxx/
+showcase/android/app/build/
+showcase/android/.gradle/
+showcase/android/local.properties
+
+# Android
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/app/.cxx/
+**/android/app/src/main/jniLibs/**/*.so
+**/android/app/src/main/jni/libdrift.h
+**/android/local.properties
+*.apk
+*.aab
+*.ap_
+*.jks
+*.keystore
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Debug
+*.log
+*.prof

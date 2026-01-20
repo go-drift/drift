@@ -1,0 +1,158 @@
+//go:build android || darwin || ios
+// +build android darwin ios
+
+// Package engine provides the Skia-backed rendering path for the Drift framework.
+package engine
+
+import (
+	"errors"
+	"sync"
+	"unsafe"
+
+	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/skia"
+)
+
+type skiaStateTracker struct {
+	mu      sync.Mutex
+	ctx     *skia.Context
+	backend string
+	lastErr string
+}
+
+var skiaState skiaStateTracker
+
+var (
+	errInvalidSize = errors.New("skia: invalid surface size")
+	errNilBuffer   = errors.New("skia: nil texture buffer")
+)
+
+// InitSkiaGL initializes the Skia GL context using the current OpenGL context.
+func InitSkiaGL() error {
+	skiaState.mu.Lock()
+	defer skiaState.mu.Unlock()
+
+	if skiaState.ctx != nil {
+		if skiaState.backend != "gl" {
+			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+		}
+		skiaState.ctx.Destroy()
+		skiaState.ctx = nil
+	}
+
+	ctx, err := skia.NewGLContext()
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	skiaState.ctx = ctx
+	skiaState.backend = "gl"
+	return nil
+}
+
+// InitSkiaMetal initializes the Skia Metal context using the provided device/queue.
+func InitSkiaMetal(device, queue unsafe.Pointer) error {
+	skiaState.mu.Lock()
+	defer skiaState.mu.Unlock()
+
+	if skiaState.ctx != nil {
+		if skiaState.backend != "metal" {
+			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+		}
+		return nil
+	}
+
+	ctx, err := skia.NewMetalContext(device, queue)
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	skiaState.ctx = ctx
+	skiaState.backend = "metal"
+	return nil
+}
+
+// RenderSkiaGL draws a frame into the currently bound OpenGL framebuffer.
+func RenderSkiaGL(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return skiaState.setError(errInvalidSize)
+	}
+	ctx, err := currentSkiaContext("gl")
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	surface, err := ctx.MakeGLSurface(width, height)
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	defer surface.Destroy()
+
+	canvas := rendering.NewSkiaCanvas(surface.Canvas(), rendering.Size{Width: float64(width), Height: float64(height)})
+	// GL default framebuffer origin differs from our top-left coordinate system.
+	// Flip both axes to correct the 180° rotation observed on emulators.
+	canvas.Translate(0, float64(height))
+	canvas.Scale(1, -1)
+	if err := app.Paint(canvas, rendering.Size{Width: float64(width), Height: float64(height)}); err != nil {
+		return skiaState.setError(err)
+	}
+	surface.Flush()
+	skiaState.clearError()
+	return nil
+}
+
+// RenderSkiaMetal draws a frame into the provided Metal texture.
+func RenderSkiaMetal(width, height int, texture unsafe.Pointer) error {
+	if width <= 0 || height <= 0 {
+		return skiaState.setError(errInvalidSize)
+	}
+	if texture == nil {
+		return skiaState.setError(errNilBuffer)
+	}
+	ctx, err := currentSkiaContext("metal")
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	surface, err := ctx.MakeMetalSurface(texture, width, height)
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	defer surface.Destroy()
+
+	canvas := rendering.NewSkiaCanvas(surface.Canvas(), rendering.Size{Width: float64(width), Height: float64(height)})
+	if err := app.Paint(canvas, rendering.Size{Width: float64(width), Height: float64(height)}); err != nil {
+		return skiaState.setError(err)
+	}
+	surface.Flush()
+	skiaState.clearError()
+	return nil
+}
+
+func currentSkiaContext(backend string) (*skia.Context, error) {
+	skiaState.mu.Lock()
+	defer skiaState.mu.Unlock()
+
+	if skiaState.ctx == nil {
+		return nil, errors.New("skia: context not initialized")
+	}
+	if skiaState.backend != backend {
+		return nil, errors.New("skia: context initialized for " + skiaState.backend)
+	}
+	return skiaState.ctx, nil
+}
+
+// LastSkiaError returns the most recent Skia error message, if any.
+func LastSkiaError() string {
+	skiaState.mu.Lock()
+	defer skiaState.mu.Unlock()
+	return skiaState.lastErr
+}
+
+func (s *skiaStateTracker) setError(err error) error {
+	if err == nil {
+		return nil
+	}
+	s.lastErr = err.Error()
+	return err
+}
+
+func (s *skiaStateTracker) clearError() {
+	s.lastErr = ""
+}

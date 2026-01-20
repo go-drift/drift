@@ -1,0 +1,277 @@
+package main
+
+// #include <stdint.h>
+// #include <stdlib.h>
+// #include <string.h>
+//
+// // Callback function type for Go->Native method invocation
+// // Native code sets this callback, Go calls it to invoke native methods
+// // Returns: 0 on success, non-zero on error
+// // resultData and resultLen are output parameters for the result
+// // errorMsg is output parameter for error message (caller must free)
+// typedef int (*DriftNativeMethodHandler)(
+//     const char* channel,
+//     const char* method,
+//     const void* argsData,
+//     int argsLen,
+//     void** resultData,
+//     int* resultLen,
+//     char** errorMsg
+// );
+//
+// // Store the native method handler
+// static DriftNativeMethodHandler nativeMethodHandler = NULL;
+//
+// static inline void setNativeMethodHandler(DriftNativeMethodHandler handler) {
+//     nativeMethodHandler = handler;
+// }
+//
+// static inline int hasNativeMethodHandler() {
+//     return nativeMethodHandler != NULL ? 1 : 0;
+// }
+//
+// static inline int callNativeMethod(
+//     const char* channel,
+//     const char* method,
+//     const void* argsData,
+//     int argsLen,
+//     void** resultData,
+//     int* resultLen,
+//     char** errorMsg
+// ) {
+//     if (nativeMethodHandler) {
+//         return nativeMethodHandler(channel, method, argsData, argsLen, resultData, resultLen, errorMsg);
+//     }
+//     return -1; // No handler
+// }
+import "C"
+
+import (
+	"encoding/json"
+	"errors"
+	"sync"
+	"unsafe"
+
+	"github.com/go-drift/drift/pkg/platform"
+)
+
+// nativePlatformBridge implements platform.NativeBridge using CGO callbacks.
+type nativePlatformBridge struct{}
+
+var (
+	bridgeInstance = &nativePlatformBridge{}
+	bridgeOnce     sync.Once
+
+	// activeStreams tracks which event channels are actively listening
+	activeStreams   = make(map[string]bool)
+	activeStreamsMu sync.Mutex
+)
+
+func init() {
+	// Register the native bridge with the platform package
+	bridgeOnce.Do(func() {
+		platform.SetNativeBridge(bridgeInstance)
+	})
+}
+
+// InvokeMethod calls a method on the native side.
+func (b *nativePlatformBridge) InvokeMethod(channel, method string, args []byte) ([]byte, error) {
+	// Check if native handler is registered
+	if C.hasNativeMethodHandler() == 0 {
+		return nil, platform.ErrPlatformUnavailable
+	}
+
+	// Convert Go strings to C strings
+	channelC := C.CString(channel)
+	defer C.free(unsafe.Pointer(channelC))
+	methodC := C.CString(method)
+	defer C.free(unsafe.Pointer(methodC))
+
+	// Prepare args pointer
+	var argsPtr unsafe.Pointer
+	var argsLen C.int
+	if len(args) > 0 {
+		argsPtr = C.CBytes(args)
+		defer C.free(argsPtr)
+		argsLen = C.int(len(args))
+	}
+
+	// Output parameters
+	var resultData unsafe.Pointer
+	var resultLen C.int
+	var errorMsg *C.char
+
+	// Call native method
+	ret := C.callNativeMethod(channelC, methodC, argsPtr, argsLen, &resultData, &resultLen, &errorMsg)
+
+	// Handle error
+	if ret != 0 {
+		if errorMsg != nil {
+			errStr := C.GoString(errorMsg)
+			C.free(unsafe.Pointer(errorMsg))
+			return nil, decodeNativeError(errStr)
+		}
+		return nil, platform.ErrPlatformUnavailable
+	}
+
+	// Extract result
+	var result []byte
+	if resultData != nil && resultLen > 0 {
+		result = C.GoBytes(resultData, resultLen)
+		C.free(resultData)
+	}
+
+	return result, nil
+}
+
+// StartEventStream tells native to start sending events.
+func (b *nativePlatformBridge) StartEventStream(channel string) error {
+	activeStreamsMu.Lock()
+	activeStreams[channel] = true
+	activeStreamsMu.Unlock()
+	return nil
+}
+
+// StopEventStream tells native to stop sending events.
+func (b *nativePlatformBridge) StopEventStream(channel string) error {
+	activeStreamsMu.Lock()
+	delete(activeStreams, channel)
+	activeStreamsMu.Unlock()
+	return nil
+}
+
+// DriftPlatformSetNativeHandler sets the callback for Go->Native method invocation.
+// Native code must call this during initialization to enable platform channels.
+//
+//export DriftPlatformSetNativeHandler
+func DriftPlatformSetNativeHandler(handler C.DriftNativeMethodHandler) {
+	C.setNativeMethodHandler(handler)
+}
+
+// DriftPlatformHandleMethodCall is called by native to invoke a Go method handler.
+// Returns JSON-encoded result or sets error.
+//
+//export DriftPlatformHandleMethodCall
+func DriftPlatformHandleMethodCall(channelPtr *C.char, methodPtr *C.char, argsPtr unsafe.Pointer, argsLen C.int, resultPtr *unsafe.Pointer, resultLen *C.int, errorPtr **C.char) C.int {
+	channel := C.GoString(channelPtr)
+	method := C.GoString(methodPtr)
+
+	var argsData []byte
+	if argsLen > 0 && argsPtr != nil {
+		argsData = C.GoBytes(argsPtr, argsLen)
+	}
+
+	result, err := platform.HandleMethodCall(channel, method, argsData)
+	if err != nil {
+		errStr := encodeErrorPayload(err)
+		*errorPtr = C.CString(errStr)
+		return 1
+	}
+
+	if result != nil {
+		*resultPtr = C.CBytes(result)
+		*resultLen = C.int(len(result))
+	}
+
+	return 0
+}
+
+// DriftPlatformHandleEvent is called by native to dispatch an event to Go listeners.
+//
+//export DriftPlatformHandleEvent
+func DriftPlatformHandleEvent(channelPtr *C.char, dataPtr unsafe.Pointer, dataLen C.int) {
+	channel := C.GoString(channelPtr)
+
+	var data []byte
+	if dataLen > 0 && dataPtr != nil {
+		data = C.GoBytes(dataPtr, dataLen)
+	}
+
+	platform.HandleEvent(channel, data)
+}
+
+// DriftPlatformHandleEventError is called by native when an event stream has an error.
+//
+//export DriftPlatformHandleEventError
+func DriftPlatformHandleEventError(channelPtr *C.char, codePtr *C.char, messagePtr *C.char) {
+	channel := C.GoString(channelPtr)
+	code := C.GoString(codePtr)
+	message := C.GoString(messagePtr)
+
+	platform.HandleEventError(channel, code, message)
+}
+
+// DriftPlatformHandleEventDone is called by native when an event stream ends.
+//
+//export DriftPlatformHandleEventDone
+func DriftPlatformHandleEventDone(channelPtr *C.char) {
+	channel := C.GoString(channelPtr)
+	platform.HandleEventDone(channel)
+}
+
+// DriftPlatformIsStreamActive returns 1 if Go is listening to the given event channel.
+//
+//export DriftPlatformIsStreamActive
+func DriftPlatformIsStreamActive(channelPtr *C.char) C.int {
+	channel := C.GoString(channelPtr)
+
+	activeStreamsMu.Lock()
+	active := activeStreams[channel]
+	activeStreamsMu.Unlock()
+
+	if active {
+		return 1
+	}
+	return 0
+}
+
+// DriftPlatformFree frees memory allocated by Go for native code.
+//
+//export DriftPlatformFree
+func DriftPlatformFree(ptr unsafe.Pointer) {
+	C.free(ptr)
+}
+
+func decodeNativeError(message string) error {
+	var payload platform.ChannelError
+	if err := json.Unmarshal([]byte(message), &payload); err == nil {
+		if payload.Code != "" || payload.Message != "" {
+			return &payload
+		}
+	}
+	return platform.NewChannelError("NATIVE_ERROR", message)
+}
+
+func encodeErrorPayload(err error) string {
+	payload := channelErrorFrom(err)
+	data, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return err.Error()
+	}
+	return string(data)
+}
+
+var errorCodeMap = map[error]string{
+	platform.ErrChannelNotFound:     "channel_not_found",
+	platform.ErrMethodNotFound:      "method_not_found",
+	platform.ErrInvalidArguments:    "invalid_arguments",
+	platform.ErrPlatformUnavailable: "platform_unavailable",
+	platform.ErrTimeout:             "timeout",
+	platform.ErrViewTypeNotFound:    "view_type_not_found",
+}
+
+func channelErrorFrom(err error) *platform.ChannelError {
+	if err == nil {
+		return platform.NewChannelError("go_error", "unknown error")
+	}
+	var channelErr *platform.ChannelError
+	if errors.As(err, &channelErr) {
+		return channelErr
+	}
+	for sentinel, code := range errorCodeMap {
+		if errors.Is(err, sentinel) {
+			return platform.NewChannelError(code, err.Error())
+		}
+	}
+	return platform.NewChannelError("go_error", err.Error())
+}
