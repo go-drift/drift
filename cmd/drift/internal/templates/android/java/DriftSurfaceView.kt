@@ -53,6 +53,13 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
     private val renderer: DriftRenderer
 
     /**
+     * Tracks active pointer IDs and their last known positions.
+     * Used to properly cancel all pointers when ACTION_CANCEL is received,
+     * since the event may have pointerCount=0 at that point.
+     */
+    private val activePointers = mutableMapOf<Long, Pair<Double, Double>>()
+
+    /**
      * Choreographer callback for vsync-synchronized frame rendering.
      *
      * The Choreographer provides callbacks aligned with the display's vsync signal,
@@ -145,43 +152,57 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
      * @param event The MotionEvent from the Android system.
      * @return true if the event was handled, false otherwise.
      *
-     * Multi-touch Note:
-     *   For ACTION_MOVE, we use pointer index 0 (the first touch).
-     *   For other actions, we use the actionIndex to get the correct pointer.
-     *   This simple approach works for single-touch demos; multi-touch would
-     *   require tracking individual pointer IDs.
+     * Multi-touch:
+     *   Each pointer is tracked by its unique ID (from getPointerId()).
+     *   For MOVE events, all active pointers are reported.
+     *   For DOWN/UP events, only the affected pointer is reported.
+     *   For CANCEL, all tracked pointers are cancelled using their last known positions.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Convert Android action to Drift pointer phase
-        val phase = when (event.actionMasked) {
+        when (event.actionMasked) {
             // Touch began (first finger or additional fingers)
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> 0
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val index = event.actionIndex
+                val pointerID = event.getPointerId(index).toLong()
+                val x = event.getX(index).toDouble()
+                val y = event.getY(index).toDouble()
+                activePointers[pointerID] = Pair(x, y)
+                NativeBridge.pointerEvent(pointerID, 0, x, y)
+            }
 
-            // Touch position changed
-            MotionEvent.ACTION_MOVE -> 1
+            // Touch position changed - report all active pointers
+            MotionEvent.ACTION_MOVE -> {
+                for (index in 0 until event.pointerCount) {
+                    val pointerID = event.getPointerId(index).toLong()
+                    val x = event.getX(index).toDouble()
+                    val y = event.getY(index).toDouble()
+                    activePointers[pointerID] = Pair(x, y)
+                    NativeBridge.pointerEvent(pointerID, 1, x, y)
+                }
+            }
 
             // Touch ended (finger lifted)
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> 2
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val index = event.actionIndex
+                val pointerID = event.getPointerId(index).toLong()
+                val x = event.getX(index).toDouble()
+                val y = event.getY(index).toDouble()
+                activePointers.remove(pointerID)
+                NativeBridge.pointerEvent(pointerID, 2, x, y)
+            }
 
-            // Touch cancelled by system (e.g., gesture detector took over)
-            MotionEvent.ACTION_CANCEL -> 3
+            // Touch cancelled by system - cancel all tracked pointers
+            // Note: event.pointerCount may be zero, so we use our tracked map
+            MotionEvent.ACTION_CANCEL -> {
+                for ((pointerID, position) in activePointers) {
+                    NativeBridge.pointerEvent(pointerID, 3, position.first, position.second)
+                }
+                activePointers.clear()
+            }
 
             // Unknown action - don't handle
             else -> return false
         }
-
-        // Determine which pointer index to use for coordinates
-        // For MOVE events, use the first pointer (index 0)
-        // For other events, use the action index (which finger triggered the event)
-        val index = if (event.actionMasked == MotionEvent.ACTION_MOVE) 0 else event.actionIndex
-
-        // Get coordinates in view pixels (not density-independent pixels)
-        // These match the render buffer dimensions
-        val x = event.getX(index).toDouble()
-        val y = event.getY(index).toDouble()
-
-        // Forward the event to the Go engine
-        NativeBridge.pointerEvent(phase, x, y)
 
         // Return true to indicate we handled this event
         return true

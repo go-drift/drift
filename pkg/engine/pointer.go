@@ -16,9 +16,10 @@ const (
 // This is a simplified event type with screen coordinates; the engine converts
 // it to gestures.PointerEvent for internal routing.
 type PointerEvent struct {
-	X     float64
-	Y     float64
-	Phase PointerPhase
+	PointerID int64
+	X         float64
+	Y         float64
+	Phase     PointerPhase
 }
 
 // HandlePointerEvent receives a pointer event from the native layer and

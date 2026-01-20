@@ -95,6 +95,8 @@ object NativeBridge {
      * This function notifies the engine of touch input, allowing interactive
      * elements (like the draggable circle in the demo) to respond to user input.
      *
+     * @param pointerID Unique identifier for this pointer/touch (enables multi-touch).
+     *                  On Android, use MotionEvent.getPointerId() for each pointer.
      * @param phase The phase of the touch event:
      *              0 = Down (finger touched screen)
      *              1 = Move (finger moved while touching)
@@ -113,7 +115,7 @@ object NativeBridge {
      *   This function is thread-safe. Typically called from the main/UI thread
      *   in response to MotionEvents, but can be called from any thread.
      */
-    external fun pointerEvent(phase: Int, x: Double, y: Double)
+    external fun pointerEvent(pointerID: Long, phase: Int, x: Double, y: Double)
 
     /**
      * Updates the device scale factor used by the Go engine for logical sizing.

@@ -53,13 +53,14 @@ typedef int (*DriftRenderFn)(int width, int height, void *buffer, int bufferLen)
 /**
  * Function pointer type for DriftPointerEvent.
  * Matches the signature exported by Go:
- *   func DriftPointerEvent(phase C.int, x C.double, y C.double)
+ *   func DriftPointerEvent(pointerID C.int64_t, phase C.int, x C.double, y C.double)
  *
- * @param phase  Touch phase: 0=Down, 1=Move, 2=Up, 3=Cancel
- * @param x      X coordinate in pixels
- * @param y      Y coordinate in pixels
+ * @param pointerID  Unique identifier for this pointer/touch (enables multi-touch)
+ * @param phase      Touch phase: 0=Down, 1=Move, 2=Up, 3=Cancel
+ * @param x          X coordinate in pixels
+ * @param y          Y coordinate in pixels
  */
-typedef void (*DriftPointerFn)(int phase, double x, double y);
+typedef void (*DriftPointerFn)(int64_t pointerID, int phase, double x, double y);
 
 /**
  * Function pointer type for DriftSetDeviceScale.
@@ -709,12 +710,13 @@ Java_{{.JNIPackage}}_NativeBridge_renderFrameSkia(
  * Called from DriftSurfaceView.onTouchEvent() when the user touches the screen.
  * This function forwards touch events to the Go engine for processing.
  *
- * @param env    JNI environment pointer (provides JNI functions)
- * @param clazz  Reference to the NativeBridge class (unused, static method)
- * @param phase  Touch phase: 0=Down, 1=Move, 2=Up, 3=Cancel
- *               Maps from Android MotionEvent actions in DriftSurfaceView
- * @param x      X coordinate of the touch in pixels (from MotionEvent.getX())
- * @param y      Y coordinate of the touch in pixels (from MotionEvent.getY())
+ * @param env       JNI environment pointer (provides JNI functions)
+ * @param clazz     Reference to the NativeBridge class (unused, static method)
+ * @param pointerID Unique identifier for this pointer/touch (from MotionEvent.getPointerId())
+ * @param phase     Touch phase: 0=Down, 1=Move, 2=Up, 3=Cancel
+ *                  Maps from Android MotionEvent actions in DriftSurfaceView
+ * @param x         X coordinate of the touch in pixels (from MotionEvent.getX())
+ * @param y         Y coordinate of the touch in pixels (from MotionEvent.getY())
  *
  * Note: Coordinates are in view pixels, not density-independent pixels (dp).
  *       The Go engine works in raw pixels, matching the render buffer dimensions.
@@ -723,6 +725,7 @@ JNIEXPORT void JNICALL
 Java_{{.JNIPackage}}_NativeBridge_pointerEvent(
     JNIEnv *env,
     jclass clazz,
+    jlong pointerID,
     jint phase,
     jdouble x,
     jdouble y
@@ -734,7 +737,7 @@ Java_{{.JNIPackage}}_NativeBridge_pointerEvent(
     }
 
     /* Forward the event to the Go engine */
-    drift_pointer_event(phase, x, y);
+    drift_pointer_event((int64_t)pointerID, phase, x, y);
 }
 
 /**

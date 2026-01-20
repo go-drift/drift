@@ -276,7 +276,7 @@ func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err err
 func (a *appRunner) HandlePointer(event PointerEvent) {
 	defer errors.Recover("engine.HandlePointer")
 
-	pointerID := int64(0)
+	pointerID := event.PointerID
 	var handlers []layout.PointerHandler
 	delta := rendering.Offset{}
 

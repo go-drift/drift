@@ -37,11 +37,12 @@ import UIKit
 /// Go function exported via CGO.
 ///
 /// - Parameters:
+///   - pointerID: Unique identifier for the pointer/touch (enables multi-touch).
 ///   - phase: The touch phase (0=Down, 1=Move, 2=Up, 3=Cancel).
 ///   - x: X coordinate in pixels.
 ///   - y: Y coordinate in pixels.
 @_silgen_name("DriftPointerEvent")
-func DriftPointerEvent(_ phase: Int32, _ x: Double, _ y: Double)
+func DriftPointerEvent(_ pointerID: Int64, _ phase: Int32, _ x: Double, _ y: Double)
 
 /// FFI declaration for updating the device scale factor in the Go engine.
 ///
@@ -63,6 +64,13 @@ final class DriftMetalView: UIView {
     ///
     /// Created immediately and lives for the view's lifetime.
     private let renderer = DriftRenderer()
+
+    /// Maps active UITouch objects to stable, non-negative pointer IDs.
+    /// Using ObjectIdentifier ensures we track touch identity correctly.
+    private var touchToPointerID: [ObjectIdentifier: Int64] = [:]
+
+    /// Counter for assigning monotonically increasing pointer IDs.
+    private var nextPointerID: Int64 = 0
 
     /// Specifies CAMetalLayer as the backing layer class.
     ///
@@ -212,23 +220,49 @@ final class DriftMetalView: UIView {
     /// Converts UIKit touch events to Drift pointer events and forwards to Go.
     ///
     /// Handles coordinate conversion from points to pixels and calls the
-    /// Go engine via FFI.
+    /// Go engine via FFI. Processes all touches for multi-touch support.
     ///
     /// - Parameters:
-    ///   - touches: The set of touches to process (uses first touch only).
+    ///   - touches: The set of touches to process.
     ///   - phase: The pointer phase (0=Down, 1=Move, 2=Up, 3=Cancel).
     private func handleTouch(_ touches: Set<UITouch>, phase: Int32) {
-        // Get the first touch (this demo only handles single-touch).
-        guard let touch = touches.first else { return }
-
-        // Get the touch location in view coordinates (points).
-        let location = touch.location(in: self)
-
         // Get the scale factor for converting points to pixels.
         let scale = contentScaleFactor
 
-        // Convert to pixels and call the Go engine.
-        // The Go engine uses pixel coordinates matching the render buffer.
-        DriftPointerEvent(phase, Double(location.x * scale), Double(location.y * scale))
+        // Process all touches for multi-touch support.
+        for touch in touches {
+            let touchID = ObjectIdentifier(touch)
+            let pointerID: Int64
+
+            if phase == 0 {
+                // Touch began: assign a new pointer ID
+                pointerID = nextPointerID
+                nextPointerID += 1
+                touchToPointerID[touchID] = pointerID
+            } else if let existingID = touchToPointerID[touchID] {
+                // Existing touch: use the assigned ID
+                pointerID = existingID
+                if phase == 2 {
+                    // Touch ended: remove from map
+                    touchToPointerID.removeValue(forKey: touchID)
+                }
+            } else {
+                // Unknown touch (shouldn't happen): skip
+                continue
+            }
+
+            // Get the touch location in view coordinates (points).
+            let location = touch.location(in: self)
+
+            // Convert to pixels and call the Go engine.
+            // The Go engine uses pixel coordinates matching the render buffer.
+            DriftPointerEvent(pointerID, phase, Double(location.x * scale), Double(location.y * scale))
+        }
+
+        // On cancel, clear all tracked touches to avoid stale entries.
+        // touchesCancelled may only deliver a subset of active touches.
+        if phase == 3 {
+            touchToPointerID.removeAll()
+        }
     }
 }
