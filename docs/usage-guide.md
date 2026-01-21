@@ -410,3 +410,129 @@ func (s *formState) handleSubmit(text string) {
     s.controller.Clear()          // Clear programmatically
 }
 ```
+
+---
+
+## Gestures
+
+### Tap Gesture
+
+Detect simple taps with `OnTap`:
+
+```go
+widgets.GestureDetector{
+    OnTap: func() {
+        fmt.Println("Tapped!")
+    },
+    ChildWidget: myButton,
+}
+```
+
+### Pan Gesture (Omnidirectional Drag)
+
+Use pan callbacks for unrestricted drag gestures:
+
+```go
+widgets.GestureDetector{
+    OnPanStart: func(d widgets.DragStartDetails) {
+        // Drag started at d.Position
+    },
+    OnPanUpdate: func(d widgets.DragUpdateDetails) {
+        // d.Delta contains movement since last update
+        x += d.Delta.X
+        y += d.Delta.Y
+    },
+    OnPanEnd: func(d widgets.DragEndDetails) {
+        // d.Velocity contains fling velocity
+    },
+    OnPanCancel: func() {
+        // Drag was cancelled
+    },
+    ChildWidget: draggableBox,
+}
+```
+
+### Axis-Locked Drags
+
+For gestures that should only respond to one axis (horizontal or vertical), use the axis-specific callbacks. These are useful for sliders, swipe-to-dismiss, and preventing scroll conflicts.
+
+#### Horizontal Drag
+
+```go
+widgets.GestureDetector{
+    OnHorizontalDragStart: func(d widgets.DragStartDetails) {
+        // Horizontal drag started
+    },
+    OnHorizontalDragUpdate: func(d widgets.DragUpdateDetails) {
+        // d.PrimaryDelta is the X movement
+        sliderValue += d.PrimaryDelta
+    },
+    OnHorizontalDragEnd: func(d widgets.DragEndDetails) {
+        // d.PrimaryVelocity is the X velocity
+    },
+    OnHorizontalDragCancel: func() {},
+    ChildWidget: slider,
+}
+```
+
+#### Vertical Drag
+
+```go
+widgets.GestureDetector{
+    OnVerticalDragStart: func(d widgets.DragStartDetails) {
+        // Vertical drag started
+    },
+    OnVerticalDragUpdate: func(d widgets.DragUpdateDetails) {
+        // d.PrimaryDelta is the Y movement
+        offset += d.PrimaryDelta
+    },
+    OnVerticalDragEnd: func(d widgets.DragEndDetails) {
+        // d.PrimaryVelocity is the Y velocity
+    },
+    OnVerticalDragCancel: func() {},
+    ChildWidget: pullToRefresh,
+}
+```
+
+### Gesture Competition
+
+When multiple gesture recognizers compete for the same pointer:
+
+- **Axis-locked drags** win when the primary axis movement exceeds slop and is greater than or equal to the orthogonal movement. If orthogonal exceeds slop first, the recognizer rejects. When both horizontal and vertical handlers are set and deltas are equal, horizontal wins (it's processed first).
+- **Tap** loses if movement exceeds the touch slop
+- **Pan** wins when total movement exceeds the touch slop. Note: Pan is automatically disabled when axis-specific handlers (horizontal/vertical) are present on the same GestureDetector.
+
+This enables patterns like swipe-to-dismiss cards inside a vertical ScrollView:
+
+```go
+// Vertical ScrollView with horizontally-swipeable cards
+widgets.ScrollView{
+    ScrollDirection: widgets.AxisVertical,
+    ChildWidget: widgets.Column{
+        ChildrenWidgets: []core.Widget{
+            // This card responds to horizontal swipes
+            // while the parent ScrollView responds to vertical swipes
+            widgets.GestureDetector{
+                OnHorizontalDragUpdate: func(d widgets.DragUpdateDetails) {
+                    cardOffset += d.PrimaryDelta
+                },
+                ChildWidget: swipeCard,
+            },
+        },
+    },
+}
+```
+
+### Drag Details
+
+The drag callbacks receive detail structs with position and movement information:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Position` | `rendering.Offset` | Current pointer position |
+| `Delta` | `rendering.Offset` | Movement since last update |
+| `PrimaryDelta` | `float64` | Axis-specific delta (horizontal or vertical) |
+| `Velocity` | `rendering.Offset` | End velocity (in DragEndDetails) |
+| `PrimaryVelocity` | `float64` | Axis-specific velocity |
+
+Note: `PrimaryDelta` and `PrimaryVelocity` are only meaningful for axis-locked recognizers. For pan gestures, use `Delta` and `Velocity` instead.

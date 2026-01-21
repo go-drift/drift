@@ -108,12 +108,13 @@ func (s scrollViewCore) UpdateRenderObject(ctx core.BuildContext, renderObject l
 
 type renderScrollView struct {
 	layout.RenderBoxBase
-	child      layout.RenderBox
-	direction  Axis
-	controller *ScrollController
-	physics    ScrollPhysics
-	position   *ScrollPosition
-	pan        *gestures.PanGestureRecognizer
+	child          layout.RenderBox
+	direction      Axis
+	controller     *ScrollController
+	physics        ScrollPhysics
+	position       *ScrollPosition
+	horizontalDrag *gestures.HorizontalDragGestureRecognizer
+	verticalDrag   *gestures.VerticalDragGestureRecognizer
 }
 
 func (r *renderScrollView) SetChild(child layout.RenderObject) {
@@ -205,7 +206,16 @@ func (r *renderScrollView) HitTest(position rendering.Offset, result *layout.Hit
 }
 
 func (r *renderScrollView) HandlePointer(event gestures.PointerEvent) {
-	if r.pan == nil {
+	var recognizer interface {
+		AddPointer(gestures.PointerEvent)
+		HandleEvent(gestures.PointerEvent)
+	}
+	if r.direction == AxisHorizontal {
+		recognizer = r.horizontalDrag
+	} else {
+		recognizer = r.verticalDrag
+	}
+	if recognizer == nil {
 		return
 	}
 	switch event.Phase {
@@ -213,44 +223,65 @@ func (r *renderScrollView) HandlePointer(event gestures.PointerEvent) {
 		if r.position != nil {
 			r.position.StopBallistic()
 		}
-		r.pan.AddPointer(event)
+		recognizer.AddPointer(event)
 	default:
-		r.pan.HandleEvent(event)
+		recognizer.HandleEvent(event)
 	}
 }
 
 func (r *renderScrollView) configurePan() {
-	if r.pan == nil {
-		r.pan = gestures.NewPanGestureRecognizer(gestures.DefaultArena)
-	}
-	r.pan.OnStart = func(details gestures.DragStartDetails) {
+	r.configureDrag()
+}
+
+func (r *renderScrollView) configureDrag() {
+	onStart := func(details gestures.DragStartDetails) {
 		if r.position != nil {
 			r.position.StopBallistic()
 		}
 	}
-	r.pan.OnUpdate = func(details gestures.DragUpdateDetails) {
+	onUpdate := func(details gestures.DragUpdateDetails) {
 		if r.position == nil {
 			return
 		}
-		if r.direction == AxisHorizontal {
-			r.position.ApplyUserOffset(-details.Delta.X)
-		} else {
-			r.position.ApplyUserOffset(-details.Delta.Y)
-		}
+		r.position.ApplyUserOffset(-details.PrimaryDelta)
 	}
-	r.pan.OnEnd = func(details gestures.DragEndDetails) {
+	onEnd := func(details gestures.DragEndDetails) {
 		if r.position == nil {
 			return
 		}
-		velocity := details.Velocity.Y
-		if r.direction == AxisHorizontal {
-			velocity = details.Velocity.X
-		}
-		r.position.StartBallistic(-velocity)
+		r.position.StartBallistic(-details.PrimaryVelocity)
 	}
-	r.pan.OnCancel = func() {
+	onCancel := func() {
 		if r.position != nil {
 			r.position.StopBallistic()
+		}
+	}
+
+	if r.direction == AxisHorizontal {
+		if r.horizontalDrag == nil {
+			r.horizontalDrag = gestures.NewHorizontalDragGestureRecognizer(gestures.DefaultArena)
+		}
+		r.horizontalDrag.OnStart = onStart
+		r.horizontalDrag.OnUpdate = onUpdate
+		r.horizontalDrag.OnEnd = onEnd
+		r.horizontalDrag.OnCancel = onCancel
+		// Dispose vertical if direction changed
+		if r.verticalDrag != nil {
+			r.verticalDrag.Dispose()
+			r.verticalDrag = nil
+		}
+	} else {
+		if r.verticalDrag == nil {
+			r.verticalDrag = gestures.NewVerticalDragGestureRecognizer(gestures.DefaultArena)
+		}
+		r.verticalDrag.OnStart = onStart
+		r.verticalDrag.OnUpdate = onUpdate
+		r.verticalDrag.OnEnd = onEnd
+		r.verticalDrag.OnCancel = onCancel
+		// Dispose horizontal if direction changed
+		if r.horizontalDrag != nil {
+			r.horizontalDrag.Dispose()
+			r.horizontalDrag = nil
 		}
 	}
 }

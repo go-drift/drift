@@ -208,7 +208,8 @@ drift run xtool
 
 #### Gesture & Input
 - [x] Gesture detection - GestureDetector, TapGestureRecognizer
-- [x] Gesture arena - Multi-touch gesture competition
+- [x] Gesture arena - Multi-touch gesture competition with hold mechanism
+- [x] Drag gestures - Pan, HorizontalDrag, VerticalDrag recognizers with axis locking
 - [x] Focus management - FocusNode, FocusScopeNode, directional navigation
 - [x] Scroll physics - ClampingScrollPhysics, BouncingScrollPhysics
 
@@ -244,7 +245,6 @@ drift run xtool
 
 ### Partially Implemented
 
-- [ ] Drag gestures - Framework in place, recognizers need completion
 - [ ] Accessibility - Safe area and focus support exist, semantic labels needed
 - [ ] Hot reload - Not yet implemented
 - [ ] Developer tools - Widget inspector, performance overlay

@@ -15,6 +15,16 @@ type GestureDetector struct {
 	OnPanUpdate func(DragUpdateDetails)
 	OnPanEnd    func(DragEndDetails)
 	OnPanCancel func()
+
+	OnHorizontalDragStart  func(DragStartDetails)
+	OnHorizontalDragUpdate func(DragUpdateDetails)
+	OnHorizontalDragEnd    func(DragEndDetails)
+	OnHorizontalDragCancel func()
+
+	OnVerticalDragStart  func(DragStartDetails)
+	OnVerticalDragUpdate func(DragUpdateDetails)
+	OnVerticalDragEnd    func(DragEndDetails)
+	OnVerticalDragCancel func()
 }
 
 func (g GestureDetector) CreateElement() core.Element {
@@ -45,9 +55,11 @@ func (g GestureDetector) UpdateRenderObject(ctx core.BuildContext, renderObject 
 
 type renderGestureDetector struct {
 	layout.RenderBoxBase
-	child layout.RenderBox
-	tap   *gestures.TapGestureRecognizer
-	pan   *gestures.PanGestureRecognizer
+	child          layout.RenderBox
+	tap            *gestures.TapGestureRecognizer
+	pan            *gestures.PanGestureRecognizer
+	horizontalDrag *gestures.HorizontalDragGestureRecognizer
+	verticalDrag   *gestures.VerticalDragGestureRecognizer
 }
 
 func (r *renderGestureDetector) SetChild(child layout.RenderObject) {
@@ -97,11 +109,27 @@ func (r *renderGestureDetector) HandlePointer(event gestures.PointerEvent) {
 			r.pan.HandleEvent(event)
 		}
 	}
+	if r.horizontalDrag != nil {
+		if isDown {
+			r.horizontalDrag.AddPointer(event)
+		} else {
+			r.horizontalDrag.HandleEvent(event)
+		}
+	}
+	if r.verticalDrag != nil {
+		if isDown {
+			r.verticalDrag.AddPointer(event)
+		} else {
+			r.verticalDrag.HandleEvent(event)
+		}
+	}
 }
 
 func (r *renderGestureDetector) configure(g GestureDetector) {
 	r.configureTap(g)
 	r.configurePan(g)
+	r.configureHorizontalDrag(g)
+	r.configureVerticalDrag(g)
 }
 
 func (r *renderGestureDetector) configureTap(g GestureDetector) {
@@ -120,11 +148,20 @@ func (r *renderGestureDetector) configureTap(g GestureDetector) {
 
 func (r *renderGestureDetector) configurePan(g GestureDetector) {
 	hasPanHandler := g.OnPanStart != nil || g.OnPanUpdate != nil || g.OnPanEnd != nil || g.OnPanCancel != nil
-	if !hasPanHandler {
+	// Don't use pan when axis-specific handlers are present (they would conflict)
+	hasAxisHandler := g.OnHorizontalDragStart != nil || g.OnHorizontalDragUpdate != nil ||
+		g.OnHorizontalDragEnd != nil || g.OnHorizontalDragCancel != nil ||
+		g.OnVerticalDragStart != nil || g.OnVerticalDragUpdate != nil ||
+		g.OnVerticalDragEnd != nil || g.OnVerticalDragCancel != nil
+	if !hasPanHandler || hasAxisHandler {
 		if r.pan != nil {
 			r.pan.Dispose()
 			r.pan = nil
 		}
+		if !hasPanHandler {
+			return
+		}
+		// hasPanHandler && hasAxisHandler: axis handlers take precedence, skip pan
 		return
 	}
 	if r.pan == nil {
@@ -134,6 +171,44 @@ func (r *renderGestureDetector) configurePan(g GestureDetector) {
 	r.pan.OnUpdate = g.OnPanUpdate
 	r.pan.OnEnd = g.OnPanEnd
 	r.pan.OnCancel = g.OnPanCancel
+}
+
+func (r *renderGestureDetector) configureHorizontalDrag(g GestureDetector) {
+	hasHandler := g.OnHorizontalDragStart != nil || g.OnHorizontalDragUpdate != nil ||
+		g.OnHorizontalDragEnd != nil || g.OnHorizontalDragCancel != nil
+	if !hasHandler {
+		if r.horizontalDrag != nil {
+			r.horizontalDrag.Dispose()
+			r.horizontalDrag = nil
+		}
+		return
+	}
+	if r.horizontalDrag == nil {
+		r.horizontalDrag = gestures.NewHorizontalDragGestureRecognizer(gestures.DefaultArena)
+	}
+	r.horizontalDrag.OnStart = g.OnHorizontalDragStart
+	r.horizontalDrag.OnUpdate = g.OnHorizontalDragUpdate
+	r.horizontalDrag.OnEnd = g.OnHorizontalDragEnd
+	r.horizontalDrag.OnCancel = g.OnHorizontalDragCancel
+}
+
+func (r *renderGestureDetector) configureVerticalDrag(g GestureDetector) {
+	hasHandler := g.OnVerticalDragStart != nil || g.OnVerticalDragUpdate != nil ||
+		g.OnVerticalDragEnd != nil || g.OnVerticalDragCancel != nil
+	if !hasHandler {
+		if r.verticalDrag != nil {
+			r.verticalDrag.Dispose()
+			r.verticalDrag = nil
+		}
+		return
+	}
+	if r.verticalDrag == nil {
+		r.verticalDrag = gestures.NewVerticalDragGestureRecognizer(gestures.DefaultArena)
+	}
+	r.verticalDrag.OnStart = g.OnVerticalDragStart
+	r.verticalDrag.OnUpdate = g.OnVerticalDragUpdate
+	r.verticalDrag.OnEnd = g.OnVerticalDragEnd
+	r.verticalDrag.OnCancel = g.OnVerticalDragCancel
 }
 
 // DragStartDetails describes the start of a drag.

@@ -13,14 +13,16 @@ type DragStartDetails struct {
 
 // DragUpdateDetails describes a drag update.
 type DragUpdateDetails struct {
-	Position rendering.Offset
-	Delta    rendering.Offset
+	Position     rendering.Offset
+	Delta        rendering.Offset
+	PrimaryDelta float64 // axis-specific delta (0 for Pan)
 }
 
 // DragEndDetails describes the end of a drag.
 type DragEndDetails struct {
-	Position rendering.Offset
-	Velocity rendering.Offset
+	Position        rendering.Offset
+	Velocity        rendering.Offset
+	PrimaryVelocity float64 // axis-specific velocity (0 for Pan)
 }
 
 // TapGestureRecognizer detects taps.
@@ -149,6 +151,8 @@ func (p *PanGestureRecognizer) AddPointer(event PointerEvent) {
 	p.reject = false
 	p.started = false
 	p.Arena.Add(event.PointerID, p)
+	// Hold immediately to prevent auto-resolve on Close before slop is exceeded
+	p.Arena.Hold(event.PointerID, p)
 }
 
 // HandleEvent processes pointer events for drag detection.
@@ -232,3 +236,251 @@ func (p *PanGestureRecognizer) ensureStarted() {
 func distance(offset rendering.Offset) float64 {
 	return math.Hypot(offset.X, offset.Y)
 }
+
+// DragAxis specifies the direction for axis-locked drag recognizers.
+type DragAxis int
+
+const (
+	DragAxisHorizontal DragAxis = iota
+	DragAxisVertical
+)
+
+// axisDragRecognizer is the shared implementation for axis-locked drags.
+type axisDragRecognizer struct {
+	Arena    *GestureArena
+	OnStart  func(DragStartDetails)
+	OnUpdate func(DragUpdateDetails)
+	OnEnd    func(DragEndDetails)
+	OnCancel func()
+
+	axis     DragAxis
+	self     ArenaMember // concrete type for arena registration
+	pointer  int64
+	start    rendering.Offset
+	last     rendering.Offset
+	lastTime time.Time
+	velocity float64 // primary axis velocity
+	slop     float64
+	accepted bool
+	reject   bool
+	started  bool
+}
+
+func (d *axisDragRecognizer) primaryOffset(offset rendering.Offset) float64 {
+	if d.axis == DragAxisHorizontal {
+		return offset.X
+	}
+	return offset.Y
+}
+
+func (d *axisDragRecognizer) orthogonalOffset(offset rendering.Offset) float64 {
+	if d.axis == DragAxisHorizontal {
+		return offset.Y
+	}
+	return offset.X
+}
+
+func (d *axisDragRecognizer) addPointer(event PointerEvent) {
+	if d.Arena == nil || d.self == nil {
+		return
+	}
+	d.pointer = event.PointerID
+	d.start = event.Position
+	d.last = event.Position
+	d.lastTime = time.Now()
+	d.velocity = 0
+	d.slop = DefaultTouchSlop
+	d.accepted = false
+	d.reject = false
+	d.started = false
+	d.Arena.Add(event.PointerID, d.self)
+	// Hold immediately to prevent auto-resolve on Close before we determine axis
+	d.Arena.Hold(event.PointerID, d.self)
+}
+
+func (d *axisDragRecognizer) handleEvent(event PointerEvent) {
+	if event.PointerID != d.pointer || d.reject {
+		return
+	}
+	switch event.Phase {
+	case PointerPhaseMove:
+		d.handleMove(event)
+	case PointerPhaseUp:
+		d.handleUp(event)
+	case PointerPhaseCancel:
+		d.handleCancel()
+	}
+}
+
+func (d *axisDragRecognizer) handleMove(event PointerEvent) {
+	now := time.Now()
+	dt := now.Sub(d.lastTime).Seconds()
+
+	total := rendering.Offset{X: event.Position.X - d.start.X, Y: event.Position.Y - d.start.Y}
+	primary := math.Abs(d.primaryOffset(total))
+	orthogonal := math.Abs(d.orthogonalOffset(total))
+
+	// Check if we should resolve or reject (we hold from addPointer)
+	if !d.accepted {
+		if primary > d.slop && primary >= orthogonal {
+			// Primary axis wins (>= handles ties in favor of primary)
+			d.Arena.Resolve(d.pointer, d.self)
+		} else if orthogonal > d.slop {
+			// Orthogonal axis exceeds slop first - reject
+			d.reject = true
+			d.Arena.Reject(d.pointer, d.self)
+			return
+		}
+	}
+
+	// Update velocity tracking
+	delta := rendering.Offset{X: event.Position.X - d.last.X, Y: event.Position.Y - d.last.Y}
+	primaryDelta := d.primaryOffset(delta)
+	if dt > 0 {
+		inst := primaryDelta / dt
+		d.velocity = d.velocity*0.8 + inst*0.2
+	}
+
+	if d.accepted {
+		d.ensureStarted()
+		if d.OnUpdate != nil {
+			d.OnUpdate(DragUpdateDetails{
+				Position:     event.Position,
+				Delta:        delta,
+				PrimaryDelta: primaryDelta,
+			})
+		}
+	}
+
+	d.last = event.Position
+	d.lastTime = now
+}
+
+func (d *axisDragRecognizer) handleUp(event PointerEvent) {
+	if d.accepted {
+		if d.OnEnd != nil {
+			var vel rendering.Offset
+			if d.axis == DragAxisHorizontal {
+				vel = rendering.Offset{X: d.velocity, Y: 0}
+			} else {
+				vel = rendering.Offset{X: 0, Y: d.velocity}
+			}
+			d.OnEnd(DragEndDetails{
+				Position:        event.Position,
+				Velocity:        vel,
+				PrimaryVelocity: d.velocity,
+			})
+		}
+	} else {
+		d.Arena.Reject(d.pointer, d.self)
+	}
+}
+
+func (d *axisDragRecognizer) handleCancel() {
+	if d.accepted && d.OnCancel != nil {
+		d.OnCancel()
+	}
+	d.reject = true
+	d.Arena.Reject(d.pointer, d.self)
+}
+
+func (d *axisDragRecognizer) acceptGesture(pointerID int64) {
+	if pointerID != d.pointer || d.reject {
+		return
+	}
+	d.accepted = true
+	d.ensureStarted()
+}
+
+func (d *axisDragRecognizer) rejectGesture(pointerID int64) {
+	if pointerID != d.pointer {
+		return
+	}
+	d.reject = true
+}
+
+func (d *axisDragRecognizer) ensureStarted() {
+	if d.started {
+		return
+	}
+	d.started = true
+	if d.OnStart != nil {
+		d.OnStart(DragStartDetails{Position: d.start})
+	}
+}
+
+// HorizontalDragGestureRecognizer detects horizontal drag gestures.
+// It wins when |deltaX| > slop before |deltaY| > slop.
+type HorizontalDragGestureRecognizer struct {
+	axisDragRecognizer
+}
+
+// NewHorizontalDragGestureRecognizer creates a horizontal drag recognizer.
+func NewHorizontalDragGestureRecognizer(arena *GestureArena) *HorizontalDragGestureRecognizer {
+	h := &HorizontalDragGestureRecognizer{}
+	h.Arena = arena
+	h.axis = DragAxisHorizontal
+	h.self = h // set self-reference for arena registration
+	return h
+}
+
+// AddPointer registers a pointer down event.
+func (h *HorizontalDragGestureRecognizer) AddPointer(event PointerEvent) {
+	h.addPointer(event)
+}
+
+// HandleEvent processes pointer events for drag detection.
+func (h *HorizontalDragGestureRecognizer) HandleEvent(event PointerEvent) {
+	h.handleEvent(event)
+}
+
+// AcceptGesture is called by the arena when this recognizer wins.
+func (h *HorizontalDragGestureRecognizer) AcceptGesture(pointerID int64) {
+	h.acceptGesture(pointerID)
+}
+
+// RejectGesture is called by the arena when this recognizer loses.
+func (h *HorizontalDragGestureRecognizer) RejectGesture(pointerID int64) {
+	h.rejectGesture(pointerID)
+}
+
+// Dispose releases resources for the recognizer.
+func (h *HorizontalDragGestureRecognizer) Dispose() {}
+
+// VerticalDragGestureRecognizer detects vertical drag gestures.
+// It wins when |deltaY| > slop before |deltaX| > slop.
+type VerticalDragGestureRecognizer struct {
+	axisDragRecognizer
+}
+
+// NewVerticalDragGestureRecognizer creates a vertical drag recognizer.
+func NewVerticalDragGestureRecognizer(arena *GestureArena) *VerticalDragGestureRecognizer {
+	v := &VerticalDragGestureRecognizer{}
+	v.Arena = arena
+	v.axis = DragAxisVertical
+	v.self = v // set self-reference for arena registration
+	return v
+}
+
+// AddPointer registers a pointer down event.
+func (v *VerticalDragGestureRecognizer) AddPointer(event PointerEvent) {
+	v.addPointer(event)
+}
+
+// HandleEvent processes pointer events for drag detection.
+func (v *VerticalDragGestureRecognizer) HandleEvent(event PointerEvent) {
+	v.handleEvent(event)
+}
+
+// AcceptGesture is called by the arena when this recognizer wins.
+func (v *VerticalDragGestureRecognizer) AcceptGesture(pointerID int64) {
+	v.acceptGesture(pointerID)
+}
+
+// RejectGesture is called by the arena when this recognizer loses.
+func (v *VerticalDragGestureRecognizer) RejectGesture(pointerID int64) {
+	v.rejectGesture(pointerID)
+}
+
+// Dispose releases resources for the recognizer.
+func (v *VerticalDragGestureRecognizer) Dispose() {}

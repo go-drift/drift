@@ -18,6 +18,7 @@ type arenaEntry struct {
 	members  []ArenaMember
 	resolved ArenaMember
 	closed   bool
+	holders  map[ArenaMember]struct{} // members requesting delayed resolution
 }
 
 // NewGestureArena creates a new arena instance.
@@ -53,9 +54,7 @@ func (a *GestureArena) Close(pointerID int64) {
 		return
 	}
 	entry.closed = true
-	if entry.resolved == nil && len(entry.members) == 1 {
-		a.resolveLocked(pointerID, entry, entry.members[0])
-	}
+	a.tryAutoResolveLocked(pointerID, entry)
 }
 
 // Resolve declares the winner for this pointer.
@@ -83,13 +82,15 @@ func (a *GestureArena) Reject(pointerID int64, member ArenaMember) {
 			break
 		}
 	}
+	// Also remove from holders if present
+	if entry.holders != nil {
+		delete(entry.holders, member)
+	}
 	if len(entry.members) == 0 {
 		delete(a.entries, pointerID)
 		return
 	}
-	if entry.closed && entry.resolved == nil && len(entry.members) == 1 {
-		a.resolveLocked(pointerID, entry, entry.members[0])
-	}
+	a.tryAutoResolveLocked(pointerID, entry)
 }
 
 // Sweep clears the arena entry for a pointer.
@@ -99,6 +100,45 @@ func (a *GestureArena) Sweep(pointerID int64) {
 	delete(a.entries, pointerID)
 }
 
+// Hold defers auto-resolution for this member. Returns true if the hold was
+// added successfully. The member must already be in the arena.
+func (a *GestureArena) Hold(pointerID int64, member ArenaMember) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry := a.entries[pointerID]
+	if entry == nil || entry.resolved != nil {
+		return false
+	}
+	// Verify member is in the arena
+	found := false
+	for _, m := range entry.members {
+		if m == member {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return false
+	}
+	if entry.holders == nil {
+		entry.holders = make(map[ArenaMember]struct{})
+	}
+	entry.holders[member] = struct{}{}
+	return true
+}
+
+// ReleaseHold removes a hold without resolving or rejecting.
+func (a *GestureArena) ReleaseHold(pointerID int64, member ArenaMember) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry := a.entries[pointerID]
+	if entry == nil || entry.holders == nil {
+		return
+	}
+	delete(entry.holders, member)
+	a.tryAutoResolveLocked(pointerID, entry)
+}
+
 func (a *GestureArena) resolveLocked(pointerID int64, entry *arenaEntry, winner ArenaMember) {
 	entry.resolved = winner
 	winner.AcceptGesture(pointerID)
@@ -106,5 +146,19 @@ func (a *GestureArena) resolveLocked(pointerID int64, entry *arenaEntry, winner 
 		if member != winner {
 			member.RejectGesture(pointerID)
 		}
+	}
+}
+
+// tryAutoResolveLocked resolves to the sole remaining member if the arena is
+// closed and no holders remain.
+func (a *GestureArena) tryAutoResolveLocked(pointerID int64, entry *arenaEntry) {
+	if !entry.closed || entry.resolved != nil {
+		return
+	}
+	if len(entry.holders) > 0 {
+		return
+	}
+	if len(entry.members) == 1 {
+		a.resolveLocked(pointerID, entry, entry.members[0])
 	}
 }

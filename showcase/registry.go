@@ -22,6 +22,7 @@ var demos = []Demo{
 	{"/images", "Images", "PNG/JPG image rendering", buildImagesPage},
 	{"/tabs", "Tabs", "Bottom tab bar navigation", buildTabsPage},
 	{"/scroll", "Scrolling", "Scrollable lists with physics", buildScrollPage},
+	{"/gestures", "Gestures", "Drag gestures with axis locking", buildGesturesPage},
 	{"/webview", "WebView", "Embedded native browser view", buildWebViewPage},
 	{"/notifications", "Notifications", "Permissions and local alerts", buildNotificationsPage},
 	{"/animations", "Animations", "Implicit animations for smooth UI", buildAnimationsPage},
