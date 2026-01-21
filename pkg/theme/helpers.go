@@ -43,6 +43,11 @@ func UseTheme(ctx core.BuildContext) (*ThemeData, ColorScheme, TextTheme) {
 // If a CupertinoTheme is found in the widget tree, returns TargetPlatformCupertino.
 // Otherwise, returns TargetPlatformMaterial.
 func PlatformOf(ctx core.BuildContext) TargetPlatform {
+	// Check AppTheme first (unified provider)
+	if appTheme := AppThemeMaybeOf(ctx); appTheme != nil {
+		return appTheme.Platform
+	}
+	// Fall back to checking CupertinoTheme presence
 	if CupertinoMaybeOf(ctx) != nil {
 		return TargetPlatformCupertino
 	}

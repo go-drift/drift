@@ -42,6 +42,11 @@ var themeType = reflect.TypeOf(Theme{})
 // ThemeOf returns the nearest ThemeData in the tree.
 // If no Theme ancestor is found, returns the default light theme.
 func ThemeOf(ctx core.BuildContext) *ThemeData {
+	// Check AppTheme first (unified provider)
+	if appTheme := AppThemeMaybeOf(ctx); appTheme != nil {
+		return appTheme.Material
+	}
+	// Fall back to legacy Theme widget
 	inherited := ctx.DependOnInherited(themeType)
 	if inherited == nil {
 		return DefaultLightTheme()

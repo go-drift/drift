@@ -42,6 +42,11 @@ var cupertinoThemeType = reflect.TypeOf(CupertinoTheme{})
 // CupertinoThemeOf returns the nearest CupertinoThemeData in the tree.
 // If no CupertinoTheme ancestor is found, returns the default light theme.
 func CupertinoThemeOf(ctx core.BuildContext) *CupertinoThemeData {
+	// Check AppTheme first (unified provider)
+	if appTheme := AppThemeMaybeOf(ctx); appTheme != nil {
+		return appTheme.Cupertino
+	}
+	// Fall back to legacy CupertinoTheme widget
 	inherited := ctx.DependOnInherited(cupertinoThemeType)
 	if inherited == nil {
 		return DefaultCupertinoLightTheme()
@@ -53,7 +58,16 @@ func CupertinoThemeOf(ctx core.BuildContext) *CupertinoThemeData {
 }
 
 // CupertinoMaybeOf returns the nearest CupertinoThemeData, or nil if not found.
+// When using AppTheme, returns data only if Cupertino mode is active.
 func CupertinoMaybeOf(ctx core.BuildContext) *CupertinoThemeData {
+	// Check AppTheme first - only return if Cupertino mode is active
+	if appTheme := AppThemeMaybeOf(ctx); appTheme != nil {
+		if appTheme.Platform == TargetPlatformCupertino {
+			return appTheme.Cupertino
+		}
+		return nil
+	}
+	// Fall back to legacy CupertinoTheme widget
 	inherited := ctx.DependOnInherited(cupertinoThemeType)
 	if inherited == nil {
 		return nil

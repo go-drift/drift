@@ -40,15 +40,15 @@ func (s ShowcaseApp) CreateState() core.State {
 
 type showcaseState struct {
 	core.StateBase
-	isDark              bool
-	isCupertino         bool
-	transparentSystemUI bool
-	deepLinkController  *navigation.DeepLinkController
+	isDark             bool
+	isCupertino        bool
+	deepLinkController *navigation.DeepLinkController
+	// Memoized theme data to avoid churn in UpdateShouldNotify
+	cachedThemeData *theme.AppThemeData
 }
 
 func (s *showcaseState) InitState() {
 	s.isDark = true // Start with dark theme
-	s.transparentSystemUI = false
 	s.updateBackgroundColor()
 	s.applySystemUI()
 	s.deepLinkController = navigation.NewDeepLinkController(s.deepLinkRoute, func(err error) {
@@ -57,7 +57,8 @@ func (s *showcaseState) InitState() {
 }
 
 func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
-	themeData := s.currentThemeData()
+	// Get memoized theme data (only recreated when values change)
+	appThemeData := s.getAppThemeData()
 
 	navigator := navigation.Navigator{
 		InitialRoute: "/",
@@ -66,7 +67,7 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 			if settings.Name == "/" {
 				return navigation.NewMaterialPageRoute(
 					func(ctx core.BuildContext) core.Widget {
-						return buildHomePage(ctx, s.isDark, s.isCupertino, s.transparentSystemUI, s.toggleTheme, s.togglePlatform, s.toggleSystemTransparency)
+						return buildHomePage(ctx, s.isDark, s.isCupertino, s.toggleTheme, s.togglePlatform)
 					},
 					settings,
 				)
@@ -98,56 +99,51 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 		},
 	}
 
-	// Always wrap with Material theme
-	materialWidget := theme.Theme{
-		Data:        themeData,
+	// Single AppTheme - no tree structure change when platform toggles
+	return theme.AppTheme{
+		Data:        appThemeData,
 		ChildWidget: navigator,
 	}
+}
 
-	// Optionally wrap with Cupertino theme
+// getAppThemeData returns memoized theme data, recreating only when state changes.
+func (s *showcaseState) getAppThemeData() *theme.AppThemeData {
+	brightness := theme.BrightnessLight
+	if s.isDark {
+		brightness = theme.BrightnessDark
+	}
+	targetPlatform := theme.TargetPlatformMaterial
 	if s.isCupertino {
-		cupertinoData := s.currentCupertinoThemeData()
-		return theme.CupertinoTheme{
-			Data:        cupertinoData,
-			ChildWidget: materialWidget,
-		}
+		targetPlatform = theme.TargetPlatformCupertino
 	}
 
-	return materialWidget
-}
-
-func (s *showcaseState) currentThemeData() *theme.ThemeData {
-	if s.isDark {
-		return theme.DefaultDarkTheme()
+	// Only recreate if values changed
+	if s.cachedThemeData == nil ||
+		s.cachedThemeData.Platform != targetPlatform ||
+		s.cachedThemeData.Brightness() != brightness {
+		s.cachedThemeData = theme.NewAppThemeData(targetPlatform, brightness)
 	}
-	return theme.DefaultLightTheme()
-}
-
-func (s *showcaseState) currentCupertinoThemeData() *theme.CupertinoThemeData {
-	if s.isDark {
-		return theme.DefaultCupertinoDarkTheme()
-	}
-	return theme.DefaultCupertinoLightTheme()
+	return s.cachedThemeData
 }
 
 func (s *showcaseState) updateBackgroundColor() {
-	themeData := s.currentThemeData()
-	engine.SetBackgroundColor(rendering.Color(themeData.ColorScheme.Background))
+	appThemeData := s.getAppThemeData()
+	engine.SetBackgroundColor(rendering.Color(appThemeData.Material.ColorScheme.Background))
 }
 
 func (s *showcaseState) applySystemUI() {
-	themeData := s.currentThemeData()
+	appThemeData := s.getAppThemeData()
 	statusStyle := platform.StatusBarStyleDark
-	if themeData.Brightness == theme.BrightnessDark {
+	if appThemeData.Brightness() == theme.BrightnessDark {
 		statusStyle = platform.StatusBarStyleLight
 	}
-	backgroundColor := themeData.ColorScheme.Surface
+	backgroundColor := appThemeData.Material.ColorScheme.Surface
 	_ = platform.SetSystemUI(platform.SystemUIStyle{
 		StatusBarHidden: false,
 		StatusBarStyle:  statusStyle,
 		TitleBarHidden:  false,
 		BackgroundColor: &backgroundColor,
-		Transparent:     s.transparentSystemUI,
+		Transparent:     true,
 	})
 }
 
@@ -201,12 +197,7 @@ func (s *showcaseState) togglePlatform() {
 	s.SetState(func() {
 		s.isCupertino = !s.isCupertino
 	})
-}
-
-func (s *showcaseState) toggleSystemTransparency() {
-	s.SetState(func() {
-		s.transparentSystemUI = !s.transparentSystemUI
-	})
+	s.updateBackgroundColor()
 	s.applySystemUI()
 }
 
