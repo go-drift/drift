@@ -29,14 +29,14 @@ const (
 // # Positioning Children
 //
 // Non-positioned children use the Alignment to determine their position.
-// For absolute positioning, wrap children in Positioned:
+// For absolute positioning, wrap children in [Positioned]:
 //
 //	Stack{
 //	    ChildrenWidgets: []core.Widget{
 //	        // Background fills the stack
 //	        Container{Color: bgColor},
 //	        // Badge in top-right corner
-//	        Positioned{Top: ptr(8), Right: ptr(8), ChildWidget: badge},
+//	        Positioned{Top: Ptr(8), Right: Ptr(8), ChildWidget: badge},
 //	    },
 //	}
 type Stack struct {
@@ -128,6 +128,7 @@ func (r *renderStack) HitTest(position rendering.Offset, result *layout.HitTestR
 
 // layoutStackChildren performs the common layout logic for stack-based widgets.
 // It lays out children according to the fit mode and positions them using alignment.
+// Positioned children contribute to stack sizing and use alignment for unset axes.
 func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment layout.Alignment, constraints layout.Constraints) rendering.Size {
 	var stackWidth, stackHeight float64
 	if fit == StackFitExpand {
@@ -135,8 +136,19 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 		stackHeight = constraints.MaxHeight
 	}
 
+	// First pass: layout all children to determine stack size.
+	// For positioned children, apply explicit Width/Height and single-edge constraints
+	// so their sizes contribute correctly to stack sizing.
+	// Edge-based stretching (both edges set) will be resolved in the second pass.
 	for _, child := range children {
-		childConstraints := stackConstraints(fit, stackWidth, stackHeight, constraints)
+		var childConstraints layout.Constraints
+		if fit == StackFitExpand {
+			childConstraints = layout.Tight(rendering.Size{Width: stackWidth, Height: stackHeight})
+		} else if pos, ok := child.(*renderPositioned); ok {
+			childConstraints = positionedFirstPassConstraints(pos, constraints)
+		} else {
+			childConstraints = layout.Loose(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
+		}
 		child.Layout(childConstraints)
 		childSize := child.Size()
 		if childSize.Width > stackWidth {
@@ -149,7 +161,19 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 
 	size := constraints.Constrain(rendering.Size{Width: stackWidth, Height: stackHeight})
 
+	// Second pass: finalize positioned children.
+	// Re-layout those that stretch (both edges set), and calculate offsets for all.
 	for _, child := range children {
+		if pos, ok := child.(*renderPositioned); ok {
+			layoutPositionedChild(pos, size, alignment)
+		}
+	}
+
+	// Third pass: position non-positioned children using alignment
+	for _, child := range children {
+		if _, ok := child.(*renderPositioned); ok {
+			continue // Already positioned
+		}
 		offset := alignment.WithinRect(
 			rendering.RectFromLTWH(0, 0, size.Width, size.Height),
 			child.Size(),
@@ -160,12 +184,157 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 	return size
 }
 
-// stackConstraints returns the constraints for a child based on the fit mode.
-func stackConstraints(fit StackFit, stackWidth, stackHeight float64, constraints layout.Constraints) layout.Constraints {
-	if fit == StackFitExpand {
-		return layout.Tight(rendering.Size{Width: stackWidth, Height: stackHeight})
+// positionedFirstPassConstraints calculates constraints for a positioned child
+// during the first layout pass. Explicit Width/Height are applied as tight constraints.
+// Single-edge offsets reduce the max constraint. Edge-based stretching (both edges set)
+// uses loose constraints since it depends on final stack size.
+func positionedFirstPassConstraints(pos *renderPositioned, constraints layout.Constraints) layout.Constraints {
+	var minWidth, maxWidth, minHeight, maxHeight float64
+
+	// Width constraints
+	if pos.width != nil {
+		// Explicit width - tight constraint
+		minWidth = *pos.width
+		maxWidth = *pos.width
+	} else if pos.left != nil && pos.right != nil {
+		// Both edges set - stretching, use loose (will be re-laid out in second pass)
+		maxWidth = constraints.MaxWidth
+	} else {
+		// Loose, reduced by any single edge
+		maxWidth = constraints.MaxWidth
+		if pos.left != nil {
+			maxWidth -= *pos.left
+		}
+		if pos.right != nil {
+			maxWidth -= *pos.right
+		}
+		if maxWidth < 0 {
+			maxWidth = 0
+		}
 	}
-	return layout.Loose(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
+
+	// Height constraints
+	if pos.height != nil {
+		// Explicit height - tight constraint
+		minHeight = *pos.height
+		maxHeight = *pos.height
+	} else if pos.top != nil && pos.bottom != nil {
+		// Both edges set - stretching, use loose (will be re-laid out in second pass)
+		maxHeight = constraints.MaxHeight
+	} else {
+		// Loose, reduced by any single edge
+		maxHeight = constraints.MaxHeight
+		if pos.top != nil {
+			maxHeight -= *pos.top
+		}
+		if pos.bottom != nil {
+			maxHeight -= *pos.bottom
+		}
+		if maxHeight < 0 {
+			maxHeight = 0
+		}
+	}
+
+	return layout.Constraints{
+		MinWidth:  minWidth,
+		MaxWidth:  maxWidth,
+		MinHeight: minHeight,
+		MaxHeight: maxHeight,
+	}
+}
+
+// layoutPositionedChild lays out a positioned child within the given stack size.
+// It calculates constraints from the position parameters, determines the child's offset,
+// and uses alignment for axes where no position is specified.
+//
+// Note: The first pass already applied explicit Width/Height and single-edge constraints.
+// This function only re-layouts when edge-based stretching is needed (both edges set
+// without explicit dimension), since stretching depends on final stack size.
+func layoutPositionedChild(pos *renderPositioned, stackSize rendering.Size, alignment layout.Alignment) {
+	if pos.child == nil {
+		pos.SetSize(rendering.Size{})
+		return
+	}
+
+	// Only re-layout if stretching on either axis (both edges set without explicit dimension)
+	stretchesWidth := pos.width == nil && pos.left != nil && pos.right != nil
+	stretchesHeight := pos.height == nil && pos.top != nil && pos.bottom != nil
+
+	if stretchesWidth || stretchesHeight {
+		childSize := pos.child.Size()
+		var minWidth, maxWidth, minHeight, maxHeight float64
+
+		// Width constraints
+		if stretchesWidth {
+			w := stackSize.Width - *pos.left - *pos.right
+			if w < 0 {
+				w = 0
+			}
+			minWidth = w
+			maxWidth = w
+		} else {
+			// Keep current width from first pass
+			maxWidth = childSize.Width
+		}
+
+		// Height constraints
+		if stretchesHeight {
+			h := stackSize.Height - *pos.top - *pos.bottom
+			if h < 0 {
+				h = 0
+			}
+			minHeight = h
+			maxHeight = h
+		} else {
+			// Keep current height from first pass
+			maxHeight = childSize.Height
+		}
+
+		childConstraints := layout.Constraints{
+			MinWidth:  minWidth,
+			MaxWidth:  maxWidth,
+			MinHeight: minHeight,
+			MaxHeight: maxHeight,
+		}
+		pos.child.Layout(childConstraints)
+	}
+
+	childSize := pos.child.Size()
+	pos.SetSize(childSize)
+
+	// Calculate offset based on position parameters.
+	// For axes with no position set, use alignment.
+	hasHorizontalPosition := pos.left != nil || pos.right != nil
+	hasVerticalPosition := pos.top != nil || pos.bottom != nil
+
+	// Compute alignment offset once for unset axes
+	var alignedOffset rendering.Offset
+	if !hasHorizontalPosition || !hasVerticalPosition {
+		alignedOffset = alignment.WithinRect(
+			rendering.RectFromLTWH(0, 0, stackSize.Width, stackSize.Height),
+			childSize,
+		)
+	}
+
+	var x, y float64
+	if pos.left != nil {
+		x = *pos.left
+	} else if pos.right != nil {
+		x = stackSize.Width - *pos.right - childSize.Width
+	} else {
+		x = alignedOffset.X
+	}
+
+	if pos.top != nil {
+		y = *pos.top
+	} else if pos.bottom != nil {
+		y = stackSize.Height - *pos.bottom - childSize.Height
+	} else {
+		y = alignedOffset.Y
+	}
+
+	pos.child.SetParentData(&layout.BoxParentData{Offset: rendering.Offset{}})
+	pos.SetParentData(&layout.BoxParentData{Offset: rendering.Offset{X: x, Y: y}})
 }
 
 // hitTestChildrenReverse tests children in reverse order and returns true if any child was hit.
@@ -284,22 +453,29 @@ func (r *renderIndexedStack) HitTest(position rendering.Offset, result *layout.H
 //
 // # Constraint Combinations
 //
-// Use pointer fields (nil = unset) to control positioning:
+// Use pointer fields (nil = unset) to control positioning. The [Ptr] helper
+// creates float64 pointers conveniently:
 //
 //	// Pin to top-left corner with 8pt margins
-//	Positioned{Left: ptr(8), Top: ptr(8), ChildWidget: icon}
+//	Positioned{Left: Ptr(8), Top: Ptr(8), ChildWidget: icon}
 //
 //	// Pin to bottom-right corner
-//	Positioned{Right: ptr(16), Bottom: ptr(16), ChildWidget: fab}
+//	Positioned{Right: Ptr(16), Bottom: Ptr(16), ChildWidget: fab}
 //
 //	// Stretch horizontally with fixed vertical position
-//	Positioned{Left: ptr(0), Right: ptr(0), Top: ptr(100), ChildWidget: divider}
+//	Positioned{Left: Ptr(0), Right: Ptr(0), Top: Ptr(100), ChildWidget: divider}
 //
 //	// Fixed size at specific position
-//	Positioned{Left: ptr(20), Top: ptr(20), Width: ptr(100), Height: ptr(50), ChildWidget: box}
+//	Positioned{Left: Ptr(20), Top: Ptr(20), Width: Ptr(100), Height: Ptr(50), ChildWidget: box}
+//
+//	// Position only vertically - horizontal uses Stack.Alignment
+//	Positioned{Top: Ptr(20), ChildWidget: header}
 //
 // When both Left and Right are set (or Top and Bottom), the child stretches
 // to fill that dimension. Width/Height override the stretching behavior.
+//
+// For axes where no position is set (neither Left nor Right, or neither Top
+// nor Bottom), the child uses the Stack's Alignment for that axis.
 type Positioned struct {
 	// ChildWidget is the widget to position.
 	ChildWidget core.Widget
@@ -385,8 +561,18 @@ func (r *renderPositioned) Layout(constraints layout.Constraints) {
 		r.SetSize(rendering.Size{})
 		return
 	}
-	// For now, just pass through
-	r.child.Layout(constraints)
+	// When used outside a Stack, apply width/height constraints if specified.
+	// Position parameters (left/top/right/bottom) only work inside a Stack.
+	childConstraints := constraints
+	if r.width != nil {
+		childConstraints.MinWidth = *r.width
+		childConstraints.MaxWidth = *r.width
+	}
+	if r.height != nil {
+		childConstraints.MinHeight = *r.height
+		childConstraints.MaxHeight = *r.height
+	}
+	r.child.Layout(childConstraints)
 	r.SetSize(r.child.Size())
 	r.child.SetParentData(&layout.BoxParentData{})
 }

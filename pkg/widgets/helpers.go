@@ -114,6 +114,14 @@ func Spacer(size float64) SizedBox {
 	return SizedBox{Height: size}
 }
 
+// Ptr returns a pointer to the given float64 value.
+// This is a convenience helper for Positioned widget fields:
+//
+//	Positioned{Left: widgets.Ptr(8), Top: widgets.Ptr(16), ChildWidget: child}
+func Ptr(v float64) *float64 {
+	return &v
+}
+
 // ContainerBuilder provides a fluent API for building Container widgets.
 type ContainerBuilder struct {
 	c Container
