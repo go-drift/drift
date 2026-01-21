@@ -25,20 +25,6 @@ func labelStyle(colors theme.ColorScheme) rendering.TextStyle {
 	}
 }
 
-// codeBlock displays code in a styled monospace container.
-func codeBlock(code string, colors theme.ColorScheme) core.Widget {
-	return widgets.NewContainer(
-		widgets.PaddingAll(12,
-			widgets.TextOf(code, rendering.TextStyle{
-				Color:              colors.OnSurfaceVariant,
-				FontFamily:         "monospace",
-				FontSize:           12,
-				PreserveWhitespace: true,
-			}).WithWrap(true),
-		),
-	).WithColor(colors.SurfaceVariant).Build()
-}
-
 // itoa converts an integer to a string without importing strconv.
 func itoa(value int) string {
 	if value == 0 {

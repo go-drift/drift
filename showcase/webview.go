@@ -25,13 +25,6 @@ func buildWebViewPage(ctx core.BuildContext) core.Widget {
 			InitialURL: "https://www.google.com",
 			Height:     420,
 		},
-		widgets.VSpace(24),
-		sectionTitle("Usage", colors),
-		widgets.VSpace(12),
-		codeBlock(`widgets.NativeWebView{
-    InitialURL: "https://www.google.com",
-    Height:     420,
-}`, colors),
 		widgets.VSpace(40),
 	)
 }

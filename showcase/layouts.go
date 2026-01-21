@@ -131,52 +131,6 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 				},
 			},
 		},
-		widgets.VSpace(24),
-
-		// Spacers section
-		sectionTitle("Spacing Helpers", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("VSpace and HSpace for consistent spacing:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    widgets.TextOf("Title", style),
-    widgets.VSpace(16),  // 16px vertical gap
-    widgets.TextOf("Body", style),
-)
-
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    button1,
-    widgets.HSpace(12),  // 12px horizontal gap
-    button2,
-)`, colors),
-		widgets.VSpace(24),
-
-		// Composition section
-		sectionTitle("Composition Pattern", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("Build complex layouts by nesting simple widgets:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`widgets.PaddingAll(20,
-    widgets.ColumnOf(
-        widgets.MainAxisAlignmentStart,
-        widgets.CrossAxisAlignmentStart,
-        widgets.MainAxisSizeMin,
-        widgets.RowOf(
-            widgets.MainAxisAlignmentStart,
-            widgets.CrossAxisAlignmentStart,
-            widgets.MainAxisSizeMin,
-            items...,
-        ),
-        widgets.VSpace(16),
-        widgets.Stack{...},
-    ),
-)`, colors),
 		widgets.VSpace(40),
 	)
 }

@@ -51,7 +51,6 @@ func buildHomePage(ctx core.BuildContext, isDark bool, systemTransparent bool, t
 					MainAxisSize:       widgets.MainAxisSizeMin,
 					ChildrenWidgets: append([]core.Widget{
 						// Logo/Title section
-						widgets.VSpace(40),
 						widgets.TextOf("Drift", rendering.TextStyle{
 							Color:      colors.Primary,
 							FontSize:   48,

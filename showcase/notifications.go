@@ -96,21 +96,6 @@ func (s *notificationsState) Build(ctx core.BuildContext) core.Widget {
 		statusCard(s.receivedText.Get(), colors),
 		widgets.VSpace(12),
 		statusCard(s.openedText.Get(), colors),
-		widgets.VSpace(24),
-		sectionTitle("Go API", colors),
-		widgets.VSpace(12),
-		codeBlock(`status, _ := platform.RequestNotificationPermissions(platform.PermissionOptions{
-    Alert: true,
-    Sound: true,
-    Badge: true,
-})
-
-platform.ScheduleLocalNotification(platform.NotificationRequest{
-    ID:    "demo",
-    Title: "Hello",
-    Body:  "Drift local notification",
-    At:    time.Now().Add(5 * time.Second),
-})`, colors),
 		widgets.VSpace(40),
 	)
 }

@@ -35,12 +35,6 @@ func buildScrollPage(ctx core.BuildContext) core.Widget {
 				},
 			},
 		},
-		widgets.VSpace(12),
-		codeBlock(`widgets.ListView{
-    Padding:         layout.EdgeInsetsAll(20),
-    Physics:         widgets.BouncingScrollPhysics{},
-    ChildrenWidgets: items,
-}`, colors),
 		widgets.VSpace(20),
 		sectionTitle("ListView Builder", colors),
 		widgets.VSpace(8),
@@ -61,15 +55,6 @@ func buildScrollPage(ctx core.BuildContext) core.Widget {
 				},
 			},
 		},
-		widgets.VSpace(12),
-		codeBlock(`widgets.ListViewBuilder{
-    ItemCount:   40,
-    ItemExtent:  52,
-    CacheExtent: 104,
-    ItemBuilder: func(ctx core.BuildContext, index int) core.Widget {
-        return listItem(index+1, colors.Surface, colors)
-    },
-}`, colors),
 		widgets.VSpace(20),
 		sectionTitle("Scrollable List", colors),
 		widgets.VSpace(8),
@@ -87,37 +72,6 @@ func buildScrollPage(ctx core.BuildContext) core.Widget {
 	}
 
 	items = append(items,
-		widgets.VSpace(20),
-		sectionTitle("Scroll Physics", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("ScrollView uses BouncingScrollPhysics for natural feel:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`widgets.ScrollView{
-    ScrollDirection: widgets.AxisVertical,
-    Physics:         widgets.BouncingScrollPhysics{},
-    ChildWidget:     content,
-}`, colors),
-		widgets.VSpace(20),
-		sectionTitle("Scroll Controller", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("Programmatic scroll control:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`ctrl := &widgets.ScrollController{}
-
-// In widget
-widgets.ScrollView{
-    Controller:  ctrl,
-    ChildWidget: content,
-}
-
-// Jump to position
-ctrl.JumpTo(100)
-
-// Animate to position
-ctrl.AnimateTo(200, 300*time.Millisecond)
-
-// Get current offset
-offset := ctrl.Offset()`, colors),
 		widgets.VSpace(40),
 	)
 

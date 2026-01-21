@@ -88,34 +88,6 @@ func buildThemingPage(ctx core.BuildContext, isDark bool) core.Widget {
 			FontSize:   28,
 			FontWeight: rendering.FontWeightBold,
 		}),
-		widgets.VSpace(24),
-
-		// Using themes section
-		sectionTitle("Using Themes", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("Access theme in Build() via context:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`func (s *myState) Build(ctx core.BuildContext) core.Widget {
-    // Get all theme parts at once
-    _, colors, textTheme := theme.UseTheme(ctx)
-
-    // Or get parts individually
-    colors := theme.ColorsOf(ctx)
-    textTheme := theme.TextThemeOf(ctx)
-
-    return widgets.TextOf("Hello", textTheme.HeadlineLarge)
-}`, colors),
-		widgets.VSpace(24),
-
-		// Theme provider section
-		sectionTitle("Providing Theme", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("Wrap your app with Theme:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`theme.Theme{
-    Data: theme.DefaultDarkTheme(),  // or DefaultLightTheme()
-    ChildWidget: myApp,
-}`, colors),
 		widgets.VSpace(40),
 	)
 }

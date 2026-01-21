@@ -31,7 +31,7 @@ func (f formsPage) CreateState() core.State {
 // Previously required: SetElement, SetState, Dispose, DidChangeDependencies, DidUpdateWidget
 // Now only InitState and Build need to be implemented.
 type formsState struct {
-	core.StateBase   // Embeds all required State interface methods
+	core.StateBase     // Embeds all required State interface methods
 	usernameController *platform.TextEditingController
 	passwordController *platform.TextEditingController
 	emailController    *platform.TextEditingController
@@ -234,26 +234,6 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 			},
 			BorderRadius: 8,
 		},
-		widgets.VSpace(24),
-
-		// Controller pattern explanation
-		sectionTitle("Controller Pattern", colors),
-		widgets.VSpace(12),
-		codeBlock(`// Create controller
-ctrl := platform.NewTextEditingController("")
-
-// Use in widget
-widgets.TextField{
-    Controller:  ctrl,
-    Placeholder: "Enter text",
-    Enabled:     true,
-}
-
-// Read value
-text := ctrl.Text()
-
-// Clear programmatically
-ctrl.Clear()`, colors),
 		widgets.VSpace(40),
 	)
 }

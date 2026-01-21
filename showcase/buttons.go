@@ -76,17 +76,6 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 			WithFontSize(20),
 		widgets.VSpace(20),
 
-		// Section: Builder Pattern
-		sectionTitle("Builder Pattern", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("Chain methods for configuration:", labelStyle(colors)),
-		widgets.VSpace(8),
-		codeBlock(`widgets.NewButton("Submit", onTap).
-    WithColor(colors.Primary, colors.OnPrimary).
-    WithFontSize(18).
-    WithPadding(padding)`, colors),
-		widgets.VSpace(20),
-
 		// Section: Haptic Feedback
 		sectionTitle("Haptic Feedback", colors),
 		widgets.VSpace(12),
