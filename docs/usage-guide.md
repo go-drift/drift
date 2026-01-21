@@ -430,7 +430,16 @@ widgets.GestureDetector{
 
 ### Pan Gesture (Omnidirectional Drag)
 
-Use pan callbacks for unrestricted drag gestures:
+Use the `Drag` helper for simple pan gestures:
+
+```go
+widgets.Drag(func(d widgets.DragUpdateDetails) {
+    x += d.Delta.X
+    y += d.Delta.Y
+}, draggableBox)
+```
+
+For more control (OnStart, OnEnd, OnCancel), use `GestureDetector` directly:
 
 ```go
 widgets.GestureDetector{
@@ -458,6 +467,16 @@ For gestures that should only respond to one axis (horizontal or vertical), use 
 
 #### Horizontal Drag
 
+Use the `HorizontalDrag` helper for simple horizontal-only drags:
+
+```go
+widgets.HorizontalDrag(func(d widgets.DragUpdateDetails) {
+    sliderValue += d.PrimaryDelta
+}, slider)
+```
+
+For more control, use `GestureDetector` directly:
+
 ```go
 widgets.GestureDetector{
     OnHorizontalDragStart: func(d widgets.DragStartDetails) {
@@ -476,6 +495,16 @@ widgets.GestureDetector{
 ```
 
 #### Vertical Drag
+
+Use the `VerticalDrag` helper for simple vertical-only drags:
+
+```go
+widgets.VerticalDrag(func(d widgets.DragUpdateDetails) {
+    offset += d.PrimaryDelta
+}, pullToRefresh)
+```
+
+For more control, use `GestureDetector` directly:
 
 ```go
 widgets.GestureDetector{
@@ -536,3 +565,14 @@ The drag callbacks receive detail structs with position and movement information
 | `PrimaryVelocity` | `float64` | Axis-specific velocity |
 
 Note: `PrimaryDelta` and `PrimaryVelocity` are only meaningful for axis-locked recognizers. For pan gestures, use `Delta` and `Velocity` instead.
+
+### Clamp Helper
+
+The `Clamp` helper constrains a value between min and max bounds—useful for keeping draggable elements within boundaries:
+
+```go
+widgets.Drag(func(d widgets.DragUpdateDetails) {
+    x = widgets.Clamp(x + d.Delta.X, 0, maxX)
+    y = widgets.Clamp(y + d.Delta.Y, 0, maxY)
+}, draggableBox)
+```

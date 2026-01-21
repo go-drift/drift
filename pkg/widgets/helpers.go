@@ -74,6 +74,32 @@ func Gesture(onTap func(), child core.Widget) GestureDetector {
 	return GestureDetector{OnTap: onTap, ChildWidget: child}
 }
 
+// Drag wraps a child with pan (omnidirectional) drag handlers.
+func Drag(onUpdate func(DragUpdateDetails), child core.Widget) GestureDetector {
+	return GestureDetector{OnPanUpdate: onUpdate, ChildWidget: child}
+}
+
+// HorizontalDrag wraps a child with horizontal-only drag handlers.
+func HorizontalDrag(onUpdate func(DragUpdateDetails), child core.Widget) GestureDetector {
+	return GestureDetector{OnHorizontalDragUpdate: onUpdate, ChildWidget: child}
+}
+
+// VerticalDrag wraps a child with vertical-only drag handlers.
+func VerticalDrag(onUpdate func(DragUpdateDetails), child core.Widget) GestureDetector {
+	return GestureDetector{OnVerticalDragUpdate: onUpdate, ChildWidget: child}
+}
+
+// Clamp constrains a value between min and max bounds.
+func Clamp(value, min, max float64) float64 {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
 // Box creates a container with padding, background color, and alignment.
 func Box(child core.Widget, padding layout.EdgeInsets, color rendering.Color, alignment layout.Alignment) Container {
 	return Container{

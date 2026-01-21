@@ -115,28 +115,25 @@ func (s *gesturesDemoState) buildPanDemo(colors theme.ColorScheme) core.Widget {
 					widgets.Positioned{
 						Left: widgets.Ptr(s.panX),
 						Top:  widgets.Ptr(s.panY),
-						ChildWidget: widgets.GestureDetector{
-							OnPanUpdate: func(d widgets.DragUpdateDetails) {
-								s.SetState(func() {
-									s.panX = clampFloat(s.panX+d.Delta.X, 0, areaWidth-boxSize)
-									s.panY = clampFloat(s.panY+d.Delta.Y, 0, areaHeight-boxSize)
-								})
-							},
-							ChildWidget: widgets.DecoratedBox{
-								Color:        colors.Primary,
-								BorderRadius: 8,
-								ChildWidget: widgets.SizedBox{
-									Width:  boxSize,
-									Height: boxSize,
-									ChildWidget: widgets.Center{
-										ChildWidget: widgets.TextOf("Drag me", rendering.TextStyle{
-											Color:    colors.OnPrimary,
-											FontSize: 12,
-										}),
-									},
+						ChildWidget: widgets.Drag(func(d widgets.DragUpdateDetails) {
+							s.SetState(func() {
+								s.panX = widgets.Clamp(s.panX+d.Delta.X, 0, areaWidth-boxSize)
+								s.panY = widgets.Clamp(s.panY+d.Delta.Y, 0, areaHeight-boxSize)
+							})
+						}, widgets.DecoratedBox{
+							Color:        colors.Primary,
+							BorderRadius: 8,
+							ChildWidget: widgets.SizedBox{
+								Width:  boxSize,
+								Height: boxSize,
+								ChildWidget: widgets.Center{
+									ChildWidget: widgets.TextOf("Drag me", rendering.TextStyle{
+										Color:    colors.OnPrimary,
+										FontSize: 12,
+									}),
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -172,21 +169,18 @@ func (s *gesturesDemoState) buildHorizontalSlider(colors theme.ColorScheme) core
 						// Thumb
 						widgets.Positioned{
 							Left: widgets.Ptr(s.sliderX - thumbSize/2),
-							ChildWidget: widgets.GestureDetector{
-								OnHorizontalDragUpdate: func(d widgets.DragUpdateDetails) {
-									s.SetState(func() {
-										s.sliderX = clampFloat(s.sliderX+d.PrimaryDelta, thumbSize/2, trackWidth-thumbSize/2)
-									})
+							ChildWidget: widgets.HorizontalDrag(func(d widgets.DragUpdateDetails) {
+								s.SetState(func() {
+									s.sliderX = widgets.Clamp(s.sliderX+d.PrimaryDelta, thumbSize/2, trackWidth-thumbSize/2)
+								})
+							}, widgets.DecoratedBox{
+								Color:        colors.Primary,
+								BorderRadius: thumbSize / 2,
+								ChildWidget: widgets.SizedBox{
+									Width:  thumbSize,
+									Height: thumbSize,
 								},
-								ChildWidget: widgets.DecoratedBox{
-									Color:        colors.Primary,
-									BorderRadius: thumbSize / 2,
-									ChildWidget: widgets.SizedBox{
-										Width:  thumbSize,
-										Height: thumbSize,
-									},
-								},
-							},
+							}),
 						},
 					},
 				},
@@ -215,27 +209,24 @@ func (s *gesturesDemoState) buildVerticalDemo(colors theme.ColorScheme) core.Wid
 					widgets.Positioned{
 						Left: widgets.Ptr((areaWidth - boxWidth) / 2), // Center horizontally
 						Top:  widgets.Ptr(s.verticalY),
-						ChildWidget: widgets.GestureDetector{
-							OnVerticalDragUpdate: func(d widgets.DragUpdateDetails) {
-								s.SetState(func() {
-									s.verticalY = clampFloat(s.verticalY+d.PrimaryDelta, 0, areaHeight-boxHeight)
-								})
-							},
-							ChildWidget: widgets.DecoratedBox{
-								Color:        colors.Secondary,
-								BorderRadius: 8,
-								ChildWidget: widgets.SizedBox{
-									Width:  boxWidth,
-									Height: boxHeight,
-									ChildWidget: widgets.Center{
-										ChildWidget: widgets.TextOf("Drag up/down", rendering.TextStyle{
-											Color:    colors.OnSecondary,
-											FontSize: 12,
-										}),
-									},
+						ChildWidget: widgets.VerticalDrag(func(d widgets.DragUpdateDetails) {
+							s.SetState(func() {
+								s.verticalY = widgets.Clamp(s.verticalY+d.PrimaryDelta, 0, areaHeight-boxHeight)
+							})
+						}, widgets.DecoratedBox{
+							Color:        colors.Secondary,
+							BorderRadius: 8,
+							ChildWidget: widgets.SizedBox{
+								Width:  boxWidth,
+								Height: boxHeight,
+								ChildWidget: widgets.Center{
+									ChildWidget: widgets.TextOf("Drag up/down", rendering.TextStyle{
+										Color:    colors.OnSecondary,
+										FontSize: 12,
+									}),
 								},
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -282,7 +273,7 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 					ChildWidget: widgets.GestureDetector{
 						OnHorizontalDragUpdate: func(d widgets.DragUpdateDetails) {
 							s.SetState(func() {
-								s.cardX = clampFloat(s.cardX+d.PrimaryDelta, -100, 0)
+								s.cardX = widgets.Clamp(s.cardX+d.PrimaryDelta, -100, 0)
 							})
 						},
 						OnHorizontalDragEnd: func(d widgets.DragEndDetails) {
@@ -315,15 +306,4 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 			},
 		},
 	}
-}
-
-// clampFloat constrains a value between min and max.
-func clampFloat(value, min, max float64) float64 {
-	if value < min {
-		return min
-	}
-	if value > max {
-		return max
-	}
-	return value
 }
