@@ -1,22 +1,9 @@
 GO ?= go
-GRADLE ?= ./gradlew
 ANDROID_SDK_ROOT ?= $(ANDROID_HOME)
 ANDROID_NDK_HOME ?= $(ANDROID_NDK_ROOT)
 HOST_TAG ?= linux-x86_64
 
-ADB ?= $(ANDROID_SDK_ROOT)/platform-tools/adb
-EMULATOR ?= $(ANDROID_SDK_ROOT)/emulator/emulator
-
-ANDROID_ABIS := arm64-v8a armeabi-v7a x86_64
-NDK_TOOLCHAIN := $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/$(HOST_TAG)/bin
-NDK_SYSROOT_LIB := $(ANDROID_NDK_HOME)/toolchains/llvm/prebuilt/$(HOST_TAG)/sysroot/usr/lib
-
-# Showcase project paths
-SHOWCASE_DIR := showcase
-ANDROID_JNI_DIR := $(SHOWCASE_DIR)/android/app/src/main/jniLibs
-ANDROID_APK := $(SHOWCASE_DIR)/android/app/build/outputs/apk/debug/app-debug.apk
-
-.PHONY: all cli skia-release android-libs android-build android-install android-run android-log android-emulator clean bridge-ios bridge-ios-sim bridge-android bridge-xtool
+.PHONY: all cli skia-release clean bridge-ios bridge-ios-sim bridge-android bridge-xtool
 
 # Build the drift CLI tool
 cli:
@@ -26,57 +13,9 @@ cli:
 skia-release:
 	./scripts/build_skia_release.sh
 
-# Build Go shared libraries for all Android ABIs
-android-libs:
-	@test -d "$(NDK_TOOLCHAIN)" || (echo "Missing NDK toolchain. Set ANDROID_NDK_HOME and HOST_TAG."; exit 1)
-	@for abi in $(ANDROID_ABIS); do \
-		case $$abi in \
-			arm64-v8a) GOARCH=arm64; GOARM=; CC=$(NDK_TOOLCHAIN)/aarch64-linux-android21-clang; CXX=$(NDK_TOOLCHAIN)/aarch64-linux-android21-clang++; NDK_TRIPLE=aarch64-linux-android ;; \
-			armeabi-v7a) GOARCH=arm; GOARM=7; CC=$(NDK_TOOLCHAIN)/armv7a-linux-androideabi21-clang; CXX=$(NDK_TOOLCHAIN)/armv7a-linux-androideabi21-clang++; NDK_TRIPLE=arm-linux-androideabi ;; \
-			x86_64) GOARCH=amd64; GOARM=; CC=$(NDK_TOOLCHAIN)/x86_64-linux-android21-clang; CXX=$(NDK_TOOLCHAIN)/x86_64-linux-android21-clang++; NDK_TRIPLE=x86_64-linux-android ;; \
-			*) echo "Unknown ABI $$abi"; exit 1 ;; \
-		esac; \
-		outdir=$(ANDROID_JNI_DIR)/$$abi; \
-		mkdir -p $$outdir; \
-		cd $(SHOWCASE_DIR) && CGO_ENABLED=1 GOOS=android GOARCH=$$GOARCH GOARM=$$GOARM CC=$$CC CXX=$$CXX \
-			$(GO) build -buildmode=c-shared -o ../$$outdir/libdrift.so . && cd ..; \
-		cpp_shared=$(NDK_SYSROOT_LIB)/$$NDK_TRIPLE/libc++_shared.so; \
-		if [ -f $$cpp_shared ]; then \
-			cp $$cpp_shared $$outdir/; \
-		else \
-			echo "Missing libc++_shared.so for $$abi at $$cpp_shared"; exit 1; \
-		fi; \
-		rm -f $$outdir/libdrift.h; \
-	done
-
-# Build the Android APK
-android-build: android-libs
-	cd $(SHOWCASE_DIR)/android && $(GRADLE) assembleDebug
-
-# Install APK on connected device
-android-install: android-build
-	$(ADB) install -r $(ANDROID_APK)
-
-# Build, install, and run on Android device
-android-run: android-install
-	$(ADB) shell am start -n com.drift.showcase/.MainActivity
-
-# View Android logs
-android-log:
-	$(ADB) logcat -v time DriftJNI:* Go:* drift:* AndroidRuntime:E *:S
-
-# Start Android emulator (requires AVD environment variable)
-android-emulator:
-	@test -n "$(AVD)" || (echo "Set AVD=<name>"; exit 1)
-	$(EMULATOR) -avd $(AVD)
-
 # Clean build artifacts
 clean:
 	rm -rf bin/
-	rm -rf $(SHOWCASE_DIR)/android/app/build
-	rm -rf $(SHOWCASE_DIR)/android/.gradle
-	rm -rf $(SHOWCASE_DIR)/build
-	rm -f $(ANDROID_JNI_DIR)/*/*.so
 
 # --------------------------------------------------------------------------
 # Fast Bridge Iteration Targets
