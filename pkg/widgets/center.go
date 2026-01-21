@@ -40,6 +40,12 @@ func (r *renderCenter) SetChild(child layout.RenderObject) {
 	r.child = setChildFromRenderObject(child)
 }
 
+func (r *renderCenter) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderCenter) Layout(constraints layout.Constraints) {
 	size := constraints.Constrain(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 	r.SetSize(size)

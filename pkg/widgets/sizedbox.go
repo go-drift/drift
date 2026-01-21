@@ -51,6 +51,12 @@ func (r *renderSizedBox) SetChild(child layout.RenderObject) {
 	r.child = setChildFromRenderObject(child)
 }
 
+func (r *renderSizedBox) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderSizedBox) Layout(constraints layout.Constraints) {
 	// Build desired size from explicit dimensions
 	desired := rendering.Size{Width: r.width, Height: r.height}

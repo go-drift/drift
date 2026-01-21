@@ -135,10 +135,20 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 	// Build all routes in a Stack
 	children := make([]core.Widget, 0, len(s.routes)+1)
 	for i, route := range s.routes {
-		children = append(children, routeBuilder{
+		isTop := i == len(s.routes)-1 && s.exitingRoute == nil
+		rb := routeBuilder{
 			route: route,
-			isTop: i == len(s.routes)-1 && s.exitingRoute == nil,
-		})
+			isTop: isTop,
+		}
+		// Exclude non-top routes from accessibility (they're hidden behind the top route)
+		if !isTop {
+			children = append(children, widgets.ExcludeSemantics{
+				ChildWidget: rb,
+				Excluding:   true,
+			})
+		} else {
+			children = append(children, rb)
+		}
 	}
 
 	// Add exiting route on top (it's animating out)

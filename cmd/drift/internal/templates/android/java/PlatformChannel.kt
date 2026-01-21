@@ -235,6 +235,11 @@ object PlatformChannelManager {
         register("drift/background") { method, args ->
             BackgroundHandler.handle(context, method, args)
         }
+
+        // Accessibility channel
+        register("drift/accessibility") { method, args ->
+            AccessibilityHandler.handle(context, method, args)
+        }
     }
 
     private fun setupLifecycleObserver() {

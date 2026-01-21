@@ -5,6 +5,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // SlideDirection determines the direction of a slide transition.
@@ -82,6 +83,19 @@ func (r *renderSlideTransition) SetChild(child layout.RenderObject) {
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
 	}
+}
+
+func (r *renderSlideTransition) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
+// DescribeSemanticsConfiguration makes the slide transition act as a semantic container.
+// This ensures all page content is grouped under one node for accessibility navigation.
+func (r *renderSlideTransition) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+	config.IsSemanticBoundary = true
+	return true
 }
 
 func (r *renderSlideTransition) Layout(constraints layout.Constraints) {
@@ -193,6 +207,19 @@ func (r *renderFadeTransition) SetChild(child layout.RenderObject) {
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
 	}
+}
+
+func (r *renderFadeTransition) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
+// DescribeSemanticsConfiguration makes the fade transition act as a semantic container.
+// This ensures all page content is grouped under one node for accessibility navigation.
+func (r *renderFadeTransition) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+	config.IsSemanticBoundary = true
+	return true
 }
 
 func (r *renderFadeTransition) Layout(constraints layout.Constraints) {

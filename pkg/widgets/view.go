@@ -43,6 +43,12 @@ func (r *renderView) SetChild(child layout.RenderObject) {
 	r.child = setChildFromRenderObject(child)
 }
 
+func (r *renderView) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderView) Layout(constraints layout.Constraints) {
 	width := constraints.MaxWidth
 	if width <= 0 {

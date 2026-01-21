@@ -127,6 +127,12 @@ func (r *renderScrollView) SetChild(child layout.RenderObject) {
 	}
 }
 
+func (r *renderScrollView) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderScrollView) Layout(constraints layout.Constraints) {
 	size := rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
 	if size.Width <= 0 {
@@ -351,6 +357,16 @@ func (r *renderScrollView) ScrollOffset() rendering.Offset {
 		return rendering.Offset{X: -offset}
 	}
 	return rendering.Offset{Y: -offset}
+}
+
+// SemanticScrollOffset implements layout.ScrollOffsetProvider.
+// Returns the scroll offset to subtract from child positions in the semantics tree.
+func (r *renderScrollView) SemanticScrollOffset() rendering.Offset {
+	offset := r.scrollOffset()
+	if r.direction == AxisHorizontal {
+		return rendering.Offset{X: offset}
+	}
+	return rendering.Offset{Y: offset}
 }
 
 func (r *renderScrollView) paintCulled(ctx *layout.PaintContext, size rendering.Size, scrollOffset float64) bool {

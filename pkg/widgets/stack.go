@@ -101,6 +101,13 @@ func (r *renderStack) SetChildren(children []layout.RenderObject) {
 	}
 }
 
+// VisitChildren calls the visitor for each child.
+func (r *renderStack) VisitChildren(visitor func(layout.RenderObject)) {
+	for _, child := range r.children {
+		visitor(child)
+	}
+}
+
 // Layout computes the size of the stack and positions children.
 func (r *renderStack) Layout(constraints layout.Constraints) {
 	size := layoutStackChildren(r.children, r.fit, r.alignment, constraints)
@@ -407,6 +414,12 @@ func (r *renderIndexedStack) SetChildren(children []layout.RenderObject) {
 	}
 }
 
+func (r *renderIndexedStack) VisitChildren(visitor func(layout.RenderObject)) {
+	for _, child := range r.children {
+		visitor(child)
+	}
+}
+
 func (r *renderIndexedStack) Layout(constraints layout.Constraints) {
 	size := layoutStackChildren(r.children, r.fit, r.alignment, constraints)
 	r.SetSize(size)
@@ -553,6 +566,12 @@ func (r *renderPositioned) SetChild(child layout.RenderObject) {
 	}
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
+	}
+}
+
+func (r *renderPositioned) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
 	}
 }
 

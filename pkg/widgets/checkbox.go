@@ -5,6 +5,7 @@ import (
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -225,4 +226,42 @@ func (r *renderCheckbox) HandlePointer(event gestures.PointerEvent) {
 	} else {
 		r.tap.HandleEvent(event)
 	}
+}
+
+// DescribeSemanticsConfiguration implements SemanticsDescriber for accessibility.
+func (r *renderCheckbox) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+	config.IsSemanticBoundary = true
+	config.Properties.Role = semantics.SemanticsRoleCheckbox
+
+	// Set flags
+	flags := semantics.SemanticsHasCheckedState | semantics.SemanticsHasEnabledState
+	if r.value {
+		flags = flags.Set(semantics.SemanticsIsChecked)
+	}
+	if r.enabled {
+		flags = flags.Set(semantics.SemanticsIsEnabled)
+	}
+	config.Properties.Flags = flags
+
+	// Set value description
+	if r.value {
+		config.Properties.Value = "Checked"
+	} else {
+		config.Properties.Value = "Not checked"
+	}
+
+	// Set hint
+	if r.enabled {
+		config.Properties.Hint = "Double tap to toggle"
+	}
+
+	// Set action
+	if r.enabled && r.onChanged != nil {
+		config.Actions = semantics.NewSemanticsActions()
+		config.Actions.SetHandler(semantics.SemanticsActionTap, func(args any) {
+			r.onChanged(!r.value)
+		})
+	}
+
+	return true
 }

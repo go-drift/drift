@@ -1,9 +1,12 @@
 package widgets
 
 import (
+	"fmt"
+
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -104,37 +107,54 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicato
 		MainAxisSize:      MainAxisSizeMin,
 	}
 
+	// Build accessibility flags
+	var flags semantics.SemanticsFlag = semantics.SemanticsHasSelectedState
+	if isActive {
+		flags = flags.Set(semantics.SemanticsIsSelected)
+	}
+
+	onTap := func() {
+		if t.OnTap != nil {
+			t.OnTap(index)
+		}
+	}
+
 	// Wrap in Expanded to fill available space in the Row
 	tabItem := Expanded{
 		Flex: 1,
-		ChildWidget: GestureDetector{
-			OnTap: func() {
-				if t.OnTap != nil {
-					t.OnTap(index)
-				}
-			},
-			ChildWidget: Column{
-				MainAxisAlignment:  MainAxisAlignmentEnd,
-				CrossAxisAlignment: CrossAxisAlignmentStretch,
-				MainAxisSize:       MainAxisSizeMax,
-				ChildrenWidgets: []core.Widget{
-					Expanded{
-						Flex: 1,
-						ChildWidget: Container{
-							Padding:     padding,
-							Alignment:   layout.AlignmentCenter,
-							ChildWidget: tabContent,
+		ChildWidget: Semantics{
+			// Note: Don't set Label here - it comes from merged descendant Text widgets
+			Hint:             fmt.Sprintf("Tab %d of %d", index+1, len(t.Items)),
+			Role:             semantics.SemanticsRoleTab,
+			Flags:            flags,
+			Container:        true,
+			MergeDescendants: true, // Merge children so TalkBack highlights the tab, not individual text/icons
+			OnTap:            onTap,
+			ChildWidget: GestureDetector{
+				OnTap: onTap,
+				ChildWidget: Column{
+					MainAxisAlignment:  MainAxisAlignmentEnd,
+					CrossAxisAlignment: CrossAxisAlignmentStretch,
+					MainAxisSize:       MainAxisSizeMax,
+					ChildrenWidgets: []core.Widget{
+						Expanded{
+							Flex: 1,
+							ChildWidget: Container{
+								Padding:     padding,
+								Alignment:   layout.AlignmentCenter,
+								ChildWidget: tabContent,
+							},
 						},
-					},
-					// Indicator at the bottom
-					Container{
-						Height: indicatorHeight,
-						Color: func() rendering.Color {
-							if isActive {
-								return indicatorColor
-							}
-							return rendering.ColorTransparent
-						}(),
+						// Indicator at the bottom
+						Container{
+							Height: indicatorHeight,
+							Color: func() rendering.Color {
+								if isActive {
+									return indicatorColor
+								}
+								return rendering.ColorTransparent
+							}(),
+						},
 					},
 				},
 			},

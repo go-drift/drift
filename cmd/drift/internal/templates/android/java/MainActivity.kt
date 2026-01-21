@@ -89,6 +89,9 @@ class MainActivity : AppCompatActivity() {
         TextInputHandler.init(this, container)
         PlatformViewHandler.init(this, container)
 
+        // Initialize accessibility support
+        AccessibilityHandler.initialize(this, surfaceView)
+
         // Set up safe area insets listener
         ViewCompat.setOnApplyWindowInsetsListener(container) { _, insets ->
             SafeAreaHandler.sendInsetsUpdate()

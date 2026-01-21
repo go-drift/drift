@@ -48,6 +48,12 @@ func (r *renderClipRRect) SetChild(child layout.RenderObject) {
 	r.child = setChildFromRenderObject(child)
 }
 
+func (r *renderClipRRect) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderClipRRect) Layout(constraints layout.Constraints) {
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))

@@ -253,6 +253,8 @@ func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err err
 			pipeline.ScheduleLayout(a.rootRender)
 			pipeline.SchedulePaint(a.rootRender)
 		}
+		// Initialize accessibility system on first frame
+		initializeAccessibility()
 	}
 
 	a.buildOwner.FlushBuild()
@@ -260,6 +262,9 @@ func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err err
 	if a.rootRender != nil {
 		pipeline := a.buildOwner.Pipeline()
 		pipeline.FlushLayoutForRoot(a.rootRender, layout.Tight(logicalSize))
+
+		// Flush semantics after layout so positions are accurate
+		flushSemanticsWithScale(a.rootRender, scale)
 
 		// Always clear and paint - with triple buffering, each drawable may contain
 		// stale content from previous frames. Skipping paint causes flicker.

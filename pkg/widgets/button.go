@@ -5,6 +5,7 @@ import (
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -160,8 +161,28 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 		}
 	}
 
-	return GestureDetector{
-		OnTap:       onTap,
-		ChildWidget: box,
+	// Build accessibility flags
+	var flags semantics.SemanticsFlag = semantics.SemanticsIsButton | semantics.SemanticsHasEnabledState
+	if !b.Disabled {
+		flags = flags.Set(semantics.SemanticsIsEnabled)
+	}
+
+	var hint string
+	if !b.Disabled && onTap != nil {
+		hint = "Double tap to activate"
+	}
+
+	return Semantics{
+		// Note: Don't set Label here - it comes from merged descendant Text widgets
+		Hint:             hint,
+		Role:             semantics.SemanticsRoleButton,
+		Flags:            flags,
+		Container:        true,
+		MergeDescendants: true, // Merge text into button node so TalkBack highlights the button, not the text
+		OnTap:            onTap,
+		ChildWidget: GestureDetector{
+			OnTap:       onTap,
+			ChildWidget: box,
+		},
 	}
 }

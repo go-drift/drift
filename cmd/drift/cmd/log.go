@@ -61,6 +61,8 @@ func logAndroid() error {
 	cmd := exec.Command(adb, "logcat",
 		"-v", "time",
 		"DriftJNI:*",
+		"DriftAccessibility:*",
+		"[Accessibility]:*",
 		"DriftDeepLink:*",
 		"Go:*",
 		"drift:*",

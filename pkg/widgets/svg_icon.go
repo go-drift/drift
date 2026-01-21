@@ -17,6 +17,10 @@ type SVGIcon struct {
 	// Color overrides the SVG's fill colors with a tint color.
 	// If zero (transparent), uses the SVG's original colors.
 	Color rendering.Color
+	// SemanticLabel provides an accessibility description of the icon.
+	SemanticLabel string
+	// ExcludeFromSemantics excludes the icon from the semantics tree when true.
+	ExcludeFromSemantics bool
 }
 
 func (s SVGIcon) CreateElement() core.Element {
@@ -33,9 +37,11 @@ func (s SVGIcon) Child() core.Widget {
 
 func (s SVGIcon) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
 	box := &renderSVGIcon{
-		icon:  s.Icon,
-		size:  s.Size,
-		color: s.Color,
+		icon:                 s.Icon,
+		size:                 s.Size,
+		color:                s.Color,
+		semanticLabel:        s.SemanticLabel,
+		excludeFromSemantics: s.ExcludeFromSemantics,
 	}
 	box.SetSelf(box)
 	return box
@@ -46,6 +52,8 @@ func (s SVGIcon) UpdateRenderObject(ctx core.BuildContext, renderObject layout.R
 		box.icon = s.Icon
 		box.size = s.Size
 		box.color = s.Color
+		box.semanticLabel = s.SemanticLabel
+		box.excludeFromSemantics = s.ExcludeFromSemantics
 		box.MarkNeedsLayout()
 		box.MarkNeedsPaint()
 	}
@@ -53,9 +61,11 @@ func (s SVGIcon) UpdateRenderObject(ctx core.BuildContext, renderObject layout.R
 
 type renderSVGIcon struct {
 	layout.RenderBoxBase
-	icon  *svg.Icon
-	size  float64
-	color rendering.Color
+	icon                 *svg.Icon
+	size                 float64
+	color                rendering.Color
+	semanticLabel        string
+	excludeFromSemantics bool
 }
 
 func (r *renderSVGIcon) SetChild(child layout.RenderObject) {

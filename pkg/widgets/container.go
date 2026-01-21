@@ -70,6 +70,12 @@ func (r *renderContainer) SetChild(child layout.RenderObject) {
 	r.child = setChildFromRenderObject(child)
 }
 
+func (r *renderContainer) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderContainer) Layout(constraints layout.Constraints) {
 	childConstraints := constraints.Deflate(r.padding)
 	hasWidth := r.width > 0

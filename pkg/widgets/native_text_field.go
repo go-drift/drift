@@ -10,6 +10,7 @@ import (
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // NativeTextField embeds a native text input field.
@@ -545,4 +546,49 @@ func (r *renderNativeTextField) HandlePointer(event gestures.PointerEvent) {
 	} else {
 		r.tap.HandleEvent(event)
 	}
+}
+
+// DescribeSemanticsConfiguration implements SemanticsDescriber for accessibility.
+func (r *renderNativeTextField) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+	config.IsSemanticBoundary = true
+	config.Properties.Role = semantics.SemanticsRoleTextField
+
+	// Set flags
+	flags := semantics.SemanticsIsTextField | semantics.SemanticsIsFocusable | semantics.SemanticsHasEnabledState
+	if r.state != nil && r.state.focused {
+		flags = flags.Set(semantics.SemanticsIsFocused)
+	}
+	// Check if enabled via the state's widget config
+	if r.state != nil && r.state.element != nil {
+		if w, ok := r.state.element.Widget().(NativeTextField); ok {
+			if w.Enabled {
+				flags = flags.Set(semantics.SemanticsIsEnabled)
+			}
+			if w.Obscure {
+				flags = flags.Set(semantics.SemanticsIsObscured)
+			}
+		}
+	}
+	config.Properties.Flags = flags
+
+	// Set current value (text content)
+	config.Properties.Value = r.text
+
+	// Set hint
+	config.Properties.Hint = "Double tap to edit"
+
+	// Set actions
+	config.Actions = semantics.NewSemanticsActions()
+	config.Actions.SetHandler(semantics.SemanticsActionTap, func(args any) {
+		if r.state != nil {
+			r.state.focus(r)
+		}
+	})
+	config.Actions.SetHandler(semantics.SemanticsActionFocus, func(args any) {
+		if r.state != nil {
+			r.state.focus(r)
+		}
+	})
+
+	return true
 }

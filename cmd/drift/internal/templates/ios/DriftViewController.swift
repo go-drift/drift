@@ -79,6 +79,8 @@ final class DriftViewController: UIViewController {
         super.viewDidLoad()
         // Initialize platform view handler with this view as the host
         PlatformViewHandler.setHostView(view)
+        // Initialize accessibility support
+        AccessibilityHandler.shared.initialize(hostView: view)
         applySystemUIStyle(SystemUIHandler.currentStyle)
         // Start the render loop
         startDisplayLink()

@@ -141,6 +141,28 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
     }
 
     /**
+     * Intercepts touch events to handle accessibility explore-by-touch.
+     * When touch exploration is enabled, single taps should focus elements.
+     */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // In touch exploration, a tap should only move accessibility focus.
+        // Consume handled taps so app touch handlers don't fire.
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (AccessibilityHandler.handleExploreByTouch(event.x, event.y)) {
+                return true
+            }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
+    /**
+     * Handle generic motion events including hover events.
+     */
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        return super.dispatchGenericMotionEvent(event)
+    }
+
+    /**
      * Handles touch events and forwards them to the Go engine.
      *
      * Converts Android MotionEvent actions to Drift pointer phases:
@@ -206,6 +228,35 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
 
         // Return true to indicate we handled this event
         return true
+    }
+
+    /**
+     * Handles hover events for accessibility explore-by-touch.
+     *
+     * When TalkBack is enabled, touch events are converted to hover events
+     * for exploration. This allows users to drag their finger to hear
+     * descriptions of UI elements without activating them.
+     *
+     * @param event The hover MotionEvent from the Android system.
+     * @return true if the event was handled, false otherwise.
+     */
+    override fun dispatchHoverEvent(event: MotionEvent): Boolean {
+        // Let the accessibility handler try to handle hover for explore-by-touch
+        if (AccessibilityHandler.onHoverEvent(event.x, event.y, event.actionMasked)) {
+            return true
+        }
+        return super.dispatchHoverEvent(event)
+    }
+
+    /**
+     * Alternative hover event handler (called by dispatchHoverEvent).
+     */
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        // Try accessibility handler first
+        if (AccessibilityHandler.onHoverEvent(event.x, event.y, event.actionMasked)) {
+            return true
+        }
+        return super.onHoverEvent(event)
     }
 
     /**

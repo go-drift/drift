@@ -66,6 +66,15 @@ type FocusNode struct {
 	// Rect provides the geometry for directional focus navigation.
 	Rect RectProvider
 
+	// SemanticsLabel provides the accessibility label for this focus node.
+	SemanticsLabel string
+
+	// SemanticsHint provides the accessibility hint for this focus node.
+	SemanticsHint string
+
+	// SemanticsNodeID links this focus node to a semantics node ID.
+	SemanticsNodeID int64
+
 	hasFocus        bool
 	hasPrimaryFocus bool
 }

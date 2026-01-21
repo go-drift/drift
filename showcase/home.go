@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/navigation"
 	"github.com/go-drift/drift/pkg/rendering"
 	"github.com/go-drift/drift/pkg/theme"
@@ -88,30 +89,17 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 
 // navButton creates a navigation button for the home page.
 func navButton(ctx core.BuildContext, title, subtitle, route string, colors theme.ColorScheme) core.Widget {
-	return widgets.Tap(func() {
-		nav := navigation.NavigatorOf(ctx)
-		if nav != nil {
-			nav.PushNamed(route, nil)
-		}
-	},
-		widgets.NewContainer(
-			widgets.PaddingAll(16,
-				widgets.ColumnOf(
-					widgets.MainAxisAlignmentStart,
-					widgets.CrossAxisAlignmentStart,
-					widgets.MainAxisSizeMin,
-					widgets.TextOf(title, rendering.TextStyle{
-						Color:      colors.OnSurface,
-						FontSize:   18,
-						FontWeight: rendering.FontWeightBold,
-					}),
-					widgets.VSpace(4),
-					widgets.TextOf(subtitle, rendering.TextStyle{
-						Color:    colors.OnSurfaceVariant,
-						FontSize: 14,
-					}),
-				),
-			),
-		).WithColor(colors.SurfaceContainerHigh).Build(),
-	)
+	return widgets.Button{
+		Label: title,
+		OnTap: func() {
+			nav := navigation.NavigatorOf(ctx)
+			if nav != nil {
+				nav.PushNamed(route, nil)
+			}
+		},
+		Color:        colors.SurfaceContainerHigh,
+		TextColor:    colors.OnSurface,
+		Padding:      layout.EdgeInsetsAll(16),
+		BorderRadius: 8,
+	}
 }

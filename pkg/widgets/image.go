@@ -6,6 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // Image renders a bitmap image onto the canvas.
@@ -20,6 +21,11 @@ type Image struct {
 	Fit ImageFit
 	// Alignment positions the image within its bounds.
 	Alignment layout.Alignment
+	// SemanticLabel provides an accessibility description of the image.
+	SemanticLabel string
+	// ExcludeFromSemantics excludes the image from the semantics tree when true.
+	// Use this for decorative images that don't convey meaningful content.
+	ExcludeFromSemantics bool
 }
 
 // ImageFit controls how an image is scaled within its box.
@@ -48,11 +54,13 @@ func (i Image) Key() any {
 
 func (i Image) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
 	box := &renderImage{
-		source:    i.Source,
-		width:     i.Width,
-		height:    i.Height,
-		fit:       i.Fit,
-		alignment: i.Alignment,
+		source:               i.Source,
+		width:                i.Width,
+		height:               i.Height,
+		fit:                  i.Fit,
+		alignment:            i.Alignment,
+		semanticLabel:        i.SemanticLabel,
+		excludeFromSemantics: i.ExcludeFromSemantics,
 	}
 	box.SetSelf(box)
 	return box
@@ -65,19 +73,24 @@ func (i Image) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Ren
 		box.height = i.Height
 		box.fit = i.Fit
 		box.alignment = i.Alignment
+		box.semanticLabel = i.SemanticLabel
+		box.excludeFromSemantics = i.ExcludeFromSemantics
 		box.MarkNeedsLayout()
 		box.MarkNeedsPaint()
+		box.MarkNeedsSemanticsUpdate()
 	}
 }
 
 type renderImage struct {
 	layout.RenderBoxBase
-	source    image.Image
-	width     float64
-	height    float64
-	fit       ImageFit
-	alignment layout.Alignment
-	intrinsic rendering.Size
+	source               image.Image
+	width                float64
+	height               float64
+	fit                  ImageFit
+	alignment            layout.Alignment
+	intrinsic            rendering.Size
+	semanticLabel        string
+	excludeFromSemantics bool
 }
 
 func (r *renderImage) SetChild(child layout.RenderObject) {
@@ -192,4 +205,23 @@ func (r *renderImage) fitSize(fit ImageFit, size rendering.Size) rendering.Size 
 	default:
 		return size
 	}
+}
+
+// DescribeSemanticsConfiguration implements SemanticsDescriber for accessibility.
+func (r *renderImage) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+	if r.excludeFromSemantics {
+		config.Properties.Flags = config.Properties.Flags.Set(semantics.SemanticsIsHidden)
+		return false
+	}
+
+	if r.semanticLabel == "" {
+		return false
+	}
+
+	config.IsSemanticBoundary = true
+	config.Properties.Label = r.semanticLabel
+	config.Properties.Role = semantics.SemanticsRoleImage
+	config.Properties.Flags = config.Properties.Flags.Set(semantics.SemanticsIsImage)
+
+	return true
 }

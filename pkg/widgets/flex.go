@@ -153,6 +153,12 @@ func (r *renderFlex) SetChildren(children []layout.RenderObject) {
 	}
 }
 
+func (r *renderFlex) VisitChildren(visitor func(layout.RenderObject)) {
+	for _, child := range r.children {
+		visitor(child)
+	}
+}
+
 func (r *renderFlex) mainAxis(size rendering.Size) float64 {
 	if r.direction == AxisHorizontal {
 		return size.Width

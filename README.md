@@ -237,6 +237,7 @@ drift run xtool
 - [x] Share - Native share sheet
 - [x] Storage - File system and preferences
 - [x] System UI - Status bar and navigation bar customization
+- [x] Accessibility - TalkBack (Android) and VoiceOver (iOS) support with semantic labels
 
 #### Build System
 - [x] CLI - drift build/run/clean commands
@@ -245,7 +246,6 @@ drift run xtool
 
 ### Partially Implemented
 
-- [ ] Accessibility - Safe area and focus support exist, semantic labels needed
 - [ ] Hot reload - Not yet implemented
 - [ ] Developer tools - Widget inspector, performance overlay
 
@@ -255,7 +255,6 @@ drift run xtool
 - [ ] API stability - Finalize public API surface and deprecation policy
 - [ ] Comprehensive documentation - API reference, tutorials, migration guides
 - [ ] Testing framework - Widget testing utilities and golden tests
-- [ ] Accessibility - Screen reader support, semantic labels, contrast ratios
 - [ ] Error boundaries - Graceful error handling in widget tree
 - [ ] Hot reload - Development-time code reloading
 

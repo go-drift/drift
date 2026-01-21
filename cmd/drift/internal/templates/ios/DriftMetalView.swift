@@ -65,6 +65,48 @@ final class DriftMetalView: UIView {
     /// Created immediately and lives for the view's lifetime.
     private let renderer = DriftRenderer()
 
+    /// Closure that provides accessibility elements from the AccessibilityBridge.
+    /// Set by AccessibilityHandler during initialization.
+    var accessibilityElementsProvider: (() -> [Any]?)?
+
+    // MARK: - Accessibility Container
+
+    override var isAccessibilityElement: Bool {
+        get { false }
+        set { }
+    }
+
+    override var accessibilityElements: [Any]? {
+        get { accessibilityElementsProvider?() }
+        set { }
+    }
+
+    override var accessibilityContainerType: UIAccessibilityContainerType {
+        get { .semanticGroup }
+        set { }
+    }
+
+    override func accessibilityElementCount() -> Int {
+        return accessibilityElements?.count ?? 0
+    }
+
+    override func accessibilityElement(at index: Int) -> Any? {
+        guard let elements = accessibilityElements, index >= 0, index < elements.count else {
+            return nil
+        }
+        return elements[index]
+    }
+
+    override func index(ofAccessibilityElement element: Any) -> Int {
+        guard let elements = accessibilityElements else { return NSNotFound }
+        for (index, e) in elements.enumerated() {
+            if (e as AnyObject) === (element as AnyObject) {
+                return index
+            }
+        }
+        return NSNotFound
+    }
+
     /// Maps active UITouch objects to stable, non-negative pointer IDs.
     /// Using ObjectIdentifier ensures we track touch identity correctly.
     private var touchToPointerID: [ObjectIdentifier: Int64] = [:]

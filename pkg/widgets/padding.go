@@ -48,6 +48,12 @@ func (r *renderPadding) SetChild(child layout.RenderObject) {
 	r.child = setChildFromRenderObject(child)
 }
 
+func (r *renderPadding) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 func (r *renderPadding) Layout(constraints layout.Constraints) {
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))

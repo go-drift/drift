@@ -68,6 +68,13 @@ func (r *renderExpanded) SetChild(child layout.RenderObject) {
 	}
 }
 
+// VisitChildren calls the visitor for each child.
+func (r *renderExpanded) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
 // Layout expands to fill available space and constrains child to that size.
 func (r *renderExpanded) Layout(constraints layout.Constraints) {
 	size := constraints.Constrain(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
