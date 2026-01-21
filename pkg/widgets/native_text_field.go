@@ -67,6 +67,9 @@ type NativeTextField struct {
 
 	// BorderRadius for rounded corners.
 	BorderRadius float64
+
+	// PlaceholderColor is the color for placeholder text.
+	PlaceholderColor rendering.Color
 }
 
 // CreateElement creates the element for the stateful widget.
@@ -217,7 +220,11 @@ func (s *nativeTextFieldState) Build(ctx core.BuildContext) core.Widget {
 	}
 	if displayText == "" && w.Placeholder != "" {
 		displayText = w.Placeholder
-		textStyle.Color = rendering.Color(0xFF999999) // Placeholder color
+		placeholderColor := w.PlaceholderColor
+		if placeholderColor == 0 {
+			placeholderColor = rendering.Color(0xFF999999) // Default placeholder color
+		}
+		textStyle.Color = placeholderColor
 	}
 	if w.Obscure && text != "" {
 		runeCount := utf8.RuneCountInString(text)

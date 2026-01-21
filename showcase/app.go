@@ -41,6 +41,7 @@ func (s ShowcaseApp) CreateState() core.State {
 type showcaseState struct {
 	core.StateBase
 	isDark              bool
+	isCupertino         bool
 	transparentSystemUI bool
 	deepLinkController  *navigation.DeepLinkController
 }
@@ -58,47 +59,61 @@ func (s *showcaseState) InitState() {
 func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 	themeData := s.currentThemeData()
 
-	return theme.Theme{
-		Data: themeData,
-		ChildWidget: navigation.Navigator{
-			InitialRoute: "/",
-			OnGenerateRoute: func(settings navigation.RouteSettings) navigation.Route {
-				// Home page (special case with state callbacks)
-				if settings.Name == "/" {
+	navigator := navigation.Navigator{
+		InitialRoute: "/",
+		OnGenerateRoute: func(settings navigation.RouteSettings) navigation.Route {
+			// Home page (special case with state callbacks)
+			if settings.Name == "/" {
+				return navigation.NewMaterialPageRoute(
+					func(ctx core.BuildContext) core.Widget {
+						return buildHomePage(ctx, s.isDark, s.isCupertino, s.transparentSystemUI, s.toggleTheme, s.togglePlatform, s.toggleSystemTransparency)
+					},
+					settings,
+				)
+			}
+
+			// Theming page (special case needing theme state)
+			if settings.Name == "/theming" {
+				return navigation.NewMaterialPageRoute(
+					func(ctx core.BuildContext) core.Widget {
+						return buildThemingPage(ctx, s.isDark, s.isCupertino)
+					},
+					settings,
+				)
+			}
+
+			// All other demos from registry
+			for _, demo := range demos {
+				if settings.Name == demo.Route {
+					builder := demo.Builder
 					return navigation.NewMaterialPageRoute(
 						func(ctx core.BuildContext) core.Widget {
-							return buildHomePage(ctx, s.isDark, s.transparentSystemUI, s.toggleTheme, s.toggleSystemTransparency)
+							return builder(ctx)
 						},
 						settings,
 					)
 				}
-
-				// Theming page (special case needing isDark state)
-				if settings.Name == "/theming" {
-					return navigation.NewMaterialPageRoute(
-						func(ctx core.BuildContext) core.Widget {
-							return buildThemingPage(ctx, s.isDark)
-						},
-						settings,
-					)
-				}
-
-				// All other demos from registry
-				for _, demo := range demos {
-					if settings.Name == demo.Route {
-						builder := demo.Builder
-						return navigation.NewMaterialPageRoute(
-							func(ctx core.BuildContext) core.Widget {
-								return builder(ctx)
-							},
-							settings,
-						)
-					}
-				}
-				return nil
-			},
+			}
+			return nil
 		},
 	}
+
+	// Always wrap with Material theme
+	materialWidget := theme.Theme{
+		Data:        themeData,
+		ChildWidget: navigator,
+	}
+
+	// Optionally wrap with Cupertino theme
+	if s.isCupertino {
+		cupertinoData := s.currentCupertinoThemeData()
+		return theme.CupertinoTheme{
+			Data:        cupertinoData,
+			ChildWidget: materialWidget,
+		}
+	}
+
+	return materialWidget
 }
 
 func (s *showcaseState) currentThemeData() *theme.ThemeData {
@@ -106,6 +121,13 @@ func (s *showcaseState) currentThemeData() *theme.ThemeData {
 		return theme.DefaultDarkTheme()
 	}
 	return theme.DefaultLightTheme()
+}
+
+func (s *showcaseState) currentCupertinoThemeData() *theme.CupertinoThemeData {
+	if s.isDark {
+		return theme.DefaultCupertinoDarkTheme()
+	}
+	return theme.DefaultCupertinoLightTheme()
 }
 
 func (s *showcaseState) updateBackgroundColor() {
@@ -173,6 +195,12 @@ func (s *showcaseState) toggleTheme() {
 	})
 	s.updateBackgroundColor()
 	s.applySystemUI()
+}
+
+func (s *showcaseState) togglePlatform() {
+	s.SetState(func() {
+		s.isCupertino = !s.isCupertino
+	})
 }
 
 func (s *showcaseState) toggleSystemTransparency() {

@@ -8,35 +8,45 @@ import (
 )
 
 // buildThemingPage demonstrates the theming system.
-func buildThemingPage(ctx core.BuildContext, isDark bool) core.Widget {
+func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core.Widget {
 	_, colors, textTheme := theme.UseTheme(ctx)
 
 	modeLabel := "Dark Mode"
 	if !isDark {
 		modeLabel = "Light Mode"
 	}
+
+	platformLabel := "Material Design"
+	if isCupertino {
+		platformLabel = "Cupertino (iOS)"
+	}
+
 	gradientText := rendering.NewLinearGradient(
 		rendering.Offset{X: 0, Y: 0},
 		rendering.Offset{X: 280, Y: 0},
 		[]rendering.GradientStop{
 			{Position: 0, Color: colors.Primary},
-			{Position: 1, Color: colors.Secondary},
+			{Position: 1, Color: colors.Tertiary},
 		},
 	)
 
-	return demoPage(ctx, "Theming",
+	contentWidgets := []core.Widget{
 		// Current mode indicator
 		widgets.NewContainer(
 			widgets.PaddingAll(16,
-				widgets.RowOf(
-					widgets.MainAxisAlignmentCenter,
-					widgets.CrossAxisAlignmentStart,
-					widgets.MainAxisSizeMax,
-
+				widgets.ColumnOf(
+					widgets.MainAxisAlignmentStart,
+					widgets.CrossAxisAlignmentCenter,
+					widgets.MainAxisSizeMin,
 					widgets.TextOf(modeLabel, rendering.TextStyle{
 						Color:      colors.OnPrimary,
 						FontSize:   18,
 						FontWeight: rendering.FontWeightBold,
+					}),
+					widgets.VSpace(4),
+					widgets.TextOf(platformLabel, rendering.TextStyle{
+						Color:    colors.OnPrimary,
+						FontSize: 14,
 					}),
 				),
 			),
@@ -48,7 +58,15 @@ func buildThemingPage(ctx core.BuildContext, isDark bool) core.Widget {
 		widgets.VSpace(12),
 		colorSwatch("Primary", colors.Primary, colors.OnPrimary),
 		widgets.VSpace(8),
+		colorSwatch("PrimaryContainer", colors.PrimaryContainer, colors.OnPrimaryContainer),
+		widgets.VSpace(8),
 		colorSwatch("Secondary", colors.Secondary, colors.OnSecondary),
+		widgets.VSpace(8),
+		colorSwatch("SecondaryContainer", colors.SecondaryContainer, colors.OnSecondaryContainer),
+		widgets.VSpace(8),
+		colorSwatch("Tertiary", colors.Tertiary, colors.OnTertiary),
+		widgets.VSpace(8),
+		colorSwatch("TertiaryContainer", colors.TertiaryContainer, colors.OnTertiaryContainer),
 		widgets.VSpace(8),
 		colorSwatch("Error", colors.Error, colors.OnError),
 		widgets.VSpace(8),
@@ -57,6 +75,8 @@ func buildThemingPage(ctx core.BuildContext, isDark bool) core.Widget {
 		colorSwatch("Surface", colors.Surface, colors.OnSurface),
 		widgets.VSpace(8),
 		colorSwatch("SurfaceVariant", colors.SurfaceVariant, colors.OnSurfaceVariant),
+		widgets.VSpace(8),
+		colorSwatch("SurfaceContainer", colors.SurfaceContainer, colors.OnSurface),
 		widgets.VSpace(24),
 
 		// Text theme section
@@ -88,8 +108,34 @@ func buildThemingPage(ctx core.BuildContext, isDark bool) core.Widget {
 			FontSize:   28,
 			FontWeight: rendering.FontWeightBold,
 		}),
-		widgets.VSpace(40),
-	)
+	}
+
+	// Add Cupertino colors section if Cupertino theme is active
+	if isCupertino {
+		cupertinoColors := theme.CupertinoColorsOf(ctx)
+		contentWidgets = append(contentWidgets,
+			widgets.VSpace(24),
+			sectionTitle("Cupertino System Colors", colors),
+			widgets.VSpace(12),
+			colorSwatch("SystemBlue", cupertinoColors.SystemBlue, rendering.RGB(255, 255, 255)),
+			widgets.VSpace(8),
+			colorSwatch("SystemGreen", cupertinoColors.SystemGreen, rendering.RGB(255, 255, 255)),
+			widgets.VSpace(8),
+			colorSwatch("SystemRed", cupertinoColors.SystemRed, rendering.RGB(255, 255, 255)),
+			widgets.VSpace(8),
+			colorSwatch("SystemOrange", cupertinoColors.SystemOrange, rendering.RGB(0, 0, 0)),
+			widgets.VSpace(8),
+			colorSwatch("SystemPurple", cupertinoColors.SystemPurple, rendering.RGB(255, 255, 255)),
+			widgets.VSpace(8),
+			colorSwatch("Label", cupertinoColors.Label, cupertinoColors.SystemBackground),
+			widgets.VSpace(8),
+			colorSwatch("SystemBackground", cupertinoColors.SystemBackground, cupertinoColors.Label),
+		)
+	}
+
+	contentWidgets = append(contentWidgets, widgets.VSpace(40))
+
+	return demoPage(ctx, "Theming", contentWidgets...)
 }
 
 // colorSwatch displays a color with its name.

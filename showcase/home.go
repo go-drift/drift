@@ -9,12 +9,17 @@ import (
 )
 
 // buildHomePage creates the main landing page with navigation to demos.
-func buildHomePage(ctx core.BuildContext, isDark bool, systemTransparent bool, toggleTheme func(), toggleTransparency func()) core.Widget {
+func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, systemTransparent bool, toggleTheme func(), togglePlatform func(), toggleTransparency func()) core.Widget {
 	_, colors, textTheme := theme.UseTheme(ctx)
 
 	themeLabel := "Switch to Dark"
 	if isDark {
 		themeLabel = "Switch to Light"
+	}
+
+	platformLabel := "Switch to Cupertino"
+	if isCupertino {
+		platformLabel = "Switch to Material"
 	}
 
 	transparencyLabel := "Enable Transparent System UI"
@@ -75,6 +80,10 @@ func buildHomePage(ctx core.BuildContext, isDark bool, systemTransparent bool, t
 						widgets.NewButton(themeLabel, toggleTheme).
 							WithColor(colors.Secondary, colors.OnSecondary),
 						widgets.VSpace(12),
+						// Platform toggle
+						widgets.NewButton(platformLabel, togglePlatform).
+							WithColor(colors.Tertiary, colors.OnTertiary),
+						widgets.VSpace(12),
 						widgets.NewButton(transparencyLabel, toggleTransparency).
 							WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
 						widgets.VSpace(40),
@@ -112,6 +121,6 @@ func navButton(ctx core.BuildContext, title, subtitle, route string, colors them
 					}),
 				),
 			),
-		).WithColor(colors.Surface).Build(),
+		).WithColor(colors.SurfaceContainerHigh).Build(),
 	}
 }

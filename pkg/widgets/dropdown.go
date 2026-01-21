@@ -160,38 +160,51 @@ func (s *dropdownState[T]) isExpanded() bool {
 
 func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 	w := s.element.Widget().(Dropdown[T])
-	_, colors, textTheme := theme.UseTheme(ctx)
+	themeData, colors, textTheme := theme.UseTheme(ctx)
+	dropdownTheme := themeData.DropdownThemeOf()
 
 	textStyle := w.TextStyle
 	if textStyle.FontSize == 0 {
 		textStyle = textTheme.BodyMedium
 	}
 	if textStyle.Color == 0 {
-		textStyle.Color = colors.OnSurface
+		textStyle.Color = dropdownTheme.TextColor
 	}
 
 	backgroundColor := w.BackgroundColor
 	if backgroundColor == 0 {
-		backgroundColor = colors.Surface
+		backgroundColor = dropdownTheme.BackgroundColor
 	}
 	borderColor := w.BorderColor
 	if borderColor == 0 {
-		borderColor = colors.Outline
+		borderColor = dropdownTheme.BorderColor
 	}
 	menuBackgroundColor := w.MenuBackgroundColor
 	if menuBackgroundColor == 0 {
-		menuBackgroundColor = colors.Surface
+		menuBackgroundColor = dropdownTheme.MenuBackgroundColor
 	}
 	menuBorderColor := w.MenuBorderColor
 	if menuBorderColor == 0 {
-		menuBorderColor = colors.Outline
+		menuBorderColor = dropdownTheme.MenuBorderColor
+	}
+	borderRadius := w.BorderRadius
+	if borderRadius == 0 {
+		borderRadius = dropdownTheme.BorderRadius
+	}
+	itemPadding := w.ItemPadding
+	if itemPadding == (layout.EdgeInsets{}) {
+		itemPadding = dropdownTheme.ItemPadding
+	}
+	itemHeight := w.Height
+	if itemHeight == 0 {
+		itemHeight = dropdownTheme.Height
 	}
 
 	enabled := !w.Disabled && w.OnChanged != nil
 	if !enabled {
-		textStyle.Color = colors.OnSurfaceVariant
+		textStyle.Color = dropdownTheme.DisabledTextColor
 		backgroundColor = colors.SurfaceVariant
-		borderColor = colors.Outline
+		borderColor = dropdownTheme.BorderColor
 	}
 
 	selectedLabel := ""
@@ -213,12 +226,6 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		displayChild = Text{Content: displayLabel, Style: textStyle}
 	}
 
-	padding := w.ItemPadding
-	if padding == (layout.EdgeInsets{}) {
-		padding = layout.EdgeInsetsSymmetric(12, 8)
-	}
-
-	height := defaultDropdownHeight(w.Height)
 	width := w.Width
 	if width == 0 {
 		width = math.MaxFloat64
@@ -227,7 +234,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 	if iconSize == 0 {
 		iconSize = textTheme.BodyMedium.FontSize
 	}
-	contentPadding := layout.EdgeInsetsOnly(padding.Left, 0, padding.Right, 0)
+	contentPadding := layout.EdgeInsetsOnly(itemPadding.Left, 0, itemPadding.Right, 0)
 
 	toggle := func() {
 		if !enabled {
@@ -251,7 +258,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		OnTap: toggle,
 		ChildWidget: Container{
 			Width:       width,
-			Height:      height,
+			Height:      itemHeight,
 			Padding:     contentPadding,
 			ChildWidget: triggerContent,
 		},
@@ -261,7 +268,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		Color:        backgroundColor,
 		BorderColor:  borderColor,
 		BorderWidth:  1,
-		BorderRadius: w.BorderRadius,
+		BorderRadius: borderRadius,
 		ChildWidget:  trigger,
 	}
 
@@ -279,7 +286,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		}
 		itemBackground := rendering.ColorTransparent
 		if reflect.DeepEqual(item.Value, w.Value) {
-			itemBackground = colors.SurfaceVariant
+			itemBackground = dropdownTheme.SelectedItemColor
 		}
 		menuItems = append(menuItems, GestureDetector{
 			OnTap: func(value T, enabled bool) func() {
@@ -300,7 +307,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 				Color: itemBackground,
 				ChildWidget: SizedBox{
 					Width:  width,
-					Height: height,
+					Height: itemHeight,
 					ChildWidget: RowOf(
 						MainAxisAlignmentStart,
 						CrossAxisAlignmentCenter,
@@ -316,7 +323,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		Color:        menuBackgroundColor,
 		BorderColor:  menuBorderColor,
 		BorderWidth:  1,
-		BorderRadius: w.BorderRadius,
+		BorderRadius: borderRadius,
 		ChildWidget:  ColumnOf(MainAxisAlignmentStart, CrossAxisAlignmentStretch, MainAxisSizeMin, menuItems...),
 	}
 
@@ -497,11 +504,4 @@ func (s *dropdownState[T]) requestParentLayout() {
 			renderObject.MarkNeedsPaint()
 		}
 	}
-}
-
-func defaultDropdownHeight(height float64) float64 {
-	if height == 0 {
-		return 44
-	}
-	return height
 }

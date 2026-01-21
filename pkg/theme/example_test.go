@@ -13,7 +13,7 @@ import (
 // In real code, BuildContext is provided by the framework.
 type mockBuildContext struct{}
 
-func (m mockBuildContext) Widget() core.Widget                { return nil }
+func (m mockBuildContext) Widget() core.Widget { return nil }
 func (m mockBuildContext) FindAncestor(func(core.Element) bool) core.Element {
 	return nil
 }

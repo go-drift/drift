@@ -23,8 +23,9 @@ const (
 type FontWeight int
 
 const (
-	FontWeightNormal FontWeight = 400
-	FontWeightBold   FontWeight = 700
+	FontWeightNormal   FontWeight = 400
+	FontWeightSemibold FontWeight = 600
+	FontWeightBold     FontWeight = 700
 )
 
 // FontStyle represents normal or italic text styles.

@@ -13,9 +13,6 @@ type TabItem struct {
 	Icon  core.Widget
 }
 
-// DefaultTabBarHeight is the default height for a tab bar.
-const DefaultTabBarHeight = 56.0
-
 // TabBar displays a row of tabs.
 type TabBar struct {
 	Items           []TabItem
@@ -24,6 +21,8 @@ type TabBar struct {
 	BackgroundColor rendering.Color
 	ActiveColor     rendering.Color
 	InactiveColor   rendering.Color
+	IndicatorColor  rendering.Color
+	IndicatorHeight float64
 	Padding         layout.EdgeInsets
 	Height          float64
 }
@@ -37,17 +36,29 @@ func (t TabBar) Key() any {
 }
 
 func (t TabBar) Build(ctx core.BuildContext) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	themeData, _, textTheme := theme.UseTheme(ctx)
+	tabBarTheme := themeData.TabBarThemeOf()
 
-	background := colorOrDefault(t.BackgroundColor, colors.SurfaceVariant)
-	active := colorOrDefault(t.ActiveColor, colors.Primary)
-	inactive := colorOrDefault(t.InactiveColor, colors.OnSurfaceVariant)
-	padding := t.effectivePadding()
-	height := t.effectiveHeight()
+	background := colorOrDefault(t.BackgroundColor, tabBarTheme.BackgroundColor)
+	active := colorOrDefault(t.ActiveColor, tabBarTheme.ActiveColor)
+	inactive := colorOrDefault(t.InactiveColor, tabBarTheme.InactiveColor)
+	indicatorColor := colorOrDefault(t.IndicatorColor, tabBarTheme.IndicatorColor)
+	indicatorHeight := t.IndicatorHeight
+	if indicatorHeight <= 0 {
+		indicatorHeight = tabBarTheme.IndicatorHeight
+	}
+	padding := t.Padding
+	if padding == (layout.EdgeInsets{}) {
+		padding = tabBarTheme.Padding
+	}
+	height := t.Height
+	if height <= 0 {
+		height = tabBarTheme.Height
+	}
 
 	children := make([]core.Widget, 0, len(t.Items))
 	for i, item := range t.Items {
-		children = append(children, t.buildTabItem(i, item, active, inactive, padding, textTheme))
+		children = append(children, t.buildTabItem(i, item, active, inactive, indicatorColor, indicatorHeight, padding, textTheme))
 	}
 
 	return SizedBox{
@@ -64,9 +75,10 @@ func (t TabBar) Build(ctx core.BuildContext) core.Widget {
 }
 
 // buildTabItem creates a single tab item widget.
-func (t TabBar) buildTabItem(index int, item TabItem, active, inactive rendering.Color, padding layout.EdgeInsets, textTheme theme.TextTheme) core.Widget {
+func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicatorColor rendering.Color, indicatorHeight float64, padding layout.EdgeInsets, textTheme theme.TextTheme) core.Widget {
+	isActive := index == t.CurrentIndex
 	color := inactive
-	if index == t.CurrentIndex {
+	if isActive {
 		color = active
 	}
 
@@ -85,38 +97,51 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive rendering
 	}
 	content = append(content, Text{Content: item.Label, Style: labelStyle, MaxLines: 1})
 
-	return GestureDetector{
-		OnTap: func() {
-			if t.OnTap != nil {
-				t.OnTap(index)
-			}
-		},
-		ChildWidget: Container{
-			Padding:   padding,
-			Alignment: layout.AlignmentCenter,
+	// Build tab content column
+	tabContent := Column{
+		ChildrenWidgets:   content,
+		MainAxisAlignment: MainAxisAlignmentCenter,
+		MainAxisSize:      MainAxisSizeMin,
+	}
+
+	// Wrap in Expanded to fill available space in the Row
+	tabItem := Expanded{
+		Flex: 1,
+		ChildWidget: GestureDetector{
+			OnTap: func() {
+				if t.OnTap != nil {
+					t.OnTap(index)
+				}
+			},
 			ChildWidget: Column{
-				ChildrenWidgets:   content,
-				MainAxisAlignment: MainAxisAlignmentCenter,
-				MainAxisSize:      MainAxisSizeMin,
+				MainAxisAlignment:  MainAxisAlignmentEnd,
+				CrossAxisAlignment: CrossAxisAlignmentStretch,
+				MainAxisSize:       MainAxisSizeMax,
+				ChildrenWidgets: []core.Widget{
+					Expanded{
+						Flex: 1,
+						ChildWidget: Container{
+							Padding:     padding,
+							Alignment:   layout.AlignmentCenter,
+							ChildWidget: tabContent,
+						},
+					},
+					// Indicator at the bottom
+					Container{
+						Height: indicatorHeight,
+						Color: func() rendering.Color {
+							if isActive {
+								return indicatorColor
+							}
+							return rendering.ColorTransparent
+						}(),
+					},
+				},
 			},
 		},
 	}
-}
 
-// effectivePadding returns the padding, using defaults if not set.
-func (t TabBar) effectivePadding() layout.EdgeInsets {
-	if t.Padding == (layout.EdgeInsets{}) {
-		return layout.EdgeInsetsSymmetric(12, 8)
-	}
-	return t.Padding
-}
-
-// effectiveHeight returns the height, using defaults if not set.
-func (t TabBar) effectiveHeight() float64 {
-	if t.Height <= 0 {
-		return DefaultTabBarHeight
-	}
-	return t.Height
+	return tabItem
 }
 
 // colorOrDefault returns the color if set, otherwise returns the default.

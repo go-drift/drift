@@ -52,6 +52,8 @@ type TextField struct {
 	BorderRadius float64
 	// Style for the text.
 	Style rendering.TextStyle
+	// PlaceholderColor for the placeholder text.
+	PlaceholderColor rendering.Color
 }
 
 func (t TextField) CreateElement() core.Element {
@@ -63,51 +65,61 @@ func (t TextField) Key() any {
 }
 
 func (t TextField) Build(ctx core.BuildContext) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	themeData, _, textTheme := theme.UseTheme(ctx)
+	textFieldTheme := themeData.TextFieldThemeOf()
 
 	labelStyle := textTheme.LabelLarge
-	labelStyle.Color = colors.OnSurfaceVariant
+	labelStyle.Color = textFieldTheme.LabelColor
 	helperStyle := textTheme.BodySmall
-	helperStyle.Color = colors.OnSurfaceVariant
+	helperStyle.Color = textFieldTheme.LabelColor
 
 	textStyle := t.Style
 	if textStyle.FontSize == 0 {
 		textStyle = textTheme.BodyLarge
 	}
 	if textStyle.Color == 0 {
-		textStyle.Color = colors.OnSurface
+		textStyle.Color = textFieldTheme.TextColor
 	}
 
 	backgroundColor := t.BackgroundColor
 	if backgroundColor == 0 {
-		backgroundColor = colors.Surface
+		backgroundColor = textFieldTheme.BackgroundColor
 	}
 	borderColor := t.BorderColor
 	if borderColor == 0 {
-		borderColor = colors.Outline
+		borderColor = textFieldTheme.BorderColor
 	}
 	focusColor := t.FocusColor
 	if focusColor == 0 {
-		focusColor = colors.Primary
+		focusColor = textFieldTheme.FocusColor
+	}
+	borderRadius := t.BorderRadius
+	if borderRadius == 0 {
+		borderRadius = textFieldTheme.BorderRadius
 	}
 	if t.ErrorText != "" {
-		borderColor = colors.Error
+		borderColor = textFieldTheme.ErrorColor
 	}
 
 	height := t.Height
 	if height == 0 {
-		height = 48
+		height = textFieldTheme.Height
 	}
 
 	padding := t.Padding
 	if padding == (layout.EdgeInsets{}) {
-		padding = layout.EdgeInsetsSymmetric(12, 8)
+		padding = textFieldTheme.Padding
 	}
 
 	children := make([]core.Widget, 0, 4)
 	if t.Label != "" {
 		children = append(children, Text{Content: t.Label, Style: labelStyle})
 		children = append(children, VSpace(6))
+	}
+
+	placeholderColor := t.PlaceholderColor
+	if placeholderColor == 0 {
+		placeholderColor = textFieldTheme.PlaceholderColor
 	}
 
 	children = append(children, NativeTextField{
@@ -128,12 +140,13 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 		BackgroundColor:   backgroundColor,
 		BorderColor:       borderColor,
 		FocusColor:        focusColor,
-		BorderRadius:      t.BorderRadius,
+		BorderRadius:      borderRadius,
+		PlaceholderColor:  placeholderColor,
 	})
 
 	if t.ErrorText != "" {
 		errorStyle := helperStyle
-		errorStyle.Color = colors.Error
+		errorStyle.Color = textFieldTheme.ErrorColor
 		children = append(children, VSpace(6))
 		children = append(children, Text{Content: t.ErrorText, Style: errorStyle})
 	} else if t.HelperText != "" {

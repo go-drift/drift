@@ -37,33 +37,43 @@ func (s Switch) Key() any {
 }
 
 func (s Switch) Build(ctx core.BuildContext) core.Widget {
-	colors := theme.ColorsOf(ctx)
+	themeData := theme.ThemeOf(ctx)
+	switchTheme := themeData.SwitchThemeOf()
+
 	activeColor := s.ActiveColor
 	if activeColor == 0 {
-		activeColor = colors.Primary
+		activeColor = switchTheme.ActiveTrackColor
 	}
 	inactiveColor := s.InactiveColor
 	if inactiveColor == 0 {
-		inactiveColor = colors.SurfaceVariant
+		inactiveColor = switchTheme.InactiveTrackColor
 	}
 	thumbColor := s.ThumbColor
 	if thumbColor == 0 {
-		thumbColor = colors.Surface
+		thumbColor = switchTheme.ThumbColor
+	}
+	width := s.Width
+	if width == 0 {
+		width = switchTheme.Width
+	}
+	height := s.Height
+	if height == 0 {
+		height = switchTheme.Height
 	}
 
 	enabled := !s.Disabled && s.OnChanged != nil
 	if !enabled {
-		activeColor = colors.SurfaceVariant
-		inactiveColor = colors.SurfaceVariant
-		thumbColor = colors.OnSurfaceVariant
+		activeColor = switchTheme.DisabledActiveTrackColor
+		inactiveColor = switchTheme.DisabledInactiveTrackColor
+		thumbColor = switchTheme.DisabledThumbColor
 	}
 
 	return switchRender{
 		value:         s.Value,
 		onChanged:     s.OnChanged,
 		enabled:       enabled,
-		width:         s.Width,
-		height:        s.Height,
+		width:         width,
+		height:        height,
 		activeColor:   activeColor,
 		inactiveColor: inactiveColor,
 		thumbColor:    thumbColor,

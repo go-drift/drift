@@ -43,9 +43,9 @@ func (t TabScaffold) CreateState() core.State {
 }
 
 type tabScaffoldState struct {
-	element            *core.StatefulElement
-	scaffold           TabScaffold
-	controller         *TabController
+	element               *core.StatefulElement
+	scaffold              TabScaffold
+	controller            *TabController
 	unsubscribeController func()
 }
 
@@ -85,7 +85,6 @@ func (s *tabScaffoldState) Build(ctx core.BuildContext) core.Widget {
 			widgets.TabBar{
 				Items:        tabItems,
 				CurrentIndex: index,
-				Height:       widgets.DefaultTabBarHeight,
 				OnTap: func(tabIndex int) {
 					s.controller.SetIndex(tabIndex)
 				},

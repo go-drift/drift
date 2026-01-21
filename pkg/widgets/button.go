@@ -5,6 +5,7 @@ import (
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/theme"
 )
 
 // Button is a tappable button widget with customizable appearance.
@@ -13,6 +14,8 @@ type Button struct {
 	Label string
 	// OnTap is called when the button is tapped.
 	OnTap func()
+	// Disabled disables the button when true.
+	Disabled bool
 	// Color is the background color. Defaults to primary if zero.
 	Color rendering.Color
 	// Gradient is the optional background gradient.
@@ -23,6 +26,8 @@ type Button struct {
 	FontSize float64
 	// Padding is the button padding. Defaults to symmetric(24, 14) if zero.
 	Padding layout.EdgeInsets
+	// BorderRadius is the corner radius. Defaults to 8 if zero.
+	BorderRadius float64
 	// Haptic enables haptic feedback on tap. Defaults to true.
 	Haptic bool
 }
@@ -68,6 +73,18 @@ func (b Button) WithHaptic(enabled bool) Button {
 	return b
 }
 
+// WithDisabled sets the disabled state.
+func (b Button) WithDisabled(disabled bool) Button {
+	b.Disabled = disabled
+	return b
+}
+
+// WithBorderRadius sets the corner radius.
+func (b Button) WithBorderRadius(radius float64) Button {
+	b.BorderRadius = radius
+	return b
+}
+
 func (b Button) CreateElement() core.Element {
 	return core.NewStatelessElement(b, nil)
 }
@@ -77,35 +94,74 @@ func (b Button) Key() any {
 }
 
 func (b Button) Build(ctx core.BuildContext) core.Widget {
-	// Apply defaults
+	// Get button theme for defaults
+	buttonTheme := theme.ThemeOf(ctx).ButtonThemeOf()
+
+	// Apply defaults from theme
+	color := b.Color
+	if color == 0 {
+		color = buttonTheme.BackgroundColor
+	}
+	textColor := b.TextColor
+	if textColor == 0 {
+		textColor = buttonTheme.ForegroundColor
+	}
 	padding := b.Padding
 	if padding == (layout.EdgeInsets{}) {
-		padding = layout.EdgeInsetsSymmetric(24, 14)
+		padding = buttonTheme.Padding
 	}
 	fontSize := b.FontSize
 	if fontSize == 0 {
-		fontSize = 16
+		fontSize = buttonTheme.FontSize
+	}
+	borderRadius := b.BorderRadius
+	if borderRadius == 0 {
+		borderRadius = buttonTheme.BorderRadius
 	}
 
-	onTap := b.OnTap
-	if b.Haptic && onTap != nil {
-		originalOnTap := onTap
-		onTap = func() {
-			platform.Haptics.LightImpact()
-			originalOnTap()
+	// Handle disabled state
+	if b.Disabled {
+		color = buttonTheme.DisabledBackgroundColor
+		textColor = buttonTheme.DisabledForegroundColor
+	}
+
+	var onTap func()
+	if !b.Disabled {
+		onTap = b.OnTap
+		if b.Haptic && onTap != nil {
+			originalOnTap := onTap
+			onTap = func() {
+				platform.Haptics.LightImpact()
+				originalOnTap()
+			}
+		}
+	}
+
+	content := Padding{
+		Padding: padding,
+		ChildWidget: Text{
+			Content: b.Label,
+			Style:   rendering.TextStyle{Color: textColor, FontSize: fontSize},
+		},
+	}
+
+	var box core.Widget
+	if b.Gradient != nil && !b.Disabled {
+		box = DecoratedBox{
+			Gradient:     b.Gradient,
+			BorderRadius: borderRadius,
+			ChildWidget:  content,
+		}
+	} else {
+		box = DecoratedBox{
+			Color:        color,
+			BorderRadius: borderRadius,
+			ChildWidget:  content,
 		}
 	}
 
 	return GestureDetector{
-		OnTap: onTap,
-		ChildWidget: Container{
-			Color:    b.Color,
-			Gradient: b.Gradient,
-			Padding:  padding,
-			ChildWidget: Text{
-				Content: b.Label,
-				Style:   rendering.TextStyle{Color: b.TextColor, FontSize: fontSize},
-			},
-		},
+		OnTap:       onTap,
+		ChildWidget: box,
 	}
 }

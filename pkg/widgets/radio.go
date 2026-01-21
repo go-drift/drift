@@ -39,26 +39,32 @@ func (r Radio[T]) Key() any {
 }
 
 func (r Radio[T]) Build(ctx core.BuildContext) core.Widget {
-	colors := theme.ColorsOf(ctx)
+	themeData := theme.ThemeOf(ctx)
+	radioTheme := themeData.RadioThemeOf()
+
 	activeColor := r.ActiveColor
 	if activeColor == 0 {
-		activeColor = colors.Primary
+		activeColor = radioTheme.ActiveColor
 	}
 	inactiveColor := r.InactiveColor
 	if inactiveColor == 0 {
-		inactiveColor = colors.Outline
+		inactiveColor = radioTheme.InactiveColor
 	}
 	backgroundColor := r.BackgroundColor
 	if backgroundColor == 0 {
-		backgroundColor = colors.Surface
+		backgroundColor = radioTheme.BackgroundColor
+	}
+	size := r.Size
+	if size == 0 {
+		size = radioTheme.Size
 	}
 
 	enabled := !r.Disabled && r.OnChanged != nil
 	selected := reflect.DeepEqual(r.Value, r.GroupValue)
 	if !enabled {
-		activeColor = colors.SurfaceVariant
-		inactiveColor = colors.Outline
-		backgroundColor = colors.SurfaceVariant
+		activeColor = radioTheme.DisabledActiveColor
+		inactiveColor = radioTheme.DisabledInactiveColor
+		// backgroundColor stays as-is for unselected state
 	}
 
 	return radioRender[T]{
@@ -66,7 +72,7 @@ func (r Radio[T]) Build(ctx core.BuildContext) core.Widget {
 		onChanged:       r.OnChanged,
 		value:           r.Value,
 		enabled:         enabled,
-		size:            r.Size,
+		size:            size,
 		activeColor:     activeColor,
 		inactiveColor:   inactiveColor,
 		backgroundColor: backgroundColor,

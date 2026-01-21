@@ -39,39 +39,47 @@ func (c Checkbox) Key() any {
 }
 
 func (c Checkbox) Build(ctx core.BuildContext) core.Widget {
-	colors := theme.ColorsOf(ctx)
+	themeData := theme.ThemeOf(ctx)
+	checkboxTheme := themeData.CheckboxThemeOf()
 
 	activeColor := c.ActiveColor
 	if activeColor == 0 {
-		activeColor = colors.Primary
+		activeColor = checkboxTheme.ActiveColor
 	}
 	checkColor := c.CheckColor
 	if checkColor == 0 {
-		checkColor = colors.OnPrimary
+		checkColor = checkboxTheme.CheckColor
 	}
 	borderColor := c.BorderColor
 	if borderColor == 0 {
-		borderColor = colors.Outline
+		borderColor = checkboxTheme.BorderColor
 	}
 	backgroundColor := c.BackgroundColor
 	if backgroundColor == 0 {
-		backgroundColor = colors.Surface
+		backgroundColor = checkboxTheme.BackgroundColor
+	}
+	size := c.Size
+	if size == 0 {
+		size = checkboxTheme.Size
+	}
+	borderRadius := c.BorderRadius
+	if borderRadius == 0 {
+		borderRadius = checkboxTheme.BorderRadius
 	}
 
 	enabled := !c.Disabled && c.OnChanged != nil
 	if !enabled {
-		activeColor = colors.SurfaceVariant
-		checkColor = colors.OnSurfaceVariant
-		borderColor = colors.Outline
-		backgroundColor = colors.SurfaceVariant
+		activeColor = checkboxTheme.DisabledActiveColor
+		checkColor = checkboxTheme.DisabledCheckColor
+		// backgroundColor stays as-is for unchecked state
 	}
 
 	return checkboxRender{
 		value:           c.Value,
 		onChanged:       c.OnChanged,
 		enabled:         enabled,
-		size:            c.Size,
-		borderRadius:    c.BorderRadius,
+		size:            size,
+		borderRadius:    borderRadius,
 		activeColor:     activeColor,
 		checkColor:      checkColor,
 		borderColor:     borderColor,
