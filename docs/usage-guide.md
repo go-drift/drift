@@ -417,7 +417,15 @@ func (s *formState) handleSubmit(text string) {
 
 ### Tap Gesture
 
-Detect simple taps with `OnTap`:
+Use the `Tap` helper for simple tap gestures:
+
+```
+widgets.Tap(func() {
+    fmt.Println("Tapped!")
+}, myButton)
+```
+
+For more control, use GestureDetector directly:
 
 ```go
 widgets.GestureDetector{

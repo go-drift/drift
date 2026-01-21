@@ -69,8 +69,8 @@ func HSpace(width float64) SizedBox {
 	return SizedBox{Width: width}
 }
 
-// Gesture wraps a child with a tap handler.
-func Gesture(onTap func(), child core.Widget) GestureDetector {
+// Tap wraps a child with a tap handler.
+func Tap(onTap func(), child core.Widget) GestureDetector {
 	return GestureDetector{OnTap: onTap, ChildWidget: child}
 }
 

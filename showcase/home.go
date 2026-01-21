@@ -88,14 +88,13 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 
 // navButton creates a navigation button for the home page.
 func navButton(ctx core.BuildContext, title, subtitle, route string, colors theme.ColorScheme) core.Widget {
-	return widgets.GestureDetector{
-		OnTap: func() {
-			nav := navigation.NavigatorOf(ctx)
-			if nav != nil {
-				nav.PushNamed(route, nil)
-			}
-		},
-		ChildWidget: widgets.NewContainer(
+	return widgets.Tap(func() {
+		nav := navigation.NavigatorOf(ctx)
+		if nav != nil {
+			nav.PushNamed(route, nil)
+		}
+	},
+		widgets.NewContainer(
 			widgets.PaddingAll(16,
 				widgets.ColumnOf(
 					widgets.MainAxisAlignmentStart,
@@ -114,5 +113,5 @@ func navButton(ctx core.BuildContext, title, subtitle, route string, colors them
 				),
 			),
 		).WithColor(colors.SurfaceContainerHigh).Build(),
-	}
+	)
 }
