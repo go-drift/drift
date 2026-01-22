@@ -11,6 +11,7 @@ detect_drift_version() {
     return
   fi
 
+  # Check module cache path (e.g., drift@v0.1.0)
   local base
   base="$(basename "$ROOT_DIR")"
   if [[ "$base" == *@* ]]; then
@@ -18,20 +19,25 @@ detect_drift_version() {
     return
   fi
 
+  # Check git tag
   if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     local tag
     tag=$(git -C "$ROOT_DIR" describe --tags --abbrev=0 2>/dev/null || true)
     if [[ -n "$tag" ]]; then
-      if [[ "$tag" == drift-* ]]; then
-        echo "${tag#drift-}"
-      else
-        echo "$tag"
-      fi
+      echo "$tag"
       return
     fi
   fi
 
   echo ""
+}
+
+fetch_latest_release() {
+  # Fetch latest release tag from GitHub API
+  curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+    | grep -o '"tag_name": *"[^"]*"' \
+    | head -1 \
+    | cut -d'"' -f4
 }
 
 usage() {
@@ -79,14 +85,28 @@ fi
 
 drift_version="$(detect_drift_version)"
 if [[ -z "$drift_version" ]]; then
-  echo "Unable to determine Drift version. Set DRIFT_VERSION or run from the module cache." >&2
-  exit 1
+  echo "Version not detected, fetching latest release from GitHub..." >&2
+  drift_version="$(fetch_latest_release)"
+  if [[ -z "$drift_version" ]]; then
+    echo "Unable to determine Drift version. Set DRIFT_VERSION manually." >&2
+    exit 1
+  fi
 fi
 
 # Normalize version to match CLI cache paths (see cache.normalizeVersion)
-# Strip "drift-" prefix, "-dev" suffix, ensure "v" prefix
 drift_version="${drift_version#drift-}"
-drift_version="${drift_version%-dev}"
+
+# Detect Go pseudo-versions (v0.2.1-0.20260122153045-abc123) and -dev builds.
+# These should fetch latest. Explicit prerelease tags (v0.2.0-rc1) are allowed.
+if [[ "$drift_version" =~ -0\.[0-9]{14}- ]] || [[ "$drift_version" == *-dev ]]; then
+  echo "Non-release version detected, fetching latest release..." >&2
+  drift_version="$(fetch_latest_release)"
+  if [[ -z "$drift_version" ]]; then
+    echo "Unable to fetch latest release from GitHub." >&2
+    exit 1
+  fi
+fi
+
 if [[ "$drift_version" != v* ]]; then
   drift_version="v$drift_version"
 fi
