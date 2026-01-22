@@ -197,7 +197,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, args []string, op
 	fmt.Println()
 
 	if !opts.noLogs {
-		if err := logAndroid(); err != nil {
+		if err := logAndroid(cfg.AppID); err != nil {
 			return err
 		}
 	}
@@ -290,7 +290,7 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 	fmt.Println()
 
 	if !opts.noLogs {
-		if err := logIOS(); err != nil {
+		if err := logIOS(cfg.AppID); err != nil {
 			return err
 		}
 	}
@@ -437,7 +437,8 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 		fmt.Println("Streaming device logs (Ctrl+C to stop)...")
 		fmt.Println()
 
-		logArgs := []string{"--match", cfg.AppID}
+		// Use --process to filter by app name (matches the executable name)
+		logArgs := []string{"--process", cfg.AppName}
 		if xtoolOpts.deviceID != "" {
 			logArgs = append([]string{"-u", xtoolOpts.deviceID}, logArgs...)
 		}

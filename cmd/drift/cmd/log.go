@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/go-drift/drift/cmd/drift/internal/config"
 )
 
 func init() {
@@ -34,18 +36,28 @@ func runLog(args []string) error {
 
 	platform := strings.ToLower(args[0])
 
+	// Load config to get app ID
+	root, err := config.FindProjectRoot()
+	if err != nil {
+		return fmt.Errorf("not in a Drift project (no go.mod found)")
+	}
+	cfg, err := config.Resolve(root)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
 	switch platform {
 	case "android":
-		return logAndroid()
+		return logAndroid(cfg.AppID)
 	case "ios":
-		return logIOS()
+		return logIOS(cfg.AppID)
 	default:
 		return fmt.Errorf("unknown platform %q (use android or ios)", platform)
 	}
 }
 
 // logAndroid streams logs from Android device.
-func logAndroid() error {
+func logAndroid(appID string) error {
 	fmt.Println("Streaming Android logs (Ctrl+C to stop)...")
 	fmt.Println()
 
@@ -57,18 +69,39 @@ func logAndroid() error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to clear logcat: %v\n", err)
 	}
 
-	// Stream logs filtered for Drift
-	cmd := exec.Command(adb, "logcat",
-		"-v", "time",
-		"DriftJNI:*",
-		"DriftAccessibility:*",
-		"[Accessibility]:*",
-		"DriftDeepLink:*",
-		"Go:*",
-		"drift:*",
-		"AndroidRuntime:E",
-		"*:S", // Silence other tags
-	)
+	// Try to get PID of the app (with fallbacks for older devices)
+	pid := getAppPID(adb, appID)
+
+	var cmd *exec.Cmd
+	if pid != "" {
+		// Test if --pid is supported (fails on old adb/devices)
+		testCmd := exec.Command(adb, "logcat", "-d", "--pid", pid)
+		if err := testCmd.Run(); err == nil {
+			// PID-based filtering (preferred) - app logs only
+			cmd = exec.Command(adb, "logcat", "-v", "time", "--pid", pid)
+		} else {
+			pid = "" // Force fallback
+		}
+	}
+
+	if pid == "" {
+		// Fallback: tag-based filtering (includes crash logs)
+		fmt.Fprintf(os.Stderr, "Note: using tag-based filtering (includes crash logs)\n")
+		cmd = exec.Command(adb, "logcat", "-v", "time",
+			"DriftJNI:*",
+			"DriftAccessibility:*",
+			"DriftDeepLink:*",
+			"DriftRenderer:*",
+			"DriftSurfaceView:*",
+			"DriftBackground:*",
+			"DriftPush:*",
+			"DriftSkia:*",
+			"PlatformChannel:*",
+			"Go:*",
+			"AndroidRuntime:E",
+			"*:S",
+		)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -93,15 +126,41 @@ func logAndroid() error {
 	return nil
 }
 
+// getAppPID tries multiple methods to get the app's PID.
+func getAppPID(adb, appID string) string {
+	// Try pidof -s first (single PID, most common)
+	if out, err := exec.Command(adb, "shell", "pidof", "-s", appID).Output(); err == nil {
+		if pid := strings.TrimSpace(string(out)); pid != "" {
+			return pid
+		}
+	}
+
+	// Fallback: pidof without -s (some devices)
+	if out, err := exec.Command(adb, "shell", "pidof", appID).Output(); err == nil {
+		if pid := strings.TrimSpace(string(out)); pid != "" {
+			// May return multiple PIDs, take first
+			fields := strings.Fields(pid)
+			if len(fields) > 0 {
+				return fields[0]
+			}
+		}
+	}
+
+	return "" // PID unavailable
+}
+
 // logIOS streams logs from iOS simulator.
-func logIOS() error {
+func logIOS(appID string) error {
 	fmt.Println("Streaming iOS simulator logs (Ctrl+C to stop)...")
 	fmt.Println()
 
-	// Get predicate for filtering
-	// This filters for our app's process
+	// Filter by app's bundle ID (which is used as the os_log subsystem)
+	// This captures DriftLog.* calls; NSLog and third-party logs are excluded to reduce noise
+	predicate := fmt.Sprintf(`subsystem == "%s"`, appID)
+
 	cmd := exec.Command("log", "stream",
-		"--predicate", `subsystem CONTAINS "drift" OR process CONTAINS "Runner"`,
+		"--predicate", predicate,
+		"--level", "debug",
 		"--style", "compact",
 	)
 	cmd.Stdout = os.Stdout

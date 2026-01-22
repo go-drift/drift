@@ -926,7 +926,7 @@ enum DeepLinkHandler {
             return
         }
         lastLink = urlString
-        NSLog("DriftDeepLink: Received deep link: %@ (source=%@)", urlString, source)
+        DriftLog.deeplink.info("Received deep link: \(urlString) (source=\(source))")
         let payload: [String: Any] = [
             "url": urlString,
             "source": source,

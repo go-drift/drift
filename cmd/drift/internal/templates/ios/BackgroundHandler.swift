@@ -103,9 +103,9 @@ enum BackgroundHandler {
             try BGTaskScheduler.shared.submit(request)
             // Track which task ID is currently scheduled for this identifier
             currentRefreshTaskId = id
-            NSLog("Scheduled background fetch task: %@ using identifier %@", id, refreshTaskIdentifier)
+            DriftLog.background.debug("Scheduled background fetch task: \(id) using identifier \(refreshTaskIdentifier)")
         } catch {
-            NSLog("Failed to schedule background fetch task: %@", error.localizedDescription)
+            DriftLog.background.error("Failed to schedule background fetch task: \(error.localizedDescription)")
             sendTaskEvent(taskId: id, eventType: "failed", data: ["error": error.localizedDescription])
         }
     }
@@ -120,9 +120,9 @@ enum BackgroundHandler {
             try BGTaskScheduler.shared.submit(request)
             // Track which task ID is currently scheduled for this identifier
             currentProcessingTaskId = id
-            NSLog("Scheduled background processing task: %@ using identifier %@", id, processingTaskIdentifier)
+            DriftLog.background.debug("Scheduled background processing task: \(id) using identifier \(processingTaskIdentifier)")
         } catch {
-            NSLog("Failed to schedule background processing task: %@", error.localizedDescription)
+            DriftLog.background.error("Failed to schedule background processing task: \(error.localizedDescription)")
             sendTaskEvent(taskId: id, eventType: "failed", data: ["error": error.localizedDescription])
         }
     }
@@ -190,7 +190,7 @@ enum BackgroundHandler {
             handleBackgroundTask(task as! BGProcessingTask)
         }
 
-        NSLog("Registered background task identifiers: %@, %@", refreshTaskIdentifier, processingTaskIdentifier)
+        DriftLog.background.debug("Registered background task identifiers: \(refreshTaskIdentifier), \(processingTaskIdentifier)")
     }
 
     private static func handleBackgroundTask(_ task: BGTask) {
@@ -206,7 +206,7 @@ enum BackgroundHandler {
             taskId = "unknown"
         }
 
-        NSLog("Executing background task: %@ (identifier: %@)", taskId, task.identifier)
+        DriftLog.background.debug("Executing background task: \(taskId) (identifier: \(task.identifier))")
 
         // Notify Go that task is starting
         sendTaskEvent(taskId: taskId, eventType: "started")
