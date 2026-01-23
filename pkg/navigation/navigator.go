@@ -74,6 +74,9 @@ type NavigatorState interface {
 	// PushNamed pushes a route by name.
 	PushNamed(name string, args any)
 
+	// PushReplacementNamed replaces the current route by name
+	PushReplacementNamed(name string, args any)
+
 	// Pop removes the current route and optionally returns a result.
 	Pop(result any)
 
@@ -211,18 +214,31 @@ func (s *navigatorState) Push(route Route) {
 	})
 }
 
-// PushNamed pushes a route by name.
-func (s *navigatorState) PushNamed(name string, args any) {
+func (s *navigatorState) routeFromName(name string, args any) Route {
 	if s.navigator.OnGenerateRoute == nil {
-		return
+		return nil
 	}
 	settings := RouteSettings{Name: name, Arguments: args}
 	route := s.navigator.OnGenerateRoute(settings)
 	if route == nil && s.navigator.OnUnknownRoute != nil {
 		route = s.navigator.OnUnknownRoute(settings)
 	}
+	return route
+}
+
+// PushNamed pushes a route by name.
+func (s *navigatorState) PushNamed(name string, args any) {
+	route := s.routeFromName(name, args)
 	if route != nil {
 		s.Push(route)
+	}
+}
+
+// PushReplacementNamed replaces the current route.
+func (s *navigatorState) PushReplacementNamed(name string, args any) {
+	route := s.routeFromName(name, args)
+	if route != nil {
+		s.PushReplacement(route)
 	}
 }
 
