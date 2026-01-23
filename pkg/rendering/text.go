@@ -48,6 +48,12 @@ type TextStyle struct {
 	Shadow             *TextShadow
 }
 
+// WithColor returns a copy of the TextStyle with the specified color.
+func (s TextStyle) WithColor(c Color) TextStyle {
+	s.Color = c
+	return s
+}
+
 // TextLine represents a single laid-out line of text.
 type TextLine struct {
 	Text  string
