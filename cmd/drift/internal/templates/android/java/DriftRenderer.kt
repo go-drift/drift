@@ -53,6 +53,11 @@ class DriftRenderer : GLSurfaceView.Renderer {
             return
         }
 
+        // Skip frame if nothing has changed (no animations, input, or state updates).
+        if (NativeBridge.needsFrame() == 0) {
+            return
+        }
+
         val result = NativeBridge.renderFrameSkia(width, height)
         if (result != 0) {
             GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)

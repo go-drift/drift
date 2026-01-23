@@ -147,6 +147,7 @@ typedef const char* (*DriftSkiaErrorFn)(void);
 typedef int (*DriftBackButtonFn)(void);
 
 typedef void (*DriftRequestFrameFn)(void);
+typedef int (*DriftNeedsFrameFn)(void);
 
 /* Cached function pointers. NULL until resolved. */
 static DriftRenderFn drift_render_frame = NULL;
@@ -163,6 +164,8 @@ static DriftPlatformIsStreamActiveFn drift_platform_stream_active = NULL;
 static DriftPlatformSetNativeHandlerFn drift_platform_set_handler = NULL;
 static DriftBackButtonFn drift_back_button = NULL;
 static DriftRequestFrameFn drift_request_frame = NULL;
+static DriftNeedsFrameFn drift_needs_frame = NULL;
+static int drift_needs_frame_resolved = 0;
 
 /* Handle to the loaded Go shared library. NULL until loaded. */
 static void *drift_handle = NULL;
@@ -920,6 +923,45 @@ static int resolve_drift_request_frame(void) {
 }
 
 /**
+ * Resolves the DriftNeedsFrame function from the Go shared library.
+ *
+ * Uses a "resolved" flag to ensure we only attempt resolution once,
+ * avoiding log spam and repeated dlsym calls if the symbol is missing.
+ *
+ * @return 0 if the function was successfully resolved, 1 on failure.
+ */
+static int resolve_drift_needs_frame(void) {
+    if (drift_needs_frame) {
+        return 0;
+    }
+
+    /* Only attempt resolution once to avoid log spam on every frame */
+    if (drift_needs_frame_resolved) {
+        return 1;
+    }
+    drift_needs_frame_resolved = 1;
+
+    if (!drift_handle) {
+        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
+        if (!drift_handle) {
+            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
+        }
+    }
+
+    if (drift_handle) {
+        drift_needs_frame = (DriftNeedsFrameFn)dlsym(drift_handle, "DriftNeedsFrame");
+    } else {
+        drift_needs_frame = (DriftNeedsFrameFn)dlsym(RTLD_DEFAULT, "DriftNeedsFrame");
+    }
+
+    if (!drift_needs_frame) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftNeedsFrame not found: %s", dlerror());
+    }
+
+    return drift_needs_frame ? 0 : 1;
+}
+
+/**
  * JNI implementation for NativeBridge.platformHandleEvent().
  *
  * Sends an event to Go event listeners.
@@ -1078,6 +1120,28 @@ Java_{{.JNIPackage}}_NativeBridge_requestFrame(
     }
 
     drift_request_frame();
+}
+
+/**
+ * JNI implementation for NativeBridge.needsFrame().
+ *
+ * Checks if the Go engine has any pending work that requires a new frame.
+ * Returns 1 if a frame should be rendered, 0 if it can be skipped.
+ */
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_needsFrame(
+    JNIEnv *env,
+    jclass clazz
+) {
+    (void)env;
+    (void)clazz;
+
+    if (resolve_drift_needs_frame() != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftNeedsFrame");
+        return 1;  /* Fail-safe: render if we can't check */
+    }
+
+    return (jint)drift_needs_frame();
 }
 
 /**

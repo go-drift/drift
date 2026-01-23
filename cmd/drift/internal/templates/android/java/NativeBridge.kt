@@ -184,4 +184,14 @@ object NativeBridge {
      * Requests the Go engine to schedule a new frame.
      */
     external fun requestFrame()
+
+    /**
+     * Checks if a new frame needs to be rendered.
+     *
+     * Call this before renderFrameSkia() to skip unnecessary render cycles
+     * when nothing has changed (no animations, no user input, no state changes).
+     *
+     * @return 1 if a new frame should be rendered, 0 if the frame can be skipped.
+     */
+    external fun needsFrame(): Int
 }
