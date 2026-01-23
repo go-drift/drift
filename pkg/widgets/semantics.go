@@ -198,7 +198,9 @@ func (r *renderSemantics) update(s Semantics) {
 }
 
 func (r *renderSemantics) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = child
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderSemantics) VisitChildren(visitor func(layout.RenderObject)) {
@@ -207,9 +209,10 @@ func (r *renderSemantics) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderSemantics) Layout(constraints layout.Constraints) {
+func (r *renderSemantics) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
@@ -304,7 +307,9 @@ type renderExcludeSemantics struct {
 }
 
 func (r *renderExcludeSemantics) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = child
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderExcludeSemantics) VisitChildren(visitor func(layout.RenderObject)) {
@@ -313,9 +318,10 @@ func (r *renderExcludeSemantics) VisitChildren(visitor func(layout.RenderObject)
 	}
 }
 
-func (r *renderExcludeSemantics) Layout(constraints layout.Constraints) {
+func (r *renderExcludeSemantics) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
@@ -380,7 +386,9 @@ type renderMergeSemantics struct {
 }
 
 func (r *renderMergeSemantics) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = child
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderMergeSemantics) VisitChildren(visitor func(layout.RenderObject)) {
@@ -389,9 +397,10 @@ func (r *renderMergeSemantics) VisitChildren(visitor func(layout.RenderObject)) 
 	}
 }
 
-func (r *renderMergeSemantics) Layout(constraints layout.Constraints) {
+func (r *renderMergeSemantics) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
 		r.SetSize(constraints.Constrain(rendering.Size{}))

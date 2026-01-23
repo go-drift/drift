@@ -47,7 +47,9 @@ type renderExcludeSemanticsStub struct {
 }
 
 func (r *renderExcludeSemanticsStub) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = child
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderExcludeSemanticsStub) VisitChildren(visitor func(layout.RenderObject)) {
@@ -56,9 +58,10 @@ func (r *renderExcludeSemanticsStub) VisitChildren(visitor func(layout.RenderObj
 	}
 }
 
-func (r *renderExcludeSemanticsStub) Layout(constraints layout.Constraints) {
+func (r *renderExcludeSemanticsStub) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
 		r.SetSize(constraints.Constrain(rendering.Size{}))

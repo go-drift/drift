@@ -45,7 +45,9 @@ type renderPadding struct {
 }
 
 func (r *renderPadding) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderPadding) VisitChildren(visitor func(layout.RenderObject)) {
@@ -54,13 +56,14 @@ func (r *renderPadding) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderPadding) Layout(constraints layout.Constraints) {
+func (r *renderPadding) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
 		return
 	}
 	childConstraints := constraints.Deflate(r.padding)
-	r.child.Layout(childConstraints)
+	r.child.Layout(childConstraints, true) // true: we read child.Size()
 	childSize := r.child.Size()
 	size := constraints.Constrain(rendering.Size{
 		Width:  childSize.Width + r.padding.Horizontal(),

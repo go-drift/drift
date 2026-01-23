@@ -72,7 +72,8 @@ func (r *renderSVGIcon) SetChild(child layout.RenderObject) {
 	// SVGIcon has no children
 }
 
-func (r *renderSVGIcon) Layout(constraints layout.Constraints) {
+func (r *renderSVGIcon) PerformLayout() {
+	constraints := r.Constraints()
 	var size rendering.Size
 
 	if r.size > 0 {

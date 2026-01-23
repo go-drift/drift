@@ -37,7 +37,9 @@ type renderCenter struct {
 }
 
 func (r *renderCenter) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderCenter) VisitChildren(visitor func(layout.RenderObject)) {
@@ -46,11 +48,12 @@ func (r *renderCenter) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderCenter) Layout(constraints layout.Constraints) {
+func (r *renderCenter) PerformLayout() {
+	constraints := r.Constraints()
 	size := constraints.Constrain(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 	r.SetSize(size)
 	if r.child != nil {
-		r.child.Layout(layout.Loose(size))
+		r.child.Layout(layout.Loose(size), true) // true: we read child.Size()
 		childSize := r.child.Size()
 		offset := layout.AlignmentCenter.WithinRect(
 			rendering.RectFromLTWH(0, 0, size.Width, size.Height),

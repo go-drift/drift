@@ -93,10 +93,15 @@ type renderStack struct {
 
 // SetChildren sets the child render objects.
 func (r *renderStack) SetChildren(children []layout.RenderObject) {
+	// Clear parent on old children
+	for _, child := range r.children {
+		setParentOnChild(child, nil)
+	}
 	r.children = make([]layout.RenderBox, 0, len(children))
 	for _, child := range children {
 		if box, ok := child.(layout.RenderBox); ok {
 			r.children = append(r.children, box)
+			setParentOnChild(box, r)
 		}
 	}
 }
@@ -108,8 +113,9 @@ func (r *renderStack) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-// Layout computes the size of the stack and positions children.
-func (r *renderStack) Layout(constraints layout.Constraints) {
+// PerformLayout computes the size of the stack and positions children.
+func (r *renderStack) PerformLayout() {
+	constraints := r.Constraints()
 	size := layoutStackChildren(r.children, r.fit, r.alignment, constraints)
 	r.SetSize(size)
 }
@@ -156,7 +162,7 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 		} else {
 			childConstraints = layout.Loose(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 		}
-		child.Layout(childConstraints)
+		child.Layout(childConstraints, true) // true: we read child.Size()
 		childSize := child.Size()
 		if childSize.Width > stackWidth {
 			stackWidth = childSize.Width
@@ -303,7 +309,7 @@ func layoutPositionedChild(pos *renderPositioned, stackSize rendering.Size, alig
 			MinHeight: minHeight,
 			MaxHeight: maxHeight,
 		}
-		pos.child.Layout(childConstraints)
+		pos.child.Layout(childConstraints, true) // true: we read child.Size()
 	}
 
 	childSize := pos.child.Size()
@@ -406,10 +412,15 @@ type renderIndexedStack struct {
 }
 
 func (r *renderIndexedStack) SetChildren(children []layout.RenderObject) {
+	// Clear parent on old children
+	for _, child := range r.children {
+		setParentOnChild(child, nil)
+	}
 	r.children = make([]layout.RenderBox, 0, len(children))
 	for _, child := range children {
 		if box, ok := child.(layout.RenderBox); ok {
 			r.children = append(r.children, box)
+			setParentOnChild(box, r)
 		}
 	}
 }
@@ -420,7 +431,8 @@ func (r *renderIndexedStack) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderIndexedStack) Layout(constraints layout.Constraints) {
+func (r *renderIndexedStack) PerformLayout() {
+	constraints := r.Constraints()
 	size := layoutStackChildren(r.children, r.fit, r.alignment, constraints)
 	r.SetSize(size)
 }
@@ -560,12 +572,14 @@ type renderPositioned struct {
 }
 
 func (r *renderPositioned) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	if child == nil {
 		r.child = nil
 		return
 	}
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
+		setParentOnChild(r.child, r)
 	}
 }
 
@@ -575,7 +589,8 @@ func (r *renderPositioned) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderPositioned) Layout(constraints layout.Constraints) {
+func (r *renderPositioned) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child == nil {
 		r.SetSize(rendering.Size{})
 		return
@@ -591,7 +606,7 @@ func (r *renderPositioned) Layout(constraints layout.Constraints) {
 		childConstraints.MinHeight = *r.height
 		childConstraints.MaxHeight = *r.height
 	}
-	r.child.Layout(childConstraints)
+	r.child.Layout(childConstraints, true) // true: we read child.Size()
 	r.SetSize(r.child.Size())
 	r.child.SetParentData(&layout.BoxParentData{})
 }

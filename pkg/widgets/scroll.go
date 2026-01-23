@@ -118,12 +118,14 @@ type renderScrollView struct {
 }
 
 func (r *renderScrollView) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	if child == nil {
 		r.child = nil
 		return
 	}
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
+		setParentOnChild(r.child, r)
 	}
 }
 
@@ -133,7 +135,8 @@ func (r *renderScrollView) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderScrollView) Layout(constraints layout.Constraints) {
+func (r *renderScrollView) PerformLayout() {
+	constraints := r.Constraints()
 	size := rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
 	if size.Width <= 0 {
 		size.Width = constraints.MinWidth
@@ -164,7 +167,7 @@ func (r *renderScrollView) Layout(constraints layout.Constraints) {
 				MaxHeight: size.Height,
 			}
 		}
-		r.child.Layout(childConstraints)
+		r.child.Layout(childConstraints, true) // true: we read child.Size() for scroll extents
 		r.child.SetParentData(&layout.BoxParentData{})
 	}
 	r.updateExtents()

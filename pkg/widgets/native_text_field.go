@@ -430,7 +430,8 @@ type renderNativeTextField struct {
 	tap          *gestures.TapGestureRecognizer
 }
 
-func (r *renderNativeTextField) Layout(constraints layout.Constraints) {
+func (r *renderNativeTextField) PerformLayout() {
+	constraints := r.Constraints()
 	width := r.width
 	if width == 0 {
 		width = constraints.MaxWidth

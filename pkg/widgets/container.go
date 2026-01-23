@@ -71,7 +71,9 @@ type renderContainer struct {
 }
 
 func (r *renderContainer) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderContainer) VisitChildren(visitor func(layout.RenderObject)) {
@@ -80,7 +82,8 @@ func (r *renderContainer) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderContainer) Layout(constraints layout.Constraints) {
+func (r *renderContainer) PerformLayout() {
+	constraints := r.Constraints()
 	childConstraints := constraints.Deflate(r.padding)
 	hasWidth := r.width > 0
 	hasHeight := r.height > 0
@@ -98,7 +101,7 @@ func (r *renderContainer) Layout(constraints layout.Constraints) {
 	}
 	var childSize rendering.Size
 	if r.child != nil {
-		r.child.Layout(childConstraints)
+		r.child.Layout(childConstraints, true) // true: we read child.Size()
 		childSize = r.child.Size()
 	}
 

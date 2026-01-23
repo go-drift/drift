@@ -97,7 +97,8 @@ func (r *renderImage) SetChild(child layout.RenderObject) {
 	// Image has no children
 }
 
-func (r *renderImage) Layout(constraints layout.Constraints) {
+func (r *renderImage) PerformLayout() {
+	constraints := r.Constraints()
 	if r.source == nil {
 		r.intrinsic = rendering.Size{}
 		r.SetSize(constraints.Constrain(rendering.Size{}))

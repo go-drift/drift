@@ -213,7 +213,8 @@ type renderNativeWebView struct {
 	state      *nativeWebViewState
 }
 
-func (r *renderNativeWebView) Layout(constraints layout.Constraints) {
+func (r *renderNativeWebView) PerformLayout() {
+	constraints := r.Constraints()
 	width := r.width
 	if width == 0 {
 		width = constraints.MaxWidth

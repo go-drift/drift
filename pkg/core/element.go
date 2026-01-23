@@ -287,6 +287,10 @@ func (e *RenderObjectElement) RebuildIfNeeded() {
 	case interface{ Child() Widget }:
 		childWidget := typed.Child()
 		var child Element
+		var oldChild Element
+		if len(e.children) > 0 {
+			oldChild = e.children[0]
+		}
 		if len(e.children) > 0 {
 			child = e.children[0]
 		}
@@ -297,6 +301,9 @@ func (e *RenderObjectElement) RebuildIfNeeded() {
 			e.children = nil
 		}
 		if single, ok := e.renderObject.(interface{ SetChild(layout.RenderObject) }); ok {
+			if child == oldChild {
+				break
+			}
 			if child == nil {
 				single.SetChild(nil)
 			} else if childElement, ok := child.(interface{ RenderObject() layout.RenderObject }); ok {
@@ -305,6 +312,7 @@ func (e *RenderObjectElement) RebuildIfNeeded() {
 		}
 	case interface{ Children() []Widget }:
 		widgets := typed.Children()
+		oldChildren := e.children
 		updated := make([]Element, 0, len(widgets))
 		for index, childWidget := range widgets {
 			var existing Element
@@ -321,6 +329,18 @@ func (e *RenderObjectElement) RebuildIfNeeded() {
 		}
 		e.children = updated
 		if multi, ok := e.renderObject.(interface{ SetChildren([]layout.RenderObject) }); ok {
+			same := len(oldChildren) == len(updated)
+			if same {
+				for i, child := range updated {
+					if oldChildren[i] != child {
+						same = false
+						break
+					}
+				}
+			}
+			if same {
+				break
+			}
 			objects := make([]layout.RenderObject, 0, len(updated))
 			for _, child := range updated {
 				if childElement, ok := child.(interface{ RenderObject() layout.RenderObject }); ok {

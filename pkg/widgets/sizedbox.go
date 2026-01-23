@@ -48,7 +48,9 @@ type renderSizedBox struct {
 }
 
 func (r *renderSizedBox) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderSizedBox) VisitChildren(visitor func(layout.RenderObject)) {
@@ -57,7 +59,8 @@ func (r *renderSizedBox) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderSizedBox) Layout(constraints layout.Constraints) {
+func (r *renderSizedBox) PerformLayout() {
+	constraints := r.Constraints()
 	// Build desired size from explicit dimensions
 	desired := rendering.Size{Width: r.width, Height: r.height}
 
@@ -80,7 +83,7 @@ func (r *renderSizedBox) Layout(constraints layout.Constraints) {
 		childConstraints.MaxHeight = constrained.Height
 	}
 
-	r.child.Layout(childConstraints)
+	r.child.Layout(childConstraints, true) // true: we read child.Size()
 	r.child.SetParentData(&layout.BoxParentData{})
 
 	// Final size uses explicit dimensions where specified, child size otherwise

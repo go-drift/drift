@@ -63,7 +63,9 @@ type renderGestureDetector struct {
 }
 
 func (r *renderGestureDetector) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderGestureDetector) VisitChildren(visitor func(layout.RenderObject)) {
@@ -72,12 +74,13 @@ func (r *renderGestureDetector) VisitChildren(visitor func(layout.RenderObject))
 	}
 }
 
-func (r *renderGestureDetector) Layout(constraints layout.Constraints) {
+func (r *renderGestureDetector) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
 		return
 	}
-	r.child.Layout(constraints)
+	r.child.Layout(constraints, true) // true: we read child.Size()
 	r.SetSize(r.child.Size())
 	r.child.SetParentData(&layout.BoxParentData{})
 }

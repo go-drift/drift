@@ -139,7 +139,8 @@ func (r *renderSwitch) update(s switchRender) {
 	r.thumbColor = s.thumbColor
 }
 
-func (r *renderSwitch) Layout(constraints layout.Constraints) {
+func (r *renderSwitch) PerformLayout() {
+	constraints := r.Constraints()
 	width := r.width
 	height := r.height
 	if width == 0 {

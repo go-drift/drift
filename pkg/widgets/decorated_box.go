@@ -75,7 +75,9 @@ type renderDecoratedBox struct {
 }
 
 func (r *renderDecoratedBox) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderDecoratedBox) VisitChildren(visitor func(layout.RenderObject)) {
@@ -84,13 +86,13 @@ func (r *renderDecoratedBox) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderDecoratedBox) Layout(constraints layout.Constraints) {
+func (r *renderDecoratedBox) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
 		return
 	}
-	forChild := constraints
-	r.child.Layout(forChild)
+	r.child.Layout(constraints, true) // true: we read child.Size()
 	size := constraints.Constrain(r.child.Size())
 	r.SetSize(size)
 	r.child.SetParentData(&layout.BoxParentData{})

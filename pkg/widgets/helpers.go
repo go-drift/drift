@@ -29,6 +29,36 @@ func setChildFromRenderObject(child layout.RenderObject) layout.RenderBox {
 	return box
 }
 
+// setParentOnChild sets the parent reference on a child render object.
+func setParentOnChild(child, parent layout.RenderObject) {
+	if child == nil {
+		return
+	}
+	getter, _ := child.(interface{ Parent() layout.RenderObject })
+	setter, ok := child.(interface{ SetParent(layout.RenderObject) })
+	if !ok {
+		return
+	}
+	currentParent := layout.RenderObject(nil)
+	if getter != nil {
+		currentParent = getter.Parent()
+	}
+	if currentParent == parent {
+		return
+	}
+	setter.SetParent(parent)
+	if currentParent != nil {
+		if marker, ok := currentParent.(interface{ MarkNeedsLayout() }); ok {
+			marker.MarkNeedsLayout()
+		}
+	}
+	if parent != nil {
+		if marker, ok := parent.(interface{ MarkNeedsLayout() }); ok {
+			marker.MarkNeedsLayout()
+		}
+	}
+}
+
 // Root creates a top-level view widget with the given child.
 func Root(child core.Widget) View {
 	return View{ChildWidget: child}

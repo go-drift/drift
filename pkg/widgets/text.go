@@ -92,7 +92,8 @@ type textLayoutCache struct {
 	wrap     bool
 }
 
-func (r *renderText) Layout(constraints layout.Constraints) {
+func (r *renderText) PerformLayout() {
+	constraints := r.Constraints()
 	maxWidth := float64(0) // Default: no wrapping
 	if r.wrap {
 		maxWidth = constraints.MaxWidth

@@ -410,7 +410,8 @@ type renderDropdownChevron struct {
 	color rendering.Color
 }
 
-func (r *renderDropdownChevron) Layout(constraints layout.Constraints) {
+func (r *renderDropdownChevron) PerformLayout() {
+	constraints := r.Constraints()
 	size := r.size
 	if size == 0 {
 		size = 10
@@ -441,15 +442,18 @@ func (r *renderDropdownChevron) HitTest(position rendering.Offset, result *layou
 }
 
 func (r *renderDropdownScope) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
-func (r *renderDropdownScope) Layout(constraints layout.Constraints) {
+func (r *renderDropdownScope) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
 		return
 	}
-	r.child.Layout(constraints)
+	r.child.Layout(constraints, true) // true: we read child.Size()
 	r.child.SetParentData(&layout.BoxParentData{})
 	r.SetSize(constraints.Constrain(r.child.Size()))
 }

@@ -137,7 +137,8 @@ func (r *renderRadio[T]) update(c radioRender[T]) {
 	r.backgroundColor = c.backgroundColor
 }
 
-func (r *renderRadio[T]) Layout(constraints layout.Constraints) {
+func (r *renderRadio[T]) PerformLayout() {
+	constraints := r.Constraints()
 	size := r.size
 	if size == 0 {
 		size = 20

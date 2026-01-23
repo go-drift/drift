@@ -56,7 +56,9 @@ type renderOpacity struct {
 }
 
 func (r *renderOpacity) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderOpacity) VisitChildren(visitor func(layout.RenderObject)) {
@@ -65,9 +67,10 @@ func (r *renderOpacity) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderOpacity) Layout(constraints layout.Constraints) {
+func (r *renderOpacity) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
 		r.SetSize(constraints.Constrain(rendering.Size{}))

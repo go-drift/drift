@@ -45,7 +45,9 @@ type renderClipRRect struct {
 }
 
 func (r *renderClipRRect) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderClipRRect) VisitChildren(visitor func(layout.RenderObject)) {
@@ -54,12 +56,13 @@ func (r *renderClipRRect) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderClipRRect) Layout(constraints layout.Constraints) {
+func (r *renderClipRRect) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(rendering.Size{}))
 		return
 	}
-	r.child.Layout(constraints)
+	r.child.Layout(constraints, true) // true: we read child.Size()
 	size := constraints.Constrain(r.child.Size())
 	r.SetSize(size)
 	r.child.SetParentData(&layout.BoxParentData{})

@@ -149,7 +149,8 @@ func (r *renderCheckbox) update(c checkboxRender) {
 	r.backgroundColor = c.backgroundColor
 }
 
-func (r *renderCheckbox) Layout(constraints layout.Constraints) {
+func (r *renderCheckbox) PerformLayout() {
+	constraints := r.Constraints()
 	size := r.size
 	if size == 0 {
 		size = 20

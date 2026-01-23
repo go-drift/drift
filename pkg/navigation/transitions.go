@@ -8,6 +8,36 @@ import (
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
+// setParentOnChild sets the parent reference on a child render object.
+func setParentOnChild(child, parent layout.RenderObject) {
+	if child == nil {
+		return
+	}
+	getter, _ := child.(interface{ Parent() layout.RenderObject })
+	setter, ok := child.(interface{ SetParent(layout.RenderObject) })
+	if !ok {
+		return
+	}
+	currentParent := layout.RenderObject(nil)
+	if getter != nil {
+		currentParent = getter.Parent()
+	}
+	if currentParent == parent {
+		return
+	}
+	setter.SetParent(parent)
+	if currentParent != nil {
+		if marker, ok := currentParent.(interface{ MarkNeedsLayout() }); ok {
+			marker.MarkNeedsLayout()
+		}
+	}
+	if parent != nil {
+		if marker, ok := parent.(interface{ MarkNeedsLayout() }); ok {
+			marker.MarkNeedsLayout()
+		}
+	}
+}
+
 // SlideDirection determines the direction of a slide transition.
 type SlideDirection int
 
@@ -76,12 +106,14 @@ type renderSlideTransition struct {
 }
 
 func (r *renderSlideTransition) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	if child == nil {
 		r.child = nil
 		return
 	}
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
+		setParentOnChild(r.child, r)
 	}
 }
 
@@ -98,9 +130,10 @@ func (r *renderSlideTransition) DescribeSemanticsConfiguration(config *semantics
 	return true
 }
 
-func (r *renderSlideTransition) Layout(constraints layout.Constraints) {
+func (r *renderSlideTransition) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 		r.child.SetParentData(&layout.BoxParentData{})
 	} else {
@@ -200,12 +233,14 @@ type renderFadeTransition struct {
 }
 
 func (r *renderFadeTransition) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	if child == nil {
 		r.child = nil
 		return
 	}
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
+		setParentOnChild(r.child, r)
 	}
 }
 
@@ -222,9 +257,10 @@ func (r *renderFadeTransition) DescribeSemanticsConfiguration(config *semantics.
 	return true
 }
 
-func (r *renderFadeTransition) Layout(constraints layout.Constraints) {
+func (r *renderFadeTransition) PerformLayout() {
+	constraints := r.Constraints()
 	if r.child != nil {
-		r.child.Layout(constraints)
+		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 		r.child.SetParentData(&layout.BoxParentData{})
 	} else {

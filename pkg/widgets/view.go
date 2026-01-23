@@ -40,7 +40,9 @@ type renderView struct {
 }
 
 func (r *renderView) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
+	setParentOnChild(r.child, r)
 }
 
 func (r *renderView) VisitChildren(visitor func(layout.RenderObject)) {
@@ -49,7 +51,8 @@ func (r *renderView) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderView) Layout(constraints layout.Constraints) {
+func (r *renderView) PerformLayout() {
+	constraints := r.Constraints()
 	width := constraints.MaxWidth
 	if width <= 0 {
 		width = constraints.MinWidth
@@ -61,7 +64,7 @@ func (r *renderView) Layout(constraints layout.Constraints) {
 	size := rendering.Size{Width: width, Height: height}
 	r.SetSize(size)
 	if r.child != nil {
-		r.child.Layout(layout.Tight(size))
+		r.child.Layout(layout.Tight(size), false) // false: tight constraints, child is boundary
 	}
 }
 

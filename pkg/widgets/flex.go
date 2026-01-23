@@ -145,10 +145,15 @@ type renderFlex struct {
 }
 
 func (r *renderFlex) SetChildren(children []layout.RenderObject) {
+	// Clear parent on old children
+	for _, child := range r.children {
+		setParentOnChild(child, nil)
+	}
 	r.children = r.children[:0]
 	for _, child := range children {
 		if box, ok := child.(layout.RenderBox); ok {
 			r.children = append(r.children, box)
+			setParentOnChild(box, r)
 		}
 	}
 }
@@ -187,7 +192,8 @@ func (r *renderFlex) makeOffset(main, cross float64) rendering.Offset {
 	return rendering.Offset{X: cross, Y: main}
 }
 
-func (r *renderFlex) Layout(constraints layout.Constraints) {
+func (r *renderFlex) PerformLayout() {
+	constraints := r.Constraints()
 	maxSize := rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
 	maxMain := r.mainAxis(maxSize)
 
@@ -204,7 +210,7 @@ func (r *renderFlex) Layout(constraints layout.Constraints) {
 			totalFlex += flex
 			continue
 		}
-		child.Layout(r.looseConstraints(maxSize))
+		child.Layout(r.looseConstraints(maxSize), true) // true: we read child.Size()
 		childSize := child.Size()
 		mainSize += r.mainAxis(childSize)
 		crossSize = math.Max(crossSize, r.crossAxis(childSize))
@@ -220,7 +226,8 @@ func (r *renderFlex) Layout(constraints layout.Constraints) {
 		if totalFlex > 0 {
 			allocated = remaining * float64(flexFactors[i]) / float64(totalFlex)
 		}
-		child.Layout(r.flexConstraints(constraints, allocated))
+		// Flex children get tight constraints in the main axis direction
+		child.Layout(r.flexConstraints(constraints, allocated), true) // true: we read child.Size()
 		childSize := child.Size()
 		mainSize += r.mainAxis(childSize)
 		crossSize = math.Max(crossSize, r.crossAxis(childSize))

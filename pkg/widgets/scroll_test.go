@@ -290,7 +290,8 @@ type mockRenderBox struct {
 	layout.RenderBoxBase
 }
 
-func (m *mockRenderBox) Layout(constraints layout.Constraints) {
+func (m *mockRenderBox) PerformLayout() {
+	constraints := m.Constraints()
 	m.SetSize(rendering.Size{Width: constraints.MaxWidth, Height: 2000})
 }
 

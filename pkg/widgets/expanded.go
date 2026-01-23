@@ -59,12 +59,14 @@ type renderExpanded struct {
 
 // SetChild sets the child render object.
 func (r *renderExpanded) SetChild(child layout.RenderObject) {
+	setParentOnChild(r.child, nil)
 	if child == nil {
 		r.child = nil
 		return
 	}
 	if box, ok := child.(layout.RenderBox); ok {
 		r.child = box
+		setParentOnChild(r.child, r)
 	}
 }
 
@@ -75,13 +77,14 @@ func (r *renderExpanded) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-// Layout expands to fill available space and constrains child to that size.
-func (r *renderExpanded) Layout(constraints layout.Constraints) {
+// PerformLayout expands to fill available space and constrains child to that size.
+func (r *renderExpanded) PerformLayout() {
+	constraints := r.Constraints()
 	size := constraints.Constrain(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 	r.SetSize(size)
 
 	if r.child != nil {
-		r.child.Layout(layout.Tight(size))
+		r.child.Layout(layout.Tight(size), false) // false: tight constraints, child is boundary
 		r.child.SetParentData(&layout.BoxParentData{})
 	}
 }
