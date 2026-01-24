@@ -68,4 +68,6 @@ type Element interface {
 	RebuildIfNeeded()
 	VisitChildren(visitor func(Element) bool)
 	Depth() int
+	Slot() any
+	UpdateSlot(newSlot any)
 }
