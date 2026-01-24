@@ -37,6 +37,12 @@ func (t CupertinoTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool 
 	return true
 }
 
+// UpdateShouldNotifyDependent returns true for any aspects since CupertinoTheme
+// doesn't support granular aspect tracking yet.
+func (t CupertinoTheme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+	return t.UpdateShouldNotify(oldWidget)
+}
+
 var cupertinoThemeType = reflect.TypeOf(CupertinoTheme{})
 
 // CupertinoThemeOf returns the nearest CupertinoThemeData in the tree.
@@ -47,7 +53,7 @@ func CupertinoThemeOf(ctx core.BuildContext) *CupertinoThemeData {
 		return appTheme.Cupertino
 	}
 	// Fall back to legacy CupertinoTheme widget
-	inherited := ctx.DependOnInherited(cupertinoThemeType)
+	inherited := ctx.DependOnInherited(cupertinoThemeType, nil)
 	if inherited == nil {
 		return DefaultCupertinoLightTheme()
 	}
@@ -68,7 +74,7 @@ func CupertinoMaybeOf(ctx core.BuildContext) *CupertinoThemeData {
 		return nil
 	}
 	// Fall back to legacy CupertinoTheme widget
-	inherited := ctx.DependOnInherited(cupertinoThemeType)
+	inherited := ctx.DependOnInherited(cupertinoThemeType, nil)
 	if inherited == nil {
 		return nil
 	}

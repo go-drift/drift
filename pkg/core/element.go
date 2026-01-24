@@ -131,8 +131,12 @@ func (e *StatelessElement) FindAncestor(predicate func(Element) bool) Element {
 	return nil
 }
 
-func (e *StatelessElement) DependOnInherited(inheritedType reflect.Type) any {
-	return dependOnInheritedImpl(e, inheritedType)
+func (e *StatelessElement) DependOnInherited(inheritedType reflect.Type, aspect any) any {
+	return dependOnInheritedImpl(e, inheritedType, aspect)
+}
+
+func (e *StatelessElement) DependOnInheritedWithAspects(inheritedType reflect.Type, aspects ...any) any {
+	return dependOnInheritedWithAspects(e, inheritedType, aspects...)
 }
 
 // StatefulElement hosts a StatefulWidget and its State.
@@ -228,8 +232,12 @@ func (e *StatefulElement) FindAncestor(predicate func(Element) bool) Element {
 	return nil
 }
 
-func (e *StatefulElement) DependOnInherited(inheritedType reflect.Type) any {
-	return dependOnInheritedImpl(e, inheritedType)
+func (e *StatefulElement) DependOnInherited(inheritedType reflect.Type, aspect any) any {
+	return dependOnInheritedImpl(e, inheritedType, aspect)
+}
+
+func (e *StatefulElement) DependOnInheritedWithAspects(inheritedType reflect.Type, aspects ...any) any {
+	return dependOnInheritedWithAspects(e, inheritedType, aspects...)
 }
 
 // RenderObjectElement hosts a RenderObject and optional children.
@@ -375,8 +383,12 @@ func (e *RenderObjectElement) FindAncestor(predicate func(Element) bool) Element
 	return nil
 }
 
-func (e *RenderObjectElement) DependOnInherited(inheritedType reflect.Type) any {
-	return dependOnInheritedImpl(e, inheritedType)
+func (e *RenderObjectElement) DependOnInherited(inheritedType reflect.Type, aspect any) any {
+	return dependOnInheritedImpl(e, inheritedType, aspect)
+}
+
+func (e *RenderObjectElement) DependOnInheritedWithAspects(inheritedType reflect.Type, aspects ...any) any {
+	return dependOnInheritedWithAspects(e, inheritedType, aspects...)
 }
 
 // RenderObject exposes the backing render object for the element.

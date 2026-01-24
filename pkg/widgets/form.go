@@ -144,7 +144,7 @@ func (s *FormState) bumpGeneration() {
 
 // FormOf returns the closest FormState in the widget tree.
 func FormOf(ctx core.BuildContext) *FormState {
-	inherited := ctx.DependOnInherited(formScopeType)
+	inherited := ctx.DependOnInherited(formScopeType, nil)
 	if inherited == nil {
 		return nil
 	}
@@ -183,6 +183,12 @@ func (f formScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 		return f.generation != old.generation
 	}
 	return true
+}
+
+// UpdateShouldNotifyDependent returns true for any aspects since formScope
+// doesn't support granular aspect tracking yet.
+func (f formScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+	return f.UpdateShouldNotify(oldWidget)
 }
 
 var formScopeType = reflect.TypeOf(formScope{})

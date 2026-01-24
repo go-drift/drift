@@ -9,6 +9,16 @@ import (
 	"github.com/go-drift/drift/pkg/platform"
 )
 
+// SafeAreaAspect identifies which safe area inset a widget depends on.
+type SafeAreaAspect int
+
+const (
+	SafeAreaAspectTop SafeAreaAspect = iota
+	SafeAreaAspectBottom
+	SafeAreaAspectLeft
+	SafeAreaAspectRight
+)
+
 // SafeAreaData provides safe area insets to descendants via InheritedWidget.
 type SafeAreaData struct {
 	Insets      layout.EdgeInsets
@@ -32,6 +42,34 @@ func (s SafeAreaData) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 		return s.Insets != old.Insets
 	}
 	return true
+}
+
+func (s SafeAreaData) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+	old, ok := oldWidget.(SafeAreaData)
+	if !ok {
+		return true
+	}
+	for aspect := range aspects {
+		switch aspect.(SafeAreaAspect) {
+		case SafeAreaAspectTop:
+			if s.Insets.Top != old.Insets.Top {
+				return true
+			}
+		case SafeAreaAspectBottom:
+			if s.Insets.Bottom != old.Insets.Bottom {
+				return true
+			}
+		case SafeAreaAspectLeft:
+			if s.Insets.Left != old.Insets.Left {
+				return true
+			}
+		case SafeAreaAspectRight:
+			if s.Insets.Right != old.Insets.Right {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SafeAreaProvider is a StatefulWidget that subscribes to platform safe area changes
@@ -129,12 +167,55 @@ func (s *safeAreaProviderState) Build(ctx core.BuildContext) core.Widget {
 var safeAreaDataType = reflect.TypeOf(SafeAreaData{})
 
 // SafeAreaOf returns the current safe area insets from context.
+// Widgets calling this will rebuild when any inset changes.
 func SafeAreaOf(ctx core.BuildContext) layout.EdgeInsets {
-	inherited := ctx.DependOnInherited(safeAreaDataType)
+	// Register all aspects in a single tree walk for efficiency
+	inherited := ctx.DependOnInheritedWithAspects(safeAreaDataType,
+		SafeAreaAspectTop, SafeAreaAspectBottom, SafeAreaAspectLeft, SafeAreaAspectRight)
 	if sa, ok := inherited.(SafeAreaData); ok {
 		return sa.Insets
 	}
 	return layout.EdgeInsets{}
+}
+
+// SafeAreaTopOf returns only the top safe area inset.
+// Widgets calling this will only rebuild when the top inset changes.
+func SafeAreaTopOf(ctx core.BuildContext) float64 {
+	inherited := ctx.DependOnInherited(safeAreaDataType, SafeAreaAspectTop)
+	if sa, ok := inherited.(SafeAreaData); ok {
+		return sa.Insets.Top
+	}
+	return 0
+}
+
+// SafeAreaBottomOf returns only the bottom safe area inset.
+// Widgets calling this will only rebuild when the bottom inset changes.
+func SafeAreaBottomOf(ctx core.BuildContext) float64 {
+	inherited := ctx.DependOnInherited(safeAreaDataType, SafeAreaAspectBottom)
+	if sa, ok := inherited.(SafeAreaData); ok {
+		return sa.Insets.Bottom
+	}
+	return 0
+}
+
+// SafeAreaLeftOf returns only the left safe area inset.
+// Widgets calling this will only rebuild when the left inset changes.
+func SafeAreaLeftOf(ctx core.BuildContext) float64 {
+	inherited := ctx.DependOnInherited(safeAreaDataType, SafeAreaAspectLeft)
+	if sa, ok := inherited.(SafeAreaData); ok {
+		return sa.Insets.Left
+	}
+	return 0
+}
+
+// SafeAreaRightOf returns only the right safe area inset.
+// Widgets calling this will only rebuild when the right inset changes.
+func SafeAreaRightOf(ctx core.BuildContext) float64 {
+	inherited := ctx.DependOnInherited(safeAreaDataType, SafeAreaAspectRight)
+	if sa, ok := inherited.(SafeAreaData); ok {
+		return sa.Insets.Right
+	}
+	return 0
 }
 
 // SafeAreaPadding returns the safe area insets as EdgeInsets for use with
@@ -175,26 +256,25 @@ func (s SafeArea) Key() any {
 }
 
 func (s SafeArea) Build(ctx core.BuildContext) core.Widget {
-	insets := SafeAreaOf(ctx)
-
 	// Default to applying all sides if none specified
 	top, bottom, left, right := s.Top, s.Bottom, s.Left, s.Right
 	if !top && !bottom && !left && !right {
 		top, bottom, left, right = true, true, true, true
 	}
 
+	// Use aspect-specific helpers for granular rebuild tracking
 	padding := layout.EdgeInsets{}
 	if top {
-		padding.Top = insets.Top
+		padding.Top = SafeAreaTopOf(ctx)
 	}
 	if bottom {
-		padding.Bottom = insets.Bottom
+		padding.Bottom = SafeAreaBottomOf(ctx)
 	}
 	if left {
-		padding.Left = insets.Left
+		padding.Left = SafeAreaLeftOf(ctx)
 	}
 	if right {
-		padding.Right = insets.Right
+		padding.Right = SafeAreaRightOf(ctx)
 	}
 
 	return Padding{

@@ -76,6 +76,12 @@ func (a AppTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 		a.Data.Cupertino != old.Data.Cupertino
 }
 
+// UpdateShouldNotifyDependent returns true for any aspects since AppTheme
+// doesn't support granular aspect tracking yet.
+func (a AppTheme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+	return a.UpdateShouldNotify(oldWidget)
+}
+
 var appThemeType = reflect.TypeOf(AppTheme{})
 
 // Cached default to avoid repeated allocations when no AppTheme is found.
@@ -84,7 +90,7 @@ var defaultAppThemeData = NewAppThemeData(TargetPlatformMaterial, BrightnessLigh
 // AppThemeOf returns the nearest AppThemeData.
 // Returns a cached default if no AppTheme is found or if Data is nil.
 func AppThemeOf(ctx core.BuildContext) *AppThemeData {
-	inherited := ctx.DependOnInherited(appThemeType)
+	inherited := ctx.DependOnInherited(appThemeType, nil)
 	if inherited == nil {
 		return defaultAppThemeData
 	}
@@ -97,7 +103,7 @@ func AppThemeOf(ctx core.BuildContext) *AppThemeData {
 // AppThemeMaybeOf returns the nearest AppThemeData, or nil if not found.
 // Returns nil if no AppTheme is found or if Data is nil.
 func AppThemeMaybeOf(ctx core.BuildContext) *AppThemeData {
-	inherited := ctx.DependOnInherited(appThemeType)
+	inherited := ctx.DependOnInherited(appThemeType, nil)
 	if inherited == nil {
 		return nil
 	}

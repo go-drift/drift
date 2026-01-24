@@ -17,7 +17,10 @@ func (m mockBuildContext) Widget() core.Widget { return nil }
 func (m mockBuildContext) FindAncestor(func(core.Element) bool) core.Element {
 	return nil
 }
-func (m mockBuildContext) DependOnInherited(inheritedType reflect.Type) any { return nil }
+func (m mockBuildContext) DependOnInherited(inheritedType reflect.Type, aspect any) any { return nil }
+func (m mockBuildContext) DependOnInheritedWithAspects(inheritedType reflect.Type, aspects ...any) any {
+	return nil
+}
 
 // This example shows how to access theme colors in a widget's Build method.
 // In a real widget, BuildContext is provided by the framework.

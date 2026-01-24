@@ -37,6 +37,12 @@ func (t Theme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	return true
 }
 
+// UpdateShouldNotifyDependent returns true for any aspects since Theme
+// doesn't support granular aspect tracking yet.
+func (t Theme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+	return t.UpdateShouldNotify(oldWidget)
+}
+
 var themeType = reflect.TypeOf(Theme{})
 
 // ThemeOf returns the nearest ThemeData in the tree.
@@ -47,7 +53,7 @@ func ThemeOf(ctx core.BuildContext) *ThemeData {
 		return appTheme.Material
 	}
 	// Fall back to legacy Theme widget
-	inherited := ctx.DependOnInherited(themeType)
+	inherited := ctx.DependOnInherited(themeType, nil)
 	if inherited == nil {
 		return DefaultLightTheme()
 	}
@@ -59,7 +65,7 @@ func ThemeOf(ctx core.BuildContext) *ThemeData {
 
 // MaybeOf returns the nearest ThemeData, or nil if not found.
 func MaybeOf(ctx core.BuildContext) *ThemeData {
-	inherited := ctx.DependOnInherited(themeType)
+	inherited := ctx.DependOnInherited(themeType, nil)
 	if inherited == nil {
 		return nil
 	}

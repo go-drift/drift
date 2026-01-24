@@ -389,12 +389,18 @@ func (n navigatorInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) b
 	return true
 }
 
+// UpdateShouldNotifyDependent returns true for any aspects since navigatorInherited
+// doesn't support granular aspect tracking yet.
+func (n navigatorInherited) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+	return n.UpdateShouldNotify(oldWidget)
+}
+
 var navigatorInheritedType = reflect.TypeOf(navigatorInherited{})
 
 // NavigatorOf returns the NavigatorState from the nearest Navigator ancestor.
 // Returns nil if no Navigator is found.
 func NavigatorOf(ctx core.BuildContext) NavigatorState {
-	inherited := ctx.DependOnInherited(navigatorInheritedType)
+	inherited := ctx.DependOnInherited(navigatorInheritedType, nil)
 	if inherited == nil {
 		return nil
 	}
