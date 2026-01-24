@@ -13,14 +13,14 @@ app with CGO + Skia.
 - **Go-native** - Use Go's tooling, testing, and ecosystem you already know
 - **Skia rendering** - Hardware-accelerated graphics via the same engine Chrome and Flutter use
 - **No bridge overhead** - Direct native compilation, no JavaScript or VM layer
-- **iOS builds on Linux** - Build iOS apps without a Mac using [xtool](docs/xtool-setup.md)
+- **iOS builds on Linux** - Build iOS apps without a Mac using [xtool](https://driftframework.dev/docs/guides/xtool-setup)
 
 ## Prerequisites
 
 - Go 1.24
 - Android builds: Android SDK + NDK, Java 17+, and `ANDROID_HOME` + `ANDROID_NDK_HOME` env vars
 - iOS builds: macOS with Xcode installed
-- Skia: prebuilt binaries, or see [skia.md](docs/skia.md) for building from source
+- Skia: prebuilt binaries, or see [Skia guide](https://driftframework.dev/docs/guides/skia) for building from source
 
 ## Quick Start
 
@@ -81,7 +81,7 @@ drift run ios --simulator "iPhone 17"
 drift run xtool
 ```
 
-Skia binaries are downloaded automatically on first run. See [Skia Binaries](#skia-binaries) for manual download options or [docs/skia.md](docs/skia.md) for building from source.
+Skia binaries are downloaded automatically on first run. See [Skia Binaries](#skia-binaries) for manual download options or the [Skia guide](https://driftframework.dev/docs/guides/skia) for building from source.
 
 4. (Optional) Add `drift.yaml` to customize app metadata:
 
@@ -93,13 +93,13 @@ engine:
   version: latest
 ```
 
-See the [usage guide](docs/usage-guide.md) for widget construction patterns, layout composition, state management, and theming.
+See the [getting started guide](https://driftframework.dev/docs/guides/getting-started) for widget construction patterns, layout composition, state management, and theming.
 
 ## Skia Binaries
 
 Drift requires prebuilt Skia libraries (`libdrift_skia.a`) which include both
 Skia and the Drift bridge code. Download prebuilt artifacts from GitHub Releases
-or build them locally (see [skia.md](docs/skia.md) for details).
+or build them locally.
 
 ```bash
 drift fetch-skia              # fetch all platforms
@@ -110,7 +110,7 @@ drift fetch-skia --version v0.2.0  # specific version
 
 Release artifacts are pinned to the Drift version and published under
 `https://github.com/go-drift/drift/releases` with tags like `v<version>`.
-For building Skia from source, see [skia.md](docs/skia.md).
+For building Skia from source, see the [Skia guide](https://driftframework.dev/docs/guides/skia).
 
 ## Build and Run Your App
 
@@ -134,7 +134,7 @@ drift clean
 Notes:
 - Android installs use `adb` and respect `ANDROID_SERIAL` if set.
 - iOS builds require macOS and an Xcode project in the generated workspace.
-- Xtool builds require xtool to be installed. See [xtool-setup.md](docs/xtool-setup.md).
+- Xtool builds require xtool to be installed. See the [xtool setup guide](https://driftframework.dev/docs/guides/xtool-setup).
 
 ## Repo Layout
 

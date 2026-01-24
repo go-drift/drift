@@ -22,9 +22,9 @@ const config: Config = {
     version: getVersion(),
   },
 
-  // GitHub Pages deployment config
-  url: 'https://go-drift.github.io',
-  baseUrl: '/drift/',
+  // Deployment config
+  url: 'https://driftframework.dev',
+  baseUrl: '/',
   organizationName: 'go-drift',
   projectName: 'drift',
   trailingSlash: false,
