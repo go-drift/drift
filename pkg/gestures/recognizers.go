@@ -8,21 +8,28 @@ import (
 
 // DragStartDetails describes the start of a drag.
 type DragStartDetails struct {
+	// Position is the global position where the drag started.
 	Position rendering.Offset
 }
 
 // DragUpdateDetails describes a drag update.
 type DragUpdateDetails struct {
-	Position     rendering.Offset
-	Delta        rendering.Offset
-	PrimaryDelta float64 // axis-specific delta (0 for Pan)
+	// Position is the current global position of the pointer.
+	Position rendering.Offset
+	// Delta is the change in position since the last update.
+	Delta rendering.Offset
+	// PrimaryDelta is the axis-specific delta (0 for Pan, non-zero for axis-locked drags).
+	PrimaryDelta float64
 }
 
 // DragEndDetails describes the end of a drag.
 type DragEndDetails struct {
-	Position        rendering.Offset
-	Velocity        rendering.Offset
-	PrimaryVelocity float64 // axis-specific velocity (0 for Pan)
+	// Position is the final global position of the pointer.
+	Position rendering.Offset
+	// Velocity is the velocity of the pointer at release in pixels per second.
+	Velocity rendering.Offset
+	// PrimaryVelocity is the axis-specific velocity (0 for Pan, non-zero for axis-locked drags).
+	PrimaryVelocity float64
 }
 
 // TapGestureRecognizer detects taps.
@@ -241,7 +248,9 @@ func distance(offset rendering.Offset) float64 {
 type DragAxis int
 
 const (
+	// DragAxisHorizontal restricts drag detection to horizontal movement.
 	DragAxisHorizontal DragAxis = iota
+	// DragAxisVertical restricts drag detection to vertical movement.
 	DragAxisVertical
 )
 

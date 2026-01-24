@@ -37,10 +37,14 @@ func (p PointerPhase) String() string {
 
 // PointerEvent represents a pointer event routed to gesture recognizers.
 type PointerEvent struct {
+	// PointerID uniquely identifies this pointer (finger/mouse).
 	PointerID int64
-	Position  rendering.Offset
-	Delta     rendering.Offset
-	Phase     PointerPhase
+	// Position is the pointer location in logical pixels.
+	Position rendering.Offset
+	// Delta is the change in position since the last event.
+	Delta rendering.Offset
+	// Phase indicates the current phase of the pointer interaction.
+	Phase PointerPhase
 }
 
 // DefaultTouchSlop is the movement threshold before a drag wins a gesture.

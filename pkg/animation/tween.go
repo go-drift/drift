@@ -7,9 +7,13 @@ import (
 
 // Tween interpolates between begin and end values.
 type Tween[T any] struct {
+	// Begin is the starting value of the interpolation.
 	Begin T
-	End   T
-	Lerp  func(a, b T, t float64) T
+	// End is the ending value of the interpolation.
+	End T
+	// Lerp is the interpolation function. It receives the begin value, end value,
+	// and a progress value t in the range [0, 1].
+	Lerp func(a, b T, t float64) T
 }
 
 // Evaluate returns the interpolated value at t (0.0 to 1.0).

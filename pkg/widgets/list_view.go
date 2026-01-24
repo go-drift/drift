@@ -9,27 +9,44 @@ import (
 
 // ListView displays a scrollable list of widgets.
 type ListView struct {
-	ChildrenWidgets   []core.Widget
-	ScrollDirection   *Axis
-	Controller        *ScrollController
-	Physics           ScrollPhysics
-	Padding           layout.EdgeInsets
+	// ChildrenWidgets are the widgets to display in the list.
+	ChildrenWidgets []core.Widget
+	// ScrollDirection is the axis along which the list scrolls. Defaults to vertical.
+	ScrollDirection *Axis
+	// Controller manages scroll position and provides scroll notifications.
+	Controller *ScrollController
+	// Physics determines how the scroll view responds to user input.
+	Physics ScrollPhysics
+	// Padding is applied around the list content.
+	Padding layout.EdgeInsets
+	// MainAxisAlignment controls how children are positioned along the scroll axis.
 	MainAxisAlignment MainAxisAlignment
-	MainAxisSize      MainAxisSize
+	// MainAxisSize determines how much space the list takes along the scroll axis.
+	MainAxisSize MainAxisSize
 }
 
 // ListViewBuilder builds children on demand for the list.
 type ListViewBuilder struct {
-	ItemCount         int
-	ItemBuilder       func(ctx core.BuildContext, index int) core.Widget
-	ItemExtent        float64
-	CacheExtent       float64
-	ScrollDirection   *Axis
-	Controller        *ScrollController
-	Physics           ScrollPhysics
-	Padding           layout.EdgeInsets
+	// ItemCount is the total number of items in the list.
+	ItemCount int
+	// ItemBuilder creates widgets for visible items. Called with the build context and item index.
+	ItemBuilder func(ctx core.BuildContext, index int) core.Widget
+	// ItemExtent is the fixed extent of each item along the scroll axis. Required for virtualization.
+	ItemExtent float64
+	// CacheExtent is the number of pixels to render beyond the visible area.
+	CacheExtent float64
+	// ScrollDirection is the axis along which the list scrolls. Defaults to vertical.
+	ScrollDirection *Axis
+	// Controller manages scroll position and provides scroll notifications.
+	Controller *ScrollController
+	// Physics determines how the scroll view responds to user input.
+	Physics ScrollPhysics
+	// Padding is applied around the list content.
+	Padding layout.EdgeInsets
+	// MainAxisAlignment controls how children are positioned along the scroll axis.
 	MainAxisAlignment MainAxisAlignment
-	MainAxisSize      MainAxisSize
+	// MainAxisSize determines how much space the list takes along the scroll axis.
+	MainAxisSize MainAxisSize
 }
 
 func (l ListView) CreateElement() core.Element {
