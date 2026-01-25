@@ -219,7 +219,57 @@ func (s *myState) InitState() {
 
 ## InheritedWidget
 
-Share data down the widget tree without passing it through every level:
+Share data down the widget tree without passing it through every level.
+
+### Simple Provider (Recommended)
+
+For most cases, use `InheritedProvider[T]` to eliminate boilerplate:
+
+```go
+// Provide at top of tree
+func App() core.Widget {
+    return core.InheritedProvider[*User]{
+        Value:       currentUser,
+        ChildWidget: MainContent{},
+    }
+}
+
+// Consume anywhere below
+func (s *profileState) Build(ctx core.BuildContext) core.Widget {
+    user, ok := core.ProviderOf[*User](ctx)
+    if !ok {
+        return widgets.Text{Content: "Not logged in"}
+    }
+    return widgets.Text{Content: "Hello, " + user.Name}
+}
+
+// Or use MustProviderOf when you're certain the provider exists
+func (s *profileState) Build(ctx core.BuildContext) core.Widget {
+    user := core.MustProviderOf[*User](ctx) // panics if not found
+    return widgets.Text{Content: "Hello, " + user.Name}
+}
+```
+
+By default, dependents rebuild when the value changes (pointer equality for pointers, value equality for value types).
+
+### Custom Comparison
+
+Use `ShouldNotify` when you need custom comparison logic:
+
+```go
+core.InheritedProvider[*User]{
+    Value:       currentUser,
+    ChildWidget: MainContent{},
+    ShouldNotify: func(old, new *User) bool {
+        // Only rebuild when ID changes, ignore name updates
+        return old.ID != new.ID
+    },
+}
+```
+
+### Custom InheritedWidget
+
+For advanced use cases like aspect-based dependency tracking, implement a custom `InheritedWidget`:
 
 ```go
 // Define the inherited widget
@@ -260,27 +310,6 @@ func UserOf(ctx core.BuildContext) *User {
         return p.User
     }
     return nil
-}
-```
-
-### Usage
-
-```go
-// Provide at top of tree
-func App() core.Widget {
-    return UserProvider{
-        User: currentUser,
-        ChildWidget: MainContent{},
-    }
-}
-
-// Consume anywhere below
-func (s *profileState) Build(ctx core.BuildContext) core.Widget {
-    user := UserOf(ctx)
-    if user == nil {
-        return widgets.Text{Content: "Not logged in"}
-    }
-    return widgets.Text{Content: "Hello, " + user.Name}
 }
 ```
 
