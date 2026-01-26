@@ -148,6 +148,7 @@ class TextInputConnection(
     private var editText: EditText? = null
     private var isUpdatingState = false
     private var isKeyboardShown = false
+    private var editingState = TextEditingState("", 0, 0, -1, -1)  // Stored state for new EditText creation
 
     fun show() {
         hostView.post {
@@ -192,6 +193,9 @@ class TextInputConnection(
     }
 
     fun setEditingState(state: TextEditingState) {
+        // Store state first (so createEditText can use it if editText is null)
+        editingState = state
+
         hostView.post {
             editText?.let { et ->
                 isUpdatingState = true
@@ -244,6 +248,16 @@ class TextInputConnection(
 
         hostView.addView(et)
         editText = et
+
+        // Apply stored editing state (suppress callback during initial setup)
+        if (editingState.text.isNotEmpty()) {
+            isUpdatingState = true
+            et.setText(editingState.text)
+            val start = editingState.selectionBase.coerceIn(0, editingState.text.length)
+            val end = editingState.selectionExtent.coerceIn(0, editingState.text.length)
+            et.setSelection(minOf(start, end), maxOf(start, end))
+            isUpdatingState = false
+        }
     }
 
     private fun getInputType(): Int {

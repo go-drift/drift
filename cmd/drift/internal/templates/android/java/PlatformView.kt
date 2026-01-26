@@ -6,16 +6,10 @@ package {{.PackageName}}
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Color
-import android.text.Editable
-import android.text.InputType
-import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.EditText
 import android.widget.FrameLayout
 
 /**
@@ -101,7 +95,6 @@ object PlatformViewHandler {
         val host = hostView ?: return Pair(null, IllegalStateException("Host view not initialized"))
 
         val creator: (() -> PlatformViewContainer)? = when (viewType) {
-            "native_text_field" -> { { NativeTextFieldContainer(ctx, viewId, params) } }
             "native_webview" -> { { NativeWebViewContainer(ctx, viewId, params) } }
             else -> null
         }
@@ -189,78 +182,6 @@ interface PlatformViewContainer {
     val viewId: Int
     val view: View
     fun dispose()
-}
-
-/**
- * Native text field container.
- */
-class NativeTextFieldContainer(
-    context: Context,
-    override val viewId: Int,
-    params: Map<String, Any?>
-) : PlatformViewContainer {
-
-    override val view: EditText = EditText(context).apply {
-        layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        )
-        setBackgroundColor(Color.WHITE)
-        setPadding(32, 24, 32, 24)
-
-        // Apply params
-        (params["placeholder"] as? String)?.let { hint = it }
-        (params["text"] as? String)?.let { setText(it) }
-        if (params["obscure"] as? Boolean == true) {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        (params["keyboardType"] as? Number)?.toInt()?.let { kt ->
-            inputType = when (kt) {
-                1 -> InputType.TYPE_CLASS_NUMBER
-                2 -> InputType.TYPE_CLASS_PHONE
-                3 -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-                4 -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-                else -> InputType.TYPE_CLASS_TEXT
-            }
-        }
-
-        // Text change listener
-        addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                PlatformChannelManager.sendEvent(
-                    "drift/platform_views",
-                    mapOf(
-                        "method" to "onTextChanged",
-                        "viewId" to viewId,
-                        "text" to (s?.toString() ?: "")
-                    )
-                )
-            }
-        })
-
-        // Submit listener
-        setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO) {
-                PlatformChannelManager.sendEvent(
-                    "drift/platform_views",
-                    mapOf(
-                        "method" to "onSubmitted",
-                        "viewId" to viewId,
-                        "text" to text.toString()
-                    )
-                )
-                true
-            } else {
-                false
-            }
-        }
-    }
-
-    override fun dispose() {
-        // Cleanup if needed
-    }
 }
 
 /**

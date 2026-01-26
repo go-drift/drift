@@ -13,8 +13,8 @@ import (
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
-// NativeTextField embeds a native text input field.
-type NativeTextField struct {
+// TextInput embeds a native text input field.
+type TextInput struct {
 	// Controller manages the text content and selection.
 	Controller *platform.TextEditingController
 
@@ -74,21 +74,21 @@ type NativeTextField struct {
 }
 
 // CreateElement creates the element for the stateful widget.
-func (n NativeTextField) CreateElement() core.Element {
+func (n TextInput) CreateElement() core.Element {
 	return core.NewStatefulElement(n, nil)
 }
 
 // Key returns the widget key.
-func (n NativeTextField) Key() any {
+func (n TextInput) Key() any {
 	return nil
 }
 
 // CreateState creates the state for this widget.
-func (n NativeTextField) CreateState() core.State {
-	return &nativeTextFieldState{}
+func (n TextInput) CreateState() core.State {
+	return &textInputState{}
 }
 
-type nativeTextFieldState struct {
+type textInputState struct {
 	element    *core.StatefulElement
 	connection *platform.TextInputConnection
 	focused    bool
@@ -96,15 +96,15 @@ type nativeTextFieldState struct {
 	focusNode  *focus.FocusNode
 }
 
-func (s *nativeTextFieldState) SetElement(e *core.StatefulElement) {
+func (s *textInputState) SetElement(e *core.StatefulElement) {
 	s.element = e
 }
 
-func (s *nativeTextFieldState) InitState() {
+func (s *textInputState) InitState() {
 	// Create and register focus node for tab navigation
 	s.focusNode = &focus.FocusNode{
 		CanRequestFocus: true,
-		DebugLabel:      "NativeTextField",
+		DebugLabel:      "TextInput",
 		Rect:            s, // s implements RectProvider
 		OnFocusChange: func(hasFocus bool) {
 			if hasFocus && !s.focused {
@@ -124,7 +124,7 @@ func (s *nativeTextFieldState) InitState() {
 	}
 }
 
-func (s *nativeTextFieldState) Dispose() {
+func (s *textInputState) Dispose() {
 	if s.connection != nil {
 		s.connection.Close()
 		s.connection = nil
@@ -150,12 +150,12 @@ func (s *nativeTextFieldState) Dispose() {
 	}
 }
 
-func (s *nativeTextFieldState) DidChangeDependencies() {}
+func (s *textInputState) DidChangeDependencies() {}
 
-func (s *nativeTextFieldState) DidUpdateWidget(oldWidget core.StatefulWidget) {}
+func (s *textInputState) DidUpdateWidget(oldWidget core.StatefulWidget) {}
 
 // FocusRect implements focus.RectProvider for directional navigation.
-func (s *nativeTextFieldState) FocusRect() focus.FocusRect {
+func (s *textInputState) FocusRect() focus.FocusRect {
 	if s.element == nil {
 		return focus.FocusRect{}
 	}
@@ -175,15 +175,15 @@ func (s *nativeTextFieldState) FocusRect() focus.FocusRect {
 	return focus.FocusRect{Left: offset.X, Top: offset.Y, Right: offset.X, Bottom: offset.Y}
 }
 
-func (s *nativeTextFieldState) SetState(fn func()) {
+func (s *textInputState) SetState(fn func()) {
 	fn()
 	if s.element != nil {
 		s.element.MarkNeedsBuild()
 	}
 }
 
-func (s *nativeTextFieldState) Build(ctx core.BuildContext) core.Widget {
-	w := s.element.Widget().(NativeTextField)
+func (s *textInputState) Build(ctx core.BuildContext) core.Widget {
+	w := s.element.Widget().(TextInput)
 
 	// Default values
 	height := w.Height
@@ -238,7 +238,7 @@ func (s *nativeTextFieldState) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	// Build the visual representation
-	return nativeTextFieldRender{
+	return textInputRender{
 		text:         displayText,
 		style:        textStyle,
 		width:        w.Width,
@@ -254,20 +254,28 @@ func (s *nativeTextFieldState) Build(ctx core.BuildContext) core.Widget {
 }
 
 // UpdateEditingValue implements platform.TextInputClient.
-func (s *nativeTextFieldState) UpdateEditingValue(value platform.TextEditingValue) {
-	w := s.element.Widget().(NativeTextField)
-	if w.Controller != nil {
-		w.Controller.SetValue(value)
+func (s *textInputState) UpdateEditingValue(value platform.TextEditingValue) {
+	w := s.element.Widget().(TextInput)
+	if w.Controller == nil {
+		return
 	}
-	if w.OnChanged != nil {
+
+	oldText := w.Controller.Text()
+
+	// Always update controller (for selection/composing changes)
+	w.Controller.SetValue(value)
+
+	// Only trigger OnChanged if text actually changed
+	if w.OnChanged != nil && value.Text != oldText {
 		w.OnChanged(value.Text)
 	}
+
 	s.SetState(func() {})
 }
 
 // PerformAction implements platform.TextInputClient.
-func (s *nativeTextFieldState) PerformAction(action platform.TextInputAction) {
-	w := s.element.Widget().(NativeTextField)
+func (s *textInputState) PerformAction(action platform.TextInputAction) {
+	w := s.element.Widget().(TextInput)
 	switch action {
 	case platform.TextInputActionDone, platform.TextInputActionGo, platform.TextInputActionSearch, platform.TextInputActionSend:
 		if w.OnSubmitted != nil && w.Controller != nil {
@@ -287,19 +295,19 @@ func (s *nativeTextFieldState) PerformAction(action platform.TextInputAction) {
 }
 
 // ConnectionClosed implements platform.TextInputClient.
-func (s *nativeTextFieldState) ConnectionClosed() {
+func (s *textInputState) ConnectionClosed() {
 	s.connection = nil
 	s.SetState(func() {
 		s.focused = false
 	})
 }
 
-func (s *nativeTextFieldState) focus(target any) {
+func (s *textInputState) focus(target any) {
 	if s.focused {
 		return
 	}
 
-	w := s.element.Widget().(NativeTextField)
+	w := s.element.Widget().(TextInput)
 	if w.Disabled {
 		return
 	}
@@ -331,7 +339,7 @@ func (s *nativeTextFieldState) focus(target any) {
 
 	s.connection.Show()
 
-	// Sync initial state
+	// Sync editing state after showing
 	if w.Controller != nil {
 		s.connection.SetEditingState(w.Controller.Value())
 	}
@@ -340,7 +348,7 @@ func (s *nativeTextFieldState) focus(target any) {
 	s.SetState(func() {})
 }
 
-func (s *nativeTextFieldState) unfocus() {
+func (s *textInputState) unfocus() {
 	if !s.focused {
 		return
 	}
@@ -356,8 +364,8 @@ func (s *nativeTextFieldState) unfocus() {
 	s.SetState(func() {})
 }
 
-// nativeTextFieldRender is a render widget for visual text field display.
-type nativeTextFieldRender struct {
+// textInputRender is a render widget for visual text field display.
+type textInputRender struct {
 	text         string
 	style        rendering.TextStyle
 	width        float64
@@ -367,20 +375,20 @@ type nativeTextFieldRender struct {
 	borderColor  rendering.Color
 	focusColor   rendering.Color
 	borderRadius float64
-	state        *nativeTextFieldState
-	config       NativeTextField
+	state        *textInputState
+	config       TextInput
 }
 
-func (n nativeTextFieldRender) CreateElement() core.Element {
+func (n textInputRender) CreateElement() core.Element {
 	return core.NewRenderObjectElement(n, nil)
 }
 
-func (n nativeTextFieldRender) Key() any {
+func (n textInputRender) Key() any {
 	return nil
 }
 
-func (n nativeTextFieldRender) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
-	r := &renderNativeTextField{
+func (n textInputRender) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
+	r := &renderTextInput{
 		text:         n.text,
 		style:        n.style,
 		width:        n.width,
@@ -397,8 +405,8 @@ func (n nativeTextFieldRender) CreateRenderObject(ctx core.BuildContext) layout.
 	return r
 }
 
-func (n nativeTextFieldRender) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
-	if r, ok := renderObject.(*renderNativeTextField); ok {
+func (n textInputRender) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
+	if r, ok := renderObject.(*renderTextInput); ok {
 		r.text = n.text
 		r.style = n.style
 		r.width = n.width
@@ -414,7 +422,7 @@ func (n nativeTextFieldRender) UpdateRenderObject(ctx core.BuildContext, renderO
 	}
 }
 
-type renderNativeTextField struct {
+type renderTextInput struct {
 	layout.RenderBoxBase
 	text         string
 	style        rendering.TextStyle
@@ -425,12 +433,12 @@ type renderNativeTextField struct {
 	borderColor  rendering.Color
 	focusColor   rendering.Color
 	borderRadius float64
-	state        *nativeTextFieldState
+	state        *textInputState
 	layout       *rendering.TextLayout
 	tap          *gestures.TapGestureRecognizer
 }
 
-func (r *renderNativeTextField) PerformLayout() {
+func (r *renderTextInput) PerformLayout() {
 	constraints := r.Constraints()
 	width := r.width
 	if width == 0 {
@@ -462,7 +470,7 @@ func (r *renderNativeTextField) PerformLayout() {
 	}
 }
 
-func (r *renderNativeTextField) Paint(ctx *layout.PaintContext) {
+func (r *renderTextInput) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
 
 	// Draw background
@@ -522,7 +530,7 @@ func (r *renderNativeTextField) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderNativeTextField) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderTextInput) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -531,7 +539,7 @@ func (r *renderNativeTextField) HitTest(position rendering.Offset, result *layou
 }
 
 // HandlePointer implements PointerHandler for gesture recognition.
-func (r *renderNativeTextField) HandlePointer(event gestures.PointerEvent) {
+func (r *renderTextInput) HandlePointer(event gestures.PointerEvent) {
 	if r.tap == nil {
 		r.tap = gestures.NewTapGestureRecognizer(gestures.DefaultArena)
 		r.tap.OnTap = func() {
@@ -549,7 +557,7 @@ func (r *renderNativeTextField) HandlePointer(event gestures.PointerEvent) {
 }
 
 // DescribeSemanticsConfiguration implements SemanticsDescriber for accessibility.
-func (r *renderNativeTextField) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+func (r *renderTextInput) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
 	config.IsSemanticBoundary = true
 	config.Properties.Role = semantics.SemanticsRoleTextField
 
@@ -560,7 +568,7 @@ func (r *renderNativeTextField) DescribeSemanticsConfiguration(config *semantics
 	}
 	// Check if enabled via the state's widget config
 	if r.state != nil && r.state.element != nil {
-		if w, ok := r.state.element.Widget().(NativeTextField); ok {
+		if w, ok := r.state.element.Widget().(TextInput); ok {
 			if !w.Disabled {
 				flags = flags.Set(semantics.SemanticsIsEnabled)
 			}

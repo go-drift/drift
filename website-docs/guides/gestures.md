@@ -347,7 +347,7 @@ func (s *formState) InitState() {
 }
 
 func (s *formState) Build(ctx core.BuildContext) core.Widget {
-    return widgets.NativeTextField{
+    return widgets.TextInput{
         Controller:   s.controller,
         Placeholder:  "Enter text",
         KeyboardType: platform.KeyboardTypeText,

@@ -195,6 +195,7 @@ class TextInputConnection: NSObject {
 
     private var textField: HiddenTextField?
     private var editingState: TextEditingState
+    private var suppressCallback: Bool = false  // Suppress callback during programmatic text changes
 
     init(connectionId: Int, config: TextInputConfiguration) {
         self.connectionId = connectionId
@@ -235,15 +236,18 @@ class TextInputConnection: NSObject {
             }
         }
         field.delegate = self
-        field.text = editingState.text
         field.connectionId = connectionId
         field.onTextChange = { [weak self] text in
             self?.handleTextChange(text)
         }
 
+        // Suppress callbacks during initial setup to prevent spurious empty updates
+        suppressCallback = true
+        field.text = editingState.text
         window.addSubview(field)
         textField = field
         field.becomeFirstResponder()
+        suppressCallback = false
     }
 
     func hide() {
@@ -272,8 +276,13 @@ class TextInputConnection: NSObject {
     func setEditingState(_ state: TextEditingState) {
         editingState = state
         DispatchQueue.main.async { [weak self] in
-            guard let field = self?.textField else { return }
+            guard let self = self, let field = self.textField else { return }
+
+            // Suppress callback during programmatic text change to prevent
+            // sending the same value back to Go (which would trigger validation)
+            self.suppressCallback = true
             field.text = state.text
+            self.suppressCallback = false
 
             // Set selection
             if let start = field.position(from: field.beginningOfDocument, offset: state.selectionBase),
@@ -284,6 +293,10 @@ class TextInputConnection: NSObject {
     }
 
     private func handleTextChange(_ text: String) {
+        // Don't send updates during programmatic text changes (e.g., setEditingState)
+        // This prevents unnecessary round-trips that trigger form validation
+        guard !suppressCallback else { return }
+
         // Get selection
         var selBase = text.count
         var selExtent = text.count

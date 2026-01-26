@@ -143,7 +143,9 @@ container := widgets.NewContainer(child).
 | Widget | Purpose |
 |--------|---------|
 | `Button` | Tappable button with haptic feedback |
-| `NativeTextField` | Platform-native text input |
+| `TextInput` | Base native text input |
+| `TextField` | Decorated text input with label and helper text |
+| `TextFormField` | Text input with form validation |
 | `Checkbox` | Boolean toggle |
 | `Radio` | Single selection from group |
 | `Switch` | On/off toggle |

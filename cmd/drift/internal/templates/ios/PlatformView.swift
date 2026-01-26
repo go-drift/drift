@@ -94,8 +94,6 @@ enum PlatformViewHandler {
         let container: PlatformViewContainer?
 
         switch viewType {
-        case "native_text_field":
-            container = createNativeTextField(viewId: viewId, params: params)
         case "native_webview":
             container = createNativeWebView(viewId: viewId, params: params)
         default:
@@ -178,10 +176,6 @@ enum PlatformViewHandler {
 
     // MARK: - View Factories
 
-    private static func createNativeTextField(viewId: Int, params: [String: Any]) -> PlatformViewContainer? {
-        return NativeTextFieldContainer(viewId: viewId, params: params)
-    }
-
     private static func createNativeWebView(viewId: Int, params: [String: Any]) -> PlatformViewContainer? {
         return NativeWebViewContainer(viewId: viewId, params: params)
     }
@@ -193,71 +187,6 @@ protocol PlatformViewContainer {
     var viewId: Int { get }
     var view: UIView { get }
     func dispose()
-}
-
-// MARK: - Native Text Field Container
-
-class NativeTextFieldContainer: NSObject, PlatformViewContainer, UITextFieldDelegate {
-    let viewId: Int
-    let view: UIView
-    private let textField: UITextField
-
-    init(viewId: Int, params: [String: Any]) {
-        self.viewId = viewId
-
-        let field = UITextField()
-        field.borderStyle = .roundedRect
-        field.backgroundColor = .white
-
-        // Apply params
-        if let placeholder = params["placeholder"] as? String {
-            field.placeholder = placeholder
-        }
-        if let text = params["text"] as? String {
-            field.text = text
-        }
-        if let obscure = params["obscure"] as? Bool, obscure {
-            field.isSecureTextEntry = true
-        }
-        if let keyboardType = params["keyboardType"] as? Int {
-            field.keyboardType = UIKeyboardType(rawValue: keyboardType)
-        }
-
-        self.textField = field
-        self.view = field
-
-        super.init()
-
-        field.delegate = self
-        field.addTarget(self, action: #selector(textChanged), for: .editingChanged)
-    }
-
-    func dispose() {
-        view.removeFromSuperview()
-    }
-
-    @objc private func textChanged() {
-        PlatformChannelManager.shared.sendEvent(
-            channel: "drift/platform_views",
-            data: [
-                "method": "onTextChanged",
-                "viewId": viewId,
-                "text": textField.text ?? ""
-            ]
-        )
-    }
-
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        PlatformChannelManager.shared.sendEvent(
-            channel: "drift/platform_views",
-            data: [
-                "method": "onSubmitted",
-                "viewId": viewId,
-                "text": textField.text ?? ""
-            ]
-        )
-        return true
-    }
 }
 
 // MARK: - Native Web View Container

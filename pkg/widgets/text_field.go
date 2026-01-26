@@ -54,6 +54,13 @@ type TextField struct {
 	Style rendering.TextStyle
 	// PlaceholderColor for the placeholder text.
 	PlaceholderColor rendering.Color
+
+	// Input is an optional escape hatch for accessing TextInput fields not
+	// exposed by TextField. TextField's own fields ALWAYS overwrite the
+	// corresponding Input fields (even with zero values), so Input is only
+	// useful for fields that TextField does not expose (e.g., future fields).
+	// To set Controller, Placeholder, etc., use TextField's fields directly.
+	Input *TextInput
 }
 
 func (t TextField) CreateElement() core.Element {
@@ -97,8 +104,12 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 	if borderRadius == 0 {
 		borderRadius = textFieldTheme.BorderRadius
 	}
+
+	// When ErrorText is set, use error color for BOTH border and focus
+	// This ensures error styling remains visible even when focused
 	if t.ErrorText != "" {
 		borderColor = textFieldTheme.ErrorColor
+		focusColor = textFieldTheme.ErrorColor
 	}
 
 	height := t.Height
@@ -122,27 +133,38 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 		placeholderColor = textFieldTheme.PlaceholderColor
 	}
 
-	children = append(children, NativeTextField{
-		Controller:        t.Controller,
-		Style:             textStyle,
-		Placeholder:       t.Placeholder,
-		KeyboardType:      t.KeyboardType,
-		InputAction:       t.InputAction,
-		Obscure:           t.Obscure,
-		Autocorrect:       t.Autocorrect,
-		OnChanged:         t.OnChanged,
-		OnSubmitted:       t.OnSubmitted,
-		OnEditingComplete: t.OnEditingComplete,
-		Disabled:          t.Disabled,
-		Width:             t.Width,
-		Height:            height,
-		Padding:           padding,
-		BackgroundColor:   backgroundColor,
-		BorderColor:       borderColor,
-		FocusColor:        focusColor,
-		BorderRadius:      borderRadius,
-		PlaceholderColor:  placeholderColor,
-	})
+	// Build TextInput - either from Input escape hatch or from scratch.
+	// When Input is provided, it supplies defaults for fields not exposed by TextField
+	// (e.g., future fields like ReadOnly). TextField's own fields always take precedence.
+	var input TextInput
+	if t.Input != nil {
+		// Copy Input as base for fields TextField doesn't directly expose
+		input = *t.Input
+	}
+
+	// Always apply TextField's fields - they take precedence over Input.
+	// This ensures predictable behavior: TextField fields are authoritative.
+	input.Controller = t.Controller
+	input.Placeholder = t.Placeholder
+	input.KeyboardType = t.KeyboardType
+	input.InputAction = t.InputAction
+	input.Obscure = t.Obscure
+	input.Autocorrect = t.Autocorrect
+	input.OnChanged = t.OnChanged
+	input.OnSubmitted = t.OnSubmitted
+	input.OnEditingComplete = t.OnEditingComplete
+	input.Disabled = t.Disabled
+	input.Width = t.Width
+	input.Height = height
+	input.Padding = padding
+	input.BackgroundColor = backgroundColor
+	input.BorderColor = borderColor
+	input.FocusColor = focusColor
+	input.BorderRadius = borderRadius
+	input.Style = textStyle
+	input.PlaceholderColor = placeholderColor
+
+	children = append(children, input)
 
 	if t.ErrorText != "" {
 		errorStyle := helperStyle

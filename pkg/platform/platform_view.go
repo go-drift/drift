@@ -12,7 +12,7 @@ type PlatformView interface {
 	// ViewID returns the unique identifier for this view.
 	ViewID() int64
 
-	// ViewType returns the type identifier for this view (e.g., "native_text_field").
+	// ViewType returns the type identifier for this view (e.g., "native_webview").
 	ViewType() string
 
 	// Create initializes the native view with given parameters.

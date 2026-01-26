@@ -122,13 +122,12 @@ func (s *FormState) Reset() {
 }
 
 // NotifyChanged informs listeners that a field changed.
+// When autovalidate is enabled, the calling field is expected to validate itself
+// rather than having the form validate all fields (which would show errors on
+// untouched fields). Form.Validate() can still be called explicitly to validate all.
 func (s *FormState) NotifyChanged() {
 	if s.onChanged != nil {
 		s.onChanged()
-	}
-	if s.autovalidate {
-		s.Validate()
-		return
 	}
 	s.bumpGeneration()
 }
@@ -316,11 +315,13 @@ func (s *FormFieldState[T]) DidChange(value T) {
 	}
 	if s.registeredForm != nil {
 		s.registeredForm.NotifyChanged()
-		if s.registeredForm.autovalidate {
-			return
-		}
 	}
-	if w.Autovalidate {
+
+	// Validate this field if form or field autovalidate is enabled.
+	// Form.autovalidate enables per-field validation on change, not form-wide validation
+	// (which would show errors on untouched fields). Use Form.Validate() explicitly
+	// to validate all fields (e.g., on submit).
+	if (s.registeredForm != nil && s.registeredForm.autovalidate) || w.Autovalidate {
 		s.Validate()
 		return
 	}

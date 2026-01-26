@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/rendering"
@@ -27,31 +29,26 @@ func (f formsPage) CreateState() core.State {
 	return &formsState{}
 }
 
-// formsState demonstrates the new StateBase pattern for reduced boilerplate.
-// Previously required: SetElement, SetState, Dispose, DidChangeDependencies, DidUpdateWidget
-// Now only InitState and Build need to be implemented.
+// formData holds the collected form values after validation.
+type formData struct {
+	Username string
+	Email    string
+	Password string
+}
+
+// formsState demonstrates Form and TextFormField with validation.
 type formsState struct {
-	core.StateBase     // Embeds all required State interface methods
-	usernameController *platform.TextEditingController
-	passwordController *platform.TextEditingController
-	emailController    *platform.TextEditingController
-	nativeController   *platform.TextEditingController
-	statusText         *core.ManagedState[string]
-	acceptTerms        *core.ManagedState[bool]
-	enableAlerts       *core.ManagedState[bool]
-	contactMethod      *core.ManagedState[string]
-	planSelection      *core.ManagedState[string]
+	core.StateBase
+	data          formData
+	statusText    *core.ManagedState[string]
+	acceptTerms   *core.ManagedState[bool]
+	enableAlerts  *core.ManagedState[bool]
+	contactMethod *core.ManagedState[string]
+	planSelection *core.ManagedState[string]
 }
 
 func (s *formsState) InitState() {
-	// Controllers are auto-disposed when state is disposed
-	s.usernameController = platform.NewTextEditingController("")
-	s.passwordController = platform.NewTextEditingController("")
-	s.emailController = platform.NewTextEditingController("")
-	s.nativeController = platform.NewTextEditingController("")
-
-	// ManagedState values auto-trigger rebuilds when Set() is called
-	s.statusText = core.NewManagedState(&s.StateBase, "Fill in the form above")
+	s.statusText = core.NewManagedState(&s.StateBase, "Fill in the form and submit")
 	s.acceptTerms = core.NewManagedState(&s.StateBase, false)
 	s.enableAlerts = core.NewManagedState(&s.StateBase, true)
 	s.contactMethod = core.NewManagedState(&s.StateBase, "email")
@@ -62,93 +59,19 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 	_, colors, _ := theme.UseTheme(ctx)
 
 	return demoPage(ctx, "Forms",
-		// Username field
-		sectionTitle("Text Input", colors),
+		// Form validation section
+		sectionTitle("Form Validation", colors),
 		widgets.VSpace(12),
-		widgets.TextField{
-			Label:        "Username",
-			Controller:   s.usernameController,
-			Placeholder:  "Enter username",
-			KeyboardType: platform.KeyboardTypeText,
-			InputAction:  platform.TextInputActionNext,
-			Autocorrect:  false,
-			BorderRadius: 8,
-		},
-		widgets.VSpace(16),
 
-		// Email field
-		widgets.TextField{
-			Label:        "Email",
-			Controller:   s.emailController,
-			Placeholder:  "you@example.com",
-			KeyboardType: platform.KeyboardTypeEmail,
-			InputAction:  platform.TextInputActionNext,
-			Autocorrect:  false,
-			BorderRadius: 8,
+		// Form wraps the fields and provides validation/save/reset
+		widgets.Form{
+			Autovalidate: true,
+			ChildWidget:  formContent{parent: s},
 		},
-		widgets.VSpace(16),
 
-		// Password field
-		sectionTitle("Password Input", colors),
-		widgets.VSpace(12),
-		widgets.TextField{
-			Label:        "Password",
-			Controller:   s.passwordController,
-			Placeholder:  "Enter password",
-			KeyboardType: platform.KeyboardTypePassword,
-			InputAction:  platform.TextInputActionDone,
-			Obscure:      true,
-			BorderRadius: 8,
-			OnSubmitted: func(text string) {
-				s.handleSubmit()
-			},
-		},
 		widgets.VSpace(24),
 
-		// Native text field
-		sectionTitle("Native Text Input", colors),
-		widgets.VSpace(12),
-		widgets.TextOf("Native notes", labelStyle(colors)),
-		widgets.VSpace(8),
-		widgets.NativeTextField{
-			Controller:      s.nativeController,
-			Placeholder:     "Native input field",
-			KeyboardType:    platform.KeyboardTypeText,
-			InputAction:     platform.TextInputActionDone,
-			Autocorrect:     true,
-			Height:          48,
-			BorderRadius:    8,
-			BackgroundColor: colors.Surface,
-			BorderColor:     colors.Outline,
-			Style: rendering.TextStyle{
-				Color:    colors.OnSurface,
-				FontSize: 16,
-			},
-		},
-		widgets.VSpace(24),
-
-		// Submit button
-		widgets.NewButton("Submit Form", func() {
-			s.handleSubmit()
-		}).WithColor(colors.Primary, colors.OnPrimary),
-		widgets.VSpace(8),
-		widgets.NewButton("Clear Form", func() {
-			s.clearForm()
-		}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
-		widgets.VSpace(16),
-
-		// Status
-		widgets.NewContainer(
-			widgets.PaddingAll(12,
-				widgets.TextOf(s.statusText.Get(), rendering.TextStyle{
-					Color:    colors.OnSurfaceVariant,
-					FontSize: 14,
-				}),
-			),
-		).WithColor(colors.SurfaceVariant).Build(),
-		widgets.VSpace(24),
-
-		// Selection controls
+		// Selection controls (unchanged)
 		sectionTitle("Selection Controls", colors),
 		widgets.VSpace(12),
 		widgets.RowOf(
@@ -234,32 +157,149 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 	)
 }
 
-func (s *formsState) handleSubmit() {
-	username := s.usernameController.Text()
-	email := s.emailController.Text()
-	password := s.passwordController.Text()
-
-	if username == "" || email == "" || password == "" {
+func (s *formsState) handleSubmit(form *widgets.FormState) {
+	if !form.Validate() {
 		platform.Haptics.Impact(platform.HapticError)
-		s.statusText.Set("Please fill in all fields")
+		s.statusText.Set("Please fix the errors above")
 		return
 	}
 
+	form.Save()
 	platform.Haptics.Impact(platform.HapticSuccess)
-	s.statusText.Set("Form submitted for: " + username + " (" + email + ")")
+	s.statusText.Set("Submitted: " + s.data.Username + " (" + s.data.Email + ")")
 }
 
-func (s *formsState) clearForm() {
-	s.usernameController.Clear()
-	s.emailController.Clear()
-	s.passwordController.Clear()
-	s.nativeController.Clear()
-	s.statusText.Set("Form cleared")
+func (s *formsState) handleReset(form *widgets.FormState) {
+	form.Reset()
+	s.data = formData{}
 	s.acceptTerms.Set(false)
 	s.enableAlerts.Set(true)
 	s.contactMethod.Set("email")
 	s.planSelection.Set("")
+	s.statusText.Set("Form reset")
 }
 
-// Note: SetState, Dispose, DidChangeDependencies, and DidUpdateWidget are
-// now inherited from core.StateBase - no need to implement them!
+// formContent is a separate widget so it can access FormOf(ctx).
+type formContent struct {
+	parent *formsState
+}
+
+func (f formContent) CreateElement() core.Element {
+	return core.NewStatelessElement(f, nil)
+}
+
+func (f formContent) Key() any {
+	return nil
+}
+
+func (f formContent) Build(ctx core.BuildContext) core.Widget {
+	_, colors, _ := theme.UseTheme(ctx)
+	form := widgets.FormOf(ctx)
+
+	return widgets.ColumnOf(
+		widgets.MainAxisAlignmentStart,
+		widgets.CrossAxisAlignmentStretch,
+		widgets.MainAxisSizeMin,
+
+		// Username field with validation
+		widgets.TextFormField{
+			Label:        "Username",
+			Placeholder:  "Enter username",
+			KeyboardType: platform.KeyboardTypeText,
+			InputAction:  platform.TextInputActionNext,
+			Autocorrect:  false,
+			BorderRadius: 8,
+			HelperText:   "Letters and numbers only",
+			Validator: func(value string) string {
+				if value == "" {
+					return "Username is required"
+				}
+				if len(value) < 3 {
+					return "Username must be at least 3 characters"
+				}
+				return ""
+			},
+			OnSaved: func(value string) {
+				f.parent.data.Username = value
+			},
+		},
+		widgets.VSpace(16),
+
+		// Email field with validation
+		widgets.TextFormField{
+			Label:        "Email",
+			Placeholder:  "you@example.com",
+			KeyboardType: platform.KeyboardTypeEmail,
+			InputAction:  platform.TextInputActionNext,
+			Autocorrect:  false,
+			BorderRadius: 8,
+			Validator: func(value string) string {
+				if value == "" {
+					return "Email is required"
+				}
+				if !strings.Contains(value, "@") || !strings.Contains(value, ".") {
+					return "Please enter a valid email"
+				}
+				return ""
+			},
+			OnSaved: func(value string) {
+				f.parent.data.Email = value
+			},
+		},
+		widgets.VSpace(16),
+
+		// Password field with validation
+		widgets.TextFormField{
+			Label:        "Password",
+			Placeholder:  "Enter password",
+			KeyboardType: platform.KeyboardTypeText,
+			InputAction:  platform.TextInputActionDone,
+			Obscure:      true,
+			Autocorrect:  false,
+			BorderRadius: 8,
+			HelperText:   "Minimum 8 characters",
+			Validator: func(value string) string {
+				if value == "" {
+					return "Password is required"
+				}
+				if len(value) < 8 {
+					return "Password must be at least 8 characters"
+				}
+				return ""
+			},
+			OnSaved: func(value string) {
+				f.parent.data.Password = value
+			},
+			OnSubmitted: func(value string) {
+				if form != nil {
+					f.parent.handleSubmit(form)
+				}
+			},
+		},
+		widgets.VSpace(24),
+
+		// Buttons
+		widgets.NewButton("Submit", func() {
+			if form != nil {
+				f.parent.handleSubmit(form)
+			}
+		}).WithColor(colors.Primary, colors.OnPrimary),
+		widgets.VSpace(8),
+		widgets.NewButton("Reset", func() {
+			if form != nil {
+				f.parent.handleReset(form)
+			}
+		}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
+		widgets.VSpace(16),
+
+		// Status display
+		widgets.NewContainer(
+			widgets.PaddingAll(12,
+				widgets.TextOf(f.parent.statusText.Get(), rendering.TextStyle{
+					Color:    colors.OnSurfaceVariant,
+					FontSize: 14,
+				}),
+			),
+		).WithColor(colors.SurfaceVariant).Build(),
+	)
+}
