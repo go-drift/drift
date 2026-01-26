@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/platform"
@@ -45,6 +46,15 @@ type formsState struct {
 	enableAlerts  *core.ManagedState[bool]
 	contactMethod *core.ManagedState[string]
 	planSelection *core.ManagedState[string]
+
+	// Date & Time picker state
+	selectedDate *core.ManagedState[*time.Time]
+	selectedHour *core.ManagedState[int]
+	selectedMin  *core.ManagedState[int]
+
+	// Progress indicator state
+	progressValue *core.ManagedState[float64]
+	isLoading     *core.ManagedState[bool]
 }
 
 func (s *formsState) InitState() {
@@ -53,6 +63,15 @@ func (s *formsState) InitState() {
 	s.enableAlerts = core.NewManagedState(&s.StateBase, true)
 	s.contactMethod = core.NewManagedState(&s.StateBase, "email")
 	s.planSelection = core.NewManagedState(&s.StateBase, "")
+
+	// Initialize date/time state
+	s.selectedDate = core.NewManagedState[*time.Time](&s.StateBase, nil)
+	s.selectedHour = core.NewManagedState(&s.StateBase, 9)
+	s.selectedMin = core.NewManagedState(&s.StateBase, 0)
+
+	// Initialize progress state
+	s.progressValue = core.NewManagedState(&s.StateBase, 0.35)
+	s.isLoading = core.NewManagedState(&s.StateBase, false)
 }
 
 func (s *formsState) Build(ctx core.BuildContext) core.Widget {
@@ -169,6 +188,142 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 			},
 			BorderRadius: 8,
 		},
+		widgets.VSpace(24),
+
+		// Date & Time Pickers
+		sectionTitle("Date & Time Pickers", colors),
+		widgets.VSpace(12),
+		widgets.TextOf("Select a date using the native picker", labelStyle(colors)),
+		widgets.VSpace(8),
+		widgets.DatePicker{
+			Value: s.selectedDate.Get(),
+			OnChanged: func(date time.Time) {
+				s.selectedDate.Set(&date)
+			},
+			Placeholder: "Select date",
+			Decoration: &widgets.InputDecoration{
+				LabelText:    "Birth Date",
+				HintText:     "Tap to select",
+				BorderRadius: 8,
+			},
+		},
+		widgets.VSpace(16),
+		widgets.TextOf("Select a time using the native picker", labelStyle(colors)),
+		widgets.VSpace(8),
+		widgets.TimePicker{
+			Hour:   s.selectedHour.Get(),
+			Minute: s.selectedMin.Get(),
+			OnChanged: func(hour, minute int) {
+				s.selectedHour.Set(hour)
+				s.selectedMin.Set(minute)
+			},
+			Decoration: &widgets.InputDecoration{
+				LabelText:    "Appointment Time",
+				HintText:     "Tap to select",
+				BorderRadius: 8,
+			},
+		},
+		widgets.VSpace(24),
+
+		// Progress Indicators
+		sectionTitle("Progress Indicators", colors),
+		widgets.VSpace(12),
+
+		// Native Activity Indicator
+		widgets.TextOf("Native Activity Indicator", labelStyle(colors)),
+		widgets.VSpace(8),
+		widgets.RowOf(
+			widgets.MainAxisAlignmentStart,
+			widgets.CrossAxisAlignmentCenter,
+			widgets.MainAxisSizeMin,
+
+			widgets.ActivityIndicator{
+				Animating: s.isLoading.Get(),
+				Size:      widgets.ActivityIndicatorSizeSmall,
+			},
+			widgets.HSpace(16),
+			widgets.ActivityIndicator{
+				Animating: s.isLoading.Get(),
+				Size:      widgets.ActivityIndicatorSizeMedium,
+			},
+			widgets.HSpace(16),
+			widgets.ActivityIndicator{
+				Animating: s.isLoading.Get(),
+				Size:      widgets.ActivityIndicatorSizeLarge,
+				Color:     colors.Primary,
+			},
+		),
+		widgets.VSpace(16),
+
+		// Circular Progress Indicators (indeterminate only when loading)
+		widgets.TextOf("Circular Progress (toggle loading to animate)", labelStyle(colors)),
+		widgets.VSpace(8),
+		widgets.RowOf(
+			widgets.MainAxisAlignmentStart,
+			widgets.CrossAxisAlignmentCenter,
+			widgets.MainAxisSizeMin,
+
+			widgets.CircularProgressIndicator{
+				Value: s.indeterminateValue(),
+				Size:  24,
+			},
+			widgets.HSpace(16),
+			widgets.CircularProgressIndicator{
+				Value: s.indeterminateValue(),
+				Size:  36,
+				Color: colors.Secondary,
+			},
+			widgets.HSpace(16),
+			widgets.CircularProgressIndicator{
+				Value: s.indeterminateValue(),
+				Size:  48,
+				Color: colors.Tertiary,
+			},
+		),
+		widgets.VSpace(16),
+		widgets.TextOf("Circular Progress (Determinate: "+itoa(int(s.progressValue.Get()*100))+"%)", labelStyle(colors)),
+		widgets.VSpace(8),
+		s.buildDeterminateCircular(colors),
+		widgets.VSpace(16),
+
+		// Linear Progress Indicators (indeterminate only when loading)
+		widgets.TextOf("Linear Progress (toggle loading to animate)", labelStyle(colors)),
+		widgets.VSpace(8),
+		widgets.LinearProgressIndicator{
+			Value: s.indeterminateValue(),
+		},
+		widgets.VSpace(16),
+		widgets.TextOf("Linear Progress (Determinate: "+itoa(int(s.progressValue.Get()*100))+"%)", labelStyle(colors)),
+		widgets.VSpace(8),
+		s.buildDeterminateLinear(colors),
+		widgets.VSpace(16),
+
+		// Progress control buttons
+		widgets.RowOf(
+			widgets.MainAxisAlignmentStart,
+			widgets.CrossAxisAlignmentCenter,
+			widgets.MainAxisSizeMin,
+
+			widgets.NewButton("-10%", func() {
+				v := s.progressValue.Get() - 0.1
+				if v < 0 {
+					v = 0
+				}
+				s.progressValue.Set(v)
+			}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
+			widgets.HSpace(8),
+			widgets.NewButton("+10%", func() {
+				v := s.progressValue.Get() + 0.1
+				if v > 1 {
+					v = 1
+				}
+				s.progressValue.Set(v)
+			}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
+			widgets.HSpace(16),
+			widgets.NewButton("Toggle Loading", func() {
+				s.isLoading.Set(!s.isLoading.Get())
+			}).WithColor(colors.Primary, colors.OnPrimary),
+		),
 		widgets.VSpace(40),
 	)
 }
@@ -318,4 +473,37 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 			),
 		).WithColor(colors.SurfaceVariant).Build(),
 	)
+}
+
+// indeterminateValue returns nil when loading (indeterminate animation) or 0 when not (stopped).
+func (s *formsState) indeterminateValue() *float64 {
+	if s.isLoading.Get() {
+		return nil // Indeterminate - will animate
+	}
+	zero := 0.0
+	return &zero // Determinate at 0 - no animation
+}
+
+// buildDeterminateCircular creates a determinate circular progress indicator.
+func (s *formsState) buildDeterminateCircular(colors theme.ColorScheme) core.Widget {
+	progress := s.progressValue.Get()
+	return widgets.CircularProgressIndicator{
+		Value:       &progress,
+		Size:        48,
+		StrokeWidth: 5,
+		Color:       colors.Primary,
+		TrackColor:  colors.SurfaceVariant,
+	}
+}
+
+// buildDeterminateLinear creates a determinate linear progress indicator.
+func (s *formsState) buildDeterminateLinear(colors theme.ColorScheme) core.Widget {
+	progress := s.progressValue.Get()
+	return widgets.LinearProgressIndicator{
+		Value:        &progress,
+		Height:       6,
+		BorderRadius: 3,
+		Color:        colors.Primary,
+		TrackColor:   colors.SurfaceVariant,
+	}
 }

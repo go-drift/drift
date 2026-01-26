@@ -30,6 +30,7 @@ object PlatformViewHandler {
     private val webViewMethods = setOf("loadUrl", "goBack", "goForward", "reload")
     private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
     private val switchMethods = setOf("setValue", "updateConfig")
+    private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
 
     fun init(context: Context, hostView: ViewGroup) {
         this.context = context
@@ -67,6 +68,7 @@ object PlatformViewHandler {
             is NativeWebViewContainer -> method in webViewMethods
             is NativeTextInputContainer -> method in textInputMethods
             is NativeSwitchContainer -> method in switchMethods
+            is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
             else -> false
         }
         if (!supported) {
@@ -125,6 +127,18 @@ object PlatformViewHandler {
                         }
                     }
                 }
+                is NativeActivityIndicatorContainer -> {
+                    when (method) {
+                        "setAnimating" -> {
+                            val animating = args["animating"] as? Boolean ?: true
+                            container.setAnimating(animating)
+                        }
+                        "updateConfig" -> {
+                            @Suppress("UNCHECKED_CAST")
+                            container.updateConfig(args as Map<String, Any?>)
+                        }
+                    }
+                }
             }
         }
 
@@ -147,6 +161,7 @@ object PlatformViewHandler {
             "native_webview" -> { { NativeWebViewContainer(ctx, viewId, params) } }
             "textinput" -> { { NativeTextInputContainer(ctx, viewId, params) } }
             "switch" -> { { NativeSwitchContainer(ctx, viewId, params) } }
+            "activity_indicator" -> { { NativeActivityIndicatorContainer(ctx, viewId, params) } }
             else -> null
         }
 

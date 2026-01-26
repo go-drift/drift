@@ -307,6 +307,16 @@ final class PlatformChannelManager {
         register(channel: "drift/secure_storage") { method, args in
             return SecureStorageHandler.handle(method: method, args: args)
         }
+
+        // Date Picker channel
+        register(channel: "drift/date_picker") { method, args in
+            return DatePickerHandler.handle(method: method, args: args)
+        }
+
+        // Time Picker channel
+        register(channel: "drift/time_picker") { method, args in
+            return TimePickerHandler.handle(method: method, args: args)
+        }
     }
 }
 

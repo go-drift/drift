@@ -62,6 +62,8 @@ enum PlatformViewHandler {
             supportedMethods = ["setText", "setSelection", "setValue", "focus", "blur", "updateConfig"]
         } else if container is NativeSwitchContainer {
             supportedMethods = ["setValue", "updateConfig"]
+        } else if container is NativeActivityIndicatorContainer {
+            supportedMethods = ["setAnimating", "updateConfig"]
         } else {
             supportedMethods = []
         }
@@ -127,6 +129,19 @@ enum PlatformViewHandler {
                     break
                 }
             }
+        } else if let indicatorContainer = container as? NativeActivityIndicatorContainer {
+            DispatchQueue.main.async {
+                switch method {
+                case "setAnimating":
+                    if let animating = args["animating"] as? Bool {
+                        indicatorContainer.setAnimating(animating)
+                    }
+                case "updateConfig":
+                    indicatorContainer.updateConfig(args)
+                default:
+                    break
+                }
+            }
         }
 
         return (nil, nil)
@@ -150,6 +165,8 @@ enum PlatformViewHandler {
             container = NativeTextInputContainer(viewId: viewId, params: params)
         case "switch":
             container = NativeSwitchContainer(viewId: viewId, params: params)
+        case "activity_indicator":
+            container = NativeActivityIndicatorContainer(viewId: viewId, params: params)
         default:
             return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Unknown view type: \(viewType)"]))
         }
