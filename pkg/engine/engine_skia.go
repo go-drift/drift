@@ -1,5 +1,4 @@
 //go:build android || darwin || ios
-// +build android darwin ios
 
 // Package engine provides the Skia-backed rendering path for the Drift framework.
 package engine

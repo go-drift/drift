@@ -1,5 +1,4 @@
 //go:build !android && !darwin && !ios
-// +build !android,!darwin,!ios
 
 // Package skia provides a stub implementation for non-supported platforms.
 // This allows the package to compile on platforms like linux for testing

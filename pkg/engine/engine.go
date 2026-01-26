@@ -284,7 +284,7 @@ func (a *appRunner) flushSemanticsIfNeeded(pipeline *layout.PipelineOwner, scale
 	shouldFlush := !animationActive
 	if !shouldFlush && a.semanticsDeferred {
 		// Check timeout only when actively deferring during animation
-		if time.Now().Sub(a.semanticsDeferredAt) >= semanticsDeferralTimeout {
+		if time.Since(a.semanticsDeferredAt) >= semanticsDeferralTimeout {
 			shouldFlush = true
 		}
 	}

@@ -62,7 +62,7 @@ func TestFrameTimingBuffer_Add(t *testing.T) {
 func TestFrameTimingBuffer_DefaultCapacity(t *testing.T) {
 	buf := NewFrameTimingBuffer(0)
 	// Should default to 60
-	for i := 0; i < 65; i++ {
+	for i := range 65 {
 		buf.Add(time.Duration(i) * time.Millisecond)
 	}
 	if buf.Count() != 60 {

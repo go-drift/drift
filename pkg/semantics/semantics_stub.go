@@ -1,5 +1,4 @@
 //go:build !android && !darwin && !ios
-// +build !android,!darwin,!ios
 
 // Package semantics provides accessibility semantics support for Drift.
 // This stub implementation provides type definitions for non-supported platforms.

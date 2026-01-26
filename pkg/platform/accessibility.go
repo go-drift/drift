@@ -1,5 +1,4 @@
 //go:build android || darwin || ios
-// +build android darwin ios
 
 package platform
 
@@ -175,4 +174,3 @@ func InitializeAccessibility() {
 	// Set the action callback (optional, for custom handling)
 	binding.SetActionCallback(nil) // Use default owner-based handling
 }
-

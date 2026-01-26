@@ -1,5 +1,4 @@
 //go:build !android && !darwin && !ios
-// +build !android,!darwin,!ios
 
 package widgets
 

@@ -1,5 +1,4 @@
 //go:build !(android || darwin || ios)
-// +build !android,!darwin,!ios
 
 package engine
 
@@ -11,11 +10,9 @@ import (
 // initializeAccessibility is a no-op on non-mobile platforms.
 func initializeAccessibility() {}
 
-// flushSemantics is a no-op on non-mobile platforms.
-func flushSemantics(rootRender layout.RenderObject) {}
-
 // flushSemanticsWithScale is a no-op on non-mobile platforms.
-func flushSemanticsWithScale(rootRender layout.RenderObject, deviceScale float64, dirtyBoundaries []layout.RenderObject) {}
+func flushSemanticsWithScale(rootRender layout.RenderObject, deviceScale float64, dirtyBoundaries []layout.RenderObject) {
+}
 
 // GetAccessibilityService returns nil on non-mobile platforms.
 func GetAccessibilityService() *accessibility.Service {
