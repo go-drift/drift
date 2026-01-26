@@ -15,6 +15,9 @@ type App struct {
 	Theme *theme.ThemeData
 	// DeviceScale is the device pixel ratio. Defaults to 1.0 if zero.
 	DeviceScale float64
+	// Diagnostics enables the performance diagnostics HUD overlay.
+	// Use engine.DefaultDiagnosticsConfig() for sensible defaults.
+	Diagnostics *engine.DiagnosticsConfig
 }
 
 // NewApp creates a default App with the given root widget.
@@ -34,6 +37,9 @@ func Run(app App) {
 	}
 	if app.Theme == nil {
 		app.Theme = theme.DefaultLightTheme()
+	}
+	if app.Diagnostics != nil {
+		engine.SetDiagnostics(app.Diagnostics)
 	}
 	if app.Root != nil {
 		// Wrap the root widget with the theme

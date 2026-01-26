@@ -105,6 +105,55 @@ func SetBackgroundColor(color rendering.Color) {
 	backgroundColor.Store(uint32(color))
 }
 
+// SetDiagnostics configures the diagnostics HUD overlay.
+// Pass nil to disable diagnostics.
+func SetDiagnostics(config *DiagnosticsConfig) {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+	app.diagnosticsConfig = config
+	if config != nil && app.frameTiming == nil {
+		samples := config.GraphSamples
+		if samples <= 0 {
+			samples = 60
+		}
+		app.frameTiming = NewFrameTimingBuffer(samples)
+	}
+	if config == nil {
+		// Clear stale HUD reference when diagnostics disabled
+		app.hudRenderObject = nil
+	}
+	if app.root != nil {
+		app.root.MarkNeedsBuild()
+	}
+}
+
+// diagnosticsDataSource implements widgets.DiagnosticsHUDDataSource
+type diagnosticsDataSource struct {
+	runner *appRunner
+}
+
+func (d *diagnosticsDataSource) FPSLabel() string {
+	return d.runner.fpsLabel
+}
+
+func (d *diagnosticsDataSource) SamplesInto(dst []time.Duration) int {
+	if d.runner.frameTiming == nil {
+		return 0
+	}
+	return d.runner.frameTiming.SamplesInto(dst)
+}
+
+func (d *diagnosticsDataSource) SampleCount() int {
+	if d.runner.frameTiming == nil {
+		return 0
+	}
+	return d.runner.frameTiming.Count()
+}
+
+func (d *diagnosticsDataSource) RegisterRenderObject(ro layout.RenderObject) {
+	d.runner.hudRenderObject = ro
+}
+
 // RestartApp unmounts the entire widget tree and re-mounts from scratch.
 // Use this for recovery from catastrophic errors. All state will be lost.
 // This is safe to call from any goroutine.
@@ -132,7 +181,6 @@ type appRunner struct {
 	userApp             core.Widget
 	pointerHandlers     map[int64][]layout.PointerHandler
 	pointerPositions    map[int64]rendering.Offset
-	frameCount          int
 	lastFPSUpdate       time.Time
 	fpsLabel            string
 	dispatchMu          sync.Mutex
@@ -142,6 +190,12 @@ type appRunner struct {
 	// Semantics deferral state for animation optimization
 	semanticsDeferred   bool      // true if we skipped a semantics flush
 	semanticsDeferredAt time.Time // when we first started deferring
+
+	// Diagnostics state
+	diagnosticsConfig *DiagnosticsConfig
+	frameTiming       *FrameTimingBuffer
+	lastFrameStart    time.Time
+	hudRenderObject   layout.RenderObject // Reference to HUD for targeted repaints
 }
 
 func init() {
@@ -262,6 +316,17 @@ func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err err
 
 	frameLock.Lock()
 	defer frameLock.Unlock()
+
+	// Track frame timing for diagnostics
+	now := time.Now()
+	if a.frameTiming != nil && !a.lastFrameStart.IsZero() {
+		a.frameTiming.Add(now.Sub(a.lastFrameStart))
+		// Mark only the HUD for repaint (not the whole tree)
+		if a.hudRenderObject != nil {
+			a.hudRenderObject.MarkNeedsPaint()
+		}
+	}
+	a.lastFrameStart = now
 
 	scale := a.deviceScale
 	logicalSize := rendering.Size{
@@ -398,24 +463,19 @@ func (a *appRunner) updateFPS() {
 	now := time.Now()
 	if a.lastFPSUpdate.IsZero() {
 		a.lastFPSUpdate = now
-		a.frameCount = 0
 		a.fpsLabel = "FPS: --"
 		return
 	}
-	a.frameCount++
+	// Calculate instant FPS from last frame duration
 	elapsed := now.Sub(a.lastFPSUpdate)
-	if elapsed < 500*time.Millisecond {
+	a.lastFPSUpdate = now
+	if elapsed <= 0 {
 		return
 	}
-	fps := float64(a.frameCount) / elapsed.Seconds()
-	a.lastFPSUpdate = now
-	a.frameCount = 0
+	fps := float64(time.Second) / float64(elapsed)
 	label := "FPS: " + itoa(int(fps+0.5))
 	if label != a.fpsLabel {
 		a.fpsLabel = label
-		if a.root != nil {
-			a.root.MarkNeedsBuild()
-		}
 	}
 }
 
@@ -473,18 +533,107 @@ func (e engineApp) Key() any {
 func (e engineApp) Build(ctx core.BuildContext) core.Widget {
 	scale := 1.0
 	var child core.Widget
+	var diagnosticsConfig *DiagnosticsConfig
 	if e.runner != nil {
 		scale = e.runner.deviceScale
 		child = e.runner.userApp
+		diagnosticsConfig = e.runner.diagnosticsConfig
 	}
 	if child == nil {
 		child = defaultPlaceholder{}
 	}
+
+	// Wrap with diagnostics HUD if enabled
+	if diagnosticsConfig != nil {
+		targetTime := diagnosticsConfig.TargetFrameTime
+		if targetTime == 0 {
+			targetTime = 16667 * time.Microsecond
+		}
+
+		graphWidth := 120.0
+		graphHeight := 60.0
+
+		// Create data source that pulls directly from runner
+		dataSource := &diagnosticsDataSource{runner: e.runner}
+
+		hud := widgets.DiagnosticsHUD{
+			DataSource:     dataSource,
+			TargetTime:     targetTime,
+			GraphWidth:     graphWidth,
+			GraphHeight:    graphHeight,
+			ShowFPS:        diagnosticsConfig.ShowFPS,
+			ShowFrameGraph: diagnosticsConfig.ShowFrameGraph,
+		}
+
+		// Wrap HUD in a positioner that reads safe area from context
+		hudPositioner := diagnosticsHUDPositioner{
+			position: diagnosticsConfig.Position,
+			hud:      hud,
+		}
+
+		child = widgets.Stack{
+			ChildrenWidgets: []core.Widget{
+				child,
+				hudPositioner,
+			},
+		}
+	}
+
 	return widgets.DeviceScale{
 		Scale: scale,
 		ChildWidget: widgets.SafeAreaProvider{
 			ChildWidget: child,
 		},
+	}
+}
+
+func ptrFloat64(v float64) *float64 {
+	return &v
+}
+
+// diagnosticsHUDPositioner reads safe area from context and positions the HUD accordingly.
+type diagnosticsHUDPositioner struct {
+	position DiagnosticsPosition
+	hud      core.Widget
+}
+
+func (d diagnosticsHUDPositioner) CreateElement() core.Element {
+	return core.NewStatelessElement(d, nil)
+}
+
+func (d diagnosticsHUDPositioner) Key() any {
+	return nil
+}
+
+func (d diagnosticsHUDPositioner) Build(ctx core.BuildContext) core.Widget {
+	insets := widgets.SafeAreaOf(ctx)
+	padding := 8.0
+
+	switch d.position {
+	case DiagnosticsTopRight:
+		return widgets.Positioned{
+			Right:       ptrFloat64(insets.Right + padding),
+			Top:         ptrFloat64(insets.Top + padding),
+			ChildWidget: d.hud,
+		}
+	case DiagnosticsBottomLeft:
+		return widgets.Positioned{
+			Left:        ptrFloat64(insets.Left + padding),
+			Bottom:      ptrFloat64(insets.Bottom + padding),
+			ChildWidget: d.hud,
+		}
+	case DiagnosticsBottomRight:
+		return widgets.Positioned{
+			Right:       ptrFloat64(insets.Right + padding),
+			Bottom:      ptrFloat64(insets.Bottom + padding),
+			ChildWidget: d.hud,
+		}
+	default: // DiagnosticsTopLeft or invalid
+		return widgets.Positioned{
+			Left:        ptrFloat64(insets.Left + padding),
+			Top:         ptrFloat64(insets.Top + padding),
+			ChildWidget: d.hud,
+		}
 	}
 }
 
