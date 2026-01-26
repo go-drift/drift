@@ -23,9 +23,15 @@ const (
 type FontWeight int
 
 const (
-	FontWeightNormal   FontWeight = 400
-	FontWeightSemibold FontWeight = 600
-	FontWeightBold     FontWeight = 700
+	FontWeightThin       FontWeight = 100
+	FontWeightExtraLight FontWeight = 200
+	FontWeightLight      FontWeight = 300
+	FontWeightNormal     FontWeight = 400
+	FontWeightMedium     FontWeight = 500
+	FontWeightSemibold   FontWeight = 600
+	FontWeightBold       FontWeight = 700
+	FontWeightExtraBold  FontWeight = 800
+	FontWeightBlack      FontWeight = 900
 )
 
 // FontStyle represents normal or italic text styles.
@@ -159,7 +165,11 @@ func LayoutTextWithConstraints(text string, style TextStyle, manager *FontManage
 	if size <= 0 {
 		size = defaultFontSize
 	}
-	metrics, err := skia.FontMetrics(family, size, int(style.FontWeight), int(style.FontStyle))
+	weight := int(style.FontWeight)
+	if weight < 100 {
+		weight = int(FontWeightNormal)
+	}
+	metrics, err := skia.FontMetrics(family, size, weight, int(style.FontStyle))
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +181,7 @@ func LayoutTextWithConstraints(text string, style TextStyle, manager *FontManage
 	}
 	var measureErr error
 	measure := func(s string) float64 {
-		width, err := skia.MeasureTextWidth(s, family, size, int(style.FontWeight), int(style.FontStyle))
+		width, err := skia.MeasureTextWidth(s, family, size, weight, int(style.FontStyle))
 		if err != nil {
 			measureErr = err
 			return 0

@@ -253,6 +253,10 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 	if fontSize <= 0 {
 		fontSize = 16
 	}
+	fontWeight := int(layout.Style.FontWeight)
+	if fontWeight < 100 {
+		fontWeight = int(FontWeightNormal)
+	}
 	lineHeight := layout.LineHeight
 	if lineHeight == 0 {
 		lineHeight = layout.Ascent + layout.Descent
@@ -287,7 +291,7 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 				float32(fontSize),
 				uint32(shadow.Color),
 				float32(shadow.Sigma()),
-				int(layout.Style.FontWeight),
+				fontWeight,
 				int(layout.Style.FontStyle),
 			)
 		}
@@ -302,7 +306,7 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 				float32(baseline),
 				float32(fontSize),
 				uint32(layout.Style.Color),
-				int(layout.Style.FontWeight),
+				fontWeight,
 				int(layout.Style.FontStyle),
 				payload.gradientType,
 				startX,
@@ -325,7 +329,7 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 			float32(baseline),
 			float32(fontSize),
 			uint32(layout.Style.Color),
-			int(layout.Style.FontWeight),
+			fontWeight,
 			int(layout.Style.FontStyle),
 		)
 	}
