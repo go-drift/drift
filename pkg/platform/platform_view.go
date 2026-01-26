@@ -87,6 +87,10 @@ type PlatformViewRegistry struct {
 	frameSeq      uint64
 	geometryCache map[int64]viewGeometryCache
 
+	// Track views for culling detection (views not painted should be hidden)
+	viewsAtFrameStart    map[int64]struct{}
+	viewsUpdatedThisFrame map[int64]struct{}
+
 	// Stats for monitoring
 	BatchTimeouts atomic.Uint64
 }
@@ -231,6 +235,11 @@ func (r *PlatformViewRegistry) GetView(viewID int64) PlatformView {
 func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset rendering.Offset, size rendering.Size, clipBounds *rendering.Rect) error {
 	r.batchMu.Lock()
 
+	// Mark this view as updated this frame (for culling detection)
+	if r.viewsUpdatedThisFrame != nil {
+		r.viewsUpdatedThisFrame[viewID] = struct{}{}
+	}
+
 	// Check if geometry has actually changed (deduplication)
 	if cached, ok := r.geometryCache[viewID]; ok {
 		if cached.offset == offset && cached.size == size && rectsEqual(cached.clipBounds, clipBounds) {
@@ -280,19 +289,47 @@ func (r *PlatformViewRegistry) BeginGeometryBatch() {
 	r.batchMode = true
 	r.batchUpdates = r.batchUpdates[:0] // Reset slice, keep capacity
 	r.frameSeq++
+	// Track which views existed at frame start to detect culled views
+	r.viewsAtFrameStart = make(map[int64]struct{})
+	r.mu.RLock()
+	for id := range r.views {
+		r.viewsAtFrameStart[id] = struct{}{}
+	}
+	r.mu.RUnlock()
+	r.viewsUpdatedThisFrame = make(map[int64]struct{})
 	r.batchMu.Unlock()
 }
 
 // FlushGeometryBatch sends all queued geometry updates to native and waits
 // for them to be applied. This ensures native views are positioned correctly
-// before the frame is displayed.
+// before the frame is displayed. Also hides any views that were paint-culled
+// (existed at frame start but weren't updated during paint).
 func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	r.batchMu.Lock()
 	updates := r.batchUpdates
 	frameSeq := r.frameSeq
+	viewsAtStart := r.viewsAtFrameStart
+	viewsUpdated := r.viewsUpdatedThisFrame
 	r.batchMode = false
 	r.batchUpdates = nil
+	r.viewsAtFrameStart = nil
+	r.viewsUpdatedThisFrame = nil
 	r.batchMu.Unlock()
+
+	// Find views that were culled (existed at frame start but not painted)
+	var culledViews []int64
+	for viewID := range viewsAtStart {
+		if _, updated := viewsUpdated[viewID]; !updated {
+			culledViews = append(culledViews, viewID)
+		}
+	}
+
+	// Hide culled views - they're outside the visible viewport
+	for _, viewID := range culledViews {
+		r.SetViewVisible(viewID, false)
+		// Clear geometry cache so view repositions correctly when scrolled back
+		r.ClearGeometryCache(viewID)
+	}
 
 	if len(updates) == 0 {
 		return
