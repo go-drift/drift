@@ -246,6 +246,8 @@ int drift_skia_svg_dom_get_size(DriftSkiaSVGDOM svg, float* width, float* height
 // scale: 0=meet(contain), 1=slice(cover)
 void drift_skia_svg_dom_set_preserve_aspect_ratio(DriftSkiaSVGDOM svg, int align, int scale);
 void drift_skia_svg_dom_set_size_to_container(DriftSkiaSVGDOM svg);
+void drift_skia_svg_dom_render_tinted(DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
+    float width, float height, uint32_t tint_argb);
 
 #ifdef __cplusplus
 }

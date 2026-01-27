@@ -30,7 +30,10 @@ func (d *DisplayList) Size() Size {
 // Call this when a cached display list is being replaced or discarded.
 func (d *DisplayList) Dispose() {
 	for _, op := range d.ops {
-		if svg, ok := op.(opSVG); ok {
+		switch svg := op.(type) {
+		case opSVG:
+			svgDebugUntrack(svg.svgPtr)
+		case opSVGTinted:
 			svgDebugUntrack(svg.svgPtr)
 		}
 	}
@@ -162,6 +165,13 @@ func (c *recordingCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds Rect) {
 		svgDebugTrack(svgPtr) // no-op in release builds
 	}
 	c.recorder.append(opSVG{svgPtr: svgPtr, bounds: bounds})
+}
+
+func (c *recordingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor Color) {
+	if svgPtr != nil {
+		svgDebugTrack(svgPtr) // no-op in release builds
+	}
+	c.recorder.append(opSVGTinted{svgPtr: svgPtr, bounds: bounds, tintColor: tintColor})
 }
 
 func (c *recordingCanvas) Size() Size {
@@ -336,4 +346,14 @@ type opSVG struct {
 
 func (op opSVG) execute(canvas Canvas) {
 	canvas.DrawSVG(op.svgPtr, op.bounds)
+}
+
+type opSVGTinted struct {
+	svgPtr    unsafe.Pointer
+	bounds    Rect
+	tintColor Color
+}
+
+func (op opSVGTinted) execute(canvas Canvas) {
+	canvas.DrawSVGTinted(op.svgPtr, op.bounds, op.tintColor)
 }

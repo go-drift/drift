@@ -142,8 +142,9 @@ func (i *Icon) ViewBox() rendering.Rect {
 // The SVG scales to fill the bounds while respecting preserveAspectRatio
 // (default: contain, centered) unless overridden via SetPreserveAspectRatio.
 // Content is clipped to the provided bounds.
-//
-// Note: tintColor is currently ignored (known regression from oksvg implementation).
+// If tintColor is non-zero, all SVG colors are replaced with the tint
+// while preserving alpha (useful for icons). Note: tinting affects all
+// content including gradients and embedded images.
 func (i *Icon) Draw(canvas rendering.Canvas, bounds rendering.Rect, tintColor rendering.Color) {
 	if i == nil || i.dom == nil {
 		return
@@ -156,8 +157,7 @@ func (i *Icon) Draw(canvas rendering.Canvas, bounds rendering.Rect, tintColor re
 	// This is needed for SVGs with explicit pixel dimensions.
 	i.dom.SetSizeToContainer()
 
-	// DrawSVG handles clipping and positioning internally
-	canvas.DrawSVG(i.dom.Ptr(), bounds)
+	canvas.DrawSVGTinted(i.dom.Ptr(), bounds, tintColor)
 }
 
 // SetPreserveAspectRatio overrides the SVG's preserveAspectRatio attribute.

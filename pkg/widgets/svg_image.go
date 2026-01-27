@@ -63,6 +63,11 @@ type SvgImage struct {
 	// Note: Setting this mutates the Source Icon.
 	PreserveAspectRatio *svg.PreserveAspectRatio
 
+	// TintColor replaces all SVG colors with this color while preserving alpha.
+	// Zero (ColorTransparent) means no tinting - original colors are preserved.
+	// Note: Tinting affects ALL content including gradients and embedded images.
+	TintColor rendering.Color
+
 	// SemanticLabel provides an accessibility description.
 	SemanticLabel string
 
@@ -88,6 +93,7 @@ func (s SvgImage) CreateRenderObject(ctx core.BuildContext) layout.RenderObject 
 		width:                s.Width,
 		height:               s.Height,
 		preserveAspectRatio:  s.PreserveAspectRatio,
+		tintColor:            s.TintColor,
 		semanticLabel:        s.SemanticLabel,
 		excludeFromSemantics: s.ExcludeFromSemantics,
 	}
@@ -107,6 +113,7 @@ func (s SvgImage) UpdateRenderObject(ctx core.BuildContext, renderObject layout.
 		box.width = s.Width
 		box.height = s.Height
 		box.preserveAspectRatio = s.PreserveAspectRatio
+		box.tintColor = s.TintColor
 		box.semanticLabel = s.SemanticLabel
 		box.excludeFromSemantics = s.ExcludeFromSemantics
 
@@ -126,6 +133,7 @@ type renderSvgImage struct {
 	width                float64
 	height               float64
 	preserveAspectRatio  *svg.PreserveAspectRatio
+	tintColor            rendering.Color
 	semanticLabel        string
 	excludeFromSemantics bool
 }
@@ -172,7 +180,7 @@ func (r *renderSvgImage) Paint(ctx *layout.PaintContext) {
 	}
 
 	bounds := rendering.RectFromLTWH(0, 0, r.Size().Width, r.Size().Height)
-	r.source.Draw(ctx.Canvas, bounds, 0)
+	r.source.Draw(ctx.Canvas, bounds, r.tintColor)
 }
 
 func (r *renderSvgImage) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
@@ -204,6 +212,10 @@ type SvgIcon struct {
 	// Size is the width and height for the icon.
 	// If zero, uses the SVG's intrinsic viewBox size.
 	Size float64
+	// TintColor replaces all SVG colors with this color while preserving alpha.
+	// Zero (ColorTransparent) means no tinting - original colors are preserved.
+	// Note: Tinting affects ALL content including gradients and embedded images.
+	TintColor rendering.Color
 	// SemanticLabel provides an accessibility description.
 	SemanticLabel string
 	// ExcludeFromSemantics excludes from the semantics tree when true.
@@ -215,6 +227,7 @@ func (s SvgIcon) CreateElement() core.Element {
 		Source:               s.Source,
 		Width:                s.Size,
 		Height:               s.Size,
+		TintColor:            s.TintColor,
 		SemanticLabel:        s.SemanticLabel,
 		ExcludeFromSemantics: s.ExcludeFromSemantics,
 	}.CreateElement()

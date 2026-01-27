@@ -3,6 +3,8 @@
 
 #include "../skia_bridge.h"
 #include "core/SkCanvas.h"
+#include "core/SkColor.h"
+#include "core/SkColorFilter.h"
 #include "core/SkData.h"
 #include "core/SkStream.h"
 #include "modules/svg/include/SkSVGDOM.h"
@@ -10,6 +12,17 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGTypes.h"
 #include "modules/skresources/include/SkResources.h"
+
+namespace drift_skia_svg_impl {
+inline SkColor to_sk_color(uint32_t argb) {
+    return SkColorSetARGB(
+        (argb >> 24) & 0xFF,
+        (argb >> 16) & 0xFF,
+        (argb >> 8) & 0xFF,
+        argb & 0xFF
+    );
+}
+}  // namespace drift_skia_svg_impl
 
 inline DriftSkiaSVGDOM drift_skia_svg_dom_create_with_base_impl(const uint8_t* data, int length, const char* base_path) {
     if (!data || length <= 0) return nullptr;
@@ -111,6 +124,31 @@ inline void drift_skia_svg_dom_set_size_to_container_impl(DriftSkiaSVGDOM svg) {
     // Set width/height to 100% so SVG fills its container
     root->setWidth(SkSVGLength(100, SkSVGLength::Unit::kPercentage));
     root->setHeight(SkSVGLength(100, SkSVGLength::Unit::kPercentage));
+}
+
+inline void drift_skia_svg_dom_render_tinted_impl(
+    DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
+    float width, float height, uint32_t tint_argb
+) {
+    if (!svg || !canvas || width <= 0 || height <= 0) return;
+    auto dom = reinterpret_cast<SkSVGDOM*>(svg);
+    auto sk_canvas = reinterpret_cast<SkCanvas*>(canvas);
+
+    dom->setContainerSize(SkSize::Make(width, height));
+
+    if (tint_argb == 0) {
+        dom->render(sk_canvas);
+        return;
+    }
+
+    // Use nullptr for bounds since Go-side already clips via CanvasClipRect.
+    // This avoids double-clipping effects that extend beyond the SVG bounds.
+    SkPaint paint;
+    paint.setColorFilter(SkColorFilters::Blend(
+        drift_skia_svg_impl::to_sk_color(tint_argb), SkBlendMode::kSrcIn));
+    sk_canvas->saveLayer(nullptr, &paint);
+    dom->render(sk_canvas);
+    sk_canvas->restore();
 }
 
 #endif

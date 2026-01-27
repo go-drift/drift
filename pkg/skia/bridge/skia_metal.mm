@@ -982,4 +982,9 @@ void drift_skia_svg_dom_set_size_to_container(DriftSkiaSVGDOM svg) {
     drift_skia_svg_dom_set_size_to_container_impl(svg);
 }
 
+void drift_skia_svg_dom_render_tinted(DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
+    float width, float height, uint32_t tint_argb) {
+    drift_skia_svg_dom_render_tinted_impl(svg, canvas, width, height, tint_argb);
+}
+
 }  // extern "C"

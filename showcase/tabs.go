@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/navigation"
+	"github.com/go-drift/drift/pkg/rendering"
 	"github.com/go-drift/drift/pkg/svg"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -24,21 +25,24 @@ func loadSVGAsset(name string) *svg.Icon {
 }
 
 func buildTabsPage(ctx core.BuildContext) core.Widget {
+	_, colors, _ := theme.UseTheme(ctx)
+	iconColor := colors.Primary
+
 	tabs := []navigation.Tab{
-		buildTabSpec("Home", loadSVGAsset("home.svg")),
-		buildTabSpec("Search", loadSVGAsset("search.svg")),
-		buildTabSpec("Inbox", loadSVGAsset("inbox.svg")),
-		buildTabSpec("Explore", loadSVGAsset("explore.svg")),
-		buildTabSpec("Settings", loadSVGAsset("settings.svg")),
+		buildTabSpec("Home", loadSVGAsset("home.svg"), iconColor),
+		buildTabSpec("Search", loadSVGAsset("search.svg"), iconColor),
+		buildTabSpec("Inbox", loadSVGAsset("inbox.svg"), iconColor),
+		buildTabSpec("Explore", loadSVGAsset("explore.svg"), iconColor),
+		buildTabSpec("Settings", loadSVGAsset("settings.svg"), iconColor),
 	}
 
 	return pageScaffold(ctx, "Tabs", navigation.TabScaffold{Tabs: tabs})
 }
 
-func buildTabSpec(label string, icon *svg.Icon) navigation.Tab {
+func buildTabSpec(label string, icon *svg.Icon, color rendering.Color) navigation.Tab {
 	item := widgets.TabItem{
 		Label: label,
-		Icon:  widgets.SvgIcon{Source: icon, Size: 24},
+		Icon:  widgets.SvgIcon{Source: icon, Size: 24, TintColor: color},
 	}
 
 	return navigation.Tab{

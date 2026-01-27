@@ -339,5 +339,13 @@ func (s *SVGDOM) Size() (width, height float64) {
 // SVGDOMRender renders an SVG DOM (by C pointer) to a Skia canvas.
 func SVGDOMRender(svgPtr, canvasPtr unsafe.Pointer, width, height float32) {}
 
+// SVGDOMRenderTinted renders an SVG DOM with an optional tint color.
+// If tintColor is 0, renders without tinting.
+func SVGDOMRenderTinted(svgPtr, canvasPtr unsafe.Pointer, width, height float32, tintColor uint32) {}
+
 // SetPreserveAspectRatio sets the preserveAspectRatio attribute on the root SVG element.
 func (s *SVGDOM) SetPreserveAspectRatio(align, scale int) {}
+
+// SetSizeToContainer sets the SVG's root width/height to 100%,
+// making it scale to fill the container size set via render calls.
+func (s *SVGDOM) SetSizeToContainer() {}

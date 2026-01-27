@@ -752,3 +752,14 @@ func (s *SVGDOM) SetSizeToContainer() {
 	}
 	C.drift_skia_svg_dom_set_size_to_container(s.ptr)
 }
+
+// SVGDOMRenderTinted renders an SVG DOM with an optional tint color.
+// If tintColor is 0, renders without tinting.
+func SVGDOMRenderTinted(svgPtr, canvasPtr unsafe.Pointer, width, height float32, tintColor uint32) {
+	if svgPtr == nil || canvasPtr == nil {
+		return
+	}
+	C.drift_skia_svg_dom_render_tinted(
+		C.DriftSkiaSVGDOM(svgPtr), C.DriftSkiaCanvas(canvasPtr),
+		C.float(width), C.float(height), C.uint(tintColor))
+}

@@ -73,6 +73,12 @@ type Canvas interface {
 	// No-op if bounds has zero or negative dimensions.
 	DrawSVG(svgPtr unsafe.Pointer, bounds Rect)
 
+	// DrawSVGTinted renders an SVG DOM within the given bounds with an optional tint color.
+	// The tint color replaces all SVG colors while preserving alpha (SrcIn blend mode).
+	// If tintColor is 0 (ColorTransparent), renders without tinting.
+	// Note: Tinting affects ALL SVG content including gradients and embedded images.
+	DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor Color)
+
 	// Size returns the size of the canvas in pixels.
 	Size() Size
 }

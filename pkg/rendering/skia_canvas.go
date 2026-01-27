@@ -471,6 +471,10 @@ func (c *SkiaCanvas) SaveLayerBlur(bounds Rect, sigmaX, sigmaY float64) {
 }
 
 func (c *SkiaCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds Rect) {
+	c.DrawSVGTinted(svgPtr, bounds, 0)
+}
+
+func (c *SkiaCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor Color) {
 	if svgPtr == nil {
 		return
 	}
@@ -483,7 +487,7 @@ func (c *SkiaCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds Rect) {
 	if bounds.Left != 0 || bounds.Top != 0 {
 		skia.CanvasTranslate(c.canvas, float32(bounds.Left), float32(bounds.Top))
 	}
-	skia.SVGDOMRender(svgPtr, c.canvas, float32(w), float32(h))
+	skia.SVGDOMRenderTinted(svgPtr, c.canvas, float32(w), float32(h), uint32(tintColor))
 	skia.CanvasRestore(c.canvas)
 }
 
