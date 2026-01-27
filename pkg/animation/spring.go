@@ -2,14 +2,25 @@ package animation
 
 import "math"
 
-// SpringDescription describes the physical properties of a spring.
+// SpringDescription describes the physical properties of a spring for
+// physics-based animations.
+//
+// Springs create natural-feeling motion that responds to velocity and can
+// overshoot the target before settling. They're ideal for gesture-driven
+// animations, scroll overscroll effects, and transitions that should feel
+// physically plausible.
+//
+// The DampingRatio controls oscillation: <1.0 bounces, =1.0 is critically damped,
+// >1.0 is overdamped. Use [IOSSpring] or [BouncySpring] for common configurations.
+//
+// See ExampleSpringSimulation for usage patterns.
 type SpringDescription struct {
 	// Stiffness controls how quickly the spring returns to rest (higher = faster).
 	Stiffness float64
-	// Damping controls energy dissipation (higher = less oscillation).
-	// DampingRatio of 1.0 is critically damped (no overshoot).
-	// DampingRatio < 1.0 is underdamped (some bounce).
-	// DampingRatio > 1.0 is overdamped (slow return).
+	// DampingRatio controls energy dissipation.
+	// 1.0 = critically damped (no overshoot)
+	// < 1.0 = underdamped (bouncy)
+	// > 1.0 = overdamped (sluggish)
 	DampingRatio float64
 }
 
@@ -29,7 +40,14 @@ func BouncySpring() SpringDescription {
 	}
 }
 
-// SpringSimulation simulates a damped spring for physics-based animations.
+// SpringSimulation simulates a damped spring moving toward a target position.
+//
+// Unlike [AnimationController] which uses duration-based timing, SpringSimulation
+// uses physics to determine motion. The simulation accounts for initial velocity,
+// making it ideal for gesture-driven animations where the user "throws" an element.
+//
+// The simulation automatically handles numerical stability by sub-stepping
+// large time deltas. See ExampleSpringSimulation for usage patterns.
 type SpringSimulation struct {
 	spring   SpringDescription
 	target   float64

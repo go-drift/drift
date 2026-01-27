@@ -1,4 +1,46 @@
-// Package animation provides animation primitives for the Drift framework.
+// Package animation provides animation primitives for building smooth,
+// physics-based animations in Drift applications.
+//
+// # Core Components
+//
+// The animation system consists of several key components:
+//
+//   - [AnimationController]: Drives animations over time, managing value progression
+//     from 0.0 to 1.0 with configurable duration and easing curves.
+//
+//   - [Tween]: Interpolates between begin and end values of any type using the
+//     controller's current value. Generic tweens support float64, Color, Offset, etc.
+//
+//   - [Curves]: Easing functions that transform linear progress into natural-feeling
+//     motion. Includes standard curves like [EaseIn], [EaseOut], [EaseInOut].
+//
+//   - [SpringSimulation]: Physics-based spring animation for natural bounce effects,
+//     commonly used for scroll overscroll and gesture-driven animations.
+//
+// # Basic Usage
+//
+// Create a controller, configure a tween, and use AddListener to rebuild on changes:
+//
+//	// In InitState
+//	s.controller = animation.NewAnimationController(300 * time.Millisecond)
+//	s.controller.Curve = animation.EaseInOut
+//	s.opacityTween = animation.TweenFloat64(0, 1)
+//	s.controller.AddListener(func() {
+//	    s.SetState(func() {})
+//	})
+//	s.controller.Forward()
+//
+//	// In Build
+//	opacity := s.opacityTween.Transform(s.controller)
+//	return widgets.Opacity{Opacity: opacity, ChildWidget: child}
+//
+//	// In Dispose
+//	s.controller.Dispose()
+//
+// # Implicit Animations
+//
+// For simpler cases, use implicit animation widgets like [widgets.AnimatedContainer]
+// or [widgets.AnimatedOpacity] which manage controllers internally.
 package animation
 
 import (
@@ -12,7 +54,13 @@ var (
 	lastTickTime  time.Time
 )
 
-// Ticker calls a callback on each frame.
+// Ticker calls a callback on each frame while active.
+//
+// Ticker is the low-level timing primitive used by [AnimationController].
+// Most code should use AnimationController directly rather than Ticker.
+//
+// The callback receives the elapsed time since Start was called. Tickers are
+// driven by the engine's frame loop via [StepTickers].
 type Ticker struct {
 	callback func(elapsed time.Duration)
 	isActive bool

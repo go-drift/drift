@@ -10,7 +10,31 @@ import (
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
-// TextInput embeds a native text input field with Skia chrome.
+// TextInput is the lowest-level text input widget that embeds a native platform
+// text field with Skia-rendered chrome (background, border, focus styling).
+//
+// TextInput provides direct access to all text input configuration options including
+// keyboard type, input action, text capitalization, obscuring for passwords,
+// autocorrect, and multiline support. It handles focus management, gesture
+// recognition, and accessibility semantics automatically.
+//
+// For most use cases, prefer [TextField] which adds labels, helper text, and
+// theme integration, or [TextFormField] which adds form validation support.
+//
+// The native text field handles all text editing, selection, and IME composition.
+// Skia renders the visual chrome (background, borders) while the platform view
+// handles the actual text rendering and cursor.
+//
+// Example:
+//
+//	controller := platform.NewTextEditingController("")
+//	TextInput{
+//	    Controller:   controller,
+//	    Placeholder:  "Enter text",
+//	    KeyboardType: platform.KeyboardTypeText,
+//	    OnChanged:    func(text string) { fmt.Println("Changed:", text) },
+//	    OnSubmitted:  func(text string) { fmt.Println("Submitted:", text) },
+//	}
 type TextInput struct {
 	// Controller manages the text content and selection.
 	Controller *platform.TextEditingController

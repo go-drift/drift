@@ -6,7 +6,18 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// Center centers its child within the available space.
+// Center positions its child at the center of the available space.
+//
+// Center expands to fill available space (like [Expanded]), then centers
+// the child within that space. The child is given loose constraints,
+// allowing it to size itself.
+//
+// Example:
+//
+//	Center{ChildWidget: Text{Content: "Hello, World!"}}
+//
+// For more control over alignment, use [Container] with an Alignment field,
+// or wrap the child in an [Align] widget.
 type Center struct {
 	ChildWidget core.Widget
 }

@@ -6,7 +6,18 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// Padding adds padding around a child.
+// Padding adds empty space around its child widget.
+//
+// The child is constrained to the remaining space after padding is applied.
+// If no child is provided, Padding creates an empty box of the padding size.
+//
+// Use [layout.EdgeInsets] helpers to create padding values:
+//
+//	Padding{Padding: layout.EdgeInsetsAll(16), ChildWidget: child}
+//	Padding{Padding: layout.EdgeInsetsSymmetric(24, 12), ChildWidget: child}
+//	Padding{Padding: layout.EdgeInsetsOnly(Left: 8, Right: 8), ChildWidget: child}
+//
+// For padding combined with background color, consider [Container] instead.
 type Padding struct {
 	Padding     layout.EdgeInsets
 	ChildWidget core.Widget

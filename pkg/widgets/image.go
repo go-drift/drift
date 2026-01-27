@@ -9,7 +9,31 @@ import (
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
-// Image renders a bitmap image onto the canvas.
+// Image renders a bitmap image onto the canvas with configurable sizing and scaling.
+//
+// Image accepts a Go [image.Image] as its Source. The image is rendered using
+// the specified Fit mode to control scaling behavior.
+//
+// # Image Fit Modes
+//
+//   - ImageFitFill: Stretches the image to completely fill the box (may distort)
+//   - ImageFitContain: Scales to fit within the box while maintaining aspect ratio
+//   - ImageFitCover: Scales to cover the box while maintaining aspect ratio (may crop)
+//   - ImageFitNone: Uses the image's intrinsic size
+//   - ImageFitScaleDown: Like Contain, but never scales up
+//
+// Example:
+//
+//	Image{
+//	    Source:        loadedImage,
+//	    Width:         200,
+//	    Height:        150,
+//	    Fit:           ImageFitCover,
+//	    SemanticLabel: "Product photo",
+//	}
+//
+// For decorative images that don't convey information, set ExcludeFromSemantics
+// to true to hide them from screen readers.
 type Image struct {
 	// Source is the image to render.
 	Source image.Image

@@ -6,7 +6,45 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// Container is a convenience widget for common decorations.
+// Container is a convenience widget that combines common painting, positioning,
+// and sizing operations into a single widget.
+//
+// Container applies decorations in this order:
+//  1. Shadow (drawn behind the container)
+//  2. Background color or gradient
+//  3. Child widget (positioned according to Alignment within the padded area)
+//
+// # Sizing Behavior
+//
+// Without explicit Width/Height, Container sizes to fit its child plus padding.
+// With Width and/or Height set, Container uses those dimensions (constrained by
+// parent constraints) and positions the child using Alignment.
+//
+// # Common Patterns
+//
+//	// Colored box with padding
+//	Container{
+//	    Color:   rendering.ColorBlue,
+//	    Padding: layout.EdgeInsetsAll(16),
+//	    ChildWidget: Text{Content: "Hello"},
+//	}
+//
+//	// Fixed-size centered child
+//	Container{
+//	    Width:     200,
+//	    Height:    100,
+//	    Alignment: layout.AlignmentCenter,
+//	    ChildWidget: icon,
+//	}
+//
+//	// Gradient background with shadow
+//	Container{
+//	    Gradient: &rendering.Gradient{...},
+//	    Shadow:   &rendering.BoxShadow{BlurRadius: 8, Color: shadowColor},
+//	    ChildWidget: content,
+//	}
+//
+// For more complex decorations (borders, border radius, clipping), use [DecoratedBox].
 type Container struct {
 	ChildWidget core.Widget
 	Padding     layout.EdgeInsets

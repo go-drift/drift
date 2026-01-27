@@ -363,7 +363,24 @@ func hitTestChildrenReverse(children []layout.RenderBox, position rendering.Offs
 	return false
 }
 
-// IndexedStack lays out all children but only paints the active index.
+// IndexedStack is a [Stack] that only displays one child at a time.
+//
+// All children are laid out (maintaining their state), but only the child at
+// Index is painted and receives hit tests. This is useful for tab views or
+// wizards where you want to preserve the state of off-screen pages.
+//
+// Example:
+//
+//	IndexedStack{
+//	    Index: currentTab,
+//	    ChildrenWidgets: []core.Widget{
+//	        HomeTab{},
+//	        SearchTab{},
+//	        ProfileTab{},
+//	    },
+//	}
+//
+// If Index is out of bounds, nothing is painted.
 type IndexedStack struct {
 	ChildrenWidgets []core.Widget
 	Alignment       layout.Alignment

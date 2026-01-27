@@ -17,33 +17,51 @@ const (
 	AxisHorizontal
 )
 
-// MainAxisAlignment controls spacing along the main axis.
+// MainAxisAlignment controls how children are positioned along the main axis
+// (horizontal for [Row], vertical for [Column]).
 type MainAxisAlignment int
 
 const (
+	// MainAxisAlignmentStart places children at the start (left for Row, top for Column).
 	MainAxisAlignmentStart MainAxisAlignment = iota
+	// MainAxisAlignmentEnd places children at the end (right for Row, bottom for Column).
 	MainAxisAlignmentEnd
+	// MainAxisAlignmentCenter centers children along the main axis.
 	MainAxisAlignmentCenter
+	// MainAxisAlignmentSpaceBetween distributes free space evenly between children.
+	// No space before the first or after the last child.
 	MainAxisAlignmentSpaceBetween
+	// MainAxisAlignmentSpaceAround distributes free space evenly, with half-sized
+	// spaces at the start and end.
 	MainAxisAlignmentSpaceAround
+	// MainAxisAlignmentSpaceEvenly distributes free space evenly, including
+	// equal space before the first and after the last child.
 	MainAxisAlignmentSpaceEvenly
 )
 
-// CrossAxisAlignment controls placement along the cross axis.
+// CrossAxisAlignment controls how children are positioned along the cross axis
+// (vertical for [Row], horizontal for [Column]).
 type CrossAxisAlignment int
 
 const (
+	// CrossAxisAlignmentStart places children at the start of the cross axis.
 	CrossAxisAlignmentStart CrossAxisAlignment = iota
+	// CrossAxisAlignmentEnd places children at the end of the cross axis.
 	CrossAxisAlignmentEnd
+	// CrossAxisAlignmentCenter centers children along the cross axis.
 	CrossAxisAlignmentCenter
+	// CrossAxisAlignmentStretch stretches children to fill the cross axis.
 	CrossAxisAlignmentStretch
 )
 
-// MainAxisSize controls the size along the main axis.
+// MainAxisSize controls how much space the flex container takes along its main axis.
 type MainAxisSize int
 
 const (
+	// MainAxisSizeMin sizes the container to fit its children (shrink-wrap).
 	MainAxisSizeMin MainAxisSize = iota
+	// MainAxisSizeMax expands to fill all available space along the main axis.
+	// This is required for [Expanded] children to receive space.
 	MainAxisSizeMax
 )
 
@@ -52,7 +70,37 @@ type FlexFactor interface {
 	FlexFactor() int
 }
 
-// Row lays out children horizontally.
+// Row lays out children horizontally from left to right.
+//
+// Row is a flex container where the main axis is horizontal. Children are
+// laid out in a single horizontal run and do not wrap.
+//
+// # Sizing Behavior
+//
+// By default (MainAxisSizeMin), Row shrinks to fit its children. Set
+// MainAxisSizeMax to expand and fill available horizontal space - this is
+// required when using [Expanded] children.
+//
+// # Alignment
+//
+// Use MainAxisAlignment to control horizontal spacing (Start, End, Center,
+// SpaceBetween, SpaceAround, SpaceEvenly). Use CrossAxisAlignment to control
+// vertical alignment (Start, End, Center, Stretch).
+//
+// # Flexible Children
+//
+// Wrap children in [Expanded] to make them share remaining space proportionally:
+//
+//	Row{
+//	    MainAxisSize: MainAxisSizeMax,
+//	    ChildrenWidgets: []core.Widget{
+//	        Text{Content: "Label"},
+//	        Expanded{ChildWidget: TextField{...}}, // Takes remaining space
+//	        Button{...},
+//	    },
+//	}
+//
+// For vertical layout, use [Column].
 type Row struct {
 	ChildrenWidgets    []core.Widget
 	MainAxisAlignment  MainAxisAlignment
@@ -94,7 +142,37 @@ func (r Row) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Rende
 	}
 }
 
-// Column lays out children vertically.
+// Column lays out children vertically from top to bottom.
+//
+// Column is a flex container where the main axis is vertical. Children are
+// laid out in a single vertical run and do not wrap.
+//
+// # Sizing Behavior
+//
+// By default (MainAxisSizeMin), Column shrinks to fit its children. Set
+// MainAxisSizeMax to expand and fill available vertical space - this is
+// required when using [Expanded] children.
+//
+// # Alignment
+//
+// Use MainAxisAlignment to control vertical spacing (Start, End, Center,
+// SpaceBetween, SpaceAround, SpaceEvenly). Use CrossAxisAlignment to control
+// horizontal alignment (Start, End, Center, Stretch).
+//
+// # Flexible Children
+//
+// Wrap children in [Expanded] to make them share remaining space proportionally:
+//
+//	Column{
+//	    MainAxisSize: MainAxisSizeMax,
+//	    ChildrenWidgets: []core.Widget{
+//	        Text{Content: "Header"},
+//	        Expanded{ChildWidget: ListView{...}}, // Takes remaining space
+//	        Text{Content: "Footer"},
+//	    },
+//	}
+//
+// For horizontal layout, use [Row].
 type Column struct {
 	ChildrenWidgets    []core.Widget
 	MainAxisAlignment  MainAxisAlignment

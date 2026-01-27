@@ -6,8 +6,36 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// Expanded expands to fill all available space in the parent constraints.
-// When placed inside Row or Column, it consumes remaining space based on Flex.
+// Expanded makes its child fill all remaining space along the main axis of a
+// [Row] or [Column].
+//
+// After non-flexible children are laid out, remaining space is distributed among
+// Expanded children proportionally based on their Flex factor. The default Flex
+// is 1; set higher values to allocate more space to specific children.
+//
+// Important: The parent Row or Column must have MainAxisSizeMax for Expanded to
+// receive any space. With MainAxisSizeMin, there is no remaining space to fill.
+//
+// Example:
+//
+//	Row{
+//	    MainAxisSize: MainAxisSizeMax,
+//	    ChildrenWidgets: []core.Widget{
+//	        Icon{...},                                    // Fixed size
+//	        Expanded{ChildWidget: Text{Content: "..."}},  // Fills remaining space
+//	        Button{...},                                   // Fixed size
+//	    },
+//	}
+//
+// Example with different flex factors:
+//
+//	Row{
+//	    MainAxisSize: MainAxisSizeMax,
+//	    ChildrenWidgets: []core.Widget{
+//	        Expanded{Flex: 1, ChildWidget: panelA}, // Gets 1/3 of space
+//	        Expanded{Flex: 2, ChildWidget: panelB}, // Gets 2/3 of space
+//	    },
+//	}
 type Expanded struct {
 	ChildWidget core.Widget
 	Flex        int

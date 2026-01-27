@@ -12,14 +12,39 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// ScrollView provides scrollable content.
-// Use the Padding field to add padding inside the scroll area. For safe area
-// handling, use SafeAreaPadding(ctx) which can be combined with additional padding:
+// ScrollView provides scrollable content in a single direction.
+//
+// ScrollView wraps a single child widget and enables scrolling when the child
+// exceeds the viewport. It supports both vertical (default) and horizontal
+// scrolling via ScrollDirection.
+//
+// # Scroll Physics
+//
+// The Physics field controls scroll behavior:
+//   - [ClampingScrollPhysics] (default): Stops at edges, no overscroll
+//   - [BouncingScrollPhysics]: iOS-style bounce effect at edges
+//   - [NeverScrollableScrollPhysics]: Disables scrolling entirely
+//
+// # Scroll Controller
+//
+// Use a [ScrollController] to programmatically control or observe scroll position:
+//
+//	controller := &widgets.ScrollController{}
+//	controller.AddListener(func() {
+//	    fmt.Println("Offset:", controller.Offset())
+//	})
+//
+// # Safe Area Handling
+//
+// Use [SafeAreaPadding] for proper inset handling on devices with notches:
 //
 //	ScrollView{
 //	    Padding: widgets.SafeAreaPadding(ctx).Add(24),
-//	    ChildWidget: ...,
+//	    ChildWidget: content,
 //	}
+//
+// For scrollable lists, consider [ListView] or [ListViewBuilder] which provide
+// additional features like item-based layout and virtualization.
 type ScrollView struct {
 	ChildWidget core.Widget
 	// ScrollDirection is the axis along which the view scrolls.

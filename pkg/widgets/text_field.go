@@ -8,7 +8,30 @@ import (
 	"github.com/go-drift/drift/pkg/theme"
 )
 
-// TextField is a styled text input built on the native text input connection.
+// TextField is a Material Design styled text input that wraps [TextInput] and adds
+// support for labels, helper text, and error display.
+//
+// TextField applies theme-based styling automatically, including colors, borders,
+// border radius, padding, and typography from the current [theme.TextFieldTheme].
+// When ErrorText is set, the border color changes to the theme's error color.
+//
+// For form validation support, use [TextFormField] instead, which wraps TextField
+// and integrates with [Form] for validation, save, and reset operations.
+//
+// The Input field provides an escape hatch for accessing [TextInput] fields not
+// directly exposed by TextField. However, TextField's own fields always take
+// precedence over Input fields, so use TextField's fields for any shared options.
+//
+// Example:
+//
+//	controller := platform.NewTextEditingController("")
+//	TextField{
+//	    Controller:  controller,
+//	    Label:       "Email",
+//	    Placeholder: "you@example.com",
+//	    HelperText:  "We'll never share your email",
+//	    KeyboardType: platform.KeyboardTypeEmail,
+//	}
 type TextField struct {
 	// Controller manages the text content and selection.
 	Controller *platform.TextEditingController

@@ -9,7 +9,32 @@ import (
 	"github.com/go-drift/drift/pkg/theme"
 )
 
-// Button is a tappable button widget with customizable appearance.
+// Button is a tappable button widget with theme-aware styling and haptic feedback.
+//
+// Button uses colors from the current [theme.ButtonTheme] by default. Override
+// individual properties using the struct fields or fluent With* methods.
+//
+// Example using struct literal:
+//
+//	Button{
+//	    Label:    "Submit",
+//	    OnTap:    handleSubmit,
+//	    Color:    colors.Primary,
+//	    Disabled: !isValid,
+//	}
+//
+// Example using fluent builder pattern:
+//
+//	NewButton("Submit", handleSubmit).
+//	    WithColor(colors.Primary, colors.OnPrimary).
+//	    WithPadding(layout.EdgeInsetsSymmetric(32, 16)).
+//	    WithDisabled(!isValid)
+//
+// The button automatically provides:
+//   - Visual feedback on press (opacity change)
+//   - Haptic feedback on tap (configurable via Haptic field)
+//   - Accessibility support (label announced by screen readers)
+//   - Disabled state styling
 type Button struct {
 	// Label is the text displayed on the button.
 	Label string

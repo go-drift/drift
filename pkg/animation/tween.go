@@ -5,14 +5,20 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// Tween interpolates between begin and end values.
+// Tween interpolates between Begin and End values based on animation progress.
+//
+// Tween maps the 0-1 range of an [AnimationController] to any value range or type.
+// Use the helper constructors ([TweenFloat64], [TweenColor], [TweenOffset]) for
+// common types, or create custom tweens with a Lerp function.
+//
+// See ExampleTween and ExampleTween_customType for usage patterns.
 type Tween[T any] struct {
-	// Begin is the starting value of the interpolation.
+	// Begin is the starting value (when t = 0).
 	Begin T
-	// End is the ending value of the interpolation.
+	// End is the ending value (when t = 1).
 	End T
-	// Lerp is the interpolation function. It receives the begin value, end value,
-	// and a progress value t in the range [0, 1].
+	// Lerp linearly interpolates between Begin and End. Receives the begin value,
+	// end value, and progress t in [0, 1]. Returns the interpolated value.
 	Lerp func(a, b T, t float64) T
 }
 

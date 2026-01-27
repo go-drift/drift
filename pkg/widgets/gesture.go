@@ -7,7 +7,32 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// GestureDetector wraps a child with tap handling.
+// GestureDetector wraps a child widget with gesture recognition callbacks.
+//
+// GestureDetector supports multiple gesture types that can be used together:
+//   - Tap: Simple tap/click detection via OnTap
+//   - Pan: Free-form drag in any direction via OnPanStart/Update/End
+//   - Horizontal drag: Constrained horizontal drag via OnHorizontalDrag*
+//   - Vertical drag: Constrained vertical drag via OnVerticalDrag*
+//
+// Example (tap detection):
+//
+//	GestureDetector{
+//	    OnTap: func() { handleTap() },
+//	    ChildWidget: Container{Color: colors.Blue, ChildWidget: icon},
+//	}
+//
+// Example (draggable widget):
+//
+//	GestureDetector{
+//	    OnPanStart:  func(d DragStartDetails) { ... },
+//	    OnPanUpdate: func(d DragUpdateDetails) { ... },
+//	    OnPanEnd:    func(d DragEndDetails) { ... },
+//	    ChildWidget: draggableItem,
+//	}
+//
+// For simple tap handling on buttons, prefer [Button] or [InkWell] which
+// provide visual feedback. GestureDetector is best for custom gestures.
 type GestureDetector struct {
 	ChildWidget core.Widget
 	OnTap       func()

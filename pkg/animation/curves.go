@@ -1,26 +1,43 @@
 package animation
 
-// LinearCurve returns linear progress.
+// Easing curves transform linear animation progress into natural-feeling motion.
+//
+// Each curve is a function that takes a value t in [0, 1] and returns a
+// transformed value. Set an [AnimationController]'s Curve field to apply easing.
+//
+// Standard curves: [LinearCurve], [Ease], [EaseIn], [EaseOut], [EaseInOut].
+// Use [CubicBezier] to create custom curves matching CSS cubic-bezier().
+//
+// See ExampleCubicBezier for custom curve usage.
+
+// LinearCurve returns linear progress (no easing).
 func LinearCurve(t float64) float64 {
 	return t
 }
 
-// IOSNavigationCurve approximates iOS navigation easing.
+// IOSNavigationCurve approximates iOS navigation transition easing.
 var IOSNavigationCurve = CubicBezier(0.32, 0.72, 0.0, 1.0)
 
 // Ease is a standard cubic bezier curve for general-purpose easing.
+// Equivalent to CSS ease.
 var Ease = CubicBezier(0.25, 0.1, 0.25, 1.0)
 
-// EaseIn is a cubic bezier curve that starts slowly and accelerates.
+// EaseIn starts slowly and accelerates. Use for elements exiting the screen.
+// Equivalent to CSS ease-in.
 var EaseIn = CubicBezier(0.4, 0.0, 1.0, 1.0)
 
-// EaseOut is a cubic bezier curve that starts quickly and decelerates.
+// EaseOut starts quickly and decelerates. Use for elements entering the screen.
+// Equivalent to CSS ease-out.
 var EaseOut = CubicBezier(0.0, 0.0, 0.2, 1.0)
 
-// EaseInOut is a cubic bezier curve that starts and ends slowly.
+// EaseInOut starts and ends slowly with acceleration in the middle.
+// Use for elements that stay on screen but change state.
+// Equivalent to CSS ease-in-out.
 var EaseInOut = CubicBezier(0.4, 0.0, 0.2, 1.0)
 
-// CubicBezier returns a cubic-bezier easing function.
+// CubicBezier returns a cubic-bezier easing function matching CSS cubic-bezier().
+// The parameters define the two control points (x1,y1) and (x2,y2) of the curve.
+// The curve starts at (0,0) and ends at (1,1).
 func CubicBezier(x1, y1, x2, y2 float64) func(float64) float64 {
 	return func(t float64) float64 {
 		if t <= 0 {

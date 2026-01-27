@@ -6,7 +6,27 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// SizedBox constrains its child to a specific size.
+// SizedBox constrains its child to a specific width and/or height.
+//
+// When both Width and Height are set, SizedBox forces those exact dimensions
+// (constrained by parent). When only one dimension is set, the other uses
+// the child's intrinsic size.
+//
+// Common uses:
+//
+//	// Fixed-size box
+//	SizedBox{Width: 100, Height: 50, ChildWidget: child}
+//
+//	// Horizontal spacer in a Row
+//	SizedBox{Width: 16}
+//
+//	// Vertical spacer in a Column
+//	SizedBox{Height: 24}
+//
+//	// Force child to specific width only
+//	SizedBox{Width: 200, ChildWidget: textField}
+//
+// For convenience, use [HSpace] and [VSpace] helper functions for spacers.
 type SizedBox struct {
 	Width       float64
 	Height      float64

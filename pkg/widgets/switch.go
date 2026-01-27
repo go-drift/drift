@@ -9,7 +9,24 @@ import (
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
-// Switch uses native UISwitch (iOS) / SwitchCompat (Android).
+// Switch is a toggle control that uses native platform components
+// (UISwitch on iOS, SwitchCompat on Android).
+//
+// Switch is a controlled component - it displays the Value you provide and
+// calls OnChanged when toggled. To change the switch state, update Value in
+// your state in response to OnChanged.
+//
+// Example:
+//
+//	Switch{
+//	    Value: s.notificationsEnabled,
+//	    OnChanged: func(enabled bool) {
+//	        s.SetState(func() { s.notificationsEnabled = enabled })
+//	    },
+//	}
+//
+// The native implementation provides platform-appropriate animations and
+// haptic feedback automatically.
 type Switch struct {
 	// Value indicates the current on/off state.
 	Value bool

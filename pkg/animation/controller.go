@@ -5,20 +5,40 @@ import (
 )
 
 // AnimationStatus represents the current state of an animation.
+//
+// The status follows this state machine:
+//
+//	                Forward()
+//	Dismissed ──────────────────► Completed
+//	    ▲                              │
+//	    │         Reverse()            │
+//	    └──────────────────────────────┘
+//
+// While animating, status is AnimationForward or AnimationReverse.
+// When stopped, status is AnimationDismissed (at 0) or AnimationCompleted (at 1).
 type AnimationStatus int
 
 const (
-	// AnimationDismissed means the animation is at 0.0.
+	// AnimationDismissed means the animation is stopped at the lower bound (0.0).
 	AnimationDismissed AnimationStatus = iota
-	// AnimationForward means the animation is playing toward 1.0.
+	// AnimationForward means the animation is playing toward the upper bound (1.0).
 	AnimationForward
-	// AnimationReverse means the animation is playing toward 0.0.
+	// AnimationReverse means the animation is playing toward the lower bound (0.0).
 	AnimationReverse
-	// AnimationCompleted means the animation is at 1.0.
+	// AnimationCompleted means the animation is stopped at the upper bound (1.0).
 	AnimationCompleted
 )
 
-// AnimationController drives an animation over time.
+// AnimationController drives an animation by producing values over time.
+//
+// The controller manages a Value that progresses from LowerBound (default 0.0)
+// to UpperBound (default 1.0) over the specified Duration. The Curve function
+// transforms linear progress into eased motion.
+//
+// Use [Tween] to map the 0-1 value to other ranges or types like colors or sizes.
+//
+// Always call Dispose when done to stop the animation and release resources.
+// See ExampleAnimationController for usage patterns.
 type AnimationController struct {
 	// Value is the current animation value, ranging from 0.0 to 1.0.
 	Value float64

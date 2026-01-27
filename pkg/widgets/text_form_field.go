@@ -7,8 +7,45 @@ import (
 	"github.com/go-drift/drift/pkg/rendering"
 )
 
-// TextFormField is a text input that integrates with Form for validation.
-// It wraps TextField and implements form field behavior directly.
+// TextFormField is a form-aware text input that wraps [TextField] and integrates
+// with [Form] for validation, save, and reset operations.
+//
+// TextFormField automatically registers with the nearest ancestor [Form] widget
+// and participates in form-wide validation, save, and reset operations. It manages
+// its own internal controller if none is provided.
+//
+// Validation behavior:
+//   - When Autovalidate is true on the field, or on the parent Form, the Validator
+//     function is called whenever the field value changes after user interaction.
+//   - Disabled fields skip validation entirely.
+//   - Call FormState.Validate() to validate all fields at once (e.g., on submit).
+//
+// Controller vs InitialValue:
+//   - If Controller is provided, it is the source of truth and InitialValue is ignored.
+//   - If no Controller is provided, TextFormField creates an internal controller
+//     initialized with InitialValue.
+//
+// Example:
+//
+//	Form{
+//	    ChildWidget: Column{
+//	        Children: []core.Widget{
+//	            TextFormField{
+//	                Label:       "Username",
+//	                Placeholder: "Enter username",
+//	                Validator: func(value string) string {
+//	                    if len(value) < 3 {
+//	                        return "Username must be at least 3 characters"
+//	                    }
+//	                    return ""
+//	                },
+//	                OnSaved: func(value string) {
+//	                    // Called when FormState.Save() is invoked
+//	                },
+//	            },
+//	        },
+//	    },
+//	}
 type TextFormField struct {
 	// Controller manages the text content and selection.
 	// If provided, it is the source of truth and InitialValue is ignored.

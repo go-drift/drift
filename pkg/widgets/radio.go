@@ -10,7 +10,32 @@ import (
 	"github.com/go-drift/drift/pkg/theme"
 )
 
-// Radio renders a single radio button in a group.
+// Radio renders a single radio button that is part of a mutually exclusive group.
+//
+// Radio is a generic widget where T is the type of the selection value. Each Radio
+// in a group has its own Value, and all share the same GroupValue (the current
+// selection). When a Radio is tapped, OnChanged is called with that Radio's Value.
+//
+// Example (string values):
+//
+//	var selected string = "small"
+//
+//	Column{ChildrenWidgets: []core.Widget{
+//	    Row{ChildrenWidgets: []core.Widget{
+//	        Radio[string]{Value: "small", GroupValue: selected, OnChanged: onSelect},
+//	        Text{Content: "Small"},
+//	    }},
+//	    Row{ChildrenWidgets: []core.Widget{
+//	        Radio[string]{Value: "medium", GroupValue: selected, OnChanged: onSelect},
+//	        Text{Content: "Medium"},
+//	    }},
+//	    Row{ChildrenWidgets: []core.Widget{
+//	        Radio[string]{Value: "large", GroupValue: selected, OnChanged: onSelect},
+//	        Text{Content: "Large"},
+//	    }},
+//	}}
+//
+// The radio automatically uses colors from the current [theme.RadioTheme].
 type Radio[T any] struct {
 	// Value is the value for this radio.
 	Value T

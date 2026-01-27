@@ -23,7 +23,31 @@ type DropdownItem[T any] struct {
 	Disabled bool
 }
 
-// Dropdown displays a menu of selectable items.
+// Dropdown displays a button that opens a menu of selectable items.
+//
+// Dropdown is a generic widget where T is the type of the selection value.
+// When an item is selected, OnChanged is called with the selected item's Value.
+//
+// Example:
+//
+//	Dropdown[string]{
+//	    Value: selectedCountry,
+//	    Hint:  "Select a country",
+//	    Items: []widgets.DropdownItem[string]{
+//	        {Value: "us", Label: "United States"},
+//	        {Value: "ca", Label: "Canada"},
+//	        {Value: "mx", Label: "Mexico"},
+//	    },
+//	    OnChanged: func(value string) {
+//	        s.SetState(func() { s.selectedCountry = value })
+//	    },
+//	}
+//
+// Each [DropdownItem] can have a custom Child widget instead of a text Label.
+// Items can be individually disabled by setting Disabled: true.
+//
+// The dropdown uses theme colors by default but supports full customization
+// of colors, borders, and text styling.
 type Dropdown[T any] struct {
 	// Value is the current selected value.
 	Value T

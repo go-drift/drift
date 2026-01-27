@@ -149,3 +149,211 @@ func ExampleManagedState() {
 	// Initial: 0
 	// After update: 10
 }
+
+// This example shows how to create a stateless widget.
+func ExampleStatelessWidget() {
+	// A stateless widget is a struct that implements StatelessWidget.
+	// It builds UI based purely on its configuration (struct fields).
+	//
+	// type Greeting struct {
+	//     Name string
+	// }
+	//
+	// func (g Greeting) Build(ctx core.BuildContext) core.Widget {
+	//     return widgets.Text{Content: "Hello, " + g.Name}
+	// }
+	//
+	// func (g Greeting) CreateElement() core.Element {
+	//     return core.NewStatelessElement(g, nil)
+	// }
+	//
+	// func (g Greeting) Key() any { return nil }
+	//
+	// Usage:
+	//     Greeting{Name: "World"}
+}
+
+// This example shows how to create a stateful widget.
+func ExampleStatefulWidget() {
+	// A stateful widget maintains mutable state across rebuilds.
+	//
+	// type Counter struct{}
+	//
+	// func (c Counter) CreateElement() core.Element {
+	//     return core.NewStatefulElement(c, nil)
+	// }
+	//
+	// func (c Counter) Key() any { return nil }
+	//
+	// func (c Counter) CreateState() core.State {
+	//     return &counterState{}
+	// }
+	//
+	// type counterState struct {
+	//     element *core.StatefulElement
+	//     count   int
+	// }
+	//
+	// func (s *counterState) SetElement(e *core.StatefulElement) {
+	//     s.element = e
+	// }
+	//
+	// func (s *counterState) InitState() { s.count = 0 }
+	//
+	// func (s *counterState) Build(ctx core.BuildContext) core.Widget {
+	//     return widgets.Button{
+	//         Label: fmt.Sprintf("Count: %d", s.count),
+	//         OnTap: func() {
+	//             s.SetState(func() { s.count++ })
+	//         },
+	//     }
+	// }
+	//
+	// func (s *counterState) SetState(fn func()) {
+	//     if fn != nil { fn() }
+	//     if s.element != nil { s.element.MarkNeedsBuild() }
+	// }
+	//
+	// func (s *counterState) Dispose() {}
+	// func (s *counterState) DidChangeDependencies() {}
+	// func (s *counterState) DidUpdateWidget(old core.StatefulWidget) {}
+}
+
+// This example shows how to create and use an inherited widget.
+func ExampleInheritedWidget() {
+	// InheritedWidget provides data to descendants without prop drilling.
+	// For simple cases, use InheritedProvider instead of implementing directly.
+	//
+	// Using InheritedProvider (recommended for simple cases):
+	//
+	//     type UserState struct {
+	//         Name  string
+	//         Email string
+	//     }
+	//
+	//     // Provide data to descendants
+	//     core.InheritedProvider[*UserState]{
+	//         Value:       &UserState{Name: "Alice", Email: "alice@example.com"},
+	//         ChildWidget: MyApp{},
+	//     }
+	//
+	//     // Access data in a descendant's Build method
+	//     func (w MyWidget) Build(ctx core.BuildContext) core.Widget {
+	//         if user, ok := core.ProviderOf[*UserState](ctx); ok {
+	//             return widgets.Text{Content: "Hello, " + user.Name}
+	//         }
+	//         return widgets.Text{Content: "Not logged in"}
+	//     }
+}
+
+// This example shows how to use UseController for automatic disposal.
+func ExampleUseController() {
+	// UseController creates a controller and registers it for automatic disposal.
+	// Call it in InitState, not Build.
+	//
+	// func (s *myState) InitState() {
+	//     s.animation = core.UseController(&s.StateBase, func() *animation.AnimationController {
+	//         return animation.NewAnimationController(300 * time.Millisecond)
+	//     })
+	//     // No need to manually dispose - it's cleaned up automatically
+	// }
+}
+
+// This example shows how to use UseListenable for reactive updates.
+func ExampleUseListenable() {
+	// UseListenable subscribes to a Listenable and triggers rebuilds.
+	// The subscription is automatically cleaned up on dispose.
+	//
+	// func (s *myState) InitState() {
+	//     s.controller = core.UseController(&s.StateBase, func() *MyController {
+	//         return NewMyController()
+	//     })
+	//     core.UseListenable(&s.StateBase, s.controller)
+	// }
+	//
+	// func (s *myState) Build(ctx core.BuildContext) core.Widget {
+	//     // This rebuilds whenever controller.NotifyListeners() is called
+	//     return widgets.Text{Content: s.controller.DisplayValue()}
+	// }
+}
+
+// This example shows how to use UseObservable for reactive state.
+func ExampleUseObservable() {
+	// UseObservable subscribes to an Observable and triggers rebuilds.
+	// Call it once in InitState, not in Build.
+	//
+	// func (s *myState) InitState() {
+	//     s.counter = core.NewObservable(0)
+	//     core.UseObservable(&s.StateBase, s.counter)
+	// }
+	//
+	// func (s *myState) Build(ctx core.BuildContext) core.Widget {
+	//     // Use .Value() in Build to read the current value
+	//     return widgets.Text{Content: fmt.Sprintf("Count: %d", s.counter.Value())}
+	// }
+	//
+	// // Update from anywhere - triggers rebuild automatically
+	// s.counter.Set(s.counter.Value() + 1)
+}
+
+// This example shows how to create a custom controller.
+func ExampleControllerBase() {
+	// Embed ControllerBase to get listener management for free.
+	//
+	// type ScrollController struct {
+	//     core.ControllerBase
+	//     offset float64
+	// }
+	//
+	// func NewScrollController() *ScrollController {
+	//     return &ScrollController{offset: 0}
+	// }
+	//
+	// func (c *ScrollController) SetOffset(offset float64) {
+	//     c.offset = offset
+	//     c.NotifyListeners() // Triggers all listeners
+	// }
+	//
+	// func (c *ScrollController) Offset() float64 {
+	//     return c.offset
+	// }
+	//
+	// Usage in InitState:
+	//     s.scroll = core.UseController(&s.StateBase, NewScrollController)
+	//     core.UseListenable(&s.StateBase, s.scroll)
+
+	controller := &core.ControllerBase{}
+	unsub := controller.AddListener(func() {
+		fmt.Println("Controller notified")
+	})
+	controller.NotifyListeners()
+	unsub()
+	controller.Dispose()
+
+	// Output:
+	// Controller notified
+}
+
+// This example shows how to use StatefulBuilder for inline stateful widgets.
+func ExampleStatefulBuilder() {
+	// StatefulBuilder provides a declarative way to create stateful widgets
+	// without defining separate types for the widget and state.
+	//
+	// widget := core.StatefulBuilder[int]{
+	//     Init: func() int { return 0 },
+	//     Build: func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
+	//         return widgets.GestureDetector{
+	//             OnTap: func() {
+	//                 setState(func(c int) int { return c + 1 })
+	//             },
+	//             ChildWidget: widgets.Text{Content: fmt.Sprintf("Count: %d", count)},
+	//         }
+	//     },
+	//     Dispose: func(count int) {
+	//         // Optional: cleanup when removed from tree
+	//     },
+	// }.Widget()
+	//
+	// The generic parameter [int] is the state type. setState takes a
+	// function that transforms the current state to a new state.
+}

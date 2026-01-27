@@ -10,7 +10,25 @@ import (
 // not just specific aspects. Used when DependOnInherited is called with nil aspect.
 var dependOnAllAspects = &struct{}{}
 
-// InheritedElement hosts an InheritedWidget and tracks dependents.
+// InheritedElement is the element that hosts an [InheritedWidget] and manages
+// the dependency tracking for descendant widgets.
+//
+// When a descendant calls [BuildContext.DependOnInherited], it registers as a
+// dependent of this element. When the InheritedWidget is updated and
+// [InheritedWidget.UpdateShouldNotify] returns true, all registered dependents
+// are notified and scheduled for rebuild.
+//
+// # Aspect-Based Tracking
+//
+// InheritedElement supports granular dependency tracking via aspects. When a
+// dependent registers with a specific aspect (non-nil), it's stored in that
+// dependent's aspect set. On update, [InheritedWidget.UpdateShouldNotifyDependent]
+// is called for each dependent to determine if it should rebuild based on its
+// registered aspects.
+//
+// Note: Aspect sets only grow during an element's lifetime. If a widget stops
+// depending on an aspect across rebuilds, the old aspect remains registered.
+// This may cause extra rebuilds but is safe (over-notification, not under).
 type InheritedElement struct {
 	elementBase
 	child      Element

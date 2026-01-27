@@ -9,7 +9,37 @@ import (
 	"github.com/go-drift/drift/pkg/theme"
 )
 
-// Checkbox displays a toggleable check control.
+// Checkbox displays a toggleable check control with theme-aware styling.
+//
+// Checkbox is a controlled component - it displays the Value you provide and
+// calls OnChanged when tapped. To toggle the checkbox, update Value in your
+// state in response to OnChanged.
+//
+// Example:
+//
+//	Checkbox{
+//	    Value: isChecked,
+//	    OnChanged: func(checked bool) {
+//	        s.SetState(func() { s.isChecked = checked })
+//	    },
+//	}
+//
+// For form integration with validation, wrap in a [FormField]:
+//
+//	FormField[bool]{
+//	    InitialValue: false,
+//	    Validator: func(v bool) string {
+//	        if !v { return "Must accept terms" }
+//	        return ""
+//	    },
+//	    Builder: func(state *FormFieldState[bool]) core.Widget {
+//	        return Checkbox{Value: state.Value(), OnChanged: state.DidChange}
+//	    },
+//	}
+//
+// The checkbox automatically uses colors from the current [theme.CheckboxTheme].
+// Override individual colors using the ActiveColor, CheckColor, BorderColor,
+// and BackgroundColor fields.
 type Checkbox struct {
 	// Value indicates whether the checkbox is checked.
 	Value bool

@@ -6,7 +6,49 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 )
 
-// Form groups form fields and provides validation helpers.
+// Form is a container widget that groups form fields and provides coordinated
+// validation, save, and reset operations.
+//
+// Form works with form field widgets that implement the formFieldState interface,
+// such as [TextFormField] and [FormField]. These fields automatically register
+// with the nearest ancestor Form when built.
+//
+// Use [FormOf] to obtain the [FormState] from a build context, then call its
+// methods to interact with the form:
+//   - Validate() validates all registered fields and returns true if all pass
+//   - Save() calls OnSaved on all registered fields
+//   - Reset() resets all fields to their initial values
+//
+// Autovalidate behavior:
+//   - When Autovalidate is true, individual fields validate themselves when their
+//     value changes (after user interaction).
+//   - This does NOT validate untouched fields, avoiding premature error display.
+//   - Call Validate() explicitly to validate all fields (e.g., on form submission).
+//
+// Example:
+//
+//	var formState *widgets.FormState
+//
+//	Form{
+//	    Autovalidate: true,
+//	    OnChanged: func() {
+//	        // Called when any field changes
+//	    },
+//	    ChildWidget: Column{
+//	        Children: []core.Widget{
+//	            TextFormField{Label: "Email", Validator: validateEmail},
+//	            TextFormField{Label: "Password", Obscure: true},
+//	            Button{
+//	                Child: Text{Content: "Submit"},
+//	                OnPressed: func() {
+//	                    if formState.Validate() {
+//	                        formState.Save()
+//	                    }
+//	                },
+//	            },
+//	        },
+//	    },
+//	}
 type Form struct {
 	// ChildWidget is the form content.
 	ChildWidget core.Widget
@@ -28,7 +70,19 @@ func (f Form) CreateState() core.State {
 	return &FormState{}
 }
 
-// FormState manages the state of a Form widget.
+// FormState manages the state of a [Form] widget and provides methods to
+// interact with all registered form fields.
+//
+// Obtain a FormState using [FormOf] from within a build context, or by storing
+// a reference when building the form.
+//
+// Methods:
+//   - Validate() bool: Validates all fields and returns true if all pass.
+//   - Save(): Calls OnSaved on all fields (typically after successful validation).
+//   - Reset(): Resets all fields to their initial values and clears errors.
+//
+// FormState tracks a generation counter that increments on validation, reset,
+// and field changes, triggering rebuilds of dependent widgets.
 type FormState struct {
 	element       *core.StatefulElement
 	fields        map[formFieldState]struct{}
@@ -141,7 +195,26 @@ func (s *FormState) bumpGeneration() {
 	})
 }
 
-// FormOf returns the closest FormState in the widget tree.
+// FormOf returns the [FormState] of the nearest ancestor [Form] widget,
+// or nil if there is no Form ancestor.
+//
+// Form fields like [TextFormField] use this internally to register with their
+// parent form. You can also use it to obtain the FormState for calling
+// Validate, Save, or Reset.
+//
+// Example:
+//
+//	func (s *myWidgetState) Build(ctx core.BuildContext) core.Widget {
+//	    formState := widgets.FormOf(ctx)
+//	    return Button{
+//	        Child: Text{Content: "Submit"},
+//	        OnPressed: func() {
+//	            if formState != nil && formState.Validate() {
+//	                formState.Save()
+//	            }
+//	        },
+//	    }
+//	}
 func FormOf(ctx core.BuildContext) *FormState {
 	inherited := ctx.DependOnInherited(formScopeType, nil)
 	if inherited == nil {
@@ -192,7 +265,43 @@ func (f formScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, a
 
 var formScopeType = reflect.TypeOf(formScope{})
 
-// FormField builds a field that integrates with a Form.
+// FormField is a generic form field widget for building custom form inputs
+// that integrate with [Form] for validation, save, and reset operations.
+//
+// Unlike [TextFormField] which is specialized for text input, FormField[T]
+// can wrap any input widget type and manage values of any type T.
+//
+// The Builder function receives the [FormFieldState] and should return a widget
+// that displays the current value and calls DidChange when the value changes.
+//
+// Example (custom checkbox field):
+//
+//	FormField[bool]{
+//	    InitialValue: false,
+//	    Validator: func(checked bool) string {
+//	        if !checked {
+//	            return "You must accept the terms"
+//	        }
+//	        return ""
+//	    },
+//	    Builder: func(state *widgets.FormFieldState[bool]) core.Widget {
+//	        return Row{
+//	            Children: []core.Widget{
+//	                Checkbox{
+//	                    Value: state.Value(),
+//	                    OnChanged: func(v bool) { state.DidChange(v) },
+//	                },
+//	                Text{Content: "I accept the terms"},
+//	                if state.HasError() {
+//	                    Text{Content: state.ErrorText(), Style: errorStyle},
+//	                },
+//	            },
+//	        }
+//	    },
+//	    OnSaved: func(checked bool) {
+//	        // Called when FormState.Save() is invoked
+//	    },
+//	}
 type FormField[T any] struct {
 	// InitialValue is the field's starting value.
 	InitialValue T
@@ -222,7 +331,17 @@ func (f FormField[T]) CreateState() core.State {
 	return &FormFieldState[T]{}
 }
 
-// FormFieldState stores mutable state for a FormField.
+// FormFieldState stores the mutable state for a [FormField] and provides methods
+// for querying and updating the field value.
+//
+// Methods:
+//   - Value() T: Returns the current field value.
+//   - ErrorText() string: Returns the current validation error message, or empty string.
+//   - HasError() bool: Returns true if there is a validation error.
+//   - DidChange(T): Call this when the field value changes to update state and trigger validation.
+//   - Validate() bool: Runs the validator and returns true if valid.
+//   - Save(): Calls the OnSaved callback with the current value.
+//   - Reset(): Resets to InitialValue and clears errors.
 type FormFieldState[T any] struct {
 	element         *core.StatefulElement
 	value           T

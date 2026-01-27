@@ -8,6 +8,24 @@ import (
 )
 
 // ListView displays a scrollable list of widgets.
+//
+// ListView wraps its children in a [ScrollView] with either a [Row] or [Column]
+// depending on ScrollDirection. All children are built immediately, making it
+// suitable for small lists with a known number of items.
+//
+// For large lists or dynamic content, use [ListViewBuilder] which builds children
+// on demand and supports virtualization for better performance.
+//
+// Example:
+//
+//	ListView{
+//	    Padding: layout.EdgeInsetsAll(16),
+//	    ChildrenWidgets: []core.Widget{
+//	        ListTile{Title: "Item 1"},
+//	        ListTile{Title: "Item 2"},
+//	        ListTile{Title: "Item 3"},
+//	    },
+//	}
 type ListView struct {
 	// ChildrenWidgets are the widgets to display in the list.
 	ChildrenWidgets []core.Widget
@@ -25,7 +43,31 @@ type ListView struct {
 	MainAxisSize MainAxisSize
 }
 
-// ListViewBuilder builds children on demand for the list.
+// ListViewBuilder builds list items on demand for efficient scrolling of large lists.
+//
+// Unlike [ListView] which builds all children upfront, ListViewBuilder only builds
+// widgets for visible items plus a cache region, making it suitable for lists with
+// hundreds or thousands of items.
+//
+// # Virtualization
+//
+// For virtualization to work, ItemExtent must be set to a fixed height (or width
+// for horizontal lists). This allows the list to calculate which items are visible
+// without building all items. If ItemExtent is 0, all items are built immediately.
+//
+// CacheExtent controls how many pixels beyond the visible area are pre-built,
+// reducing flicker during fast scrolling.
+//
+// Example:
+//
+//	ListViewBuilder{
+//	    ItemCount:   1000,
+//	    ItemExtent:  56, // Fixed height per item enables virtualization
+//	    CacheExtent: 200, // Pre-build 200px beyond visible area
+//	    ItemBuilder: func(ctx core.BuildContext, index int) core.Widget {
+//	        return ListTile{Title: fmt.Sprintf("Item %d", index)}
+//	    },
+//	}
 type ListViewBuilder struct {
 	// ItemCount is the total number of items in the list.
 	ItemCount int
