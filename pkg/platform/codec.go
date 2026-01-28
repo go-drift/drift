@@ -1,6 +1,3 @@
-// Package platform provides platform channel communication between Go and native code.
-// It enables Go code to call native APIs (clipboard, haptics, etc.) and receive
-// events from the native platform (lifecycle changes, sensor data, etc.).
 package platform
 
 import (

@@ -1,5 +1,3 @@
-// Package engine provides the core rendering logic for the Drift framework.
-// It renders a widget tree into backend-specific surfaces consumed by native embedders.
 package engine
 
 // PointerPhase represents the phase of a pointer/touch event.
