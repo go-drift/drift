@@ -92,6 +92,15 @@ func (c *recordingCanvas) SaveLayerAlpha(bounds Rect, alpha float64) {
 	c.recorder.append(opSaveLayerAlpha{bounds: bounds, alpha: alpha})
 }
 
+func (c *recordingCanvas) SaveLayer(bounds Rect, paint *Paint) {
+	var paintCopy *Paint
+	if paint != nil {
+		p := *paint
+		paintCopy = &p
+	}
+	c.recorder.append(opSaveLayer{bounds: bounds, paint: paintCopy})
+}
+
 func (c *recordingCanvas) Restore() {
 	c.recorder.append(opRestore{})
 }
@@ -114,6 +123,10 @@ func (c *recordingCanvas) ClipRect(rect Rect) {
 
 func (c *recordingCanvas) ClipRRect(rrect RRect) {
 	c.recorder.append(opClipRRect{rrect: rrect})
+}
+
+func (c *recordingCanvas) ClipPath(path *Path, op ClipOp, antialias bool) {
+	c.recorder.append(opClipPath{path: deepCopyPath(path), op: op, antialias: antialias})
 }
 
 func (c *recordingCanvas) Clear(color Color) {
@@ -149,7 +162,7 @@ func (c *recordingCanvas) DrawImageRect(img image.Image, srcRect, dstRect Rect, 
 }
 
 func (c *recordingCanvas) DrawPath(path *Path, paint Paint) {
-	c.recorder.append(opPath{path: path, paint: paint})
+	c.recorder.append(opPath{path: deepCopyPath(path), paint: paint})
 }
 
 func (c *recordingCanvas) DrawRectShadow(rect Rect, shadow BoxShadow) {
@@ -197,6 +210,15 @@ func (op opSaveLayerAlpha) execute(canvas Canvas) {
 	canvas.SaveLayerAlpha(op.bounds, op.alpha)
 }
 
+type opSaveLayer struct {
+	bounds Rect
+	paint  *Paint
+}
+
+func (op opSaveLayer) execute(canvas Canvas) {
+	canvas.SaveLayer(op.bounds, op.paint)
+}
+
 type opRestore struct{}
 
 func (opRestore) execute(canvas Canvas) {
@@ -241,6 +263,16 @@ type opClipRRect struct {
 
 func (op opClipRRect) execute(canvas Canvas) {
 	canvas.ClipRRect(op.rrect)
+}
+
+type opClipPath struct {
+	path      *Path
+	op        ClipOp
+	antialias bool
+}
+
+func (op opClipPath) execute(canvas Canvas) {
+	canvas.ClipPath(op.path, op.op, op.antialias)
 }
 
 type opClear struct {
@@ -372,4 +404,23 @@ type opSVGTinted struct {
 
 func (op opSVGTinted) execute(canvas Canvas) {
 	canvas.DrawSVGTinted(op.svgPtr, op.bounds, op.tintColor)
+}
+
+// deepCopyPath creates a fully independent copy of a Path, including all
+// command arguments. Returns nil if path is nil.
+func deepCopyPath(path *Path) *Path {
+	if path == nil {
+		return nil
+	}
+	pathCopy := &Path{
+		Commands: make([]PathCommand, len(path.Commands)),
+		FillRule: path.FillRule,
+	}
+	for i, cmd := range path.Commands {
+		pathCopy.Commands[i] = PathCommand{
+			Op:   cmd.Op,
+			Args: append([]float64(nil), cmd.Args...),
+		}
+	}
+	return pathCopy
 }

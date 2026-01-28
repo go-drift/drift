@@ -1,33 +1,40 @@
 package rendering
 
-// PathOp represents a path operation type.
+// PathOp represents a path drawing operation type.
 type PathOp int
 
 const (
-	PathOpMoveTo PathOp = iota
-	PathOpLineTo
-	PathOpQuadTo
-	PathOpCubicTo
-	PathOpClose
+	PathOpMoveTo  PathOp = iota // Start new subpath at point (x, y)
+	PathOpLineTo                // Draw line to point (x, y)
+	PathOpQuadTo                // Draw quadratic curve to (x2, y2) via control (x1, y1)
+	PathOpCubicTo               // Draw cubic curve to (x3, y3) via controls (x1, y1), (x2, y2)
+	PathOpClose                 // Close subpath with line to start point
 )
 
-// PathFillRule represents the fill rule for a path.
+// PathFillRule determines how path interiors are calculated for filling.
 type PathFillRule int
 
 const (
-	// FillRuleNonZero uses the nonzero winding rule.
+	// FillRuleNonZero fills regions with nonzero winding count.
+	// A point is inside if a ray from it crosses more left-to-right edges
+	// than right-to-left edges (or vice versa).
 	FillRuleNonZero PathFillRule = iota
-	// FillRuleEvenOdd uses the even-odd rule (for paths with holes).
+
+	// FillRuleEvenOdd fills regions crossed an odd number of times.
+	// Useful for creating holes: nested shapes alternate between filled/unfilled.
 	FillRuleEvenOdd
 )
 
-// PathCommand represents a single path command with its arguments.
+// PathCommand represents a single path operation with its coordinate arguments.
 type PathCommand struct {
-	Op   PathOp
-	Args []float64
+	Op   PathOp    // The operation type
+	Args []float64 // Coordinates: MoveTo/LineTo=[x,y], QuadTo=[x1,y1,x2,y2], CubicTo=[x1,y1,x2,y2,x3,y3]
 }
 
-// Path represents a vector path consisting of move, line, and curve commands.
+// Path represents a vector path for drawing or clipping arbitrary shapes.
+//
+// Build paths using MoveTo, LineTo, QuadTo, CubicTo, and Close methods.
+// Use with Canvas.DrawPath to stroke/fill, or Canvas.ClipPath to clip.
 type Path struct {
 	Commands []PathCommand
 	FillRule PathFillRule

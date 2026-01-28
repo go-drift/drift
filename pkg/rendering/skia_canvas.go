@@ -48,6 +48,34 @@ func paintParams(paint Paint) (cap, join int32, miter float32, dash []float32, d
 	return
 }
 
+// buildSkiaPath converts a rendering.Path to a skia.Path.
+// Returns nil if path is nil or empty. Caller must call Destroy() on non-nil result.
+func buildSkiaPath(path *Path) *skia.Path {
+	if path == nil || path.IsEmpty() {
+		return nil
+	}
+	fillType := skia.FillTypeWinding
+	if path.FillRule == FillRuleEvenOdd {
+		fillType = skia.FillTypeEvenOdd
+	}
+	skPath := skia.NewPath(fillType)
+	for _, cmd := range path.Commands {
+		switch cmd.Op {
+		case PathOpMoveTo:
+			skPath.MoveTo(float32(cmd.Args[0]), float32(cmd.Args[1]))
+		case PathOpLineTo:
+			skPath.LineTo(float32(cmd.Args[0]), float32(cmd.Args[1]))
+		case PathOpQuadTo:
+			skPath.QuadTo(float32(cmd.Args[0]), float32(cmd.Args[1]), float32(cmd.Args[2]), float32(cmd.Args[3]))
+		case PathOpCubicTo:
+			skPath.CubicTo(float32(cmd.Args[0]), float32(cmd.Args[1]), float32(cmd.Args[2]), float32(cmd.Args[3]), float32(cmd.Args[4]), float32(cmd.Args[5]))
+		case PathOpClose:
+			skPath.Close()
+		}
+	}
+	return skPath
+}
+
 // SkiaCanvas implements Canvas using the Skia backend.
 type SkiaCanvas struct {
 	canvas unsafe.Pointer
@@ -75,6 +103,28 @@ func (c *SkiaCanvas) SaveLayerAlpha(bounds Rect, alpha float64) {
 	}
 	alpha8 := uint8(alpha * 255)
 	skia.CanvasSaveLayerAlpha(c.canvas, float32(bounds.Left), float32(bounds.Top), float32(bounds.Right), float32(bounds.Bottom), alpha8)
+}
+
+func (c *SkiaCanvas) SaveLayer(bounds Rect, paint *Paint) {
+	if paint == nil {
+		skia.CanvasSave(c.canvas)
+		return
+	}
+	// Extract blend mode with default
+	blend := int32(paint.BlendMode)
+	if blend < 0 || blend > int32(BlendModeLuminosity) {
+		blend = int32(BlendModeSrcOver)
+	}
+	// Extract alpha with default
+	alpha := float32(paint.Alpha)
+	if !(alpha >= 0 && alpha <= 1) {
+		alpha = 1.0
+	}
+	skia.CanvasSaveLayer(
+		c.canvas,
+		float32(bounds.Left), float32(bounds.Top), float32(bounds.Right), float32(bounds.Bottom),
+		blend, alpha,
+	)
 }
 
 func (c *SkiaCanvas) Restore() {
@@ -113,6 +163,21 @@ func (c *SkiaCanvas) ClipRRect(rrect RRect) {
 		float32(rrect.BottomLeft.X),
 		float32(rrect.BottomLeft.Y),
 	)
+}
+
+func (c *SkiaCanvas) ClipPath(path *Path, op ClipOp, antialias bool) {
+	skPath := buildSkiaPath(path)
+	if skPath == nil {
+		// Empty or nil path: create an empty Skia path and let Skia handle it.
+		// Intersect with empty = empty clip; Difference with empty = unchanged.
+		fillType := skia.FillTypeWinding
+		if path != nil && path.FillRule == FillRuleEvenOdd {
+			fillType = skia.FillTypeEvenOdd
+		}
+		skPath = skia.NewPath(fillType)
+	}
+	defer skPath.Destroy()
+	skia.CanvasClipPath(c.canvas, skPath, int32(op), antialias)
 }
 
 func (c *SkiaCanvas) Clear(color Color) {
@@ -372,30 +437,11 @@ func (c *SkiaCanvas) DrawImageRect(img image.Image, srcRect, dstRect Rect, quali
 }
 
 func (c *SkiaCanvas) DrawPath(path *Path, paint Paint) {
-	if path == nil || path.IsEmpty() {
+	skPath := buildSkiaPath(path)
+	if skPath == nil {
 		return
 	}
-	fillType := skia.FillTypeWinding
-	if path.FillRule == FillRuleEvenOdd {
-		fillType = skia.FillTypeEvenOdd
-	}
-	skPath := skia.NewPath(fillType)
 	defer skPath.Destroy()
-
-	for _, cmd := range path.Commands {
-		switch cmd.Op {
-		case PathOpMoveTo:
-			skPath.MoveTo(float32(cmd.Args[0]), float32(cmd.Args[1]))
-		case PathOpLineTo:
-			skPath.LineTo(float32(cmd.Args[0]), float32(cmd.Args[1]))
-		case PathOpQuadTo:
-			skPath.QuadTo(float32(cmd.Args[0]), float32(cmd.Args[1]), float32(cmd.Args[2]), float32(cmd.Args[3]))
-		case PathOpCubicTo:
-			skPath.CubicTo(float32(cmd.Args[0]), float32(cmd.Args[1]), float32(cmd.Args[2]), float32(cmd.Args[3]), float32(cmd.Args[4]), float32(cmd.Args[5]))
-		case PathOpClose:
-			skPath.Close()
-		}
-	}
 
 	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
 	if payload, ok := buildGradientPayload(paint.Gradient); ok {

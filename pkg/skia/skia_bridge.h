@@ -46,6 +46,18 @@ void drift_skia_canvas_clip_rrect(
     float rx4,
     float ry4
 );
+void drift_skia_canvas_clip_path(
+    DriftSkiaCanvas canvas,
+    DriftSkiaPath path,
+    int clip_op,
+    int antialias
+);
+void drift_skia_canvas_save_layer(
+    DriftSkiaCanvas canvas,
+    float l, float t, float r, float b,
+    int blend_mode,
+    float alpha
+);
 void drift_skia_canvas_clear(DriftSkiaCanvas canvas, uint32_t argb);
 void drift_skia_canvas_draw_rect(
     DriftSkiaCanvas canvas, float l, float t, float r, float b,

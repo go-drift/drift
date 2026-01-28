@@ -112,6 +112,17 @@ func CanvasClipRRect(
 ) {
 }
 
+// CanvasClipPath clips the canvas to an arbitrary path.
+func CanvasClipPath(canvas unsafe.Pointer, path *Path, clipOp int32, antialias bool) {}
+
+// CanvasSaveLayer saves a layer with blend mode and alpha compositing.
+func CanvasSaveLayer(
+	canvas unsafe.Pointer,
+	left, top, right, bottom float32,
+	blendMode int32, alpha float32,
+) {
+}
+
 // CanvasClear clears the canvas with a solid color.
 func CanvasClear(canvas unsafe.Pointer, argb uint32) {}
 

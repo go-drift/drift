@@ -556,6 +556,45 @@ void drift_skia_canvas_clip_rrect(
     reinterpret_cast<SkCanvas*>(canvas)->clipRRect(rrect);
 }
 
+void drift_skia_canvas_clip_path(
+    DriftSkiaCanvas canvas,
+    DriftSkiaPath path,
+    int clip_op,
+    int antialias
+) {
+    if (!canvas || !path) {
+        return;
+    }
+    SkClipOp op = clip_op == 1 ? SkClipOp::kDifference : SkClipOp::kIntersect;
+    reinterpret_cast<SkCanvas*>(canvas)->clipPath(
+        drift_skia_path_snapshot(path),
+        op,
+        antialias != 0
+    );
+}
+
+void drift_skia_canvas_save_layer(
+    DriftSkiaCanvas canvas,
+    float l, float t, float r, float b,
+    int blend_mode,
+    float alpha
+) {
+    if (!canvas) {
+        return;
+    }
+
+    SkRect bounds = SkRect::MakeLTRB(l, t, r, b);
+    SkRect* boundsPtr = (l == 0 && t == 0 && r == 0 && b == 0) ? nullptr : &bounds;
+
+    SkPaint paint;
+    paint.setBlendMode(static_cast<SkBlendMode>(blend_mode));
+    if (alpha < 1.0f) {
+        paint.setAlphaf(alpha);
+    }
+
+    reinterpret_cast<SkCanvas*>(canvas)->saveLayer(boundsPtr, &paint);
+}
+
 void drift_skia_canvas_clear(DriftSkiaCanvas canvas, uint32_t argb) {
     if (!canvas) {
         return;

@@ -15,6 +15,17 @@ const (
 	FilterQualityHigh                        // Bicubic (Mitchell)
 )
 
+// ClipOp specifies how a new clip shape combines with the existing clip region.
+//
+// Clips are cumulative within a Save/Restore pair. Each clip operation
+// further restricts the drawable area based on the chosen operation.
+type ClipOp int
+
+const (
+	ClipOpIntersect  ClipOp = iota // Restrict to intersection of old and new clips
+	ClipOpDifference               // Subtract new shape from old clip (creates holes)
+)
+
 // Canvas records or renders drawing commands.
 type Canvas interface {
 	// Save pushes the current transform and clip state.
@@ -23,6 +34,16 @@ type Canvas interface {
 	// SaveLayerAlpha saves a new layer with the given opacity (0.0 to 1.0).
 	// All drawing until the matching Restore() call will be composited with this opacity.
 	SaveLayerAlpha(bounds Rect, alpha float64)
+
+	// SaveLayer saves a new offscreen layer for group compositing effects.
+	//
+	// All drawing until the matching Restore() is captured in the layer,
+	// then composited back using the paint's BlendMode and Alpha.
+	// This enables effects like drawing multiple shapes that blend as a group.
+	//
+	// bounds defines the layer extent; pass Rect{} for unbounded.
+	// If paint is nil, behaves like Save() with no special compositing.
+	SaveLayer(bounds Rect, paint *Paint)
 
 	// Restore pops the most recent transform and clip state.
 	Restore()
@@ -41,6 +62,20 @@ type Canvas interface {
 
 	// ClipRRect restricts future drawing to the given rounded rectangle.
 	ClipRRect(rrect RRect)
+
+	// ClipPath restricts future drawing to an arbitrary path shape.
+	//
+	// op controls how the path combines with any existing clip:
+	//   - ClipOpIntersect: only draw where both old clip and path overlap
+	//   - ClipOpDifference: cut the path shape out of the drawable area
+	//
+	// antialias enables smooth edges; disable for pixel-perfect hard edges.
+	// The path's FillRule determines how self-intersecting paths are filled.
+	//
+	// With a nil or empty path:
+	//   - ClipOpIntersect: results in an empty clip (nothing visible)
+	//   - ClipOpDifference: leaves the clip unchanged (subtracting nothing)
+	ClipPath(path *Path, op ClipOp, antialias bool)
 
 	// Clear fills the entire canvas with the given color.
 	Clear(color Color)

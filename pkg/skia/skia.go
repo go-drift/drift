@@ -217,6 +217,36 @@ func CanvasClipRRect(
 	)
 }
 
+// CanvasClipPath clips the canvas to an arbitrary path.
+func CanvasClipPath(canvas unsafe.Pointer, path *Path, clipOp int32, antialias bool) {
+	if path == nil || path.ptr == nil {
+		return
+	}
+	aa := C.int(0)
+	if antialias {
+		aa = 1
+	}
+	C.drift_skia_canvas_clip_path(
+		C.DriftSkiaCanvas(canvas),
+		path.ptr,
+		C.int(clipOp),
+		aa,
+	)
+}
+
+// CanvasSaveLayer saves a layer with blend mode and alpha compositing.
+func CanvasSaveLayer(
+	canvas unsafe.Pointer,
+	left, top, right, bottom float32,
+	blendMode int32, alpha float32,
+) {
+	C.drift_skia_canvas_save_layer(
+		C.DriftSkiaCanvas(canvas),
+		C.float(left), C.float(top), C.float(right), C.float(bottom),
+		C.int(blendMode), C.float(alpha),
+	)
+}
+
 // CanvasClear clears the canvas with a solid color.
 func CanvasClear(canvas unsafe.Pointer, argb uint32) {
 	C.drift_skia_canvas_clear(C.DriftSkiaCanvas(canvas), C.uint(argb))
