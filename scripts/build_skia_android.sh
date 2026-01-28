@@ -21,7 +21,7 @@ python3 tools/git-sync-deps
 build() {
   local out_dir="$1"
   local target_cpu="$2"
-  bin/gn gen "$out_dir" --args="target_os=\"android\" target_cpu=\"$target_cpu\" ndk=\"$ANDROID_NDK_HOME\" ndk_api=21 is_official_build=true skia_use_gl=true skia_use_system_harfbuzz=false skia_use_harfbuzz=true skia_use_system_expat=false skia_use_system_libpng=false skia_use_system_zlib=false skia_use_system_freetype2=false skia_use_system_libjpeg_turbo=false skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true skia_use_system_libwebp=false skia_use_libwebp_decode=true skia_use_libwebp_encode=true skia_enable_svg=true skia_use_expat=true skia_enable_skresources=true skia_use_icu=false skia_use_libgrapheme=true skia_enable_skparagraph=true skia_enable_skshaper=true"
+  bin/gn gen "$out_dir" --args="target_os=\"android\" target_cpu=\"$target_cpu\" ndk=\"$ANDROID_NDK_HOME\" ndk_api=21 is_official_build=true skia_use_gl=true skia_use_system_harfbuzz=false skia_use_harfbuzz=true skia_use_system_expat=false skia_use_system_libpng=false skia_use_system_zlib=false skia_use_system_freetype2=false skia_use_system_libjpeg_turbo=false skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true skia_use_system_libwebp=false skia_use_libwebp_decode=true skia_use_libwebp_encode=true skia_enable_svg=true skia_use_expat=true skia_use_icu=false skia_use_libgrapheme=true skia_enable_skparagraph=true skia_enable_skshaper=true"
   ninja -C "$out_dir" skia svg skresources skparagraph skshaper skunicode
 }
 
