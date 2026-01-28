@@ -1,4 +1,4 @@
-package rendering
+package graphics
 
 // maxByte is the maximum value of a byte, used for color normalization.
 const maxByte = 255.0

@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Center positions its child at the center of the available space.
@@ -61,13 +61,13 @@ func (r *renderCenter) VisitChildren(visitor func(layout.RenderObject)) {
 
 func (r *renderCenter) PerformLayout() {
 	constraints := r.Constraints()
-	size := constraints.Constrain(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
+	size := constraints.Constrain(graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 	r.SetSize(size)
 	if r.child != nil {
 		r.child.Layout(layout.Loose(size), true) // true: we read child.Size()
 		childSize := r.child.Size()
 		offset := layout.AlignmentCenter.WithinRect(
-			rendering.RectFromLTWH(0, 0, size.Width, size.Height),
+			graphics.RectFromLTWH(0, 0, size.Width, size.Height),
 			childSize,
 		)
 		r.child.SetParentData(&layout.BoxParentData{Offset: offset})
@@ -80,12 +80,12 @@ func (r *renderCenter) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderCenter) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderCenter) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
 	offset := getChildOffset(r.child)
-	local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+	local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 	if r.child != nil && r.child.HitTest(local, result) {
 		return true
 	}

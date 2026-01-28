@@ -47,7 +47,7 @@ func (k ErrorKind) String() string {
 
 // DriftError represents a structured error in the Drift framework.
 type DriftError struct {
-	// Op is the operation that failed (e.g., "rendering.DefaultFontManager").
+	// Op is the operation that failed (e.g., "graphics.DefaultFontManager").
 	Op string
 	// Kind categorizes the error.
 	Kind ErrorKind

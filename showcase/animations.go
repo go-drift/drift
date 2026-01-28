@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -48,7 +48,7 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 	_, colors, textTheme := theme.UseTheme(ctx)
 
 	// Colors to cycle through for AnimatedContainer demo
-	containerColors := []rendering.Color{
+	containerColors := []graphics.Color{
 		colors.Primary,
 		colors.Secondary,
 		colors.Error,
@@ -76,7 +76,7 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 			// AnimatedContainer section
 			widgets.TextOf("AnimatedContainer", textTheme.TitleLarge),
 			widgets.VSpace(8),
-			widgets.TextOf("Automatically animates size, color, and padding changes", rendering.TextStyle{
+			widgets.TextOf("Automatically animates size, color, and padding changes", graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,
 			}),
@@ -90,10 +90,10 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 				Height:    containerHeight,
 				Color:     currentColor,
 				Alignment: layout.AlignmentCenter,
-				ChildWidget: widgets.TextOf("Tap buttons", rendering.TextStyle{
+				ChildWidget: widgets.TextOf("Tap buttons", graphics.TextStyle{
 					Color:      colors.OnPrimary,
 					FontSize:   14,
-					FontWeight: rendering.FontWeightBold,
+					FontWeight: graphics.FontWeightBold,
 				}),
 			},
 			widgets.VSpace(16),
@@ -125,7 +125,7 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 			// AnimatedOpacity section
 			widgets.TextOf("AnimatedOpacity", textTheme.TitleLarge),
 			widgets.VSpace(8),
-			widgets.TextOf("Smoothly fades widgets in and out", rendering.TextStyle{
+			widgets.TextOf("Smoothly fades widgets in and out", graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,
 			}),
@@ -141,10 +141,10 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 					Height:    80,
 					Color:     colors.Secondary,
 					Alignment: layout.AlignmentCenter,
-					ChildWidget: widgets.TextOf("Fade me!", rendering.TextStyle{
+					ChildWidget: widgets.TextOf("Fade me!", graphics.TextStyle{
 						Color:      colors.OnSecondary,
 						FontSize:   16,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 				},
 			},

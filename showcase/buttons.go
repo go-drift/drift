@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -12,10 +12,10 @@ import (
 // buildButtonsPage demonstrates button variants and the builder pattern.
 func buildButtonsPage(ctx core.BuildContext) core.Widget {
 	_, colors, _ := theme.UseTheme(ctx)
-	buttonGradient := rendering.NewLinearGradient(
-		rendering.Offset{X: 0, Y: 0},
-		rendering.Offset{X: 100, Y: 0},
-		[]rendering.GradientStop{
+	buttonGradient := graphics.NewLinearGradient(
+		graphics.Offset{X: 0, Y: 0},
+		graphics.Offset{X: 100, Y: 0},
+		[]graphics.GradientStop{
 			{Position: 0, Color: colors.Primary},
 			{Position: 1, Color: colors.Tertiary},
 		},

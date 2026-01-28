@@ -1,4 +1,4 @@
-package rendering
+package graphics
 
 import (
 	"fmt"
@@ -116,7 +116,7 @@ type TextLayout struct {
 	paragraph  *skia.Paragraph
 }
 
-// FontManager manages font registration for text rendering.
+// FontManager manages font registration for text graphics.
 type FontManager struct {
 	mu          sync.RWMutex
 	fonts       map[string]struct{}
@@ -146,7 +146,7 @@ func DefaultFontManagerErr() (*FontManager, error) {
 		if err != nil {
 			defaultFontManagerErr = err
 			errors.Report(&errors.DriftError{
-				Op:   "rendering.DefaultFontManager",
+				Op:   "graphics.DefaultFontManager",
 				Kind: errors.KindInit,
 				Err:  err,
 			})
@@ -228,7 +228,7 @@ func LayoutTextWithConstraintsAndMaxLines(text string, style TextStyle, manager 
 
 // layoutParagraph creates a Skia paragraph for text shaping and line breaking.
 // It returns a TextLayout containing both the computed metrics and the native
-// paragraph handle for later rendering.
+// paragraph handle for later graphics.
 func layoutParagraph(text string, style TextStyle, family string, size float64, weight int, maxWidth float64, maxLines int) (*TextLayout, error) {
 	if maxWidth < 0 || math.IsInf(maxWidth, 0) {
 		maxWidth = 0

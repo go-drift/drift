@@ -2,17 +2,17 @@ package core
 
 import (
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // ScrollOffsetProvider reports a paint-time scroll offset for descendants.
 type ScrollOffsetProvider interface {
-	ScrollOffset() rendering.Offset
+	ScrollOffset() graphics.Offset
 }
 
 // GlobalOffsetOf returns the accumulated offset for an element in the render tree.
-func GlobalOffsetOf(element Element) rendering.Offset {
-	var offset rendering.Offset
+func GlobalOffsetOf(element Element) graphics.Offset {
+	var offset graphics.Offset
 	var lastRenderObject layout.RenderObject
 	current := element
 	for current != nil {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -66,15 +66,15 @@ type Dropdown[T any] struct {
 	// BorderRadius sets the corner radius.
 	BorderRadius float64
 	// BackgroundColor sets the trigger background.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// BorderColor sets the trigger border color.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 	// MenuBackgroundColor sets the menu background.
-	MenuBackgroundColor rendering.Color
+	MenuBackgroundColor graphics.Color
 	// MenuBorderColor sets the menu border color.
-	MenuBorderColor rendering.Color
+	MenuBorderColor graphics.Color
 	// TextStyle sets the text style for labels.
-	TextStyle rendering.TextStyle
+	TextStyle graphics.TextStyle
 	// ItemPadding sets padding for each menu item.
 	ItemPadding layout.EdgeInsets
 }
@@ -308,7 +308,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		if itemChild == nil {
 			itemChild = Text{Content: itemLabel, Style: textStyle}
 		}
-		itemBackground := rendering.ColorTransparent
+		itemBackground := graphics.ColorTransparent
 		if reflect.DeepEqual(item.Value, w.Value) {
 			itemBackground = dropdownTheme.SelectedItemColor
 		}
@@ -402,7 +402,7 @@ type renderDropdownScope struct {
 
 type dropdownChevron struct {
 	size  float64
-	color rendering.Color
+	color graphics.Color
 }
 
 func (d dropdownChevron) CreateElement() core.Element {
@@ -431,7 +431,7 @@ func (d dropdownChevron) UpdateRenderObject(ctx core.BuildContext, renderObject 
 type renderDropdownChevron struct {
 	layout.RenderBoxBase
 	size  float64
-	color rendering.Color
+	color graphics.Color
 }
 
 func (r *renderDropdownChevron) PerformLayout() {
@@ -440,24 +440,24 @@ func (r *renderDropdownChevron) PerformLayout() {
 	if size == 0 {
 		size = 10
 	}
-	finalSize := constraints.Constrain(rendering.Size{Width: size, Height: size})
+	finalSize := constraints.Constrain(graphics.Size{Width: size, Height: size})
 	r.SetSize(finalSize)
 }
 
 func (r *renderDropdownChevron) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
-	path := rendering.NewPath()
+	path := graphics.NewPath()
 	path.MoveTo(0, size.Height*0.3)
 	path.LineTo(size.Width/2, size.Height*0.75)
 	path.LineTo(size.Width, size.Height*0.3)
-	paint := rendering.DefaultPaint()
+	paint := graphics.DefaultPaint()
 	paint.Color = r.color
-	paint.Style = rendering.PaintStyleStroke
+	paint.Style = graphics.PaintStyleStroke
 	paint.StrokeWidth = max(size.Width*0.12, 1.5)
 	ctx.Canvas.DrawPath(path, paint)
 }
 
-func (r *renderDropdownChevron) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderDropdownChevron) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -474,7 +474,7 @@ func (r *renderDropdownScope) SetChild(child layout.RenderObject) {
 func (r *renderDropdownScope) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child == nil {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 	r.child.Layout(constraints, true) // true: we read child.Size()
@@ -484,11 +484,11 @@ func (r *renderDropdownScope) PerformLayout() {
 
 func (r *renderDropdownScope) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, rendering.Offset{})
+		ctx.PaintChild(r.child, graphics.Offset{})
 	}
 }
 
-func (r *renderDropdownScope) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderDropdownScope) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

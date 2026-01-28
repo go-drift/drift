@@ -1,115 +1,115 @@
 package theme
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // CupertinoColors defines the iOS-style color palette.
 // Based on Apple's Human Interface Guidelines system colors.
 type CupertinoColors struct {
 	// System colors - vibrant, accessible colors
-	SystemBlue   rendering.Color
-	SystemGreen  rendering.Color
-	SystemIndigo rendering.Color
-	SystemOrange rendering.Color
-	SystemPink   rendering.Color
-	SystemPurple rendering.Color
-	SystemRed    rendering.Color
-	SystemTeal   rendering.Color
-	SystemYellow rendering.Color
+	SystemBlue   graphics.Color
+	SystemGreen  graphics.Color
+	SystemIndigo graphics.Color
+	SystemOrange graphics.Color
+	SystemPink   graphics.Color
+	SystemPurple graphics.Color
+	SystemRed    graphics.Color
+	SystemTeal   graphics.Color
+	SystemYellow graphics.Color
 
 	// Gray colors - semantic grays for various uses
-	SystemGray  rendering.Color
-	SystemGray2 rendering.Color
-	SystemGray3 rendering.Color
-	SystemGray4 rendering.Color
-	SystemGray5 rendering.Color
-	SystemGray6 rendering.Color
+	SystemGray  graphics.Color
+	SystemGray2 graphics.Color
+	SystemGray3 graphics.Color
+	SystemGray4 graphics.Color
+	SystemGray5 graphics.Color
+	SystemGray6 graphics.Color
 
 	// Background colors - for view hierarchies
-	SystemBackground          rendering.Color
-	SecondarySystemBackground rendering.Color
-	TertiarySystemBackground  rendering.Color
+	SystemBackground          graphics.Color
+	SecondarySystemBackground graphics.Color
+	TertiarySystemBackground  graphics.Color
 
 	// Grouped background colors - for grouped content
-	SystemGroupedBackground          rendering.Color
-	SecondarySystemGroupedBackground rendering.Color
-	TertiarySystemGroupedBackground  rendering.Color
+	SystemGroupedBackground          graphics.Color
+	SecondarySystemGroupedBackground graphics.Color
+	TertiarySystemGroupedBackground  graphics.Color
 
 	// Label colors - for text content
-	Label           rendering.Color
-	SecondaryLabel  rendering.Color
-	TertiaryLabel   rendering.Color
-	QuaternaryLabel rendering.Color
+	Label           graphics.Color
+	SecondaryLabel  graphics.Color
+	TertiaryLabel   graphics.Color
+	QuaternaryLabel graphics.Color
 
 	// Fill colors - for shapes and controls
-	SystemFill           rendering.Color
-	SecondarySystemFill  rendering.Color
-	TertiarySystemFill   rendering.Color
-	QuaternarySystemFill rendering.Color
+	SystemFill           graphics.Color
+	SecondarySystemFill  graphics.Color
+	TertiarySystemFill   graphics.Color
+	QuaternarySystemFill graphics.Color
 
 	// Separator colors - for dividers
-	Separator       rendering.Color
-	OpaqueSeparator rendering.Color
+	Separator       graphics.Color
+	OpaqueSeparator graphics.Color
 
 	// Link color
-	Link rendering.Color
+	Link graphics.Color
 
 	// Placeholder text color
-	PlaceholderText rendering.Color
+	PlaceholderText graphics.Color
 }
 
 // LightCupertinoColors returns the iOS light mode color palette.
 func LightCupertinoColors() CupertinoColors {
 	return CupertinoColors{
 		// System colors (iOS light mode)
-		SystemBlue:   rendering.RGB(0, 122, 255),
-		SystemGreen:  rendering.RGB(52, 199, 89),
-		SystemIndigo: rendering.RGB(88, 86, 214),
-		SystemOrange: rendering.RGB(255, 149, 0),
-		SystemPink:   rendering.RGB(255, 45, 85),
-		SystemPurple: rendering.RGB(175, 82, 222),
-		SystemRed:    rendering.RGB(255, 59, 48),
-		SystemTeal:   rendering.RGB(90, 200, 250),
-		SystemYellow: rendering.RGB(255, 204, 0),
+		SystemBlue:   graphics.RGB(0, 122, 255),
+		SystemGreen:  graphics.RGB(52, 199, 89),
+		SystemIndigo: graphics.RGB(88, 86, 214),
+		SystemOrange: graphics.RGB(255, 149, 0),
+		SystemPink:   graphics.RGB(255, 45, 85),
+		SystemPurple: graphics.RGB(175, 82, 222),
+		SystemRed:    graphics.RGB(255, 59, 48),
+		SystemTeal:   graphics.RGB(90, 200, 250),
+		SystemYellow: graphics.RGB(255, 204, 0),
 
 		// Gray colors (iOS light mode)
-		SystemGray:  rendering.RGB(142, 142, 147),
-		SystemGray2: rendering.RGB(174, 174, 178),
-		SystemGray3: rendering.RGB(199, 199, 204),
-		SystemGray4: rendering.RGB(209, 209, 214),
-		SystemGray5: rendering.RGB(229, 229, 234),
-		SystemGray6: rendering.RGB(242, 242, 247),
+		SystemGray:  graphics.RGB(142, 142, 147),
+		SystemGray2: graphics.RGB(174, 174, 178),
+		SystemGray3: graphics.RGB(199, 199, 204),
+		SystemGray4: graphics.RGB(209, 209, 214),
+		SystemGray5: graphics.RGB(229, 229, 234),
+		SystemGray6: graphics.RGB(242, 242, 247),
 
 		// Background colors (iOS light mode)
-		SystemBackground:          rendering.RGB(255, 255, 255),
-		SecondarySystemBackground: rendering.RGB(242, 242, 247),
-		TertiarySystemBackground:  rendering.RGB(255, 255, 255),
+		SystemBackground:          graphics.RGB(255, 255, 255),
+		SecondarySystemBackground: graphics.RGB(242, 242, 247),
+		TertiarySystemBackground:  graphics.RGB(255, 255, 255),
 
 		// Grouped background colors (iOS light mode)
-		SystemGroupedBackground:          rendering.RGB(242, 242, 247),
-		SecondarySystemGroupedBackground: rendering.RGB(255, 255, 255),
-		TertiarySystemGroupedBackground:  rendering.RGB(242, 242, 247),
+		SystemGroupedBackground:          graphics.RGB(242, 242, 247),
+		SecondarySystemGroupedBackground: graphics.RGB(255, 255, 255),
+		TertiarySystemGroupedBackground:  graphics.RGB(242, 242, 247),
 
 		// Label colors (iOS light mode)
-		Label:           rendering.RGBA(0, 0, 0, 255),
-		SecondaryLabel:  rendering.RGBA(60, 60, 67, 153),
-		TertiaryLabel:   rendering.RGBA(60, 60, 67, 76),
-		QuaternaryLabel: rendering.RGBA(60, 60, 67, 45),
+		Label:           graphics.RGBA(0, 0, 0, 255),
+		SecondaryLabel:  graphics.RGBA(60, 60, 67, 153),
+		TertiaryLabel:   graphics.RGBA(60, 60, 67, 76),
+		QuaternaryLabel: graphics.RGBA(60, 60, 67, 45),
 
 		// Fill colors (iOS light mode)
-		SystemFill:           rendering.RGBA(120, 120, 128, 51),
-		SecondarySystemFill:  rendering.RGBA(120, 120, 128, 40),
-		TertiarySystemFill:   rendering.RGBA(118, 118, 128, 30),
-		QuaternarySystemFill: rendering.RGBA(116, 116, 128, 20),
+		SystemFill:           graphics.RGBA(120, 120, 128, 51),
+		SecondarySystemFill:  graphics.RGBA(120, 120, 128, 40),
+		TertiarySystemFill:   graphics.RGBA(118, 118, 128, 30),
+		QuaternarySystemFill: graphics.RGBA(116, 116, 128, 20),
 
 		// Separator colors (iOS light mode)
-		Separator:       rendering.RGBA(60, 60, 67, 73),
-		OpaqueSeparator: rendering.RGB(198, 198, 200),
+		Separator:       graphics.RGBA(60, 60, 67, 73),
+		OpaqueSeparator: graphics.RGB(198, 198, 200),
 
 		// Link color
-		Link: rendering.RGB(0, 122, 255),
+		Link: graphics.RGB(0, 122, 255),
 
 		// Placeholder text
-		PlaceholderText: rendering.RGBA(60, 60, 67, 76),
+		PlaceholderText: graphics.RGBA(60, 60, 67, 76),
 	}
 }
 
@@ -117,54 +117,54 @@ func LightCupertinoColors() CupertinoColors {
 func DarkCupertinoColors() CupertinoColors {
 	return CupertinoColors{
 		// System colors (iOS dark mode)
-		SystemBlue:   rendering.RGB(10, 132, 255),
-		SystemGreen:  rendering.RGB(48, 209, 88),
-		SystemIndigo: rendering.RGB(94, 92, 230),
-		SystemOrange: rendering.RGB(255, 159, 10),
-		SystemPink:   rendering.RGB(255, 55, 95),
-		SystemPurple: rendering.RGB(191, 90, 242),
-		SystemRed:    rendering.RGB(255, 69, 58),
-		SystemTeal:   rendering.RGB(100, 210, 255),
-		SystemYellow: rendering.RGB(255, 214, 10),
+		SystemBlue:   graphics.RGB(10, 132, 255),
+		SystemGreen:  graphics.RGB(48, 209, 88),
+		SystemIndigo: graphics.RGB(94, 92, 230),
+		SystemOrange: graphics.RGB(255, 159, 10),
+		SystemPink:   graphics.RGB(255, 55, 95),
+		SystemPurple: graphics.RGB(191, 90, 242),
+		SystemRed:    graphics.RGB(255, 69, 58),
+		SystemTeal:   graphics.RGB(100, 210, 255),
+		SystemYellow: graphics.RGB(255, 214, 10),
 
 		// Gray colors (iOS dark mode)
-		SystemGray:  rendering.RGB(142, 142, 147),
-		SystemGray2: rendering.RGB(99, 99, 102),
-		SystemGray3: rendering.RGB(72, 72, 74),
-		SystemGray4: rendering.RGB(58, 58, 60),
-		SystemGray5: rendering.RGB(44, 44, 46),
-		SystemGray6: rendering.RGB(28, 28, 30),
+		SystemGray:  graphics.RGB(142, 142, 147),
+		SystemGray2: graphics.RGB(99, 99, 102),
+		SystemGray3: graphics.RGB(72, 72, 74),
+		SystemGray4: graphics.RGB(58, 58, 60),
+		SystemGray5: graphics.RGB(44, 44, 46),
+		SystemGray6: graphics.RGB(28, 28, 30),
 
 		// Background colors (iOS dark mode)
-		SystemBackground:          rendering.RGB(0, 0, 0),
-		SecondarySystemBackground: rendering.RGB(28, 28, 30),
-		TertiarySystemBackground:  rendering.RGB(44, 44, 46),
+		SystemBackground:          graphics.RGB(0, 0, 0),
+		SecondarySystemBackground: graphics.RGB(28, 28, 30),
+		TertiarySystemBackground:  graphics.RGB(44, 44, 46),
 
 		// Grouped background colors (iOS dark mode)
-		SystemGroupedBackground:          rendering.RGB(0, 0, 0),
-		SecondarySystemGroupedBackground: rendering.RGB(28, 28, 30),
-		TertiarySystemGroupedBackground:  rendering.RGB(44, 44, 46),
+		SystemGroupedBackground:          graphics.RGB(0, 0, 0),
+		SecondarySystemGroupedBackground: graphics.RGB(28, 28, 30),
+		TertiarySystemGroupedBackground:  graphics.RGB(44, 44, 46),
 
 		// Label colors (iOS dark mode)
-		Label:           rendering.RGBA(255, 255, 255, 255),
-		SecondaryLabel:  rendering.RGBA(235, 235, 245, 153),
-		TertiaryLabel:   rendering.RGBA(235, 235, 245, 76),
-		QuaternaryLabel: rendering.RGBA(235, 235, 245, 45),
+		Label:           graphics.RGBA(255, 255, 255, 255),
+		SecondaryLabel:  graphics.RGBA(235, 235, 245, 153),
+		TertiaryLabel:   graphics.RGBA(235, 235, 245, 76),
+		QuaternaryLabel: graphics.RGBA(235, 235, 245, 45),
 
 		// Fill colors (iOS dark mode)
-		SystemFill:           rendering.RGBA(120, 120, 128, 91),
-		SecondarySystemFill:  rendering.RGBA(120, 120, 128, 81),
-		TertiarySystemFill:   rendering.RGBA(118, 118, 128, 61),
-		QuaternarySystemFill: rendering.RGBA(118, 118, 128, 45),
+		SystemFill:           graphics.RGBA(120, 120, 128, 91),
+		SecondarySystemFill:  graphics.RGBA(120, 120, 128, 81),
+		TertiarySystemFill:   graphics.RGBA(118, 118, 128, 61),
+		QuaternarySystemFill: graphics.RGBA(118, 118, 128, 45),
 
 		// Separator colors (iOS dark mode)
-		Separator:       rendering.RGBA(84, 84, 88, 153),
-		OpaqueSeparator: rendering.RGB(56, 56, 58),
+		Separator:       graphics.RGBA(84, 84, 88, 153),
+		OpaqueSeparator: graphics.RGB(56, 56, 58),
 
 		// Link color
-		Link: rendering.RGB(10, 132, 255),
+		Link: graphics.RGB(10, 132, 255),
 
 		// Placeholder text
-		PlaceholderText: rendering.RGBA(235, 235, 245, 76),
+		PlaceholderText: graphics.RGBA(235, 235, 245, 76),
 	}
 }

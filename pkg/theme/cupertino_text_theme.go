@@ -1,141 +1,141 @@
 package theme
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // CupertinoTextThemeData defines text styles for iOS-style interfaces.
 // Based on Apple's Human Interface Guidelines typography.
 type CupertinoTextThemeData struct {
 	// TextStyle is the default body text style.
-	TextStyle rendering.TextStyle
+	TextStyle graphics.TextStyle
 
 	// ActionTextStyle is for interactive text elements.
-	ActionTextStyle rendering.TextStyle
+	ActionTextStyle graphics.TextStyle
 
 	// NavTitleTextStyle is for navigation bar titles.
-	NavTitleTextStyle rendering.TextStyle
+	NavTitleTextStyle graphics.TextStyle
 
 	// NavLargeTitleTextStyle is for large navigation bar titles.
-	NavLargeTitleTextStyle rendering.TextStyle
+	NavLargeTitleTextStyle graphics.TextStyle
 
 	// TabLabelTextStyle is for tab bar labels.
-	TabLabelTextStyle rendering.TextStyle
+	TabLabelTextStyle graphics.TextStyle
 
 	// PickerTextStyle is for picker/wheel items.
-	PickerTextStyle rendering.TextStyle
+	PickerTextStyle graphics.TextStyle
 
 	// DateTimePickerTextStyle is for date/time picker items.
-	DateTimePickerTextStyle rendering.TextStyle
+	DateTimePickerTextStyle graphics.TextStyle
 
 	// LargeTitleTextStyle is for large prominent text.
-	LargeTitleTextStyle rendering.TextStyle
+	LargeTitleTextStyle graphics.TextStyle
 
 	// Title1TextStyle is for title level 1.
-	Title1TextStyle rendering.TextStyle
+	Title1TextStyle graphics.TextStyle
 
 	// Title2TextStyle is for title level 2.
-	Title2TextStyle rendering.TextStyle
+	Title2TextStyle graphics.TextStyle
 
 	// Title3TextStyle is for title level 3.
-	Title3TextStyle rendering.TextStyle
+	Title3TextStyle graphics.TextStyle
 
 	// HeadlineTextStyle is for headline text.
-	HeadlineTextStyle rendering.TextStyle
+	HeadlineTextStyle graphics.TextStyle
 
 	// SubheadlineTextStyle is for subheadline text.
-	SubheadlineTextStyle rendering.TextStyle
+	SubheadlineTextStyle graphics.TextStyle
 
 	// BodyTextStyle is for body text.
-	BodyTextStyle rendering.TextStyle
+	BodyTextStyle graphics.TextStyle
 
 	// CalloutTextStyle is for callout text.
-	CalloutTextStyle rendering.TextStyle
+	CalloutTextStyle graphics.TextStyle
 
 	// FootnoteTextStyle is for footnote text.
-	FootnoteTextStyle rendering.TextStyle
+	FootnoteTextStyle graphics.TextStyle
 
 	// Caption1TextStyle is for caption level 1.
-	Caption1TextStyle rendering.TextStyle
+	Caption1TextStyle graphics.TextStyle
 
 	// Caption2TextStyle is for caption level 2.
-	Caption2TextStyle rendering.TextStyle
+	Caption2TextStyle graphics.TextStyle
 }
 
 // DefaultCupertinoTextTheme creates a text theme with iOS-style defaults.
-func DefaultCupertinoTextTheme(textColor rendering.Color) CupertinoTextThemeData {
+func DefaultCupertinoTextTheme(textColor graphics.Color) CupertinoTextThemeData {
 	return CupertinoTextThemeData{
-		TextStyle: rendering.TextStyle{
+		TextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 17,
 		},
-		ActionTextStyle: rendering.TextStyle{
+		ActionTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 17,
 		},
-		NavTitleTextStyle: rendering.TextStyle{
+		NavTitleTextStyle: graphics.TextStyle{
 			Color:      textColor,
 			FontSize:   17,
-			FontWeight: rendering.FontWeightSemibold,
+			FontWeight: graphics.FontWeightSemibold,
 		},
-		NavLargeTitleTextStyle: rendering.TextStyle{
+		NavLargeTitleTextStyle: graphics.TextStyle{
 			Color:      textColor,
 			FontSize:   34,
-			FontWeight: rendering.FontWeightBold,
+			FontWeight: graphics.FontWeightBold,
 		},
-		TabLabelTextStyle: rendering.TextStyle{
+		TabLabelTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 10,
 		},
-		PickerTextStyle: rendering.TextStyle{
+		PickerTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 21,
 		},
-		DateTimePickerTextStyle: rendering.TextStyle{
+		DateTimePickerTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 21,
 		},
-		LargeTitleTextStyle: rendering.TextStyle{
+		LargeTitleTextStyle: graphics.TextStyle{
 			Color:      textColor,
 			FontSize:   34,
-			FontWeight: rendering.FontWeightBold,
+			FontWeight: graphics.FontWeightBold,
 		},
-		Title1TextStyle: rendering.TextStyle{
+		Title1TextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 28,
 		},
-		Title2TextStyle: rendering.TextStyle{
+		Title2TextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 22,
 		},
-		Title3TextStyle: rendering.TextStyle{
+		Title3TextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 20,
 		},
-		HeadlineTextStyle: rendering.TextStyle{
+		HeadlineTextStyle: graphics.TextStyle{
 			Color:      textColor,
 			FontSize:   17,
-			FontWeight: rendering.FontWeightSemibold,
+			FontWeight: graphics.FontWeightSemibold,
 		},
-		SubheadlineTextStyle: rendering.TextStyle{
+		SubheadlineTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 15,
 		},
-		BodyTextStyle: rendering.TextStyle{
+		BodyTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 17,
 		},
-		CalloutTextStyle: rendering.TextStyle{
+		CalloutTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 16,
 		},
-		FootnoteTextStyle: rendering.TextStyle{
+		FootnoteTextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 13,
 		},
-		Caption1TextStyle: rendering.TextStyle{
+		Caption1TextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 12,
 		},
-		Caption2TextStyle: rendering.TextStyle{
+		Caption2TextStyle: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 11,
 		},

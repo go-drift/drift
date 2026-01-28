@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // SizedBox constrains its child to a specific width and/or height.
@@ -82,7 +82,7 @@ func (r *renderSizedBox) VisitChildren(visitor func(layout.RenderObject)) {
 func (r *renderSizedBox) PerformLayout() {
 	constraints := r.Constraints()
 	// Build desired size from explicit dimensions
-	desired := rendering.Size{Width: r.width, Height: r.height}
+	desired := graphics.Size{Width: r.width, Height: r.height}
 
 	if r.child == nil {
 		r.SetSize(constraints.Constrain(desired))
@@ -119,11 +119,11 @@ func (r *renderSizedBox) PerformLayout() {
 
 func (r *renderSizedBox) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, rendering.Offset{})
+		ctx.PaintChild(r.child, graphics.Offset{})
 	}
 }
 
-func (r *renderSizedBox) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderSizedBox) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

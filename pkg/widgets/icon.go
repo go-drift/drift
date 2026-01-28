@@ -2,7 +2,7 @@ package widgets
 
 import (
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -13,9 +13,9 @@ type Icon struct {
 	// Size is the font size for the icon. Uses theme defaults if zero.
 	Size float64
 	// Color is the icon color. Uses theme defaults if zero.
-	Color rendering.Color
+	Color graphics.Color
 	// Weight sets the font weight if non-zero.
-	Weight rendering.FontWeight
+	Weight graphics.FontWeight
 }
 
 // IconOf creates an icon with the given glyph.
@@ -39,7 +39,7 @@ func (i Icon) Build(ctx core.BuildContext) core.Widget {
 	if i.Size > 0 {
 		style.FontSize = i.Size
 	}
-	if i.Color != rendering.ColorTransparent {
+	if i.Color != graphics.ColorTransparent {
 		style.Color = i.Color
 	}
 	if i.Weight != 0 {

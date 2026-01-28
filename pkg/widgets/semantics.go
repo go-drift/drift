@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -214,17 +214,17 @@ func (r *renderSemantics) PerformLayout() {
 		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
 func (r *renderSemantics) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child.(layout.RenderBox), rendering.Offset{})
+		ctx.PaintChild(r.child.(layout.RenderBox), graphics.Offset{})
 	}
 }
 
-func (r *renderSemantics) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderSemantics) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child != nil {
 		return r.child.HitTest(position, result)
 	}
@@ -323,17 +323,17 @@ func (r *renderExcludeSemantics) PerformLayout() {
 		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
 func (r *renderExcludeSemantics) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child.(layout.RenderBox), rendering.Offset{})
+		ctx.PaintChild(r.child.(layout.RenderBox), graphics.Offset{})
 	}
 }
 
-func (r *renderExcludeSemantics) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderExcludeSemantics) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child != nil {
 		return r.child.HitTest(position, result)
 	}
@@ -402,17 +402,17 @@ func (r *renderMergeSemantics) PerformLayout() {
 		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
 func (r *renderMergeSemantics) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child.(layout.RenderBox), rendering.Offset{})
+		ctx.PaintChild(r.child.(layout.RenderBox), graphics.Offset{})
 	}
 }
 
-func (r *renderMergeSemantics) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderMergeSemantics) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child != nil {
 		return r.child.HitTest(position, result)
 	}

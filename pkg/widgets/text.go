@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Text displays a string with a single style.
@@ -35,7 +35,7 @@ type Text struct {
 	// Content is the text string to display.
 	Content string
 	// Style controls the font, size, color, and other text properties.
-	Style rendering.TextStyle
+	Style graphics.TextStyle
 	// MaxLines limits the number of visible lines (0 = unlimited).
 	// Lines beyond this limit are not rendered.
 	MaxLines int
@@ -48,7 +48,7 @@ type Text struct {
 // This is a convenience helper equivalent to:
 //
 //	Text{Content: content, Style: style, Wrap: true}
-func TextOf(content string, style rendering.TextStyle) Text {
+func TextOf(content string, style graphics.TextStyle) Text {
 	return Text{Content: content, Style: style, Wrap: true}
 }
 
@@ -67,7 +67,7 @@ func (t Text) WithWrap(wrap bool) Text {
 }
 
 // WithStyle returns a copy of the text with the specified style.
-func (t Text) WithStyle(style rendering.TextStyle) Text {
+func (t Text) WithStyle(style graphics.TextStyle) Text {
 	t.Style = style
 	return t
 }
@@ -98,8 +98,8 @@ func (t Text) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Rend
 type renderText struct {
 	layout.RenderBoxBase
 	text     string
-	style    rendering.TextStyle
-	layout   *rendering.TextLayout
+	style    graphics.TextStyle
+	layout   *graphics.TextLayout
 	maxLines int
 	wrap     bool
 	cache    textLayoutCache
@@ -107,7 +107,7 @@ type renderText struct {
 
 type textLayoutCache struct {
 	text     string
-	style    rendering.TextStyle
+	style    graphics.TextStyle
 	maxWidth float64
 	maxLines int
 	wrap     bool
@@ -132,18 +132,18 @@ func (r *renderText) PerformLayout() {
 	}
 	r.cache = current
 
-	manager, _ := rendering.DefaultFontManagerErr()
+	manager, _ := graphics.DefaultFontManagerErr()
 	if manager == nil {
 		// Error already reported by DefaultFontManagerErr
 		r.layout = nil
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 
-	layout, err := rendering.LayoutTextWithConstraintsAndMaxLines(r.text, r.style, manager, maxWidth, r.maxLines)
+	layout, err := graphics.LayoutTextWithConstraintsAndMaxLines(r.text, r.style, manager, maxWidth, r.maxLines)
 	if err != nil {
 		r.layout = nil
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 
@@ -162,14 +162,14 @@ func (r *renderText) Paint(ctx *layout.PaintContext) {
 	//   if r.layout.Style.Shadow == nil {
 	//       ctx.Canvas.Save()
 	//       size := r.Size()
-	//       ctx.Canvas.ClipRect(rendering.Rect{Left: 0, Top: 0, Right: size.Width, Bottom: size.Height})
+	//       ctx.Canvas.ClipRect(graphics.Rect{Left: 0, Top: 0, Right: size.Width, Bottom: size.Height})
 	//       defer ctx.Canvas.Restore()
 	//   }
 	//
-	ctx.Canvas.DrawText(r.layout, rendering.Offset{})
+	ctx.Canvas.DrawText(r.layout, graphics.Offset{})
 }
 
-func (r *renderText) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderText) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

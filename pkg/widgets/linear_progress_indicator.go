@@ -7,7 +7,7 @@ import (
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -20,10 +20,10 @@ type LinearProgressIndicator struct {
 	Value *float64
 
 	// Color is the indicator color. Uses theme primary color if not set.
-	Color rendering.Color
+	Color graphics.Color
 
 	// TrackColor is the background track color. Uses theme surface variant if not set.
-	TrackColor rendering.Color
+	TrackColor graphics.Color
 
 	// Height is the thickness of the indicator. Default: 4.0
 	Height float64
@@ -155,8 +155,8 @@ func (s *linearProgressState) Build(ctx core.BuildContext) core.Widget {
 
 type linearProgressRender struct {
 	value        *float64
-	color        rendering.Color
-	trackColor   rendering.Color
+	color        graphics.Color
+	trackColor   graphics.Color
 	height       float64
 	borderRadius float64
 	minWidth     float64
@@ -201,8 +201,8 @@ func (l linearProgressRender) UpdateRenderObject(ctx core.BuildContext, renderOb
 type renderLinearProgress struct {
 	layout.RenderBoxBase
 	value        *float64
-	color        rendering.Color
-	trackColor   rendering.Color
+	color        graphics.Color
+	trackColor   graphics.Color
 	height       float64
 	borderRadius float64
 	minWidth     float64
@@ -226,25 +226,25 @@ func (r *renderLinearProgress) PerformLayout() {
 	height := r.height
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
 
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
 func (r *renderLinearProgress) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
-	radius := rendering.CircularRadius(r.borderRadius)
+	radius := graphics.CircularRadius(r.borderRadius)
 
 	// Draw track (background)
 	if r.trackColor != 0 {
-		trackPaint := rendering.DefaultPaint()
+		trackPaint := graphics.DefaultPaint()
 		trackPaint.Color = r.trackColor
 
-		trackRect := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
-		trackRRect := rendering.RRectFromRectAndRadius(trackRect, radius)
+		trackRect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
+		trackRRect := graphics.RRectFromRectAndRadius(trackRect, radius)
 		ctx.Canvas.DrawRRect(trackRRect, trackPaint)
 	}
 
 	// Draw progress
-	progressPaint := rendering.DefaultPaint()
+	progressPaint := graphics.DefaultPaint()
 	progressPaint.Color = r.color
 
 	if r.value != nil {
@@ -259,8 +259,8 @@ func (r *renderLinearProgress) Paint(ctx *layout.PaintContext) {
 
 		if progress > 0 {
 			progressWidth := size.Width * progress
-			progressRect := rendering.RectFromLTWH(0, 0, progressWidth, size.Height)
-			progressRRect := rendering.RRectFromRectAndRadius(progressRect, radius)
+			progressRect := graphics.RectFromLTWH(0, 0, progressWidth, size.Height)
+			progressRRect := graphics.RRectFromRectAndRadius(progressRect, radius)
 			ctx.Canvas.DrawRRect(progressRRect, progressPaint)
 		}
 	} else {
@@ -293,14 +293,14 @@ func (r *renderLinearProgress) Paint(ctx *layout.PaintContext) {
 		visibleRight := min(barX+barWidth, size.Width)
 
 		if visibleRight > visibleLeft {
-			progressRect := rendering.RectFromLTWH(visibleLeft, 0, visibleRight-visibleLeft, size.Height)
-			progressRRect := rendering.RRectFromRectAndRadius(progressRect, radius)
+			progressRect := graphics.RectFromLTWH(visibleLeft, 0, visibleRight-visibleLeft, size.Height)
+			progressRRect := graphics.RRectFromRectAndRadius(progressRect, radius)
 			ctx.Canvas.DrawRRect(progressRRect, progressPaint)
 		}
 	}
 }
 
-func (r *renderLinearProgress) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderLinearProgress) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	// Progress indicators typically don't handle hit tests
 	return false
 }

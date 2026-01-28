@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -21,10 +21,10 @@ type TabBar struct {
 	Items           []TabItem
 	CurrentIndex    int
 	OnTap           func(index int)
-	BackgroundColor rendering.Color
-	ActiveColor     rendering.Color
-	InactiveColor   rendering.Color
-	IndicatorColor  rendering.Color
+	BackgroundColor graphics.Color
+	ActiveColor     graphics.Color
+	InactiveColor   graphics.Color
+	IndicatorColor  graphics.Color
 	IndicatorHeight float64
 	Padding         layout.EdgeInsets
 	Height          float64
@@ -78,7 +78,7 @@ func (t TabBar) Build(ctx core.BuildContext) core.Widget {
 }
 
 // buildTabItem creates a single tab item widget.
-func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicatorColor rendering.Color, indicatorHeight float64, padding layout.EdgeInsets, textTheme theme.TextTheme) core.Widget {
+func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicatorColor graphics.Color, indicatorHeight float64, padding layout.EdgeInsets, textTheme theme.TextTheme) core.Widget {
 	isActive := index == t.CurrentIndex
 	color := inactive
 	if isActive {
@@ -148,11 +148,11 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicato
 						// Indicator at the bottom
 						Container{
 							Height: indicatorHeight,
-							Color: func() rendering.Color {
+							Color: func() graphics.Color {
 								if isActive {
 									return indicatorColor
 								}
-								return rendering.ColorTransparent
+								return graphics.ColorTransparent
 							}(),
 						},
 					},
@@ -165,8 +165,8 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicato
 }
 
 // colorOrDefault returns the color if set, otherwise returns the default.
-func colorOrDefault(color, defaultColor rendering.Color) rendering.Color {
-	if color == rendering.ColorTransparent {
+func colorOrDefault(color, defaultColor graphics.Color) graphics.Color {
+	if color == graphics.ColorTransparent {
 		return defaultColor
 	}
 	return color

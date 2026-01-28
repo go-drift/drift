@@ -5,7 +5,7 @@ import (
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -35,9 +35,9 @@ type Switch struct {
 	// Disabled disables interaction when true.
 	Disabled bool
 	// OnTintColor is the track color when on (optional).
-	OnTintColor rendering.Color
+	OnTintColor graphics.Color
 	// ThumbColor is the thumb color (optional).
-	ThumbColor rendering.Color
+	ThumbColor graphics.Color
 }
 
 // SwitchOf creates a switch with the given value and change handler.
@@ -213,10 +213,10 @@ func (r *renderSwitch) PerformLayout() {
 	height := 31.0
 	width = min(max(width, constraints.MinWidth), constraints.MaxWidth)
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
-func (r *renderSwitch) updatePlatformView(clipBounds *rendering.Rect) {
+func (r *renderSwitch) updatePlatformView(clipBounds *graphics.Rect) {
 	if r.state == nil || r.state.element == nil {
 		return
 	}
@@ -241,7 +241,7 @@ func (r *renderSwitch) updatePlatformView(clipBounds *rendering.Rect) {
 func (r *renderSwitch) Paint(ctx *layout.PaintContext) {
 	// Get clip bounds for platform view
 	clip, hasClip := ctx.CurrentClipBounds()
-	var clipPtr *rendering.Rect
+	var clipPtr *graphics.Rect
 	if hasClip {
 		clipPtr = &clip
 	}
@@ -252,7 +252,7 @@ func (r *renderSwitch) Paint(ctx *layout.PaintContext) {
 	// Native view handles rendering - nothing to draw in Skia
 }
 
-func (r *renderSwitch) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderSwitch) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -52,13 +52,13 @@ type Checkbox struct {
 	// BorderRadius controls the checkbox corner radius.
 	BorderRadius float64
 	// ActiveColor is the fill color when checked.
-	ActiveColor rendering.Color
+	ActiveColor graphics.Color
 	// CheckColor is the checkmark color.
-	CheckColor rendering.Color
+	CheckColor graphics.Color
 	// BorderColor is the outline color when unchecked.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 	// BackgroundColor is the fill color when unchecked.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 }
 
 // CheckboxOf creates a checkbox with the given value and change handler.
@@ -70,7 +70,7 @@ func CheckboxOf(value bool, onChanged func(bool)) Checkbox {
 }
 
 // WithColors returns a copy of the checkbox with the specified colors.
-func (c Checkbox) WithColors(activeColor, checkColor rendering.Color) Checkbox {
+func (c Checkbox) WithColors(activeColor, checkColor graphics.Color) Checkbox {
 	c.ActiveColor = activeColor
 	c.CheckColor = checkColor
 	return c
@@ -145,10 +145,10 @@ type checkboxRender struct {
 	enabled         bool
 	size            float64
 	borderRadius    float64
-	activeColor     rendering.Color
-	checkColor      rendering.Color
-	borderColor     rendering.Color
-	backgroundColor rendering.Color
+	activeColor     graphics.Color
+	checkColor      graphics.Color
+	borderColor     graphics.Color
+	backgroundColor graphics.Color
 }
 
 func (c checkboxRender) CreateElement() core.Element {
@@ -181,10 +181,10 @@ type renderCheckbox struct {
 	enabled         bool
 	size            float64
 	borderRadius    float64
-	activeColor     rendering.Color
-	checkColor      rendering.Color
-	borderColor     rendering.Color
-	backgroundColor rendering.Color
+	activeColor     graphics.Color
+	checkColor      graphics.Color
+	borderColor     graphics.Color
+	backgroundColor graphics.Color
 	tap             *gestures.TapGestureRecognizer
 }
 
@@ -208,14 +208,14 @@ func (r *renderCheckbox) PerformLayout() {
 	}
 	size = min(max(size, constraints.MinWidth), constraints.MaxWidth)
 	size = min(max(size, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: size, Height: size})
+	r.SetSize(graphics.Size{Width: size, Height: size})
 }
 
 func (r *renderCheckbox) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
-	rect := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
+	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 
-	fillPaint := rendering.DefaultPaint()
+	fillPaint := graphics.DefaultPaint()
 	if r.value {
 		fillPaint.Color = r.activeColor
 	} else {
@@ -223,37 +223,37 @@ func (r *renderCheckbox) Paint(ctx *layout.PaintContext) {
 	}
 
 	if r.borderRadius > 0 {
-		rrect := rendering.RRectFromRectAndRadius(rect, rendering.CircularRadius(r.borderRadius))
+		rrect := graphics.RRectFromRectAndRadius(rect, graphics.CircularRadius(r.borderRadius))
 		ctx.Canvas.DrawRRect(rrect, fillPaint)
 	} else {
 		ctx.Canvas.DrawRect(rect, fillPaint)
 	}
 
-	borderPaint := rendering.DefaultPaint()
+	borderPaint := graphics.DefaultPaint()
 	borderPaint.Color = r.borderColor
-	borderPaint.Style = rendering.PaintStyleStroke
+	borderPaint.Style = graphics.PaintStyleStroke
 	borderPaint.StrokeWidth = 1
 	if r.borderRadius > 0 {
-		rrect := rendering.RRectFromRectAndRadius(rect, rendering.CircularRadius(r.borderRadius))
+		rrect := graphics.RRectFromRectAndRadius(rect, graphics.CircularRadius(r.borderRadius))
 		ctx.Canvas.DrawRRect(rrect, borderPaint)
 	} else {
 		ctx.Canvas.DrawRect(rect, borderPaint)
 	}
 
 	if r.value {
-		path := rendering.NewPath()
+		path := graphics.NewPath()
 		path.MoveTo(size.Width*0.24, size.Height*0.55)
 		path.LineTo(size.Width*0.44, size.Height*0.72)
 		path.LineTo(size.Width*0.76, size.Height*0.32)
-		checkPaint := rendering.DefaultPaint()
+		checkPaint := graphics.DefaultPaint()
 		checkPaint.Color = r.checkColor
-		checkPaint.Style = rendering.PaintStyleStroke
+		checkPaint.Style = graphics.PaintStyleStroke
 		checkPaint.StrokeWidth = max(size.Width*0.12, 2)
 		ctx.Canvas.DrawPath(path, checkPaint)
 	}
 }
 
-func (r *renderCheckbox) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderCheckbox) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

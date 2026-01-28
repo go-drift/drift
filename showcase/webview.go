@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -16,7 +16,7 @@ func buildWebViewPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.TextOf("This view renders a platform-native browser surface.", labelStyle(colors)),
 		widgets.VSpace(8),
-		widgets.TextOf("Load any HTTPS URL in the native layer.", rendering.TextStyle{
+		widgets.TextOf("Load any HTTPS URL in the native layer.", graphics.TextStyle{
 			Color:    colors.OnSurfaceVariant,
 			FontSize: 13,
 		}),

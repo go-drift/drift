@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -113,7 +113,7 @@ func (s *locationState) locationCard(colors theme.ColorScheme) core.Widget {
 		return widgets.Container{
 			Color: colors.SurfaceVariant,
 			ChildWidget: widgets.PaddingAll(16,
-				widgets.TextOf("No location data yet", rendering.TextStyle{
+				widgets.TextOf("No location data yet", graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
 					FontSize: 14,
 				}),
@@ -149,14 +149,14 @@ func (s *locationState) locationRow(label, value string, colors theme.ColorSchem
 		MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 		ChildrenWidgets: []core.Widget{
-			widgets.TextOf(label, rendering.TextStyle{
+			widgets.TextOf(label, graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,
 			}),
-			widgets.TextOf(value, rendering.TextStyle{
+			widgets.TextOf(value, graphics.TextStyle{
 				Color:      colors.OnSurface,
 				FontSize:   14,
-				FontWeight: rendering.FontWeightSemibold,
+				FontWeight: graphics.FontWeightSemibold,
 			}),
 		},
 	}

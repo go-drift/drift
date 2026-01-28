@@ -1,6 +1,6 @@
 package layout
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // Alignment represents a position within a rectangle.
 type Alignment struct {
@@ -9,10 +9,10 @@ type Alignment struct {
 }
 
 // WithinRect returns the offset for a child within the given rect.
-func (a Alignment) WithinRect(rect rendering.Rect, childSize rendering.Size) rendering.Offset {
+func (a Alignment) WithinRect(rect graphics.Rect, childSize graphics.Size) graphics.Offset {
 	x := rect.Left + (rect.Width()-childSize.Width)*(a.X+1)/2
 	y := rect.Top + (rect.Height()-childSize.Height)*(a.Y+1)/2
-	return rendering.Offset{X: x, Y: y}
+	return graphics.Offset{X: x, Y: y}
 }
 
 // Common alignment presets.

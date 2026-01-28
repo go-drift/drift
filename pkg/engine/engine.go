@@ -14,7 +14,7 @@ import (
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -101,7 +101,7 @@ func SetApp(root core.Widget) {
 // SetBackgroundColor sets the color used to clear the canvas before each frame.
 // This should match your app's background color so the status bar area (on iOS)
 // or any gaps show the correct color. Safe to call from InitState or Build.
-func SetBackgroundColor(color rendering.Color) {
+func SetBackgroundColor(color graphics.Color) {
 	backgroundColor.Store(uint32(color))
 }
 
@@ -180,7 +180,7 @@ type appRunner struct {
 	deviceScale         float64
 	userApp             core.Widget
 	pointerHandlers     map[int64][]layout.PointerHandler
-	pointerPositions    map[int64]rendering.Offset
+	pointerPositions    map[int64]graphics.Offset
 	lastFPSUpdate       time.Time
 	fpsLabel            string
 	dispatchMu          sync.Mutex
@@ -200,7 +200,7 @@ type appRunner struct {
 
 func init() {
 	// Default background color to black
-	backgroundColor.Store(uint32(rendering.RGB(0, 0, 0)))
+	backgroundColor.Store(uint32(graphics.RGB(0, 0, 0)))
 	// Register dispatch function for platform package
 	platform.RegisterDispatch(Dispatch)
 	// Register RestartApp for error widget
@@ -212,7 +212,7 @@ func newAppRunner() *appRunner {
 		buildOwner:       core.NewBuildOwner(),
 		deviceScale:      1,
 		pointerHandlers:  make(map[int64][]layout.PointerHandler),
-		pointerPositions: make(map[int64]rendering.Offset),
+		pointerPositions: make(map[int64]graphics.Offset),
 	}
 }
 
@@ -301,7 +301,7 @@ func (a *appRunner) flushSemanticsIfNeeded(pipeline *layout.PipelineOwner, scale
 	}
 }
 
-func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err error) {
+func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := &errors.PanicError{
@@ -329,7 +329,7 @@ func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err err
 	a.lastFrameStart = now
 
 	scale := a.deviceScale
-	logicalSize := rendering.Size{
+	logicalSize := graphics.Size{
 		Width:  size.Width / scale,
 		Height: size.Height / scale,
 	}
@@ -379,10 +379,10 @@ func (a *appRunner) Paint(canvas rendering.Canvas, size rendering.Size) (err err
 		}
 
 		// Clear and composite tree using cached layers
-		canvas.Clear(rendering.Color(backgroundColor.Load()))
+		canvas.Clear(graphics.Color(backgroundColor.Load()))
 		canvas.Save()
 		canvas.Scale(scale, scale)
-		paintTreeWithLayers(&layout.PaintContext{Canvas: canvas}, a.rootRender, rendering.Offset{})
+		paintTreeWithLayers(&layout.PaintContext{Canvas: canvas}, a.rootRender, graphics.Offset{})
 		canvas.Restore()
 
 		// Flush geometry batch - blocks until native applies all updates.
@@ -397,7 +397,7 @@ func (a *appRunner) HandlePointer(event PointerEvent) {
 
 	pointerID := event.PointerID
 	var handlers []layout.PointerHandler
-	delta := rendering.Offset{}
+	delta := graphics.Offset{}
 
 	frameLock.Lock()
 	rootRender := a.rootRender
@@ -406,11 +406,11 @@ func (a *appRunner) HandlePointer(event PointerEvent) {
 		return
 	}
 	scale := a.deviceScale
-	position := rendering.Offset{X: event.X / scale, Y: event.Y / scale}
+	position := graphics.Offset{X: event.X / scale, Y: event.Y / scale}
 
 	if event.Phase != PointerPhaseDown {
 		if last, ok := a.pointerPositions[pointerID]; ok {
-			delta = rendering.Offset{X: position.X - last.X, Y: position.Y - last.Y}
+			delta = graphics.Offset{X: position.X - last.X, Y: position.Y - last.Y}
 		}
 	}
 	a.pointerPositions[pointerID] = position
@@ -667,15 +667,15 @@ func (d defaultPlaceholder) Build(ctx core.BuildContext) core.Widget {
 						widgets.MainAxisAlignmentCenter,
 						widgets.CrossAxisAlignmentStart,
 						widgets.MainAxisSizeMin,
-						widgets.TextOf("Drift", rendering.TextStyle{
+						widgets.TextOf("Drift", graphics.TextStyle{
 							Color:      colors.Primary,
 							FontSize:   48,
-							FontWeight: rendering.FontWeightBold,
+							FontWeight: graphics.FontWeightBold,
 						}),
 						widgets.VSpace(16),
 						widgets.TextOf("No app registered", textTheme.BodyLarge),
 						widgets.VSpace(8),
-						widgets.TextOf("Call drift.NewApp(...).Run() to set your root widget", rendering.TextStyle{
+						widgets.TextOf("Call drift.NewApp(...).Run() to set your root widget", graphics.TextStyle{
 							Color:    colors.OnSurfaceVariant,
 							FontSize: 14,
 						}),
@@ -711,16 +711,16 @@ func itoa(value int) string {
 
 func paintBoundaryToLayer(boundary layout.RenderObject) {
 	size := boundary.Size()
-	recorder := &rendering.PictureRecorder{}
+	recorder := &graphics.PictureRecorder{}
 	recordCanvas := recorder.BeginRecording(size)
 
 	// Paint boundary's content to recorded canvas
-	paintTreeWithLayers(&layout.PaintContext{Canvas: recordCanvas}, boundary, rendering.Offset{})
+	paintTreeWithLayers(&layout.PaintContext{Canvas: recordCanvas}, boundary, graphics.Offset{})
 
 	layer := recorder.EndRecording()
 
 	if setter, ok := boundary.(interface {
-		SetLayer(*rendering.DisplayList)
+		SetLayer(*graphics.DisplayList)
 		ClearNeedsPaint()
 	}); ok {
 		setter.SetLayer(layer)
@@ -728,14 +728,14 @@ func paintBoundaryToLayer(boundary layout.RenderObject) {
 	}
 }
 
-func paintTreeWithLayers(ctx *layout.PaintContext, node layout.RenderObject, offset rendering.Offset) {
+func paintTreeWithLayers(ctx *layout.PaintContext, node layout.RenderObject, offset graphics.Offset) {
 	ctx.Canvas.Save()
 	ctx.Canvas.Translate(offset.X, offset.Y)
 
 	// If this is a boundary with valid layer, use it
 	if boundary, ok := node.(interface {
 		IsRepaintBoundary() bool
-		Layer() *rendering.DisplayList
+		Layer() *graphics.DisplayList
 		NeedsPaint() bool
 	}); ok && boundary.IsRepaintBoundary() {
 		if layer := boundary.Layer(); layer != nil && !boundary.NeedsPaint() {

@@ -1,4 +1,4 @@
-package rendering
+package widgets
 
 // Overflow controls whether gradient decorations extend beyond widget bounds.
 //

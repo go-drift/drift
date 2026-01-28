@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/navigation"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -82,14 +82,14 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 						widgets.Container{
 							Width:  200,
 							Height: 100,
-							Color:  rendering.ColorWhite,
-							Gradient: rendering.NewRadialGradient(
-								rendering.Offset{X: 100, Y: 50}, // Center
+							Color:  graphics.ColorWhite,
+							Gradient: graphics.NewRadialGradient(
+								graphics.Offset{X: 100, Y: 50}, // Center
 								100,                             // Radius
-								[]rendering.GradientStop{
-									{Position: 0, Color: rendering.RGBA(47, 249, 238, 60)},   // cyan center
-									{Position: 0.5, Color: rendering.RGBA(238, 23, 130, 20)}, // magenta mid
-									{Position: 1, Color: rendering.RGBA(238, 23, 130, 0)},    // fade out
+								[]graphics.GradientStop{
+									{Position: 0, Color: graphics.RGBA(47, 249, 238, 60)},   // cyan center
+									{Position: 0.5, Color: graphics.RGBA(238, 23, 130, 20)}, // magenta mid
+									{Position: 1, Color: graphics.RGBA(238, 23, 130, 0)},    // fade out
 								},
 							),
 							Alignment: layout.AlignmentCenter,
@@ -100,7 +100,7 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 						}, widgets.VSpace(8),
 						widgets.TextOf("Cross-platform UI for Go", textTheme.HeadlineSmall),
 						widgets.VSpace(4),
-						widgets.TextOf("Build native iOS & Android apps with idiomatic Go", rendering.TextStyle{
+						widgets.TextOf("Build native iOS & Android apps with idiomatic Go", graphics.TextStyle{
 							Color:    colors.OnSurfaceVariant,
 							FontSize: 14,
 						}),
@@ -125,10 +125,10 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 
 // sectionHeader creates a styled section header for the home page.
 func sectionHeader(text string, colors theme.ColorScheme) core.Widget {
-	return widgets.TextOf(text, rendering.TextStyle{
+	return widgets.TextOf(text, graphics.TextStyle{
 		Color:      colors.OnSurface,
 		FontSize:   20,
-		FontWeight: rendering.FontWeightBold,
+		FontWeight: graphics.FontWeightBold,
 	})
 }
 

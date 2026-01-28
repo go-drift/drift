@@ -9,7 +9,7 @@ import (
 	drifterrors "github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
@@ -26,7 +26,7 @@ func ExampleButton_withStyles() {
 	button := widgets.ButtonOf("Submit", func() {
 		fmt.Println("Submitted!")
 	}).
-		WithColor(rendering.RGB(33, 150, 243), rendering.ColorWhite).
+		WithColor(graphics.RGB(33, 150, 243), graphics.ColorWhite).
 		WithFontSize(18).
 		WithPadding(layout.EdgeInsetsSymmetric(32, 16)).
 		WithHaptic(true)
@@ -78,7 +78,7 @@ func ExampleColumnOf() {
 func ExampleContainer() {
 	container := widgets.Container{
 		Padding: layout.EdgeInsetsAll(16),
-		Color:   rendering.RGB(245, 245, 245),
+		Color:   graphics.RGB(245, 245, 245),
 		Width:   200,
 		Height:  100,
 		ChildWidget: widgets.Text{
@@ -93,9 +93,9 @@ func ExampleContainer() {
 func ExampleText() {
 	text := widgets.Text{
 		Content: "Hello, Drift!",
-		Style: rendering.TextStyle{
+		Style: graphics.TextStyle{
 			FontSize: 24,
-			Color:    rendering.RGB(33, 33, 33),
+			Color:    graphics.RGB(33, 33, 33),
 		},
 		Wrap:     true,
 		MaxLines: 2,
@@ -143,7 +143,7 @@ func ExampleGestureDetector() {
 			fmt.Println("Tapped!")
 		},
 		ChildWidget: widgets.Container{
-			Color:   rendering.RGB(200, 200, 200),
+			Color:   graphics.RGB(200, 200, 200),
 			Padding: layout.EdgeInsetsAll(20),
 			ChildWidget: widgets.Text{
 				Content: "Tap me",
@@ -175,13 +175,13 @@ func ExampleStack() {
 		ChildrenWidgets: []core.Widget{
 			// Background
 			widgets.Container{
-				Color:  rendering.RGB(200, 200, 200),
+				Color:  graphics.RGB(200, 200, 200),
 				Width:  200,
 				Height: 200,
 			},
 			// Foreground centered via Alignment
 			widgets.Container{
-				Color:  rendering.RGB(100, 149, 237),
+				Color:  graphics.RGB(100, 149, 237),
 				Width:  100,
 				Height: 100,
 			},
@@ -197,7 +197,7 @@ func ExampleStack_withPositioned() {
 		ChildrenWidgets: []core.Widget{
 			// Background fills the stack
 			widgets.Container{
-				Color:  rendering.RGB(240, 240, 240),
+				Color:  graphics.RGB(240, 240, 240),
 				Width:  300,
 				Height: 200,
 			},
@@ -206,7 +206,7 @@ func ExampleStack_withPositioned() {
 				Top:   widgets.Ptr(8),
 				Right: widgets.Ptr(8),
 				ChildWidget: widgets.Container{
-					Color:   rendering.RGB(255, 0, 0),
+					Color:   graphics.RGB(255, 0, 0),
 					Width:   20,
 					Height:  20,
 					Padding: layout.EdgeInsetsAll(4),
@@ -218,7 +218,7 @@ func ExampleStack_withPositioned() {
 				Right:  widgets.Ptr(0),
 				Bottom: widgets.Ptr(0),
 				ChildWidget: widgets.Container{
-					Color:  rendering.RGB(33, 33, 33),
+					Color:  graphics.RGB(33, 33, 33),
 					Height: 48,
 				},
 			},
@@ -254,7 +254,7 @@ func ExamplePositioned() {
 		Width:  widgets.Ptr(100),
 		Height: widgets.Ptr(60),
 		ChildWidget: widgets.Container{
-			Color: rendering.RGB(100, 149, 237),
+			Color: graphics.RGB(100, 149, 237),
 		},
 	}
 
@@ -271,7 +271,7 @@ func ExamplePositioned_stretch() {
 		Right: widgets.Ptr(16),
 		Top:   widgets.Ptr(100),
 		ChildWidget: widgets.Container{
-			Color:  rendering.RGB(200, 200, 200),
+			Color:  graphics.RGB(200, 200, 200),
 			Height: 2, // Divider line
 		},
 	}
@@ -282,7 +282,7 @@ func ExamplePositioned_stretch() {
 		Bottom: widgets.Ptr(50),
 		Left:   widgets.Ptr(0),
 		ChildWidget: widgets.Container{
-			Color: rendering.RGB(100, 100, 100),
+			Color: graphics.RGB(100, 100, 100),
 			Width: 4, // Vertical bar
 		},
 	}
@@ -294,7 +294,7 @@ func ExamplePositioned_stretch() {
 		Right:  widgets.Ptr(20),
 		Bottom: widgets.Ptr(20),
 		ChildWidget: widgets.Container{
-			Color: rendering.RGBA(0, 0, 0, 128), // Semi-transparent overlay
+			Color: graphics.RGBA(0, 0, 0, 128), // Semi-transparent overlay
 		},
 	}
 
@@ -335,13 +335,13 @@ func ExampleRow_withExpanded() {
 	row := widgets.Row{
 		ChildrenWidgets: []core.Widget{
 			// Fixed width
-			widgets.Container{Width: 80, Color: rendering.RGB(200, 200, 200)},
+			widgets.Container{Width: 80, Color: graphics.RGB(200, 200, 200)},
 			// Flexible - takes remaining space
 			widgets.Expanded{
-				ChildWidget: widgets.Container{Color: rendering.RGB(100, 149, 237)},
+				ChildWidget: widgets.Container{Color: graphics.RGB(100, 149, 237)},
 			},
 			// Fixed width
-			widgets.Container{Width: 80, Color: rendering.RGB(200, 200, 200)},
+			widgets.Container{Width: 80, Color: graphics.RGB(200, 200, 200)},
 		},
 	}
 	_ = row
@@ -352,7 +352,7 @@ func ExampleColumn_withExpanded() {
 	column := widgets.Column{
 		ChildrenWidgets: []core.Widget{
 			// Fixed header
-			widgets.Container{Height: 60, Color: rendering.RGB(33, 33, 33)},
+			widgets.Container{Height: 60, Color: graphics.RGB(33, 33, 33)},
 			// Content takes remaining space
 			widgets.Expanded{
 				ChildWidget: widgets.ScrollView{
@@ -360,7 +360,7 @@ func ExampleColumn_withExpanded() {
 				},
 			},
 			// Fixed footer
-			widgets.Container{Height: 48, Color: rendering.RGB(66, 66, 66)},
+			widgets.Container{Height: 48, Color: graphics.RGB(66, 66, 66)},
 		},
 	}
 	_ = column
@@ -412,18 +412,18 @@ func ExampleContainer_withGradient() {
 	container := widgets.Container{
 		Width:  200,
 		Height: 100,
-		Gradient: rendering.NewLinearGradient(
-			rendering.Offset{X: 0, Y: 0},
-			rendering.Offset{X: 1, Y: 1},
-			[]rendering.GradientStop{
-				{Position: 0.0, Color: rendering.RGB(66, 133, 244)},
-				{Position: 1.0, Color: rendering.RGB(15, 157, 88)},
+		Gradient: graphics.NewLinearGradient(
+			graphics.Offset{X: 0, Y: 0},
+			graphics.Offset{X: 1, Y: 1},
+			[]graphics.GradientStop{
+				{Position: 0.0, Color: graphics.RGB(66, 133, 244)},
+				{Position: 1.0, Color: graphics.RGB(15, 157, 88)},
 			},
 		),
-		Shadow: &rendering.BoxShadow{
-			Color:      rendering.RGBA(0, 0, 0, 64),
+		Shadow: &graphics.BoxShadow{
+			Color:      graphics.RGBA(0, 0, 0, 64),
 			BlurRadius: 8,
-			Offset:     rendering.Offset{X: 0, Y: 4},
+			Offset:     graphics.Offset{X: 0, Y: 4},
 		},
 		ChildWidget: widgets.Center{ChildWidget: widgets.Text{Content: "Gradient Card"}},
 	}
@@ -439,7 +439,7 @@ func ExampleExpanded() {
 			// Expanded takes all remaining horizontal space
 			widgets.Expanded{
 				ChildWidget: widgets.Container{
-					Color:       rendering.RGB(240, 240, 240),
+					Color:       graphics.RGB(240, 240, 240),
 					ChildWidget: widgets.Text{Content: "Flexible content"},
 				},
 			},
@@ -455,12 +455,12 @@ func ExampleExpanded_flexFactors() {
 			// Takes 1/3 of available space
 			widgets.Expanded{
 				Flex:        1,
-				ChildWidget: widgets.Container{Color: rendering.RGB(255, 0, 0)},
+				ChildWidget: widgets.Container{Color: graphics.RGB(255, 0, 0)},
 			},
 			// Takes 2/3 of available space
 			widgets.Expanded{
 				Flex:        2,
-				ChildWidget: widgets.Container{Color: rendering.RGB(0, 0, 255)},
+				ChildWidget: widgets.Container{Color: graphics.RGB(0, 0, 255)},
 			},
 		},
 	}
@@ -506,7 +506,7 @@ func ExampleSizedBox() {
 	box := widgets.SizedBox{
 		Width:       100,
 		Height:      50,
-		ChildWidget: widgets.Container{Color: rendering.RGB(200, 200, 200)},
+		ChildWidget: widgets.Container{Color: graphics.RGB(200, 200, 200)},
 	}
 	_ = box
 }
@@ -553,7 +553,7 @@ func ExampleGestureDetector_drag() {
 		ChildWidget: widgets.Container{
 			Width:  100,
 			Height: 100,
-			Color:  rendering.RGB(100, 149, 237),
+			Color:  graphics.RGB(100, 149, 237),
 		},
 	}
 	_ = detector
@@ -805,7 +805,7 @@ func ExampleAnimatedContainer() {
 		Curve:    animation.EaseInOut,
 		Width:    func() float64 { if isExpanded { return 200 } else { return 100 } }(),
 		Height:   func() float64 { if isExpanded { return 200 } else { return 100 } }(),
-		Color:    func() rendering.Color { if isExpanded { return rendering.RGB(100, 149, 237) } else { return rendering.RGB(200, 200, 200) } }(),
+		Color:    func() graphics.Color { if isExpanded { return graphics.RGB(100, 149, 237) } else { return graphics.RGB(200, 200, 200) } }(),
 		ChildWidget: widgets.Center{ChildWidget: widgets.Text{Content: "Tap to toggle"}},
 	}
 	_ = container
@@ -833,7 +833,7 @@ func ExampleErrorBoundary() {
 		FallbackBuilder: func(err *drifterrors.BuildError) core.Widget {
 			return widgets.Container{
 				Padding:     layout.EdgeInsetsAll(16),
-				Color:       rendering.RGBA(255, 0, 0, 32),
+				Color:       graphics.RGBA(255, 0, 0, 32),
 				ChildWidget: widgets.Text{Content: "Something went wrong"},
 			}
 		},
@@ -850,7 +850,7 @@ func ExampleTappable() {
 		func() { fmt.Println("Submitted!") },
 		widgets.Container{
 			Padding:     layout.EdgeInsetsAll(16),
-			Color:       rendering.RGB(33, 150, 243),
+			Color:       graphics.RGB(33, 150, 243),
 			ChildWidget: widgets.Text{Content: "Submit"},
 		},
 	)
@@ -884,7 +884,7 @@ func ExampleSemanticHeading() {
 		1, // heading level 1-6
 		widgets.Text{
 			Content: "Welcome",
-			Style:   rendering.TextStyle{FontSize: 32, FontWeight: 700},
+			Style:   graphics.TextStyle{FontSize: 32, FontWeight: 700},
 		},
 	)
 	_ = heading
@@ -897,7 +897,7 @@ func ExampleSemanticLink() {
 		func() { fmt.Println("Opening website...") },
 		widgets.Text{
 			Content: "www.example.com",
-			Style:   rendering.TextStyle{Color: rendering.RGB(33, 150, 243)},
+			Style:   graphics.TextStyle{Color: graphics.RGB(33, 150, 243)},
 		},
 	)
 	_ = link
@@ -933,7 +933,7 @@ func ExampleDecorative() {
 	divider := widgets.Decorative(
 		widgets.Container{
 			Height: 1,
-			Color:  rendering.RGB(200, 200, 200),
+			Color:  graphics.RGB(200, 200, 200),
 		},
 	)
 	_ = divider

@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -38,22 +38,22 @@ type InputDecoration struct {
 	BorderRadius float64
 
 	// BorderColor when not focused.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 
 	// FocusedBorderColor when focused.
-	FocusedBorderColor rendering.Color
+	FocusedBorderColor graphics.Color
 
 	// BackgroundColor of the input field.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 
 	// LabelStyle for the label text.
-	LabelStyle rendering.TextStyle
+	LabelStyle graphics.TextStyle
 
 	// HintStyle for the hint text.
-	HintStyle rendering.TextStyle
+	HintStyle graphics.TextStyle
 
 	// HelperStyle for the helper/error text.
-	HelperStyle rendering.TextStyle
+	HelperStyle graphics.TextStyle
 }
 
 // DatePicker displays a date selection field that opens a native date picker modal.
@@ -83,7 +83,7 @@ type DatePicker struct {
 	Decoration *InputDecoration
 
 	// TextStyle for the value text.
-	TextStyle rendering.TextStyle
+	TextStyle graphics.TextStyle
 
 	// Child overrides the default rendering for full customization.
 	Child core.Widget
@@ -217,7 +217,7 @@ func (s *datePickerState) buildDefaultField(ctx core.BuildContext, w DatePicker,
 	}
 
 	var displayText string
-	var displayStyle rendering.TextStyle
+	var displayStyle graphics.TextStyle
 	if w.Value != nil {
 		displayText = w.Value.Format(format)
 		displayStyle = textStyle

@@ -426,18 +426,18 @@ Add visual styling without layout:
 widgets.DecoratedBox{
     Color:        colors.Surface,
     BorderRadius: 8,
-    Gradient: rendering.NewLinearGradient(
-        rendering.Offset{X: 0, Y: 0},    // start
-        rendering.Offset{X: 0, Y: 100},  // end
-        []rendering.GradientStop{
+    Gradient: graphics.NewLinearGradient(
+        graphics.Offset{X: 0, Y: 0},    // start
+        graphics.Offset{X: 0, Y: 100},  // end
+        []graphics.GradientStop{
             {Position: 0, Color: color1},
             {Position: 1, Color: color2},
         },
     ),
-    Shadow: &rendering.BoxShadow{
+    Shadow: &graphics.BoxShadow{
         Color:      shadowColor,
         BlurRadius: 8,
-        Offset:     rendering.Offset{X: 0, Y: 2},
+        Offset:     graphics.Offset{X: 0, Y: 2},
     },
     ChildWidget: content,
 }

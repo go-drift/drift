@@ -6,7 +6,7 @@ package validation
 import (
 	"testing"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -117,7 +117,7 @@ func TestLintSemanticsTree_HiddenImage(t *testing.T) {
 
 func TestLintSemanticsTree_SmallTouchTarget(t *testing.T) {
 	node := semantics.NewSemanticsNode()
-	node.Rect = rendering.RectFromLTWH(0, 0, 30, 30) // Too small
+	node.Rect = graphics.RectFromLTWH(0, 0, 30, 30) // Too small
 	node.Config.Actions = semantics.NewSemanticsActions()
 	node.Config.Actions.SetHandler(semantics.SemanticsActionTap, func(args any) {})
 	node.Config.Properties.Label = "Button" // Add label to avoid missing-label error
@@ -142,7 +142,7 @@ func TestLintSemanticsTree_SmallTouchTarget(t *testing.T) {
 
 func TestLintSemanticsTree_AdequateTouchTarget(t *testing.T) {
 	node := semantics.NewSemanticsNode()
-	node.Rect = rendering.RectFromLTWH(0, 0, 48, 48) // Minimum size
+	node.Rect = graphics.RectFromLTWH(0, 0, 48, 48) // Minimum size
 	node.Config.Actions = semantics.NewSemanticsActions()
 	node.Config.Actions.SetHandler(semantics.SemanticsActionTap, func(args any) {})
 	node.Config.Properties.Label = "Button"

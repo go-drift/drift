@@ -5,7 +5,7 @@ import (
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -33,7 +33,7 @@ type ActivityIndicator struct {
 	Size ActivityIndicatorSize
 
 	// Color is the spinner color (optional, uses system default if not set).
-	Color rendering.Color
+	Color graphics.Color
 }
 
 func (a ActivityIndicator) CreateElement() core.Element {
@@ -139,7 +139,7 @@ type activityIndicatorRender struct {
 	state     *activityIndicatorState
 	animating bool
 	size      ActivityIndicatorSize
-	color     rendering.Color
+	color     graphics.Color
 }
 
 func (a activityIndicatorRender) CreateElement() core.Element {
@@ -177,7 +177,7 @@ type renderActivityIndicator struct {
 	state     *activityIndicatorState
 	animating bool
 	size      ActivityIndicatorSize
-	color     rendering.Color
+	color     graphics.Color
 }
 
 func (r *renderActivityIndicator) PerformLayout() {
@@ -196,10 +196,10 @@ func (r *renderActivityIndicator) PerformLayout() {
 
 	width = min(max(width, constraints.MinWidth), constraints.MaxWidth)
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
-func (r *renderActivityIndicator) updatePlatformView(clipBounds *rendering.Rect) {
+func (r *renderActivityIndicator) updatePlatformView(clipBounds *graphics.Rect) {
 	if r.state == nil || r.state.element == nil {
 		return
 	}
@@ -223,7 +223,7 @@ func (r *renderActivityIndicator) updatePlatformView(clipBounds *rendering.Rect)
 func (r *renderActivityIndicator) Paint(ctx *layout.PaintContext) {
 	// Get clip bounds for platform view
 	clip, hasClip := ctx.CurrentClipBounds()
-	var clipPtr *rendering.Rect
+	var clipPtr *graphics.Rect
 	if hasClip {
 		clipPtr = &clip
 	}
@@ -234,7 +234,7 @@ func (r *renderActivityIndicator) Paint(ctx *layout.PaintContext) {
 	// Native view handles rendering - nothing to draw in Skia
 }
 
-func (r *renderActivityIndicator) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderActivityIndicator) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

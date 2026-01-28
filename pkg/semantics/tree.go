@@ -2,7 +2,7 @@
 
 package semantics
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // SemanticsUpdate represents changes to the semantics tree that need to be sent to the platform.
 type SemanticsUpdate struct {
@@ -24,7 +24,7 @@ type SemanticsNodeUpdate struct {
 	ID int64
 
 	// Rect is the bounding rectangle in global coordinates.
-	Rect rendering.Rect
+	Rect graphics.Rect
 
 	// Label is the primary text description.
 	Label string
@@ -244,7 +244,7 @@ func floatPtrEqual(a, b *float64) bool {
 
 // BuildSemanticsTree constructs a semantics tree from a root configuration.
 // This is a helper for testing and debugging.
-func BuildSemanticsTree(config SemanticsConfiguration, rect rendering.Rect, children ...*SemanticsNode) *SemanticsNode {
+func BuildSemanticsTree(config SemanticsConfiguration, rect graphics.Rect, children ...*SemanticsNode) *SemanticsNode {
 	node := NewSemanticsNode()
 	node.Rect = rect
 	node.Config = config

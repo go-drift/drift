@@ -1,96 +1,96 @@
 package theme
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // TextTheme defines text styles for various purposes.
 // Based on Material Design 3 type scale.
 type TextTheme struct {
 	// Display styles are for short, important text.
-	DisplayLarge  rendering.TextStyle
-	DisplayMedium rendering.TextStyle
-	DisplaySmall  rendering.TextStyle
+	DisplayLarge  graphics.TextStyle
+	DisplayMedium graphics.TextStyle
+	DisplaySmall  graphics.TextStyle
 
 	// Headline styles are for high-emphasis text.
-	HeadlineLarge  rendering.TextStyle
-	HeadlineMedium rendering.TextStyle
-	HeadlineSmall  rendering.TextStyle
+	HeadlineLarge  graphics.TextStyle
+	HeadlineMedium graphics.TextStyle
+	HeadlineSmall  graphics.TextStyle
 
 	// Title styles are for medium-emphasis text.
-	TitleLarge  rendering.TextStyle
-	TitleMedium rendering.TextStyle
-	TitleSmall  rendering.TextStyle
+	TitleLarge  graphics.TextStyle
+	TitleMedium graphics.TextStyle
+	TitleSmall  graphics.TextStyle
 
 	// Body styles are for long-form text.
-	BodyLarge  rendering.TextStyle
-	BodyMedium rendering.TextStyle
-	BodySmall  rendering.TextStyle
+	BodyLarge  graphics.TextStyle
+	BodyMedium graphics.TextStyle
+	BodySmall  graphics.TextStyle
 
 	// Label styles are for small text like buttons.
-	LabelLarge  rendering.TextStyle
-	LabelMedium rendering.TextStyle
-	LabelSmall  rendering.TextStyle
+	LabelLarge  graphics.TextStyle
+	LabelMedium graphics.TextStyle
+	LabelSmall  graphics.TextStyle
 }
 
 // DefaultTextTheme creates a TextTheme with default sizes and the given text color.
-func DefaultTextTheme(textColor rendering.Color) TextTheme {
+func DefaultTextTheme(textColor graphics.Color) TextTheme {
 	return TextTheme{
-		DisplayLarge: rendering.TextStyle{
+		DisplayLarge: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 57,
 		},
-		DisplayMedium: rendering.TextStyle{
+		DisplayMedium: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 45,
 		},
-		DisplaySmall: rendering.TextStyle{
+		DisplaySmall: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 36,
 		},
-		HeadlineLarge: rendering.TextStyle{
+		HeadlineLarge: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 32,
 		},
-		HeadlineMedium: rendering.TextStyle{
+		HeadlineMedium: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 28,
 		},
-		HeadlineSmall: rendering.TextStyle{
+		HeadlineSmall: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 24,
 		},
-		TitleLarge: rendering.TextStyle{
+		TitleLarge: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 22,
 		},
-		TitleMedium: rendering.TextStyle{
+		TitleMedium: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 16,
 		},
-		TitleSmall: rendering.TextStyle{
+		TitleSmall: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 14,
 		},
-		BodyLarge: rendering.TextStyle{
+		BodyLarge: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 16,
 		},
-		BodyMedium: rendering.TextStyle{
+		BodyMedium: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 14,
 		},
-		BodySmall: rendering.TextStyle{
+		BodySmall: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 12,
 		},
-		LabelLarge: rendering.TextStyle{
+		LabelLarge: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 14,
 		},
-		LabelMedium: rendering.TextStyle{
+		LabelMedium: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 12,
 		},
-		LabelSmall: rendering.TextStyle{
+		LabelSmall: graphics.TextStyle{
 			Color:    textColor,
 			FontSize: 11,
 		},
@@ -118,7 +118,7 @@ func (t TextTheme) Apply(scale float64) TextTheme {
 	}
 }
 
-func scaleTextStyle(style rendering.TextStyle, scale float64) rendering.TextStyle {
+func scaleTextStyle(style graphics.TextStyle, scale float64) graphics.TextStyle {
 	style.FontSize = style.FontSize * scale
 	return style
 }

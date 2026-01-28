@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -48,11 +48,11 @@ type Radio[T any] struct {
 	// Size controls the radio diameter.
 	Size float64
 	// ActiveColor is the selected fill color.
-	ActiveColor rendering.Color
+	ActiveColor graphics.Color
 	// InactiveColor is the unselected border color.
-	InactiveColor rendering.Color
+	InactiveColor graphics.Color
 	// BackgroundColor is the fill color when unselected.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 }
 
 func (r Radio[T]) CreateElement() core.Element {
@@ -110,9 +110,9 @@ type radioRender[T any] struct {
 	onChanged       func(T)
 	enabled         bool
 	size            float64
-	activeColor     rendering.Color
-	inactiveColor   rendering.Color
-	backgroundColor rendering.Color
+	activeColor     graphics.Color
+	inactiveColor   graphics.Color
+	backgroundColor graphics.Color
 }
 
 func (r radioRender[T]) CreateElement() core.Element {
@@ -145,9 +145,9 @@ type renderRadio[T any] struct {
 	onChanged       func(T)
 	enabled         bool
 	size            float64
-	activeColor     rendering.Color
-	inactiveColor   rendering.Color
-	backgroundColor rendering.Color
+	activeColor     graphics.Color
+	inactiveColor   graphics.Color
+	backgroundColor graphics.Color
 	tap             *gestures.TapGestureRecognizer
 }
 
@@ -170,32 +170,32 @@ func (r *renderRadio[T]) PerformLayout() {
 	}
 	size = min(max(size, constraints.MinWidth), constraints.MaxWidth)
 	size = min(max(size, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: size, Height: size})
+	r.SetSize(graphics.Size{Width: size, Height: size})
 }
 
 func (r *renderRadio[T]) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
-	center := rendering.Offset{X: size.Width / 2, Y: size.Height / 2}
+	center := graphics.Offset{X: size.Width / 2, Y: size.Height / 2}
 	radius := size.Width / 2
 
-	fillPaint := rendering.DefaultPaint()
+	fillPaint := graphics.DefaultPaint()
 	fillPaint.Color = r.backgroundColor
 	ctx.Canvas.DrawCircle(center, radius, fillPaint)
 
-	borderPaint := rendering.DefaultPaint()
+	borderPaint := graphics.DefaultPaint()
 	borderPaint.Color = r.inactiveColor
-	borderPaint.Style = rendering.PaintStyleStroke
+	borderPaint.Style = graphics.PaintStyleStroke
 	borderPaint.StrokeWidth = 1
 	ctx.Canvas.DrawCircle(center, radius-0.5, borderPaint)
 
 	if r.selected {
-		innerPaint := rendering.DefaultPaint()
+		innerPaint := graphics.DefaultPaint()
 		innerPaint.Color = r.activeColor
 		ctx.Canvas.DrawCircle(center, radius*0.45, innerPaint)
 	}
 }
 
-func (r *renderRadio[T]) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderRadio[T]) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

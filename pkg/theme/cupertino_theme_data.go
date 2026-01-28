@@ -1,6 +1,6 @@
 package theme
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // CupertinoThemeData contains all theme configuration for iOS-style interfaces.
 type CupertinoThemeData struct {
@@ -8,10 +8,10 @@ type CupertinoThemeData struct {
 	Brightness Brightness
 
 	// PrimaryColor is the primary accent color (defaults to SystemBlue).
-	PrimaryColor rendering.Color
+	PrimaryColor graphics.Color
 
 	// PrimaryContrastingColor is used for text/icons on primary color.
-	PrimaryContrastingColor rendering.Color
+	PrimaryContrastingColor graphics.Color
 
 	// Colors provides the full iOS color palette.
 	Colors CupertinoColors
@@ -20,10 +20,10 @@ type CupertinoThemeData struct {
 	TextTheme CupertinoTextThemeData
 
 	// BarBackgroundColor is the color for navigation/tab bars.
-	BarBackgroundColor rendering.Color
+	BarBackgroundColor graphics.Color
 
 	// ScaffoldBackgroundColor is the default page background color.
-	ScaffoldBackgroundColor rendering.Color
+	ScaffoldBackgroundColor graphics.Color
 }
 
 // DefaultCupertinoLightTheme returns the default iOS light theme.
@@ -32,10 +32,10 @@ func DefaultCupertinoLightTheme() *CupertinoThemeData {
 	return &CupertinoThemeData{
 		Brightness:              BrightnessLight,
 		PrimaryColor:            colors.SystemBlue,
-		PrimaryContrastingColor: rendering.RGB(255, 255, 255),
+		PrimaryContrastingColor: graphics.RGB(255, 255, 255),
 		Colors:                  colors,
 		TextTheme:               DefaultCupertinoTextTheme(colors.Label),
-		BarBackgroundColor:      rendering.RGBA(249, 249, 249, 244), // iOS translucent bar
+		BarBackgroundColor:      graphics.RGBA(249, 249, 249, 244), // iOS translucent bar
 		ScaffoldBackgroundColor: colors.SystemBackground,
 	}
 }
@@ -46,10 +46,10 @@ func DefaultCupertinoDarkTheme() *CupertinoThemeData {
 	return &CupertinoThemeData{
 		Brightness:              BrightnessDark,
 		PrimaryColor:            colors.SystemBlue,
-		PrimaryContrastingColor: rendering.RGB(255, 255, 255),
+		PrimaryContrastingColor: graphics.RGB(255, 255, 255),
 		Colors:                  colors,
 		TextTheme:               DefaultCupertinoTextTheme(colors.Label),
-		BarBackgroundColor:      rendering.RGBA(30, 30, 30, 244), // iOS translucent bar
+		BarBackgroundColor:      graphics.RGBA(30, 30, 30, 244), // iOS translucent bar
 		ScaffoldBackgroundColor: colors.SystemBackground,
 	}
 }
@@ -57,12 +57,12 @@ func DefaultCupertinoDarkTheme() *CupertinoThemeData {
 // CopyWith returns a new CupertinoThemeData with the specified fields overridden.
 func (t *CupertinoThemeData) CopyWith(
 	brightness *Brightness,
-	primaryColor *rendering.Color,
-	primaryContrastingColor *rendering.Color,
+	primaryColor *graphics.Color,
+	primaryContrastingColor *graphics.Color,
 	colors *CupertinoColors,
 	textTheme *CupertinoTextThemeData,
-	barBackgroundColor *rendering.Color,
-	scaffoldBackgroundColor *rendering.Color,
+	barBackgroundColor *graphics.Color,
+	scaffoldBackgroundColor *graphics.Color,
 ) *CupertinoThemeData {
 	result := &CupertinoThemeData{
 		Brightness:              t.Brightness,

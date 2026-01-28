@@ -2,7 +2,7 @@ package animation
 
 import (
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Tween interpolates between Begin and End values based on animation progress.
@@ -41,15 +41,15 @@ func LerpFloat64(a, b float64, t float64) float64 {
 }
 
 // LerpOffset linearly interpolates between two Offset values.
-func LerpOffset(a, b rendering.Offset, t float64) rendering.Offset {
-	return rendering.Offset{
+func LerpOffset(a, b graphics.Offset, t float64) graphics.Offset {
+	return graphics.Offset{
 		X: LerpFloat64(a.X, b.X, t),
 		Y: LerpFloat64(a.Y, b.Y, t),
 	}
 }
 
 // LerpColor linearly interpolates between two Color values.
-func LerpColor(a, b rendering.Color, t float64) rendering.Color {
+func LerpColor(a, b graphics.Color, t float64) graphics.Color {
 	aR := float64((a >> 16) & 0xFF)
 	aG := float64((a >> 8) & 0xFF)
 	aB := float64(a & 0xFF)
@@ -65,7 +65,7 @@ func LerpColor(a, b rendering.Color, t float64) rendering.Color {
 	b8 := uint8(LerpFloat64(aB, bB, t))
 	alpha := uint8(LerpFloat64(aA, bA, t))
 
-	return rendering.Color(uint32(alpha)<<24 | uint32(r)<<16 | uint32(g)<<8 | uint32(b8))
+	return graphics.Color(uint32(alpha)<<24 | uint32(r)<<16 | uint32(g)<<8 | uint32(b8))
 }
 
 // TweenFloat64 creates a tween for float64 values.
@@ -78,8 +78,8 @@ func TweenFloat64(begin, end float64) *Tween[float64] {
 }
 
 // TweenOffset creates a tween for Offset values.
-func TweenOffset(begin, end rendering.Offset) *Tween[rendering.Offset] {
-	return &Tween[rendering.Offset]{
+func TweenOffset(begin, end graphics.Offset) *Tween[graphics.Offset] {
+	return &Tween[graphics.Offset]{
 		Begin: begin,
 		End:   end,
 		Lerp:  LerpOffset,
@@ -87,8 +87,8 @@ func TweenOffset(begin, end rendering.Offset) *Tween[rendering.Offset] {
 }
 
 // TweenColor creates a tween for Color values.
-func TweenColor(begin, end rendering.Color) *Tween[rendering.Color] {
-	return &Tween[rendering.Color]{
+func TweenColor(begin, end graphics.Color) *Tween[graphics.Color] {
+	return &Tween[graphics.Color]{
 		Begin: begin,
 		End:   end,
 		Lerp:  LerpColor,
@@ -106,8 +106,8 @@ func LerpEdgeInsets(a, b layout.EdgeInsets, t float64) layout.EdgeInsets {
 }
 
 // LerpRadius linearly interpolates between two Radius values.
-func LerpRadius(a, b rendering.Radius, t float64) rendering.Radius {
-	return rendering.Radius{
+func LerpRadius(a, b graphics.Radius, t float64) graphics.Radius {
+	return graphics.Radius{
 		X: LerpFloat64(a.X, b.X, t),
 		Y: LerpFloat64(a.Y, b.Y, t),
 	}
@@ -131,8 +131,8 @@ func TweenEdgeInsets(begin, end layout.EdgeInsets) *Tween[layout.EdgeInsets] {
 }
 
 // TweenRadius creates a tween for Radius values.
-func TweenRadius(begin, end rendering.Radius) *Tween[rendering.Radius] {
-	return &Tween[rendering.Radius]{
+func TweenRadius(begin, end graphics.Radius) *Tween[graphics.Radius] {
+	return &Tween[graphics.Radius]{
 		Begin: begin,
 		End:   end,
 		Lerp:  LerpRadius,

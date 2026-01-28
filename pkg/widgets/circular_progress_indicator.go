@@ -7,7 +7,7 @@ import (
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -20,10 +20,10 @@ type CircularProgressIndicator struct {
 	Value *float64
 
 	// Color is the indicator color. Uses theme primary color if not set.
-	Color rendering.Color
+	Color graphics.Color
 
 	// TrackColor is the background track color. Uses theme surface variant if not set.
-	TrackColor rendering.Color
+	TrackColor graphics.Color
 
 	// StrokeWidth is the thickness of the indicator. Default: 4.0
 	StrokeWidth float64
@@ -169,8 +169,8 @@ func (s *circularProgressState) Build(ctx core.BuildContext) core.Widget {
 
 type circularProgressRender struct {
 	value       *float64
-	color       rendering.Color
-	trackColor  rendering.Color
+	color       graphics.Color
+	trackColor  graphics.Color
 	strokeWidth float64
 	size        float64
 	rotationRad float64
@@ -215,8 +215,8 @@ func (c circularProgressRender) UpdateRenderObject(ctx core.BuildContext, render
 type renderCircularProgress struct {
 	layout.RenderBoxBase
 	value       *float64
-	color       rendering.Color
-	trackColor  rendering.Color
+	color       graphics.Color
+	trackColor  graphics.Color
 	strokeWidth float64
 	size        float64
 	rotationRad float64
@@ -227,7 +227,7 @@ func (r *renderCircularProgress) PerformLayout() {
 	constraints := r.Constraints()
 	width := min(max(r.size, constraints.MinWidth), constraints.MaxWidth)
 	height := min(max(r.size, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
 func (r *renderCircularProgress) Paint(ctx *layout.PaintContext) {
@@ -238,18 +238,18 @@ func (r *renderCircularProgress) Paint(ctx *layout.PaintContext) {
 
 	// Draw track (background circle)
 	if r.trackColor != 0 {
-		trackPaint := rendering.DefaultPaint()
-		trackPaint.Style = rendering.PaintStyleStroke
+		trackPaint := graphics.DefaultPaint()
+		trackPaint.Style = graphics.PaintStyleStroke
 		trackPaint.StrokeWidth = r.strokeWidth
 		trackPaint.Color = r.trackColor
 
 		// Draw full circle as track
-		ctx.Canvas.DrawCircle(rendering.Offset{X: centerX, Y: centerY}, radius, trackPaint)
+		ctx.Canvas.DrawCircle(graphics.Offset{X: centerX, Y: centerY}, radius, trackPaint)
 	}
 
 	// Draw progress arc
-	arcPaint := rendering.DefaultPaint()
-	arcPaint.Style = rendering.PaintStyleStroke
+	arcPaint := graphics.DefaultPaint()
+	arcPaint.Style = graphics.PaintStyleStroke
 	arcPaint.StrokeWidth = r.strokeWidth
 	arcPaint.Color = r.color
 
@@ -277,14 +277,14 @@ func (r *renderCircularProgress) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderCircularProgress) drawArc(ctx *layout.PaintContext, cx, cy, radius, startAngle, sweepAngle float64, paint rendering.Paint) {
+func (r *renderCircularProgress) drawArc(ctx *layout.PaintContext, cx, cy, radius, startAngle, sweepAngle float64, paint graphics.Paint) {
 	if sweepAngle == 0 {
 		return
 	}
 
 	// Draw arc using cubic bezier curves
 	// For best accuracy, split into 90-degree (π/2) segments
-	path := rendering.NewPath()
+	path := graphics.NewPath()
 
 	// Calculate start point
 	startX := cx + radius*math.Cos(startAngle)
@@ -344,7 +344,7 @@ func (r *renderCircularProgress) drawArc(ctx *layout.PaintContext, cx, cy, radiu
 	ctx.Canvas.DrawPath(path, paint)
 }
 
-func (r *renderCircularProgress) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderCircularProgress) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	// Progress indicators typically don't handle hit tests
 	return false
 }

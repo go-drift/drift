@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // GestureDetector wraps a child widget with gesture recognition callbacks.
@@ -102,7 +102,7 @@ func (r *renderGestureDetector) VisitChildren(visitor func(layout.RenderObject))
 func (r *renderGestureDetector) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child == nil {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 	r.child.Layout(constraints, true) // true: we read child.Size()
@@ -112,11 +112,11 @@ func (r *renderGestureDetector) PerformLayout() {
 
 func (r *renderGestureDetector) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, rendering.Offset{})
+		ctx.PaintChild(r.child, graphics.Offset{})
 	}
 }
 
-func (r *renderGestureDetector) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderGestureDetector) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/svg"
 )
 
@@ -66,7 +66,7 @@ type SvgImage struct {
 	// TintColor replaces all SVG colors with this color while preserving alpha.
 	// Zero (ColorTransparent) means no tinting - original colors are preserved.
 	// Note: Tinting affects ALL content including gradients and embedded images.
-	TintColor rendering.Color
+	TintColor graphics.Color
 
 	// SemanticLabel provides an accessibility description.
 	SemanticLabel string
@@ -141,7 +141,7 @@ type renderSvgImage struct {
 	width                float64
 	height               float64
 	preserveAspectRatio  *svg.PreserveAspectRatio
-	tintColor            rendering.Color
+	tintColor            graphics.Color
 	semanticLabel        string
 	excludeFromSemantics bool
 }
@@ -152,7 +152,7 @@ func (r *renderSvgImage) SetChild(child layout.RenderObject) {
 
 func (r *renderSvgImage) PerformLayout() {
 	constraints := r.Constraints()
-	var size rendering.Size
+	var size graphics.Size
 
 	if r.source != nil {
 		vb := r.source.ViewBox()
@@ -164,19 +164,19 @@ func (r *renderSvgImage) PerformLayout() {
 		switch {
 		case r.width > 0 && r.height > 0:
 			// Both specified: use exact dimensions
-			size = rendering.Size{Width: r.width, Height: r.height}
+			size = graphics.Size{Width: r.width, Height: r.height}
 		case r.width > 0:
 			// Width only: calculate height from aspect ratio
-			size = rendering.Size{Width: r.width, Height: r.width / aspectRatio}
+			size = graphics.Size{Width: r.width, Height: r.width / aspectRatio}
 		case r.height > 0:
 			// Height only: calculate width from aspect ratio
-			size = rendering.Size{Width: r.height * aspectRatio, Height: r.height}
+			size = graphics.Size{Width: r.height * aspectRatio, Height: r.height}
 		default:
 			// Neither: use viewBox size
-			size = rendering.Size{Width: vb.Width(), Height: vb.Height()}
+			size = graphics.Size{Width: vb.Width(), Height: vb.Height()}
 		}
 	} else {
-		size = rendering.Size{Width: 24, Height: 24}
+		size = graphics.Size{Width: 24, Height: 24}
 	}
 
 	r.SetSize(constraints.Constrain(size))
@@ -187,11 +187,11 @@ func (r *renderSvgImage) Paint(ctx *layout.PaintContext) {
 		return
 	}
 
-	bounds := rendering.RectFromLTWH(0, 0, r.Size().Width, r.Size().Height)
+	bounds := graphics.RectFromLTWH(0, 0, r.Size().Width, r.Size().Height)
 	r.source.Draw(ctx.Canvas, bounds, r.tintColor)
 }
 
-func (r *renderSvgImage) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderSvgImage) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -223,7 +223,7 @@ type SvgIcon struct {
 	// TintColor replaces all SVG colors with this color while preserving alpha.
 	// Zero (ColorTransparent) means no tinting - original colors are preserved.
 	// Note: Tinting affects ALL content including gradients and embedded images.
-	TintColor rendering.Color
+	TintColor graphics.Color
 	// SemanticLabel provides an accessibility description.
 	SemanticLabel string
 	// ExcludeFromSemantics excludes from the semantics tree when true.

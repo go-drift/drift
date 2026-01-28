@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -118,14 +118,14 @@ func (s *Service) fullRebuild(rootRender layout.RenderObject) {
 	// Create synthetic root node (ID 0)
 	size := rootRender.Size()
 	syntheticRoot := semantics.NewSemanticsNodeWithID(0)
-	syntheticRoot.Rect = rendering.RectFromLTWH(
+	syntheticRoot.Rect = graphics.RectFromLTWH(
 		0, 0,
 		size.Width*s.deviceScale,
 		size.Height*s.deviceScale,
 	)
 
 	// Build semantics tree from render tree
-	s.buildFromRender(rootRender, syntheticRoot, rendering.Offset{}, s.deviceScale)
+	s.buildFromRender(rootRender, syntheticRoot, graphics.Offset{}, s.deviceScale)
 
 	// Compute diff from last tree
 	diff := semantics.ComputeDiff(s.lastRoot, syntheticRoot)
@@ -158,13 +158,13 @@ func (s *Service) incrementalUpdate(rootRender layout.RenderObject, dirtyBoundar
 }
 
 // buildFromRender recursively builds semantics nodes from render objects.
-func (s *Service) buildFromRender(renderObj layout.RenderObject, parent *semantics.SemanticsNode, globalOffset rendering.Offset, deviceScale float64) {
+func (s *Service) buildFromRender(renderObj layout.RenderObject, parent *semantics.SemanticsNode, globalOffset graphics.Offset, deviceScale float64) {
 	if renderObj == nil {
 		return
 	}
 
 	// Get this object's offset from its parent data
-	localOffset := rendering.Offset{}
+	localOffset := graphics.Offset{}
 	if parentData := renderObj.ParentData(); parentData != nil {
 		if boxData, ok := parentData.(*layout.BoxParentData); ok {
 			localOffset = boxData.Offset
@@ -172,7 +172,7 @@ func (s *Service) buildFromRender(renderObj layout.RenderObject, parent *semanti
 	}
 
 	// Compute absolute position
-	absolutePos := rendering.Offset{
+	absolutePos := graphics.Offset{
 		X: globalOffset.X + localOffset.X,
 		Y: globalOffset.Y + localOffset.Y,
 	}
@@ -195,7 +195,7 @@ func (s *Service) buildFromRender(renderObj layout.RenderObject, parent *semanti
 			nodeID := s.owner.GetStableID(renderObj)
 			currentNode = semantics.NewSemanticsNodeWithID(nodeID)
 			currentNode.Config = config
-			currentNode.Rect = rendering.RectFromLTWH(
+			currentNode.Rect = graphics.RectFromLTWH(
 				absolutePos.X*deviceScale,
 				absolutePos.Y*deviceScale,
 				size.Width*deviceScale,

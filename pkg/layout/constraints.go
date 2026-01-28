@@ -1,6 +1,6 @@
 package layout
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // Constraints specify the min/max dimensions a child can occupy.
 type Constraints struct {
@@ -11,7 +11,7 @@ type Constraints struct {
 }
 
 // Tight returns constraints that force an exact size.
-func Tight(size rendering.Size) Constraints {
+func Tight(size graphics.Size) Constraints {
 	return Constraints{
 		MinWidth:  size.Width,
 		MaxWidth:  size.Width,
@@ -21,7 +21,7 @@ func Tight(size rendering.Size) Constraints {
 }
 
 // Loose returns constraints with zero minimum.
-func Loose(size rendering.Size) Constraints {
+func Loose(size graphics.Size) Constraints {
 	return Constraints{
 		MinWidth:  0,
 		MaxWidth:  size.Width,
@@ -46,8 +46,8 @@ func (c Constraints) HasTightHeight() bool {
 }
 
 // Constrain clamps a size to fit within the constraints.
-func (c Constraints) Constrain(size rendering.Size) rendering.Size {
-	return rendering.Size{
+func (c Constraints) Constrain(size graphics.Size) graphics.Size {
+	return graphics.Size{
 		Width:  min(max(size.Width, c.MinWidth), c.MaxWidth),
 		Height: min(max(size.Height, c.MinHeight), c.MaxHeight),
 	}

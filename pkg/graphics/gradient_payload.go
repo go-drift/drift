@@ -1,4 +1,4 @@
-package rendering
+package graphics
 
 type gradientPayload struct {
 	gradientType int32

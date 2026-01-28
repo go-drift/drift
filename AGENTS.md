@@ -15,7 +15,7 @@ go vet ./...            # Lint
 
 ## Project Structure
 - `cmd/drift/` - CLI tool (build, run, clean, init, devices, log)
-- `pkg/` - Core framework packages (core, engine, rendering, layout, widgets, animation, theme, navigation, gestures, platform, skia, svg)
+- `pkg/` - Core framework packages (core, engine, graphics, layout, widgets, animation, theme, navigation, gestures, platform, skia, svg)
 - `showcase/` - Demo application
 - `scripts/` - Skia build scripts
 - `third_party/` - Skia source and prebuilt binaries

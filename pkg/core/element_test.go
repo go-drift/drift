@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // testStatelessWidget is a simple stateless widget for testing.
@@ -348,13 +348,13 @@ func (r *mockRenderObject) Layout(constraints layout.Constraints, parentUsesSize
 	r.RenderBoxBase.Layout(constraints, parentUsesSize)
 }
 
-func (r *mockRenderObject) Size() rendering.Size {
+func (r *mockRenderObject) Size() graphics.Size {
 	return r.RenderBoxBase.Size()
 }
 
 func (r *mockRenderObject) Paint(ctx *layout.PaintContext) {}
 
-func (r *mockRenderObject) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *mockRenderObject) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	return false
 }
 

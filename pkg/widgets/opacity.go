@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Opacity applies transparency to its child widget.
@@ -87,7 +87,7 @@ func (r *renderOpacity) PerformLayout() {
 		r.child.Layout(constraints, true) // true: we read child.Size()
 		r.SetSize(r.child.Size())
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
@@ -106,13 +106,13 @@ func (r *renderOpacity) Paint(ctx *layout.PaintContext) {
 	}
 	// Use SaveLayerAlpha for intermediate opacity values
 	size := r.Size()
-	bounds := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
+	bounds := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	ctx.Canvas.SaveLayerAlpha(bounds, r.opacity)
 	ctx.PaintChild(r.child, getChildOffset(r.child))
 	ctx.Canvas.Restore()
 }
 
-func (r *renderOpacity) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderOpacity) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -122,7 +122,7 @@ func (r *renderOpacity) HitTest(position rendering.Offset, result *layout.HitTes
 	}
 	if r.child != nil {
 		offset := getChildOffset(r.child)
-		local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+		local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 		if r.child.HitTest(local, result) {
 			return true
 		}

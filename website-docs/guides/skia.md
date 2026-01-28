@@ -107,7 +107,7 @@ Builds `libdrift_skia.a` for:
 - Device: `arm64`
 - Simulator: `arm64` (Apple Silicon), `x64` (Intel)
 
-Uses Metal for GPU rendering. The script compiles Skia, then compiles the drift bridge and combines them using libtool. Output is written to `third_party/drift_skia/ios/` and `third_party/drift_skia/ios-simulator/`.
+Uses Metal for GPU graphics. The script compiles Skia, then compiles the drift bridge and combines them using libtool. Output is written to `third_party/drift_skia/ios/` and `third_party/drift_skia/ios-simulator/`.
 
 ### Build for iOS using xtool (Linux)
 

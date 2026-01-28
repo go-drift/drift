@@ -1,6 +1,6 @@
 package platform
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // StatusBarStyle indicates the status bar icon color scheme.
 type StatusBarStyle string
@@ -16,7 +16,7 @@ type SystemUIStyle struct {
 	StatusBarHidden bool
 	StatusBarStyle  StatusBarStyle
 	TitleBarHidden  bool             // Android only (no-op on iOS)
-	BackgroundColor *rendering.Color // Android only (no-op on iOS)
+	BackgroundColor *graphics.Color // Android only (no-op on iOS)
 	Transparent     bool             // Android only (no-op on iOS)
 }
 

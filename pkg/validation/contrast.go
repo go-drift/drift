@@ -7,14 +7,14 @@ package validation
 import (
 	"math"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // ContrastRatio calculates the contrast ratio between two colors according to WCAG 2.1.
 // Returns a value between 1 and 21, where higher values indicate more contrast.
 // A ratio of 4.5:1 is required for normal text (AA), 7:1 for enhanced (AAA).
 // A ratio of 3:1 is required for large text (AA), 4.5:1 for enhanced (AAA).
-func ContrastRatio(fg, bg rendering.Color) float64 {
+func ContrastRatio(fg, bg graphics.Color) float64 {
 	l1 := relativeLuminance(fg)
 	l2 := relativeLuminance(bg)
 
@@ -28,7 +28,7 @@ func ContrastRatio(fg, bg rendering.Color) float64 {
 
 // relativeLuminance calculates the relative luminance of a color.
 // See: https://www.w3.org/WAI/GL/wiki/Relative_luminance
-func relativeLuminance(c rendering.Color) float64 {
+func relativeLuminance(c graphics.Color) float64 {
 	r := linearize(float64(c.R()) / 255)
 	g := linearize(float64(c.G()) / 255)
 	b := linearize(float64(c.B()) / 255)
@@ -137,7 +137,7 @@ type ContrastResult struct {
 }
 
 // CheckContrast checks the contrast ratio between two colors and returns detailed results.
-func CheckContrast(fg, bg rendering.Color, largeText bool) ContrastResult {
+func CheckContrast(fg, bg graphics.Color, largeText bool) ContrastResult {
 	ratio := ContrastRatio(fg, bg)
 	return ContrastResult{
 		Ratio:    ratio,
@@ -148,26 +148,26 @@ func CheckContrast(fg, bg rendering.Color, largeText bool) ContrastResult {
 
 // SuggestForegroundColor suggests a foreground color that meets the target contrast
 // with the given background color.
-func SuggestForegroundColor(bg rendering.Color, targetRatio float64) rendering.Color {
+func SuggestForegroundColor(bg graphics.Color, targetRatio float64) graphics.Color {
 	bgLum := relativeLuminance(bg)
 
 	// Try black
-	blackRatio := ContrastRatio(rendering.ColorBlack, bg)
+	blackRatio := ContrastRatio(graphics.ColorBlack, bg)
 	if blackRatio >= targetRatio {
-		return rendering.ColorBlack
+		return graphics.ColorBlack
 	}
 
 	// Try white
-	whiteRatio := ContrastRatio(rendering.ColorWhite, bg)
+	whiteRatio := ContrastRatio(graphics.ColorWhite, bg)
 	if whiteRatio >= targetRatio {
-		return rendering.ColorWhite
+		return graphics.ColorWhite
 	}
 
 	// If background is dark, use white; if light, use black
 	if bgLum < 0.5 {
-		return rendering.ColorWhite
+		return graphics.ColorWhite
 	}
-	return rendering.ColorBlack
+	return graphics.ColorBlack
 }
 
 // IsLargeText determines if text at the given font size and weight is considered "large"

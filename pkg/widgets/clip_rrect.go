@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // ClipRRect clips its child using rounded corners.
@@ -59,7 +59,7 @@ func (r *renderClipRRect) VisitChildren(visitor func(layout.RenderObject)) {
 func (r *renderClipRRect) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child == nil {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 	r.child.Layout(constraints, true) // true: we read child.Size()
@@ -80,8 +80,8 @@ func (r *renderClipRRect) Paint(ctx *layout.PaintContext) {
 	if radius < 0 {
 		radius = 0
 	}
-	rect := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
-	rrect := rendering.RRectFromRectAndRadius(rect, rendering.CircularRadius(radius))
+	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
+	rrect := graphics.RRectFromRectAndRadius(rect, graphics.CircularRadius(radius))
 	ctx.Canvas.Save()
 	ctx.Canvas.ClipRRect(rrect)
 
@@ -93,7 +93,7 @@ func (r *renderClipRRect) Paint(ctx *layout.PaintContext) {
 	ctx.Canvas.Restore()
 }
 
-func (r *renderClipRRect) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderClipRRect) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

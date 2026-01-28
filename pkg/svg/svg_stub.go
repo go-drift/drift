@@ -10,7 +10,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // PreserveAspectRatio controls how an SVG scales to fit its container.
@@ -75,7 +75,7 @@ const (
 // goroutines. Rendering the same Icon at two different sizes in the same frame
 // will result in last-write-wins for the container size.
 type Icon struct {
-	viewBox rendering.Rect
+	viewBox graphics.Rect
 }
 
 // Load parses an SVG from the provided reader.
@@ -96,8 +96,8 @@ func LoadFile(path string) (*Icon, error) {
 }
 
 // ViewBox returns the viewBox of the SVG.
-func (i *Icon) ViewBox() rendering.Rect {
-	return rendering.Rect{}
+func (i *Icon) ViewBox() graphics.Rect {
+	return graphics.Rect{}
 }
 
 // Draw renders the SVG onto a canvas within the specified bounds.
@@ -106,7 +106,7 @@ func (i *Icon) ViewBox() rendering.Rect {
 // Content is clipped to the provided bounds.
 //
 // Note: tintColor is currently ignored (known regression from oksvg implementation).
-func (i *Icon) Draw(canvas rendering.Canvas, bounds rendering.Rect, tintColor rendering.Color) {}
+func (i *Icon) Draw(canvas graphics.Canvas, bounds graphics.Rect, tintColor graphics.Color) {}
 
 // SetPreserveAspectRatio overrides the SVG's preserveAspectRatio attribute.
 // This controls how the viewBox scales and aligns within the render bounds.

@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -32,7 +32,7 @@ func ExampleColorsOf() {
 	//         Color: colors.Primary,
 	//         ChildWidget: widgets.Text{
 	//             Content: "Themed text",
-	//             Style: rendering.TextStyle{Color: colors.OnPrimary},
+	//             Style: graphics.TextStyle{Color: colors.OnPrimary},
 	//         },
 	//     }
 	// }
@@ -43,7 +43,7 @@ func ExampleColorsOf() {
 		Color: colors.Primary,
 		ChildWidget: widgets.Text{
 			Content: "Themed text",
-			Style:   rendering.TextStyle{Color: colors.OnPrimary},
+			Style:   graphics.TextStyle{Color: colors.OnPrimary},
 		},
 	}
 }
@@ -55,7 +55,7 @@ func ExampleThemeData_CopyWith() {
 
 	// Create a custom color scheme with a different primary color
 	customColors := theme.LightColorScheme()
-	customColors.Primary = rendering.RGB(0, 150, 136) // Teal
+	customColors.Primary = graphics.RGB(0, 150, 136) // Teal
 
 	// Create a new theme with the custom colors
 	customTheme := baseTheme.CopyWith(&customColors, nil, nil)

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/skia"
 )
 
@@ -84,12 +84,12 @@ func RenderSkiaGL(width, height int) error {
 	}
 	defer surface.Destroy()
 
-	canvas := rendering.NewSkiaCanvas(surface.Canvas(), rendering.Size{Width: float64(width), Height: float64(height)})
+	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
 	// GL default framebuffer origin differs from our top-left coordinate system.
 	// Flip both axes to correct the 180° rotation observed on emulators.
 	canvas.Translate(0, float64(height))
 	canvas.Scale(1, -1)
-	if err := app.Paint(canvas, rendering.Size{Width: float64(width), Height: float64(height)}); err != nil {
+	if err := app.Paint(canvas, graphics.Size{Width: float64(width), Height: float64(height)}); err != nil {
 		return skiaState.setError(err)
 	}
 	surface.Flush()
@@ -115,8 +115,8 @@ func RenderSkiaMetal(width, height int, texture unsafe.Pointer) error {
 	}
 	defer surface.Destroy()
 
-	canvas := rendering.NewSkiaCanvas(surface.Canvas(), rendering.Size{Width: float64(width), Height: float64(height)})
-	if err := app.Paint(canvas, rendering.Size{Width: float64(width), Height: float64(height)}); err != nil {
+	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
+	if err := app.Paint(canvas, graphics.Size{Width: float64(width), Height: float64(height)}); err != nil {
 		return skiaState.setError(err)
 	}
 	surface.Flush()

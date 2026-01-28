@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // BackdropFilter applies a blur effect to content behind this widget.
@@ -80,7 +80,7 @@ func (r *renderBackdropFilter) VisitChildren(visitor func(layout.RenderObject)) 
 func (r *renderBackdropFilter) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child == nil {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 	r.child.Layout(constraints, true) // true: we read child.Size()
@@ -94,7 +94,7 @@ func (r *renderBackdropFilter) Paint(ctx *layout.PaintContext) {
 	if size.Width <= 0 || size.Height <= 0 {
 		return
 	}
-	bounds := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
+	bounds := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	ctx.Canvas.Save()
 	ctx.Canvas.ClipRect(bounds)
 
@@ -112,7 +112,7 @@ func (r *renderBackdropFilter) Paint(ctx *layout.PaintContext) {
 	ctx.Canvas.Restore() // clip
 }
 
-func (r *renderBackdropFilter) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderBackdropFilter) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // View is the root widget that hosts the render tree.
@@ -61,7 +61,7 @@ func (r *renderView) PerformLayout() {
 	if height <= 0 {
 		height = constraints.MinHeight
 	}
-	size := rendering.Size{Width: width, Height: height}
+	size := graphics.Size{Width: width, Height: height}
 	r.SetSize(size)
 	if r.child != nil {
 		r.child.Layout(layout.Tight(size), false) // false: tight constraints, child is boundary
@@ -70,11 +70,11 @@ func (r *renderView) PerformLayout() {
 
 func (r *renderView) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, rendering.Offset{})
+		ctx.PaintChild(r.child, graphics.Offset{})
 	}
 }
 
-func (r *renderView) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderView) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child != nil {
 		return r.child.HitTest(position, result)
 	}

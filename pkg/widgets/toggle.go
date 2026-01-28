@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -22,11 +22,11 @@ type Toggle struct {
 	// Height controls the overall height.
 	Height float64
 	// ActiveColor is the track color when on.
-	ActiveColor rendering.Color
+	ActiveColor graphics.Color
 	// InactiveColor is the track color when off.
-	InactiveColor rendering.Color
+	InactiveColor graphics.Color
 	// ThumbColor is the thumb fill color.
-	ThumbColor rendering.Color
+	ThumbColor graphics.Color
 }
 
 // ToggleOf creates a toggle switch with the given value and change handler.
@@ -95,9 +95,9 @@ type toggleRender struct {
 	enabled       bool
 	width         float64
 	height        float64
-	activeColor   rendering.Color
-	inactiveColor rendering.Color
-	thumbColor    rendering.Color
+	activeColor   graphics.Color
+	inactiveColor graphics.Color
+	thumbColor    graphics.Color
 }
 
 func (s toggleRender) CreateElement() core.Element {
@@ -130,9 +130,9 @@ type renderToggle struct {
 	enabled       bool
 	width         float64
 	height        float64
-	activeColor   rendering.Color
-	inactiveColor rendering.Color
-	thumbColor    rendering.Color
+	activeColor   graphics.Color
+	inactiveColor graphics.Color
+	thumbColor    graphics.Color
 	tap           *gestures.TapGestureRecognizer
 }
 
@@ -159,33 +159,33 @@ func (r *renderToggle) PerformLayout() {
 	}
 	width = min(max(width, constraints.MinWidth), constraints.MaxWidth)
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
 func (r *renderToggle) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
-	trackPaint := rendering.DefaultPaint()
+	trackPaint := graphics.DefaultPaint()
 	if r.value {
 		trackPaint.Color = r.activeColor
 	} else {
 		trackPaint.Color = r.inactiveColor
 	}
-	trackRect := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
+	trackRect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	trackRadius := size.Height / 2
-	trackRRect := rendering.RRectFromRectAndRadius(trackRect, rendering.CircularRadius(trackRadius))
+	trackRRect := graphics.RRectFromRectAndRadius(trackRect, graphics.CircularRadius(trackRadius))
 	ctx.Canvas.DrawRRect(trackRRect, trackPaint)
 
 	thumbRadius := (size.Height - 4) / 2
-	thumbCenter := rendering.Offset{X: 2 + thumbRadius, Y: size.Height / 2}
+	thumbCenter := graphics.Offset{X: 2 + thumbRadius, Y: size.Height / 2}
 	if r.value {
 		thumbCenter.X = size.Width - 2 - thumbRadius
 	}
-	thumbPaint := rendering.DefaultPaint()
+	thumbPaint := graphics.DefaultPaint()
 	thumbPaint.Color = r.thumbColor
 	ctx.Canvas.DrawCircle(thumbCenter, thumbRadius, thumbPaint)
 }
 
-func (r *renderToggle) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderToggle) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

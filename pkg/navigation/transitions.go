@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -137,12 +137,12 @@ func (r *renderSlideTransition) PerformLayout() {
 		r.SetSize(r.child.Size())
 		r.child.SetParentData(&layout.BoxParentData{})
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
-func (r *renderSlideTransition) slideOffset() rendering.Offset {
-	offset := rendering.Offset{}
+func (r *renderSlideTransition) slideOffset() graphics.Offset {
+	offset := graphics.Offset{}
 	if r.animation != nil {
 		// Calculate offset based on animation value and direction
 		// value 0 = off screen, value 1 = on screen
@@ -163,7 +163,7 @@ func (r *renderSlideTransition) slideOffset() rendering.Offset {
 	return offset
 }
 
-func (r *renderSlideTransition) ScrollOffset() rendering.Offset {
+func (r *renderSlideTransition) ScrollOffset() graphics.Offset {
 	return r.slideOffset()
 }
 
@@ -176,7 +176,7 @@ func (r *renderSlideTransition) Paint(ctx *layout.PaintContext) {
 	ctx.PaintChild(r.child, offset)
 }
 
-func (r *renderSlideTransition) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderSlideTransition) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child == nil {
 		return false
 	}
@@ -264,7 +264,7 @@ func (r *renderFadeTransition) PerformLayout() {
 		r.SetSize(r.child.Size())
 		r.child.SetParentData(&layout.BoxParentData{})
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
@@ -275,10 +275,10 @@ func (r *renderFadeTransition) Paint(ctx *layout.PaintContext) {
 	// Note: Full opacity support would require layer compositing.
 	// For now, just paint the child directly.
 	// In a full implementation, we'd use an OpacityLayer.
-	ctx.PaintChild(r.child, rendering.Offset{})
+	ctx.PaintChild(r.child, graphics.Offset{})
 }
 
-func (r *renderFadeTransition) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderFadeTransition) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child == nil {
 		return false
 	}

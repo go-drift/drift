@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -45,13 +45,13 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 					widgets.MainAxisAlignmentStart,
 					widgets.CrossAxisAlignmentStart,
 					widgets.MainAxisSizeMin,
-					widgets.TextOf("Card title", rendering.TextStyle{
+					widgets.TextOf("Card title", graphics.TextStyle{
 						Color:      colors.OnSurface,
 						FontSize:   16,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 					widgets.VSpace(8),
-					widgets.TextOf("Use border radius for cards and panels.", rendering.TextStyle{
+					widgets.TextOf("Use border radius for cards and panels.", graphics.TextStyle{
 						Color:    colors.OnSurfaceVariant,
 						FontSize: 14,
 					}).WithWrap(true),
@@ -60,10 +60,10 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		},
 		widgets.VSpace(24),
 		widgets.DecoratedBox{
-			Gradient: rendering.NewLinearGradient(
-				rendering.Offset{X: 0, Y: 0},
-				rendering.Offset{X: 240, Y: 0},
-				[]rendering.GradientStop{
+			Gradient: graphics.NewLinearGradient(
+				graphics.Offset{X: 0, Y: 0},
+				graphics.Offset{X: 240, Y: 0},
+				[]graphics.GradientStop{
 					{Position: 0, Color: colors.Primary},
 					{Position: 1, Color: colors.Secondary},
 				},
@@ -73,10 +73,10 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 				Width:  240,
 				Height: 52,
 				ChildWidget: widgets.Center{
-					ChildWidget: widgets.TextOf("Gradient surface", rendering.TextStyle{
+					ChildWidget: widgets.TextOf("Gradient surface", graphics.TextStyle{
 						Color:      colors.OnPrimary,
 						FontSize:   14,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 				},
 			},
@@ -93,15 +93,15 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.DecoratedBox{
 				BorderColor:  colors.SecondaryContainer,
 				BorderWidth:  2,
-				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
+				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
 				Color:        colors.SurfaceVariant,
-				Shadow:       rendering.BoxShadowElevation(1, colors.SurfaceTint.WithAlpha(80)),
+				Shadow:       graphics.BoxShadowElevation(1, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
 					Height: 72,
 					ChildWidget: widgets.Center{
-						ChildWidget: widgets.TextOf("1", rendering.TextStyle{
+						ChildWidget: widgets.TextOf("1", graphics.TextStyle{
 							Color:    colors.OnSurface,
 							FontSize: 14,
 						}),
@@ -112,15 +112,15 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.DecoratedBox{
 				BorderColor:  colors.SecondaryContainer,
 				BorderWidth:  2,
-				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
+				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
 				Color:        colors.SurfaceVariant,
-				Shadow:       rendering.BoxShadowElevation(2, colors.SurfaceTint.WithAlpha(80)),
+				Shadow:       graphics.BoxShadowElevation(2, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
 					Height: 72,
 					ChildWidget: widgets.Center{
-						ChildWidget: widgets.TextOf("2", rendering.TextStyle{
+						ChildWidget: widgets.TextOf("2", graphics.TextStyle{
 							Color:    colors.OnSurface,
 							FontSize: 14,
 						}),
@@ -131,15 +131,15 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.DecoratedBox{
 				BorderColor:  colors.SecondaryContainer,
 				BorderWidth:  2,
-				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
+				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
 				Color:        colors.SurfaceVariant,
-				Shadow:       rendering.BoxShadowElevation(3, colors.SurfaceTint.WithAlpha(80)),
+				Shadow:       graphics.BoxShadowElevation(3, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
 					Height: 72,
 					ChildWidget: widgets.Center{
-						ChildWidget: widgets.TextOf("3", rendering.TextStyle{
+						ChildWidget: widgets.TextOf("3", graphics.TextStyle{
 							Color:    colors.OnSurface,
 							FontSize: 14,
 						}),
@@ -150,15 +150,15 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.DecoratedBox{
 				BorderColor:  colors.SecondaryContainer,
 				BorderWidth:  2,
-				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
+				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
 				Color:        colors.SurfaceVariant,
-				Shadow:       rendering.BoxShadowElevation(5, colors.SurfaceTint.WithAlpha(80)),
+				Shadow:       graphics.BoxShadowElevation(5, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
 					Height: 72,
 					ChildWidget: widgets.Center{
-						ChildWidget: widgets.TextOf("5", rendering.TextStyle{
+						ChildWidget: widgets.TextOf("5", graphics.TextStyle{
 							Color:    colors.OnSurface,
 							FontSize: 14,
 						}),
@@ -194,12 +194,12 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 							Radius: 12,
 							ChildWidget: widgets.NewBackdropFilter(10,
 								widgets.DecoratedBox{
-									Color: rendering.RGBA(255, 255, 255, 77),
+									Color: graphics.RGBA(255, 255, 255, 77),
 									ChildWidget: widgets.Center{
-										ChildWidget: widgets.TextOf("Frosted Glass", rendering.TextStyle{
-											Color:      rendering.RGBA(10, 10, 10, 90),
+										ChildWidget: widgets.TextOf("Frosted Glass", graphics.TextStyle{
+											Color:      graphics.RGBA(10, 10, 10, 90),
 											FontSize:   14,
-											FontWeight: rendering.FontWeightBold,
+											FontWeight: graphics.FontWeightBold,
 										}),
 									},
 								},
@@ -218,34 +218,34 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.MainAxisAlignmentStart,
 			widgets.CrossAxisAlignmentStart,
 			widgets.MainAxisSizeMin,
-			widgets.TextOf("Hard Shadow", rendering.TextStyle{
+			widgets.TextOf("Hard Shadow", graphics.TextStyle{
 				Color:      colors.OnSurface,
 				FontSize:   24,
-				FontWeight: rendering.FontWeightBold,
-				Shadow: &rendering.TextShadow{
+				FontWeight: graphics.FontWeightBold,
+				Shadow: &graphics.TextShadow{
 					Color:  colors.Primary.WithAlpha(80),
-					Offset: rendering.Offset{X: 2, Y: 2},
+					Offset: graphics.Offset{X: 2, Y: 2},
 				},
 			}),
 			widgets.VSpace(16),
-			widgets.TextOf("Soft Shadow", rendering.TextStyle{
+			widgets.TextOf("Soft Shadow", graphics.TextStyle{
 				Color:      colors.OnSurface,
 				FontSize:   24,
-				FontWeight: rendering.FontWeightBold,
-				Shadow: &rendering.TextShadow{
+				FontWeight: graphics.FontWeightBold,
+				Shadow: &graphics.TextShadow{
 					Color:      colors.Primary.WithAlpha(100),
-					Offset:     rendering.Offset{X: 2, Y: 3},
+					Offset:     graphics.Offset{X: 2, Y: 3},
 					BlurRadius: 4,
 				},
 			}),
 			widgets.VSpace(16),
-			widgets.TextOf("Glow Effect", rendering.TextStyle{
+			widgets.TextOf("Glow Effect", graphics.TextStyle{
 				Color:      colors.Primary,
 				FontSize:   24,
-				FontWeight: rendering.FontWeightBold,
-				Shadow: &rendering.TextShadow{
+				FontWeight: graphics.FontWeightBold,
+				Shadow: &graphics.TextShadow{
 					Color:      colors.SurfaceTint.WithAlpha(200),
-					Offset:     rendering.Offset{X: 0, Y: 0},
+					Offset:     graphics.Offset{X: 0, Y: 0},
 					BlurRadius: 8,
 				},
 			}),

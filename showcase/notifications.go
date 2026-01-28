@@ -7,7 +7,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -143,7 +143,7 @@ func statusCard(text string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color: colors.SurfaceVariant,
 		ChildWidget: widgets.PaddingAll(12,
-			widgets.TextOf(text, rendering.TextStyle{
+			widgets.TextOf(text, graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,
 			}),

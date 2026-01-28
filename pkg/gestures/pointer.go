@@ -3,7 +3,7 @@
 // tap and pan.
 package gestures
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // PointerPhase represents the phase of a pointer event.
 type PointerPhase int
@@ -40,9 +40,9 @@ type PointerEvent struct {
 	// PointerID uniquely identifies this pointer (finger/mouse).
 	PointerID int64
 	// Position is the pointer location in logical pixels.
-	Position rendering.Offset
+	Position graphics.Offset
 	// Delta is the change in position since the last event.
-	Delta rendering.Offset
+	Delta graphics.Offset
 	// Phase indicates the current phase of the pointer interaction.
 	Phase PointerPhase
 }

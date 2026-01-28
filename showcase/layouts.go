@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -119,7 +119,7 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 					widgets.Container{Color: colors.Primary, Width: 200, Height: 120},
 					widgets.Container{Color: colors.Secondary, Width: 140, Height: 80},
 					widgets.Container{Color: colors.Error, Width: 80, Height: 40},
-					widgets.TextOf("Stacked", rendering.TextStyle{
+					widgets.TextOf("Stacked", graphics.TextStyle{
 						Color:    colors.OnError,
 						FontSize: 14,
 					}),
@@ -139,12 +139,12 @@ func layoutContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
 }
 
 // colorBox creates a small colored box with a label.
-func colorBox(color rendering.Color, label string) core.Widget {
+func colorBox(color graphics.Color, label string) core.Widget {
 	return widgets.Container{
 		Color: color,
 		ChildWidget: widgets.PaddingAll(12,
-			widgets.TextOf(label, rendering.TextStyle{
-				Color:    rendering.ColorWhite,
+			widgets.TextOf(label, graphics.TextStyle{
+				Color:    graphics.ColorWhite,
 				FontSize: 14,
 			}),
 		),

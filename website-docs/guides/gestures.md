@@ -195,22 +195,22 @@ The drag callbacks receive detail structs:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Position` | `rendering.Offset` | Global position where the drag started |
+| `Position` | `graphics.Offset` | Global position where the drag started |
 
 ### DragUpdateDetails
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Position` | `rendering.Offset` | Current global position |
-| `Delta` | `rendering.Offset` | Movement since last update |
+| `Position` | `graphics.Offset` | Current global position |
+| `Delta` | `graphics.Offset` | Movement since last update |
 | `PrimaryDelta` | `float64` | Axis-specific delta (only for axis-locked drags) |
 
 ### DragEndDetails
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Position` | `rendering.Offset` | Final global position |
-| `Velocity` | `rendering.Offset` | Fling velocity in pixels/second |
+| `Position` | `graphics.Offset` | Final global position |
+| `Velocity` | `graphics.Offset` | Fling velocity in pixels/second |
 | `PrimaryVelocity` | `float64` | Axis-specific velocity (only for axis-locked drags) |
 
 Note: `PrimaryDelta` and `PrimaryVelocity` are only meaningful for axis-locked recognizers.

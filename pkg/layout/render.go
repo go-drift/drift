@@ -1,16 +1,16 @@
 package layout
 
 import (
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // RenderObject handles layout, painting, and hit testing.
 type RenderObject interface {
 	Layout(constraints Constraints, parentUsesSize bool)
-	Size() rendering.Size
+	Size() graphics.Size
 	Paint(ctx *PaintContext)
-	HitTest(position rendering.Offset, result *HitTestResult) bool
+	HitTest(position graphics.Offset, result *HitTestResult) bool
 	ParentData() any
 	SetParentData(data any)
 	MarkNeedsLayout()
@@ -43,17 +43,17 @@ type ChildVisitor interface {
 type ScrollOffsetProvider interface {
 	// SemanticScrollOffset returns the scroll offset to subtract from child positions.
 	// A positive Y value means content has scrolled up (showing lower content).
-	SemanticScrollOffset() rendering.Offset
+	SemanticScrollOffset() graphics.Offset
 }
 
 // BoxParentData stores the offset for a child in a box layout.
 type BoxParentData struct {
-	Offset rendering.Offset
+	Offset graphics.Offset
 }
 
 // RenderBoxBase provides base behavior for render boxes.
 type RenderBoxBase struct {
-	size                 rendering.Size
+	size                 graphics.Size
 	parentData           any
 	owner                *PipelineOwner
 	self                 RenderObject
@@ -64,18 +64,18 @@ type RenderBoxBase struct {
 	constraints          Constraints            // last received constraints
 	repaintBoundary      RenderObject           // cached nearest repaint boundary
 	needsPaint           bool                   // local dirty flag for paint
-	layer                *rendering.DisplayList // cached paint output for boundaries
+	layer                *graphics.DisplayList // cached paint output for boundaries
 	semanticsBoundary    RenderObject           // cached nearest semantics boundary
 	needsSemanticsUpdate bool                   // local dirty flag for semantics
 }
 
 // Size returns the current size of the render box.
-func (r *RenderBoxBase) Size() rendering.Size {
+func (r *RenderBoxBase) Size() graphics.Size {
 	return r.size
 }
 
 // SetSize updates the render box size.
-func (r *RenderBoxBase) SetSize(size rendering.Size) {
+func (r *RenderBoxBase) SetSize(size graphics.Size) {
 	r.size = size
 }
 
@@ -245,12 +245,12 @@ func (r *RenderBoxBase) NeedsPaint() bool {
 }
 
 // Layer returns the cached display list for repaint boundaries.
-func (r *RenderBoxBase) Layer() *rendering.DisplayList {
+func (r *RenderBoxBase) Layer() *graphics.DisplayList {
 	return r.layer
 }
 
 // SetLayer stores the cached display list.
-func (r *RenderBoxBase) SetLayer(list *rendering.DisplayList) {
+func (r *RenderBoxBase) SetLayer(list *graphics.DisplayList) {
 	r.layer = list
 }
 

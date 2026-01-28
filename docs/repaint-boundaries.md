@@ -34,7 +34,7 @@ type RenderBoxBase struct {
     // ... other fields ...
     repaintBoundary RenderObject           // cached nearest repaint boundary
     needsPaint      bool                   // local dirty flag
-    layer           *rendering.DisplayList // cached paint output (boundaries only)
+    layer           *graphics.DisplayList // cached paint output (boundaries only)
 }
 ```
 
@@ -96,7 +96,7 @@ When a boundary is painted, its output is recorded to a `DisplayList`:
 
 ```go
 func paintBoundaryToLayer(boundary layout.RenderObject) {
-    recorder := &rendering.PictureRecorder{}
+    recorder := &graphics.PictureRecorder{}
     canvas := recorder.BeginRecording(boundary.Size())
 
     // Paint boundary's content to recorded canvas

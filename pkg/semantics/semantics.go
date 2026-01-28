@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // nextNodeID is a global counter for generating unique node IDs.
@@ -23,7 +23,7 @@ type SemanticsNode struct {
 	ID int64
 
 	// Rect is the bounding rectangle in global coordinates.
-	Rect rendering.Rect
+	Rect graphics.Rect
 
 	// Config contains the semantic configuration.
 	Config SemanticsConfiguration

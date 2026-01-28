@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Axis represents the layout direction.
@@ -326,37 +326,37 @@ func (r *renderFlex) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-func (r *renderFlex) mainAxis(size rendering.Size) float64 {
+func (r *renderFlex) mainAxis(size graphics.Size) float64 {
 	if r.direction == AxisHorizontal {
 		return size.Width
 	}
 	return size.Height
 }
 
-func (r *renderFlex) crossAxis(size rendering.Size) float64 {
+func (r *renderFlex) crossAxis(size graphics.Size) float64 {
 	if r.direction == AxisHorizontal {
 		return size.Height
 	}
 	return size.Width
 }
 
-func (r *renderFlex) makeSize(main, cross float64) rendering.Size {
+func (r *renderFlex) makeSize(main, cross float64) graphics.Size {
 	if r.direction == AxisHorizontal {
-		return rendering.Size{Width: main, Height: cross}
+		return graphics.Size{Width: main, Height: cross}
 	}
-	return rendering.Size{Width: cross, Height: main}
+	return graphics.Size{Width: cross, Height: main}
 }
 
-func (r *renderFlex) makeOffset(main, cross float64) rendering.Offset {
+func (r *renderFlex) makeOffset(main, cross float64) graphics.Offset {
 	if r.direction == AxisHorizontal {
-		return rendering.Offset{X: main, Y: cross}
+		return graphics.Offset{X: main, Y: cross}
 	}
-	return rendering.Offset{X: cross, Y: main}
+	return graphics.Offset{X: cross, Y: main}
 }
 
 func (r *renderFlex) PerformLayout() {
 	constraints := r.Constraints()
-	maxSize := rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
+	maxSize := graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
 	maxMain := r.mainAxis(maxSize)
 
 	mainSize := 0.0
@@ -421,7 +421,7 @@ func (r *renderFlex) flexFactor(child layout.RenderBox) int {
 	return 0
 }
 
-func (r *renderFlex) looseConstraints(maxSize rendering.Size) layout.Constraints {
+func (r *renderFlex) looseConstraints(maxSize graphics.Size) layout.Constraints {
 	if r.crossAlignment != CrossAxisAlignmentStretch {
 		return layout.Loose(maxSize)
 	}
@@ -441,7 +441,7 @@ func (r *renderFlex) looseConstraints(maxSize rendering.Size) layout.Constraints
 	}
 }
 
-func (r *renderFlex) crossAxisOffset(childSize rendering.Size) float64 {
+func (r *renderFlex) crossAxisOffset(childSize graphics.Size) float64 {
 	freeSpace := r.crossAxis(r.Size()) - r.crossAxis(childSize)
 	if freeSpace <= 0 {
 		return 0
@@ -514,14 +514,14 @@ func (r *renderFlex) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderFlex) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderFlex) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
 	for i := len(r.children) - 1; i >= 0; i-- {
 		child := r.children[i]
 		offset := getChildOffset(child)
-		local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+		local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 		if child.HitTest(local, result) {
 			return true
 		}

@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 )
 
@@ -66,17 +66,17 @@ type TextField struct {
 	// Padding inside the text field.
 	Padding layout.EdgeInsets
 	// BackgroundColor of the text field.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// BorderColor of the text field.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 	// FocusColor of the text field outline.
-	FocusColor rendering.Color
+	FocusColor graphics.Color
 	// BorderRadius for rounded corners.
 	BorderRadius float64
 	// Style for the text.
-	Style rendering.TextStyle
+	Style graphics.TextStyle
 	// PlaceholderColor for the placeholder text.
-	PlaceholderColor rendering.Color
+	PlaceholderColor graphics.Color
 
 	// Input is an optional escape hatch for accessing TextInput fields not
 	// exposed by TextField. TextField's own fields ALWAYS overwrite the

@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -40,7 +40,7 @@ type TextInput struct {
 	Controller *platform.TextEditingController
 
 	// Style for the text.
-	Style rendering.TextStyle
+	Style graphics.TextStyle
 
 	// Placeholder text shown when empty.
 	Placeholder string
@@ -92,13 +92,13 @@ type TextInput struct {
 	Padding layout.EdgeInsets
 
 	// BackgroundColor of the text field.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 
 	// BorderColor of the text field.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 
 	// FocusColor of the text field outline.
-	FocusColor rendering.Color
+	FocusColor graphics.Color
 
 	// BorderRadius for rounded corners.
 	BorderRadius float64
@@ -107,7 +107,7 @@ type TextInput struct {
 	BorderWidth float64
 
 	// PlaceholderColor is the color for placeholder text.
-	PlaceholderColor rendering.Color
+	PlaceholderColor graphics.Color
 }
 
 // CreateElement creates the element for the stateful widget.
@@ -209,7 +209,7 @@ func (s *textInputState) FocusRect() focus.FocusRect {
 	}
 	offset := core.GlobalOffsetOf(s.element)
 	if ro := s.element.RenderObject(); ro != nil {
-		if sizer, ok := ro.(interface{ Size() rendering.Size }); ok {
+		if sizer, ok := ro.(interface{ Size() graphics.Size }); ok {
 			size := sizer.Size()
 			return focus.FocusRect{
 				Left:   offset.X,
@@ -245,17 +245,17 @@ func (s *textInputState) Build(ctx core.BuildContext) core.Widget {
 
 	bgColor := w.BackgroundColor
 	if bgColor == 0 {
-		bgColor = rendering.ColorWhite
+		bgColor = graphics.ColorWhite
 	}
 
 	borderColor := w.BorderColor
 	if borderColor == 0 {
-		borderColor = rendering.Color(0xFFCCCCCC)
+		borderColor = graphics.Color(0xFFCCCCCC)
 	}
 
 	focusColor := w.FocusColor
 	if focusColor == 0 {
-		focusColor = rendering.Color(0xFF007AFF)
+		focusColor = graphics.Color(0xFF007AFF)
 	}
 
 	borderWidth := w.BorderWidth
@@ -371,13 +371,13 @@ func (s *textInputState) buildPlatformViewConfig(w TextInput) platform.TextInput
 	// Convert colors to ARGB uint32
 	textColor := w.Style.Color
 	if textColor == 0 {
-		textColor = rendering.Color(0xFF000000) // black
+		textColor = graphics.Color(0xFF000000) // black
 	}
 	config.TextColor = uint32(textColor)
 
 	placeholderColor := w.PlaceholderColor
 	if placeholderColor == 0 {
-		placeholderColor = rendering.Color(0xFF999999)
+		placeholderColor = graphics.Color(0xFF999999)
 	}
 	config.PlaceholderColor = uint32(placeholderColor)
 
@@ -542,9 +542,9 @@ type textInputRender struct {
 	width        float64
 	height       float64
 	padding      layout.EdgeInsets
-	bgColor      rendering.Color
-	borderColor  rendering.Color
-	focusColor   rendering.Color
+	bgColor      graphics.Color
+	borderColor  graphics.Color
+	focusColor   graphics.Color
 	borderRadius float64
 	borderWidth  float64
 	state        *textInputState
@@ -599,9 +599,9 @@ type renderTextInput struct {
 	width        float64
 	height       float64
 	padding      layout.EdgeInsets
-	bgColor      rendering.Color
-	borderColor  rendering.Color
-	focusColor   rendering.Color
+	bgColor      graphics.Color
+	borderColor  graphics.Color
+	focusColor   graphics.Color
 	borderRadius float64
 	borderWidth  float64
 	state        *textInputState
@@ -620,10 +620,10 @@ func (r *renderTextInput) PerformLayout() {
 	height := r.height
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
 
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
-func (r *renderTextInput) updatePlatformView(clipBounds *rendering.Rect) {
+func (r *renderTextInput) updatePlatformView(clipBounds *graphics.Rect) {
 	if r.state == nil || r.state.element == nil {
 		return
 	}
@@ -648,7 +648,7 @@ func (r *renderTextInput) updatePlatformView(clipBounds *rendering.Rect) {
 func (r *renderTextInput) Paint(ctx *layout.PaintContext) {
 	// Get clip bounds for platform view
 	clip, hasClip := ctx.CurrentClipBounds()
-	var clipPtr *rendering.Rect
+	var clipPtr *graphics.Rect
 	if hasClip {
 		clipPtr = &clip
 	}
@@ -659,22 +659,22 @@ func (r *renderTextInput) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
 
 	// Draw background
-	bgPaint := rendering.DefaultPaint()
+	bgPaint := graphics.DefaultPaint()
 	bgPaint.Color = r.bgColor
 
 	if r.borderRadius > 0 {
-		rrect := rendering.RRectFromRectAndRadius(
-			rendering.RectFromLTWH(0, 0, size.Width, size.Height),
-			rendering.CircularRadius(r.borderRadius),
+		rrect := graphics.RRectFromRectAndRadius(
+			graphics.RectFromLTWH(0, 0, size.Width, size.Height),
+			graphics.CircularRadius(r.borderRadius),
 		)
 		ctx.Canvas.DrawRRect(rrect, bgPaint)
 	} else {
-		ctx.Canvas.DrawRect(rendering.RectFromLTWH(0, 0, size.Width, size.Height), bgPaint)
+		ctx.Canvas.DrawRect(graphics.RectFromLTWH(0, 0, size.Width, size.Height), bgPaint)
 	}
 
 	// Draw border
-	borderPaint := rendering.DefaultPaint()
-	borderPaint.Style = rendering.PaintStyleStroke
+	borderPaint := graphics.DefaultPaint()
+	borderPaint.Style = graphics.PaintStyleStroke
 	borderPaint.StrokeWidth = r.borderWidth
 
 	// Use focus color when focused, otherwise border color
@@ -687,19 +687,19 @@ func (r *renderTextInput) Paint(ctx *layout.PaintContext) {
 
 	halfStroke := borderPaint.StrokeWidth / 2
 	if r.borderRadius > 0 {
-		rrect := rendering.RRectFromRectAndRadius(
-			rendering.RectFromLTWH(halfStroke, halfStroke, size.Width-borderPaint.StrokeWidth, size.Height-borderPaint.StrokeWidth),
-			rendering.CircularRadius(r.borderRadius),
+		rrect := graphics.RRectFromRectAndRadius(
+			graphics.RectFromLTWH(halfStroke, halfStroke, size.Width-borderPaint.StrokeWidth, size.Height-borderPaint.StrokeWidth),
+			graphics.CircularRadius(r.borderRadius),
 		)
 		ctx.Canvas.DrawRRect(rrect, borderPaint)
 	} else {
-		ctx.Canvas.DrawRect(rendering.RectFromLTWH(halfStroke, halfStroke, size.Width-borderPaint.StrokeWidth, size.Height-borderPaint.StrokeWidth), borderPaint)
+		ctx.Canvas.DrawRect(graphics.RectFromLTWH(halfStroke, halfStroke, size.Width-borderPaint.StrokeWidth, size.Height-borderPaint.StrokeWidth), borderPaint)
 	}
 
 	// Native view handles text rendering - no Skia text drawing needed
 }
 
-func (r *renderTextInput) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderTextInput) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

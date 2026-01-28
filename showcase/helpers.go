@@ -3,23 +3,23 @@ package main
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
 // sectionTitle creates a styled section header for demo pages.
 func sectionTitle(text string, colors theme.ColorScheme) core.Widget {
-	return widgets.TextOf(text, rendering.TextStyle{
+	return widgets.TextOf(text, graphics.TextStyle{
 		Color:      colors.OnSurface,
 		FontSize:   20,
-		FontWeight: rendering.FontWeightBold,
+		FontWeight: graphics.FontWeightBold,
 	})
 }
 
 // labelStyle returns a text style for descriptive labels.
-func labelStyle(colors theme.ColorScheme) rendering.TextStyle {
-	return rendering.TextStyle{
+func labelStyle(colors theme.ColorScheme) graphics.TextStyle {
+	return graphics.TextStyle{
 		Color:    colors.OnSurfaceVariant,
 		FontSize: 14,
 	}

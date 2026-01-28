@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/skia"
 )
 
@@ -76,7 +76,7 @@ const (
 // will result in last-write-wins for the container size.
 type Icon struct {
 	dom     *skia.SVGDOM
-	viewBox rendering.Rect
+	viewBox graphics.Rect
 }
 
 // Load parses an SVG from the provided reader.
@@ -100,7 +100,7 @@ func LoadBytes(data []byte) (*Icon, error) {
 	}
 	return &Icon{
 		dom:     dom,
-		viewBox: rendering.Rect{Right: w, Bottom: h},
+		viewBox: graphics.Rect{Right: w, Bottom: h},
 	}, nil
 }
 
@@ -126,14 +126,14 @@ func LoadFile(path string) (*Icon, error) {
 	}
 	return &Icon{
 		dom:     dom,
-		viewBox: rendering.Rect{Right: w, Bottom: h},
+		viewBox: graphics.Rect{Right: w, Bottom: h},
 	}, nil
 }
 
 // ViewBox returns the viewBox of the SVG.
-func (i *Icon) ViewBox() rendering.Rect {
+func (i *Icon) ViewBox() graphics.Rect {
 	if i == nil {
-		return rendering.Rect{}
+		return graphics.Rect{}
 	}
 	return i.viewBox
 }
@@ -145,7 +145,7 @@ func (i *Icon) ViewBox() rendering.Rect {
 // If tintColor is non-zero, all SVG colors are replaced with the tint
 // while preserving alpha (useful for icons). Note: tinting affects all
 // content including gradients and embedded images.
-func (i *Icon) Draw(canvas rendering.Canvas, bounds rendering.Rect, tintColor rendering.Color) {
+func (i *Icon) Draw(canvas graphics.Canvas, bounds graphics.Rect, tintColor graphics.Color) {
 	if i == nil || i.dom == nil {
 		return
 	}
@@ -185,7 +185,7 @@ func (i *Icon) SetPreserveAspectRatio(par PreserveAspectRatio) {
 // To detect lifetime violations, build with -tags svgdebug.
 func (i *Icon) Destroy() {
 	if i != nil && i.dom != nil {
-		rendering.SVGDebugCheckDestroy(i.dom.Ptr())
+		graphics.SVGDebugCheckDestroy(i.dom.Ptr())
 		i.dom.Destroy()
 		i.dom = nil
 	}

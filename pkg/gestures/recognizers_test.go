@@ -3,7 +3,7 @@ package gestures
 import (
 	"testing"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 func TestHorizontalDrag_WinsOnHorizontalSlop(t *testing.T) {
@@ -24,7 +24,7 @@ func TestHorizontalDrag_WinsOnHorizontalSlop(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -32,7 +32,7 @@ func TestHorizontalDrag_WinsOnHorizontalSlop(t *testing.T) {
 	// Move horizontally beyond slop
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 5, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 5, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -43,7 +43,7 @@ func TestHorizontalDrag_WinsOnHorizontalSlop(t *testing.T) {
 	// Continue moving
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 15, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 15, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -57,7 +57,7 @@ func TestHorizontalDrag_WinsOnHorizontalSlop(t *testing.T) {
 	// Pointer up
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 15, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 15, Y: 100},
 		Phase:     PointerPhaseUp,
 	})
 
@@ -76,7 +76,7 @@ func TestHorizontalDrag_RejectsOnVerticalSlop(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -84,7 +84,7 @@ func TestHorizontalDrag_RejectsOnVerticalSlop(t *testing.T) {
 	// Move vertically beyond slop
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100 + DefaultTouchSlop + 5},
+		Position:  graphics.Offset{X: 100, Y: 100 + DefaultTouchSlop + 5},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -111,7 +111,7 @@ func TestVerticalDrag_WinsOnVerticalSlop(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -119,7 +119,7 @@ func TestVerticalDrag_WinsOnVerticalSlop(t *testing.T) {
 	// Move vertically beyond slop
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100 + DefaultTouchSlop + 5},
+		Position:  graphics.Offset{X: 100, Y: 100 + DefaultTouchSlop + 5},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -130,7 +130,7 @@ func TestVerticalDrag_WinsOnVerticalSlop(t *testing.T) {
 	// Continue moving
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100 + DefaultTouchSlop + 25},
+		Position:  graphics.Offset{X: 100, Y: 100 + DefaultTouchSlop + 25},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -144,7 +144,7 @@ func TestVerticalDrag_WinsOnVerticalSlop(t *testing.T) {
 	// Pointer up
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100 + DefaultTouchSlop + 25},
+		Position:  graphics.Offset{X: 100, Y: 100 + DefaultTouchSlop + 25},
 		Phase:     PointerPhaseUp,
 	})
 
@@ -163,7 +163,7 @@ func TestVerticalDrag_RejectsOnHorizontalSlop(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -171,7 +171,7 @@ func TestVerticalDrag_RejectsOnHorizontalSlop(t *testing.T) {
 	// Move horizontally beyond slop
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 5, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 5, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -192,7 +192,7 @@ func TestDrag_VelocityCalculation(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -200,7 +200,7 @@ func TestDrag_VelocityCalculation(t *testing.T) {
 	// Move to trigger acceptance
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -208,7 +208,7 @@ func TestDrag_VelocityCalculation(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		recognizer.HandleEvent(PointerEvent{
 			PointerID: 1,
-			Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 10 + float64(i+1)*50, Y: 100},
+			Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10 + float64(i+1)*50, Y: 100},
 			Phase:     PointerPhaseMove,
 		})
 	}
@@ -216,7 +216,7 @@ func TestDrag_VelocityCalculation(t *testing.T) {
 	// Pointer up
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 260, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 260, Y: 100},
 		Phase:     PointerPhaseUp,
 	})
 
@@ -238,7 +238,7 @@ func TestDrag_CompetesWithTap(t *testing.T) {
 	// Pointer down - both recognizers enter arena
 	down := PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	}
 	horizontal.AddPointer(down)
@@ -248,7 +248,7 @@ func TestDrag_CompetesWithTap(t *testing.T) {
 	// Move horizontally - drag should win
 	move := PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
 		Phase:     PointerPhaseMove,
 	}
 	horizontal.HandleEvent(move)
@@ -257,7 +257,7 @@ func TestDrag_CompetesWithTap(t *testing.T) {
 	// Pointer up
 	up := PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
 		Phase:     PointerPhaseUp,
 	}
 	horizontal.HandleEvent(up)
@@ -283,7 +283,7 @@ func TestDrag_HorizontalVsVertical(t *testing.T) {
 	// Pointer down - both enter arena
 	down := PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	}
 	horizontal.AddPointer(down)
@@ -293,7 +293,7 @@ func TestDrag_HorizontalVsVertical(t *testing.T) {
 	// Move diagonally but more horizontal
 	move := PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100 + 5},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100 + 5},
 		Phase:     PointerPhaseMove,
 	}
 	horizontal.HandleEvent(move)
@@ -317,7 +317,7 @@ func TestDrag_Cancel(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -325,14 +325,14 @@ func TestDrag_Cancel(t *testing.T) {
 	// Move to trigger acceptance
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
+		Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
 	// Cancel
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseCancel,
 	})
 
@@ -353,7 +353,7 @@ func TestDrag_NegativeDirection(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -361,14 +361,14 @@ func TestDrag_NegativeDirection(t *testing.T) {
 	// Move left (negative X)
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 - DefaultTouchSlop - 10, Y: 100},
+		Position:  graphics.Offset{X: 100 - DefaultTouchSlop - 10, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
 	// Move further left
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 - DefaultTouchSlop - 30, Y: 100},
+		Position:  graphics.Offset{X: 100 - DefaultTouchSlop - 30, Y: 100},
 		Phase:     PointerPhaseMove,
 	})
 
@@ -388,7 +388,7 @@ func TestDrag_PointerUpWithoutAcceptance(t *testing.T) {
 	// Pointer down
 	recognizer.AddPointer(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseDown,
 	})
 	arena.Close(1)
@@ -396,7 +396,7 @@ func TestDrag_PointerUpWithoutAcceptance(t *testing.T) {
 	// Immediate pointer up (no movement)
 	recognizer.HandleEvent(PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     PointerPhaseUp,
 	})
 

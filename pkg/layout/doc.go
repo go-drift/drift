@@ -7,8 +7,8 @@
 //
 // Constraints specify the min/max dimensions a child can occupy:
 //
-//	constraints := layout.Tight(rendering.Size{Width: 100, Height: 50})
-//	constraints := layout.Loose(rendering.Size{Width: 200, Height: 200})
+//	constraints := layout.Tight(graphics.Size{Width: 100, Height: 50})
+//	constraints := layout.Loose(graphics.Size{Width: 200, Height: 200})
 //
 // EdgeInsets represents padding/margin on four sides:
 //

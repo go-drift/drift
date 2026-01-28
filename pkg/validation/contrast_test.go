@@ -7,11 +7,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 func TestContrastRatio_BlackOnWhite(t *testing.T) {
-	ratio := ContrastRatio(rendering.ColorBlack, rendering.ColorWhite)
+	ratio := ContrastRatio(graphics.ColorBlack, graphics.ColorWhite)
 
 	// Black on white should be 21:1
 	if math.Abs(ratio-21.0) > 0.1 {
@@ -20,7 +20,7 @@ func TestContrastRatio_BlackOnWhite(t *testing.T) {
 }
 
 func TestContrastRatio_WhiteOnBlack(t *testing.T) {
-	ratio := ContrastRatio(rendering.ColorWhite, rendering.ColorBlack)
+	ratio := ContrastRatio(graphics.ColorWhite, graphics.ColorBlack)
 
 	// Should be the same regardless of order
 	if math.Abs(ratio-21.0) > 0.1 {
@@ -29,7 +29,7 @@ func TestContrastRatio_WhiteOnBlack(t *testing.T) {
 }
 
 func TestContrastRatio_SameColor(t *testing.T) {
-	ratio := ContrastRatio(rendering.ColorWhite, rendering.ColorWhite)
+	ratio := ContrastRatio(graphics.ColorWhite, graphics.ColorWhite)
 
 	// Same color should be 1:1
 	if math.Abs(ratio-1.0) > 0.1 {
@@ -83,7 +83,7 @@ func TestMeetsWCAGAAA_LargeText(t *testing.T) {
 
 func TestCheckContrast(t *testing.T) {
 	// Black on white should pass both AA and AAA
-	result := CheckContrast(rendering.ColorBlack, rendering.ColorWhite, false)
+	result := CheckContrast(graphics.ColorBlack, graphics.ColorWhite, false)
 
 	if math.Abs(result.Ratio-21.0) > 0.1 {
 		t.Errorf("Expected ratio ~21, got %.2f", result.Ratio)
@@ -100,8 +100,8 @@ func TestCheckContrast(t *testing.T) {
 
 func TestCheckContrast_LowContrast(t *testing.T) {
 	// Light gray on white
-	lightGray := rendering.Color(0xFFCCCCCC)
-	result := CheckContrast(lightGray, rendering.ColorWhite, false)
+	lightGray := graphics.Color(0xFFCCCCCC)
+	result := CheckContrast(lightGray, graphics.ColorWhite, false)
 
 	if result.MeetsAA {
 		t.Error("Light gray on white should not meet AA")
@@ -113,21 +113,21 @@ func TestCheckContrast_LowContrast(t *testing.T) {
 }
 
 func TestSuggestForegroundColor_DarkBackground(t *testing.T) {
-	darkBg := rendering.Color(0xFF333333)
+	darkBg := graphics.Color(0xFF333333)
 	suggested := SuggestForegroundColor(darkBg, 4.5)
 
 	// Should suggest white for dark backgrounds
-	if suggested != rendering.ColorWhite {
+	if suggested != graphics.ColorWhite {
 		t.Errorf("Expected white for dark background, got %v", suggested)
 	}
 }
 
 func TestSuggestForegroundColor_LightBackground(t *testing.T) {
-	lightBg := rendering.Color(0xFFEEEEEE)
+	lightBg := graphics.Color(0xFFEEEEEE)
 	suggested := SuggestForegroundColor(lightBg, 4.5)
 
 	// Should suggest black for light backgrounds
-	if suggested != rendering.ColorBlack {
+	if suggested != graphics.ColorBlack {
 		t.Errorf("Expected black for light background, got %v", suggested)
 	}
 }
@@ -175,13 +175,13 @@ func TestMeetsWCAG_LevelA(t *testing.T) {
 
 func TestRelativeLuminance(t *testing.T) {
 	// White should have luminance of 1.0
-	whiteLum := relativeLuminance(rendering.ColorWhite)
+	whiteLum := relativeLuminance(graphics.ColorWhite)
 	if math.Abs(whiteLum-1.0) > 0.01 {
 		t.Errorf("White luminance: expected ~1.0, got %.4f", whiteLum)
 	}
 
 	// Black should have luminance of 0.0
-	blackLum := relativeLuminance(rendering.ColorBlack)
+	blackLum := relativeLuminance(graphics.ColorBlack)
 	if math.Abs(blackLum-0.0) > 0.01 {
 		t.Errorf("Black luminance: expected ~0.0, got %.4f", blackLum)
 	}

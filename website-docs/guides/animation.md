@@ -319,7 +319,7 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
     // Interpolate color
     startColor := colors.Primary
     endColor := colors.Secondary
-    // Use rendering.LerpColor for color interpolation
+    // Use graphics.LerpColor for color interpolation
 
     return widgets.Container{
         // Use interpolated values

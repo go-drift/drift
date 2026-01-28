@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -467,7 +467,7 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 		widgets.Container{
 			Color: colors.SurfaceVariant,
 			ChildWidget: widgets.PaddingAll(12,
-				widgets.TextOf(f.parent.statusText.Get(), rendering.TextStyle{
+				widgets.TextOf(f.parent.statusText.Get(), graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
 					FontSize: 14,
 				}),

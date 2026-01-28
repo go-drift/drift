@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 func init() {
@@ -54,20 +54,20 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 		// Error indicator
 		Text{
 			Content: "!",
-			Style: rendering.TextStyle{
-				Color:      rendering.ColorWhite,
+			Style: graphics.TextStyle{
+				Color:      graphics.ColorWhite,
 				FontSize:   24,
-				FontWeight: rendering.FontWeightBold,
+				FontWeight: graphics.FontWeightBold,
 			},
 		},
 		SizedBox{Height: 8},
 		// Error message
 		Text{
 			Content: "Something went wrong",
-			Style: rendering.TextStyle{
-				Color:      rendering.ColorWhite,
+			Style: graphics.TextStyle{
+				Color:      graphics.ColorWhite,
 				FontSize:   16,
-				FontWeight: rendering.FontWeightBold,
+				FontWeight: graphics.FontWeightBold,
 			},
 			Wrap: true,
 		},
@@ -78,8 +78,8 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 			SizedBox{Height: 8},
 			Text{
 				Content: errorText,
-				Style: rendering.TextStyle{
-					Color:    rendering.RGBA(255, 255, 255, 200),
+				Style: graphics.TextStyle{
+					Color:    graphics.RGBA(255, 255, 255, 200),
 					FontSize: 12,
 				},
 				Wrap:     true,
@@ -95,7 +95,7 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 	)
 
 	return Container{
-		Color:   rendering.RGBA(180, 0, 0, 255), // Dark red
+		Color:   graphics.RGBA(180, 0, 0, 255), // Dark red
 		Padding: layout.EdgeInsetsAll(16),
 		ChildWidget: Column{
 			MainAxisAlignment:  MainAxisAlignmentCenter,
@@ -136,12 +136,12 @@ func (s *errorRestartButtonState) Build(ctx core.BuildContext) core.Widget {
 	if s.restartFn == nil {
 		// No restart function registered, show disabled button
 		return Container{
-			Color:   rendering.RGBA(100, 100, 100, 200),
+			Color:   graphics.RGBA(100, 100, 100, 200),
 			Padding: layout.EdgeInsetsSymmetric(16, 8),
 			ChildWidget: Text{
 				Content: "Restart unavailable",
-				Style: rendering.TextStyle{
-					Color:    rendering.RGBA(200, 200, 200, 255),
+				Style: graphics.TextStyle{
+					Color:    graphics.RGBA(200, 200, 200, 255),
 					FontSize: 14,
 				},
 			},
@@ -151,14 +151,14 @@ func (s *errorRestartButtonState) Build(ctx core.BuildContext) core.Widget {
 	return GestureDetector{
 		OnTap: s.restartFn,
 		ChildWidget: Container{
-			Color:   rendering.RGBA(255, 255, 255, 220),
+			Color:   graphics.RGBA(255, 255, 255, 220),
 			Padding: layout.EdgeInsetsSymmetric(16, 8),
 			ChildWidget: Text{
 				Content: "Restart App",
-				Style: rendering.TextStyle{
-					Color:      rendering.ColorBlack,
+				Style: graphics.TextStyle{
+					Color:      graphics.ColorBlack,
 					FontSize:   14,
-					FontWeight: rendering.FontWeightNormal,
+					FontWeight: graphics.FontWeightNormal,
 				},
 			},
 		},

@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -139,7 +139,7 @@ func (s *errorBoundariesState) buildPanicDemo(colors theme.ColorScheme) core.Wid
 		Padding: layout.EdgeInsetsAll(16),
 		ChildWidget: widgets.Text{
 			Content: "This widget is working normally.",
-			Style: rendering.TextStyle{
+			Style: graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,
 			},
@@ -158,7 +158,7 @@ func (s *errorBoundariesState) buildBoundaryDemo(colors theme.ColorScheme) core.
 			Padding: layout.EdgeInsetsAll(16),
 			ChildWidget: widgets.Text{
 				Content: "Content inside ErrorBoundary - working normally.",
-				Style: rendering.TextStyle{
+				Style: graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
 					FontSize: 14,
 				},
@@ -189,16 +189,16 @@ func (s *errorBoundariesState) buildCustomFallbackDemo(colors theme.ColorScheme)
 					ChildrenWidgets: []core.Widget{
 						widgets.Text{
 							Content: "Custom Error Handler",
-							Style: rendering.TextStyle{
+							Style: graphics.TextStyle{
 								Color:      colors.OnErrorContainer,
 								FontSize:   16,
-								FontWeight: rendering.FontWeightBold,
+								FontWeight: graphics.FontWeightBold,
 							},
 						},
 						widgets.VSpace(8),
 						widgets.Text{
 							Content: "Widget: " + err.Widget,
-							Style: rendering.TextStyle{
+							Style: graphics.TextStyle{
 								Color:    colors.OnErrorContainer,
 								FontSize: 12,
 							},
@@ -228,7 +228,7 @@ func (s *errorBoundariesState) buildCodeExample(colors theme.ColorScheme) core.W
 		Padding: layout.EdgeInsetsAll(16),
 		ChildWidget: widgets.Text{
 			Content: code,
-			Style: rendering.TextStyle{
+			Style: graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 12,
 			},

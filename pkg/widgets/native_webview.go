@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // NativeWebView embeds a native web browser view.
@@ -224,7 +224,7 @@ func (r *renderNativeWebView) PerformLayout() {
 	height := r.height
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
 
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
 func (r *renderNativeWebView) ensurePlatformView() {
@@ -234,12 +234,12 @@ func (r *renderNativeWebView) ensurePlatformView() {
 	r.state.ensurePlatformView(r.initialURL, r.controller)
 }
 
-func (r *renderNativeWebView) updatePlatformView(clipBounds *rendering.Rect) {
+func (r *renderNativeWebView) updatePlatformView(clipBounds *graphics.Rect) {
 	if r.state == nil || r.state.viewID == 0 {
 		return
 	}
 
-	offset := rendering.Offset{}
+	offset := graphics.Offset{}
 	if r.state.element != nil {
 		offset = core.GlobalOffsetOf(r.state.element)
 	} else if parentData, ok := r.ParentData().(*layout.BoxParentData); ok && parentData != nil {
@@ -256,7 +256,7 @@ func (r *renderNativeWebView) Paint(ctx *layout.PaintContext) {
 
 	// Get clip bounds for platform view
 	clip, hasClip := ctx.CurrentClipBounds()
-	var clipPtr *rendering.Rect
+	var clipPtr *graphics.Rect
 	if hasClip {
 		clipPtr = &clip
 	}
@@ -266,38 +266,38 @@ func (r *renderNativeWebView) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
 
 	// Draw a placeholder background for the web view
-	bgPaint := rendering.DefaultPaint()
-	bgPaint.Color = rendering.Color(0xFFF0F0F0) // Light gray
+	bgPaint := graphics.DefaultPaint()
+	bgPaint.Color = graphics.Color(0xFFF0F0F0) // Light gray
 
-	ctx.Canvas.DrawRect(rendering.RectFromLTWH(0, 0, size.Width, size.Height), bgPaint)
+	ctx.Canvas.DrawRect(graphics.RectFromLTWH(0, 0, size.Width, size.Height), bgPaint)
 
 	// Draw border
-	borderPaint := rendering.DefaultPaint()
-	borderPaint.Color = rendering.Color(0xFFCCCCCC)
-	borderPaint.Style = rendering.PaintStyleStroke
+	borderPaint := graphics.DefaultPaint()
+	borderPaint.Color = graphics.Color(0xFFCCCCCC)
+	borderPaint.Style = graphics.PaintStyleStroke
 	borderPaint.StrokeWidth = 1
 
-	ctx.Canvas.DrawRect(rendering.RectFromLTWH(0.5, 0.5, size.Width-1, size.Height-1), borderPaint)
+	ctx.Canvas.DrawRect(graphics.RectFromLTWH(0.5, 0.5, size.Width-1, size.Height-1), borderPaint)
 
 	// Draw a "web view" label in the center (placeholder until native view is positioned)
-	textStyle := rendering.TextStyle{
+	textStyle := graphics.TextStyle{
 		FontSize: 14,
-		Color:    rendering.Color(0xFF999999),
+		Color:    graphics.Color(0xFF999999),
 	}
-	manager, _ := rendering.DefaultFontManagerErr()
+	manager, _ := graphics.DefaultFontManagerErr()
 	if manager == nil {
 		// Error already reported by DefaultFontManagerErr
 		return
 	}
-	layout, err := rendering.LayoutText("WebView", textStyle, manager)
+	layout, err := graphics.LayoutText("WebView", textStyle, manager)
 	if err == nil {
 		textX := (size.Width - layout.Size.Width) / 2
 		textY := (size.Height - layout.Size.Height) / 2
-		ctx.Canvas.DrawText(layout, rendering.Offset{X: textX, Y: textY})
+		ctx.Canvas.DrawText(layout, graphics.Offset{X: textX, Y: textY})
 	}
 }
 
-func (r *renderNativeWebView) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderNativeWebView) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}

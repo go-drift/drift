@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // RepaintBoundary isolates its subtree into a separate paint layer.
@@ -64,7 +64,7 @@ func (r *renderRepaintBoundary) PerformLayout() {
 		r.child.Layout(constraints, true)
 		r.SetSize(r.child.Size())
 	} else {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
@@ -74,13 +74,13 @@ func (r *renderRepaintBoundary) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderRepaintBoundary) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderRepaintBoundary) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
 	if r.child != nil {
 		offset := getChildOffset(r.child)
-		local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+		local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 		if r.child.HitTest(local, result) {
 			return true
 		}

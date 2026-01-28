@@ -1,6 +1,6 @@
 //go:build android || darwin || ios
 
-package rendering
+package graphics
 
 import (
 	"image"
@@ -48,7 +48,7 @@ func paintParams(paint Paint) (cap, join int32, miter float32, dash []float32, d
 	return
 }
 
-// buildSkiaPath converts a rendering.Path to a skia.Path.
+// buildSkiaPath converts a graphics.Path to a skia.Path.
 // Returns nil if path is nil or empty. Caller must call Destroy() on non-nil result.
 func buildSkiaPath(path *Path) *skia.Path {
 	if path == nil || path.IsEmpty() {

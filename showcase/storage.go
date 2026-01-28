@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -140,7 +140,7 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 		return widgets.Container{
 			Color: colors.SurfaceVariant,
 			ChildWidget: widgets.PaddingAll(16,
-				widgets.TextOf("No item selected", rendering.TextStyle{
+				widgets.TextOf("No item selected", graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
 					FontSize: 14,
 				}),
@@ -163,13 +163,13 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 						widgets.VSpace(8),
 						s.infoRow("Size", formatSize(file.Size), colors),
 						widgets.VSpace(8),
-						widgets.TextOf("Path:", rendering.TextStyle{
+						widgets.TextOf("Path:", graphics.TextStyle{
 							Color:      colors.OnSurfaceVariant,
 							FontSize:   12,
-							FontWeight: rendering.FontWeightBold,
+							FontWeight: graphics.FontWeightBold,
 						}),
 						widgets.VSpace(4),
-						widgets.TextOf(file.Path, rendering.TextStyle{
+						widgets.TextOf(file.Path, graphics.TextStyle{
 							Color:    colors.OnSurface,
 							FontSize: 12,
 						}),
@@ -187,13 +187,13 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 				MainAxisSize:       widgets.MainAxisSizeMin,
 				ChildrenWidgets: []core.Widget{
-					widgets.TextOf("Directory:", rendering.TextStyle{
+					widgets.TextOf("Directory:", graphics.TextStyle{
 						Color:      colors.OnSurfaceVariant,
 						FontSize:   12,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 					widgets.VSpace(4),
-					widgets.TextOf(path, rendering.TextStyle{
+					widgets.TextOf(path, graphics.TextStyle{
 						Color:    colors.OnSurface,
 						FontSize: 12,
 					}),
@@ -210,7 +210,7 @@ func (s *storageState) appDirectoriesCard(colors theme.ColorScheme) core.Widget 
 		return widgets.Container{
 			Color: colors.SurfaceVariant,
 			ChildWidget: widgets.PaddingAll(16,
-				widgets.TextOf("Loading directories...", rendering.TextStyle{
+				widgets.TextOf("Loading directories...", graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
 					FontSize: 14,
 				}),
@@ -229,13 +229,13 @@ func (s *storageState) appDirectoriesCard(colors theme.ColorScheme) core.Widget 
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 				MainAxisSize:       widgets.MainAxisSizeMin,
 				ChildrenWidgets: []core.Widget{
-					widgets.TextOf(name+":", rendering.TextStyle{
+					widgets.TextOf(name+":", graphics.TextStyle{
 						Color:      colors.OnSurfaceVariant,
 						FontSize:   12,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 					widgets.VSpace(2),
-					widgets.TextOf(path, rendering.TextStyle{
+					widgets.TextOf(path, graphics.TextStyle{
 						Color:    colors.OnSurface,
 						FontSize: 11,
 					}),
@@ -262,14 +262,14 @@ func (s *storageState) infoRow(label, value string, colors theme.ColorScheme) co
 		MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 		ChildrenWidgets: []core.Widget{
-			widgets.TextOf(label, rendering.TextStyle{
+			widgets.TextOf(label, graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,
 			}),
-			widgets.TextOf(value, rendering.TextStyle{
+			widgets.TextOf(value, graphics.TextStyle{
 				Color:      colors.OnSurface,
 				FontSize:   14,
-				FontWeight: rendering.FontWeightSemibold,
+				FontWeight: graphics.FontWeightSemibold,
 			}),
 		},
 	}

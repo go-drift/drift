@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -306,13 +306,13 @@ func retrievedValueCard(value string, colors theme.ColorScheme) core.Widget {
 				widgets.MainAxisAlignmentStart,
 				widgets.CrossAxisAlignmentStart,
 				widgets.MainAxisSizeMin,
-				widgets.TextOf("Retrieved Value:", rendering.TextStyle{
+				widgets.TextOf("Retrieved Value:", graphics.TextStyle{
 					Color:      colors.OnSurfaceVariant,
 					FontSize:   12,
-					FontWeight: rendering.FontWeightBold,
+					FontWeight: graphics.FontWeightBold,
 				}),
 				widgets.VSpace(4),
-				widgets.TextOf(displayValue, rendering.TextStyle{
+				widgets.TextOf(displayValue, graphics.TextStyle{
 					Color:    colors.OnSurface,
 					FontSize: 16,
 				}),

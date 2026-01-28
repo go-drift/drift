@@ -1,4 +1,4 @@
-package rendering
+package graphics
 
 import (
 	"fmt"
@@ -135,7 +135,7 @@ func cloneGradientStops(stops []GradientStop) []GradientStop {
 //
 // For linear gradients, the natural bounds span from the start to end points.
 //
-// This method is used by widgets with [OverflowVisible] to determine the
+// This method is used by widgets with overflow visible to determine the
 // drawing area for gradient overflow effects like glows.
 func (g *Gradient) Bounds(widgetRect Rect) Rect {
 	if g == nil || !g.IsValid() {

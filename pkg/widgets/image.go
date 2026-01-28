@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -161,7 +161,7 @@ type renderImage struct {
 	height               float64
 	fit                  ImageFit
 	alignment            layout.Alignment
-	intrinsic            rendering.Size
+	intrinsic            graphics.Size
 	semanticLabel        string
 	excludeFromSemantics bool
 
@@ -180,15 +180,15 @@ func (r *renderImage) SetChild(child layout.RenderObject) {
 func (r *renderImage) PerformLayout() {
 	constraints := r.Constraints()
 	if r.source == nil {
-		r.intrinsic = rendering.Size{}
+		r.intrinsic = graphics.Size{}
 		r.cachedRGBA, r.cachedSource = nil, nil
 		r.cacheID = 0
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 
 	bounds := r.source.Bounds()
-	intrinsic := rendering.Size{
+	intrinsic := graphics.Size{
 		Width:  float64(bounds.Dx()),
 		Height: float64(bounds.Dy()),
 	}
@@ -197,13 +197,13 @@ func (r *renderImage) PerformLayout() {
 
 	size := intrinsic
 	if r.width > 0 && r.height > 0 {
-		size = rendering.Size{Width: r.width, Height: r.height}
+		size = graphics.Size{Width: r.width, Height: r.height}
 	} else if r.width > 0 && intrinsic.Width > 0 {
 		scale := r.width / intrinsic.Width
-		size = rendering.Size{Width: r.width, Height: intrinsic.Height * scale}
+		size = graphics.Size{Width: r.width, Height: intrinsic.Height * scale}
 	} else if r.height > 0 && intrinsic.Height > 0 {
 		scale := r.height / intrinsic.Height
-		size = rendering.Size{Width: intrinsic.Width * scale, Height: r.height}
+		size = graphics.Size{Width: intrinsic.Width * scale, Height: r.height}
 	}
 
 	r.SetSize(constraints.Constrain(size))
@@ -236,12 +236,12 @@ func (r *renderImage) Paint(ctx *layout.PaintContext) {
 	}
 
 	ctx.Canvas.Save()
-	ctx.Canvas.ClipRect(rendering.RectFromLTWH(0, 0, size.Width, size.Height))
-	ctx.Canvas.DrawImageRect(r.cachedRGBA, srcRect, dstRect, rendering.FilterQualityLow, r.cacheKey())
+	ctx.Canvas.ClipRect(graphics.RectFromLTWH(0, 0, size.Width, size.Height))
+	ctx.Canvas.DrawImageRect(r.cachedRGBA, srcRect, dstRect, graphics.FilterQualityLow, r.cacheKey())
 	ctx.Canvas.Restore()
 }
 
-func (r *renderImage) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderImage) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -249,24 +249,24 @@ func (r *renderImage) HitTest(position rendering.Offset, result *layout.HitTestR
 	return true
 }
 
-func (r *renderImage) fitSize(fit ImageFit, size rendering.Size) rendering.Size {
+func (r *renderImage) fitSize(fit ImageFit, size graphics.Size) graphics.Size {
 	if r.intrinsic.Width <= 0 || r.intrinsic.Height <= 0 {
-		return rendering.Size{}
+		return graphics.Size{}
 	}
 
 	switch fit {
 	case ImageFitContain:
 		scale := min(size.Width/r.intrinsic.Width, size.Height/r.intrinsic.Height)
 		if scale <= 0 {
-			return rendering.Size{}
+			return graphics.Size{}
 		}
-		return rendering.Size{Width: r.intrinsic.Width * scale, Height: r.intrinsic.Height * scale}
+		return graphics.Size{Width: r.intrinsic.Width * scale, Height: r.intrinsic.Height * scale}
 	case ImageFitCover:
 		scale := max(size.Width/r.intrinsic.Width, size.Height/r.intrinsic.Height)
 		if scale <= 0 {
-			return rendering.Size{}
+			return graphics.Size{}
 		}
-		return rendering.Size{Width: r.intrinsic.Width * scale, Height: r.intrinsic.Height * scale}
+		return graphics.Size{Width: r.intrinsic.Width * scale, Height: r.intrinsic.Height * scale}
 	case ImageFitNone:
 		return r.intrinsic
 	case ImageFitScaleDown:
@@ -275,9 +275,9 @@ func (r *renderImage) fitSize(fit ImageFit, size rendering.Size) rendering.Size 
 		}
 		scale := min(size.Width/r.intrinsic.Width, size.Height/r.intrinsic.Height)
 		if scale <= 0 {
-			return rendering.Size{}
+			return graphics.Size{}
 		}
-		return rendering.Size{Width: r.intrinsic.Width * scale, Height: r.intrinsic.Height * scale}
+		return graphics.Size{Width: r.intrinsic.Width * scale, Height: r.intrinsic.Height * scale}
 	default:
 		return size
 	}
@@ -312,37 +312,37 @@ func (r *renderImage) cacheKey() uintptr {
 	return r.cacheID
 }
 
-func (r *renderImage) computeFitRects(fit ImageFit, align layout.Alignment, box rendering.Size) (src, dst rendering.Rect) {
+func (r *renderImage) computeFitRects(fit ImageFit, align layout.Alignment, box graphics.Size) (src, dst graphics.Rect) {
 	intrinsic := r.intrinsic
-	fullSrc := rendering.RectFromLTWH(0, 0, intrinsic.Width, intrinsic.Height)
+	fullSrc := graphics.RectFromLTWH(0, 0, intrinsic.Width, intrinsic.Height)
 
 	switch fit {
 	case ImageFitFill:
-		return fullSrc, rendering.RectFromLTWH(0, 0, box.Width, box.Height)
+		return fullSrc, graphics.RectFromLTWH(0, 0, box.Width, box.Height)
 
 	case ImageFitContain, ImageFitScaleDown:
 		scale := min(box.Width/intrinsic.Width, box.Height/intrinsic.Height)
 		if fit == ImageFitScaleDown && scale > 1 {
 			scale = 1
 		}
-		drawSize := rendering.Size{Width: intrinsic.Width * scale, Height: intrinsic.Height * scale}
-		offset := align.WithinRect(rendering.RectFromLTWH(0, 0, box.Width, box.Height), drawSize)
-		return fullSrc, rendering.RectFromLTWH(offset.X, offset.Y, drawSize.Width, drawSize.Height)
+		drawSize := graphics.Size{Width: intrinsic.Width * scale, Height: intrinsic.Height * scale}
+		offset := align.WithinRect(graphics.RectFromLTWH(0, 0, box.Width, box.Height), drawSize)
+		return fullSrc, graphics.RectFromLTWH(offset.X, offset.Y, drawSize.Width, drawSize.Height)
 
 	case ImageFitCover:
 		scale := max(box.Width/intrinsic.Width, box.Height/intrinsic.Height)
-		scaledSize := rendering.Size{Width: intrinsic.Width * scale, Height: intrinsic.Height * scale}
-		offset := align.WithinRect(rendering.RectFromLTWH(0, 0, box.Width, box.Height), scaledSize)
+		scaledSize := graphics.Size{Width: intrinsic.Width * scale, Height: intrinsic.Height * scale}
+		offset := align.WithinRect(graphics.RectFromLTWH(0, 0, box.Width, box.Height), scaledSize)
 		// Convert back to source coordinates
 		srcX, srcY := -offset.X/scale, -offset.Y/scale
 		srcW, srcH := box.Width/scale, box.Height/scale
-		return rendering.RectFromLTWH(srcX, srcY, srcW, srcH), rendering.RectFromLTWH(0, 0, box.Width, box.Height)
+		return graphics.RectFromLTWH(srcX, srcY, srcW, srcH), graphics.RectFromLTWH(0, 0, box.Width, box.Height)
 
 	case ImageFitNone:
-		offset := align.WithinRect(rendering.RectFromLTWH(0, 0, box.Width, box.Height), intrinsic)
-		return fullSrc, rendering.RectFromLTWH(offset.X, offset.Y, intrinsic.Width, intrinsic.Height)
+		offset := align.WithinRect(graphics.RectFromLTWH(0, 0, box.Width, box.Height), intrinsic)
+		return fullSrc, graphics.RectFromLTWH(offset.X, offset.Y, intrinsic.Width, intrinsic.Height)
 	}
-	return fullSrc, rendering.RectFromLTWH(0, 0, box.Width, box.Height)
+	return fullSrc, graphics.RectFromLTWH(0, 0, box.Width, box.Height)
 }
 
 func toRGBAImage(src image.Image) *image.RGBA {

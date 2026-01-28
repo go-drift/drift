@@ -1,6 +1,6 @@
 //go:build svgdebug
 
-package rendering
+package graphics
 
 import (
 	"fmt"

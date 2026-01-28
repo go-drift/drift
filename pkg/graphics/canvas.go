@@ -1,4 +1,4 @@
-package rendering
+package graphics
 
 import (
 	"fmt"

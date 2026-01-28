@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // DiagnosticsHUDDataSource provides frame timing data to the HUD.
@@ -116,7 +116,7 @@ type renderDiagnosticsHUD struct {
 	showFrameGraph bool
 
 	// Cached state
-	textLayout     *rendering.TextLayout
+	textLayout     *graphics.TextLayout
 	cachedFPSLabel string
 	sampleBuffer   []time.Duration // Reusable buffer for samples
 }
@@ -150,17 +150,17 @@ func (r *renderDiagnosticsHUD) PerformLayout() {
 	constraints := r.Constraints()
 	width = min(max(width, constraints.MinWidth), constraints.MaxWidth)
 	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
-	r.SetSize(rendering.Size{Width: width, Height: height})
+	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
 func (r *renderDiagnosticsHUD) Paint(ctx *layout.PaintContext) {
 	size := r.Size()
 
 	// Draw semi-transparent background
-	bgPaint := rendering.DefaultPaint()
-	bgPaint.Color = rendering.RGBA(0, 0, 0, 180)
-	bgRect := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
-	bgRRect := rendering.RRectFromRectAndRadius(bgRect, rendering.CircularRadius(4))
+	bgPaint := graphics.DefaultPaint()
+	bgPaint.Color = graphics.RGBA(0, 0, 0, 180)
+	bgRect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
+	bgRRect := graphics.RRectFromRectAndRadius(bgRect, graphics.CircularRadius(4))
 	ctx.Canvas.DrawRRect(bgRRect, bgPaint)
 
 	yOffset := 4.0
@@ -172,19 +172,19 @@ func (r *renderDiagnosticsHUD) Paint(ctx *layout.PaintContext) {
 		// Only recreate text layout if label changed
 		if fpsLabel != r.cachedFPSLabel || r.textLayout == nil {
 			r.cachedFPSLabel = fpsLabel
-			textStyle := rendering.TextStyle{
-				Color:      rendering.RGB(255, 255, 255),
+			textStyle := graphics.TextStyle{
+				Color:      graphics.RGB(255, 255, 255),
 				FontSize:   12,
-				FontWeight: rendering.FontWeightBold,
+				FontWeight: graphics.FontWeightBold,
 			}
-			manager, _ := rendering.DefaultFontManagerErr()
+			manager, _ := graphics.DefaultFontManagerErr()
 			if manager != nil {
-				r.textLayout, _ = rendering.LayoutTextWithConstraints(fpsLabel, textStyle, manager, 0)
+				r.textLayout, _ = graphics.LayoutTextWithConstraints(fpsLabel, textStyle, manager, 0)
 			}
 		}
 
 		if r.textLayout != nil {
-			ctx.Canvas.DrawText(r.textLayout, rendering.Offset{X: 8, Y: yOffset})
+			ctx.Canvas.DrawText(r.textLayout, graphics.Offset{X: 8, Y: yOffset})
 		}
 		yOffset += 18
 	}
@@ -239,37 +239,37 @@ func (r *renderDiagnosticsHUD) Paint(ctx *layout.PaintContext) {
 				}
 
 				// Determine color based on frame time relative to target
-				var barColor rendering.Color
+				var barColor graphics.Color
 				ratio := float64(ft) / float64(r.targetTime)
 				if ratio <= 1.0 {
 					// Green - at or below target
-					barColor = rendering.RGB(76, 175, 80)
+					barColor = graphics.RGB(76, 175, 80)
 				} else if ratio <= 2.0 {
 					// Yellow - 1-2x target
-					barColor = rendering.RGB(255, 193, 7)
+					barColor = graphics.RGB(255, 193, 7)
 				} else {
 					// Red - >2x target
-					barColor = rendering.RGB(244, 67, 54)
+					barColor = graphics.RGB(244, 67, 54)
 				}
 
-				barPaint := rendering.DefaultPaint()
+				barPaint := graphics.DefaultPaint()
 				barPaint.Color = barColor
 
 				x := graphLeft + float64(i)*barWidth
 				y := graphTop + graphHeight - barHeight
-				ctx.Canvas.DrawRect(rendering.RectFromLTWH(x, y, barWidth-1, barHeight), barPaint)
+				ctx.Canvas.DrawRect(graphics.RectFromLTWH(x, y, barWidth-1, barHeight), barPaint)
 			}
 
 			// Draw target line
 			targetY := graphTop + graphHeight - (float64(r.targetTime)/float64(maxTime))*graphHeight
-			linePaint := rendering.DefaultPaint()
-			linePaint.Color = rendering.RGBA(255, 255, 255, 128)
-			ctx.Canvas.DrawRect(rendering.RectFromLTWH(graphLeft, targetY, graphWidth, 1), linePaint)
+			linePaint := graphics.DefaultPaint()
+			linePaint.Color = graphics.RGBA(255, 255, 255, 128)
+			ctx.Canvas.DrawRect(graphics.RectFromLTWH(graphLeft, targetY, graphWidth, 1), linePaint)
 		}
 	}
 }
 
 // HitTest returns false to allow taps to pass through to the app below.
-func (r *renderDiagnosticsHUD) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderDiagnosticsHUD) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	return false
 }

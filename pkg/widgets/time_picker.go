@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -41,7 +41,7 @@ type TimePicker struct {
 	Decoration *InputDecoration
 
 	// TextStyle for the value text.
-	TextStyle rendering.TextStyle
+	TextStyle graphics.TextStyle
 
 	// Child overrides the default rendering for full customization.
 	Child core.Widget
@@ -170,7 +170,7 @@ func (s *timePickerState) buildDefaultField(ctx core.BuildContext, w TimePicker,
 
 	// Format the time value
 	var displayText string
-	var displayStyle rendering.TextStyle
+	var displayStyle graphics.TextStyle
 
 	showPlaceholder := w.ShowPlaceholder && w.Hour == 0 && w.Minute == 0
 	if showPlaceholder {

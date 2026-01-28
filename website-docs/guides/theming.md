@@ -83,7 +83,7 @@ widgets.Container{
     ChildWidget: child,
 }
 
-widgets.TextOf("Error!", rendering.TextStyle{
+widgets.TextOf("Error!", graphics.TextStyle{
     Color: colors.Error,
 })
 ```
@@ -126,16 +126,16 @@ Create a custom theme by building `ThemeData`:
 ```go
 myTheme := theme.ThemeData{
     ColorScheme: theme.ColorScheme{
-        Primary:      rendering.RGB(0x67, 0x50, 0xA7),  // Purple
-        OnPrimary:    rendering.ColorWhite,
-        Secondary:    rendering.RGB(0x62, 0x5B, 0x71),
-        OnSecondary:  rendering.ColorWhite,
-        Surface:      rendering.RGB(0xFE, 0xF7, 0xFF),
-        OnSurface:    rendering.RGB(0x1D, 0x1B, 0x20),
-        Background:   rendering.ColorWhite,
-        OnBackground: rendering.ColorBlack,
-        Error:        rendering.RGB(0xB3, 0x26, 0x1E),
-        OnError:      rendering.ColorWhite,
+        Primary:      graphics.RGB(0x67, 0x50, 0xA7),  // Purple
+        OnPrimary:    graphics.ColorWhite,
+        Secondary:    graphics.RGB(0x62, 0x5B, 0x71),
+        OnSecondary:  graphics.ColorWhite,
+        Surface:      graphics.RGB(0xFE, 0xF7, 0xFF),
+        OnSurface:    graphics.RGB(0x1D, 0x1B, 0x20),
+        Background:   graphics.ColorWhite,
+        OnBackground: graphics.ColorBlack,
+        Error:        graphics.RGB(0xB3, 0x26, 0x1E),
+        OnError:      graphics.ColorWhite,
     },
     TextTheme: theme.DefaultTextTheme(),
 }

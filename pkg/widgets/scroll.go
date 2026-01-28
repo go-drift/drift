@@ -9,7 +9,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // ScrollView provides scrollable content in a single direction.
@@ -170,7 +170,7 @@ func (r *renderScrollView) VisitChildren(visitor func(layout.RenderObject)) {
 
 func (r *renderScrollView) PerformLayout() {
 	constraints := r.Constraints()
-	size := rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
+	size := graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}
 	if size.Width <= 0 {
 		size.Width = constraints.MinWidth
 	}
@@ -211,7 +211,7 @@ func (r *renderScrollView) Paint(ctx *layout.PaintContext) {
 		return
 	}
 	size := r.Size()
-	clipRect := rendering.RectFromLTWH(0, 0, size.Width, size.Height)
+	clipRect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 
 	ctx.Canvas.Save()
 	ctx.Canvas.ClipRect(clipRect)
@@ -238,7 +238,7 @@ func (r *renderScrollView) Paint(ctx *layout.PaintContext) {
 	ctx.Canvas.Restore()
 }
 
-func (r *renderScrollView) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderScrollView) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	size := r.Size()
 	if position.X < 0 || position.Y < 0 || position.X > size.Width || position.Y > size.Height {
 		return false
@@ -400,32 +400,32 @@ func (r *renderScrollView) scrollOffset() float64 {
 	return r.position.Offset()
 }
 
-func (r *renderScrollView) ScrollOffset() rendering.Offset {
+func (r *renderScrollView) ScrollOffset() graphics.Offset {
 	offset := r.scrollOffset()
 	if r.direction == AxisHorizontal {
-		return rendering.Offset{X: -offset}
+		return graphics.Offset{X: -offset}
 	}
-	return rendering.Offset{Y: -offset}
+	return graphics.Offset{Y: -offset}
 }
 
 // SemanticScrollOffset implements layout.ScrollOffsetProvider.
 // Returns the scroll offset to subtract from child positions in the semantics tree.
-func (r *renderScrollView) SemanticScrollOffset() rendering.Offset {
+func (r *renderScrollView) SemanticScrollOffset() graphics.Offset {
 	offset := r.scrollOffset()
 	if r.direction == AxisHorizontal {
-		return rendering.Offset{X: offset}
+		return graphics.Offset{X: offset}
 	}
-	return rendering.Offset{Y: offset}
+	return graphics.Offset{Y: offset}
 }
 
-func (r *renderScrollView) paintCulled(ctx *layout.PaintContext, size rendering.Size, scrollOffset float64) bool {
+func (r *renderScrollView) paintCulled(ctx *layout.PaintContext, size graphics.Size, scrollOffset float64) bool {
 	if flex, ok := r.child.(*renderFlex); ok {
-		r.paintFlex(ctx, flex, rendering.Offset{}, size, scrollOffset)
+		r.paintFlex(ctx, flex, graphics.Offset{}, size, scrollOffset)
 		return true
 	}
 	if padding, ok := r.child.(*renderPadding); ok {
 		if flex, ok := padding.child.(*renderFlex); ok {
-			contentOffset := rendering.Offset{X: padding.padding.Left, Y: padding.padding.Top}
+			contentOffset := graphics.Offset{X: padding.padding.Left, Y: padding.padding.Top}
 			r.paintFlex(ctx, flex, contentOffset, size, scrollOffset)
 			return true
 		}
@@ -436,8 +436,8 @@ func (r *renderScrollView) paintCulled(ctx *layout.PaintContext, size rendering.
 func (r *renderScrollView) paintFlex(
 	ctx *layout.PaintContext,
 	flex *renderFlex,
-	contentOffset rendering.Offset,
-	size rendering.Size,
+	contentOffset graphics.Offset,
+	size graphics.Size,
 	scrollOffset float64,
 ) {
 	viewportSize := size.Height
@@ -451,7 +451,7 @@ func (r *renderScrollView) paintFlex(
 		parentData, _ := child.ParentData().(*layout.BoxParentData)
 		offset := contentOffset
 		if parentData != nil {
-			offset = rendering.Offset{
+			offset = graphics.Offset{
 				X: contentOffset.X + parentData.Offset.X,
 				Y: contentOffset.Y + parentData.Offset.Y,
 			}

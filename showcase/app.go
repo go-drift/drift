@@ -12,7 +12,7 @@ import (
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/navigation"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -128,7 +128,7 @@ func (s *showcaseState) getAppThemeData() *theme.AppThemeData {
 
 func (s *showcaseState) updateBackgroundColor() {
 	appThemeData := s.getAppThemeData()
-	engine.SetBackgroundColor(rendering.Color(appThemeData.Material.ColorScheme.Background))
+	engine.SetBackgroundColor(graphics.Color(appThemeData.Material.ColorScheme.Background))
 }
 
 func (s *showcaseState) applySystemUI() {

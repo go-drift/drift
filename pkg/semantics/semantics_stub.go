@@ -4,7 +4,7 @@
 // This stub implementation provides type definitions for non-supported platforms.
 package semantics
 
-import "github.com/go-drift/drift/pkg/rendering"
+import "github.com/go-drift/drift/pkg/graphics"
 
 // SemanticsConfiguration describes semantic properties and actions for a render object.
 type SemanticsConfiguration struct {
@@ -77,7 +77,7 @@ type SemanticsNode struct {
 	ID int64
 
 	// Rect is the bounding rectangle in global coordinates.
-	Rect rendering.Rect
+	Rect graphics.Rect
 
 	// Config contains the semantic configuration.
 	Config SemanticsConfiguration
@@ -129,7 +129,7 @@ func (o *SemanticsOwner) GetDirtyNodes() []*SemanticsNode {
 }
 
 // BuildSemanticsTree creates a semantics tree node with children.
-func BuildSemanticsTree(config SemanticsConfiguration, rect rendering.Rect, children ...*SemanticsNode) *SemanticsNode {
+func BuildSemanticsTree(config SemanticsConfiguration, rect graphics.Rect, children ...*SemanticsNode) *SemanticsNode {
 	return &SemanticsNode{
 		Config:   config,
 		Rect:     rect,

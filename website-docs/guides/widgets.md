@@ -12,7 +12,7 @@ Widgets are the building blocks of Drift applications. Everything you see on scr
 
 Drift uses a layered architecture:
 
-- **Widgets** are immutable configuration objects. They describe what the UI should look like but don't hold state or do rendering. Widgets are cheap to create and are rebuilt frequently.
+- **Widgets** are immutable configuration objects. They describe what the UI should look like but don't hold state or do graphics. Widgets are cheap to create and are rebuilt frequently.
 
 - **Elements** are the mutable objects that manage the widget lifecycle. When you call `CreateElement()`, Drift creates an Element that persists across rebuilds. Elements hold references to State (for StatefulWidgets) and handle the work of updating the tree.
 
@@ -66,7 +66,7 @@ button := widgets.Button{
 
 text := widgets.Text{
     Content: "Hello, Drift",
-    Style:   rendering.TextStyle{Color: colors.OnSurface, FontSize: 16},
+    Style:   graphics.TextStyle{Color: colors.OnSurface, FontSize: 16},
 }
 ```
 

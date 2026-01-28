@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/go-drift/drift/pkg/gestures"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 func TestGestureDetector_HorizontalDrag(t *testing.T) {
@@ -36,7 +36,7 @@ func TestGestureDetector_HorizontalDrag(t *testing.T) {
 	// Simulate gesture
 	down := gestures.PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	detector.HandlePointer(down)
@@ -44,21 +44,21 @@ func TestGestureDetector_HorizontalDrag(t *testing.T) {
 
 	move := gestures.PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 20, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 20, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	detector.HandlePointer(move)
 
 	move2 := gestures.PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 40, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 40, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	detector.HandlePointer(move2)
 
 	up := gestures.PointerEvent{
 		PointerID: 1,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 40, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 40, Y: 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	detector.HandlePointer(up)
@@ -109,7 +109,7 @@ func TestGestureDetector_VerticalDrag(t *testing.T) {
 	// Simulate gesture
 	down := gestures.PointerEvent{
 		PointerID: 2,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	detector.HandlePointer(down)
@@ -117,21 +117,21 @@ func TestGestureDetector_VerticalDrag(t *testing.T) {
 
 	move := gestures.PointerEvent{
 		PointerID: 2,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 30},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 30},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	detector.HandlePointer(move)
 
 	move2 := gestures.PointerEvent{
 		PointerID: 2,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 60},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 60},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	detector.HandlePointer(move2)
 
 	up := gestures.PointerEvent{
 		PointerID: 2,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 60},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 60},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	detector.HandlePointer(up)
@@ -205,7 +205,7 @@ func TestGestureDetector_MultipleRecognizers(t *testing.T) {
 	// Simulate drag - tap should lose
 	down := gestures.PointerEvent{
 		PointerID: 3,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	detector.HandlePointer(down)
@@ -213,14 +213,14 @@ func TestGestureDetector_MultipleRecognizers(t *testing.T) {
 
 	move := gestures.PointerEvent{
 		PointerID: 3,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 20, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 20, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	detector.HandlePointer(move)
 
 	up := gestures.PointerEvent{
 		PointerID: 3,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 20, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 20, Y: 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	detector.HandlePointer(up)

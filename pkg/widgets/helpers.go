@@ -3,22 +3,22 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // getChildOffset extracts the offset from a child's parent data.
-func getChildOffset(child layout.RenderBox) rendering.Offset {
+func getChildOffset(child layout.RenderBox) graphics.Offset {
 	if child == nil {
-		return rendering.Offset{}
+		return graphics.Offset{}
 	}
 	if data, ok := child.ParentData().(*layout.BoxParentData); ok {
 		return data.Offset
 	}
-	return rendering.Offset{}
+	return graphics.Offset{}
 }
 
 // withinBounds checks if a position is within the given size.
-func withinBounds(position rendering.Offset, size rendering.Size) bool {
+func withinBounds(position graphics.Offset, size graphics.Size) bool {
 	return position.X >= 0 && position.Y >= 0 && position.X <= size.Width && position.Y <= size.Height
 }
 

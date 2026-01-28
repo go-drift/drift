@@ -1,4 +1,4 @@
-package rendering
+package graphics
 
 // ColorFilterType specifies the algorithm used by a ColorFilter.
 type ColorFilterType int
@@ -13,7 +13,7 @@ const (
 	ColorFilterMatrix
 )
 
-// ColorFilter transforms colors during rendering.
+// ColorFilter transforms colors during graphics.
 //
 // ColorFilters modify pixel colors as they pass through the rendering pipeline.
 // They can be used for effects like tinting, grayscale conversion, brightness

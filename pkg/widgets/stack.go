@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // StackFit determines how children are sized within a Stack.
@@ -149,7 +149,7 @@ func (r *renderStack) Paint(ctx *layout.PaintContext) {
 }
 
 // HitTest tests children in reverse order (topmost first).
-func (r *renderStack) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderStack) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -163,7 +163,7 @@ func (r *renderStack) HitTest(position rendering.Offset, result *layout.HitTestR
 // layoutStackChildren performs the common layout logic for stack-based widgets.
 // It lays out children according to the fit mode and positions them using alignment.
 // Positioned children contribute to stack sizing and use alignment for unset axes.
-func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment layout.Alignment, constraints layout.Constraints) rendering.Size {
+func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment layout.Alignment, constraints layout.Constraints) graphics.Size {
 	var stackWidth, stackHeight float64
 	if fit == StackFitExpand {
 		stackWidth = constraints.MaxWidth
@@ -177,11 +177,11 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 	for _, child := range children {
 		var childConstraints layout.Constraints
 		if fit == StackFitExpand {
-			childConstraints = layout.Tight(rendering.Size{Width: stackWidth, Height: stackHeight})
+			childConstraints = layout.Tight(graphics.Size{Width: stackWidth, Height: stackHeight})
 		} else if pos, ok := child.(*renderPositioned); ok {
 			childConstraints = positionedFirstPassConstraints(pos, constraints)
 		} else {
-			childConstraints = layout.Loose(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
+			childConstraints = layout.Loose(graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 		}
 		child.Layout(childConstraints, true) // true: we read child.Size()
 		childSize := child.Size()
@@ -193,7 +193,7 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 		}
 	}
 
-	size := constraints.Constrain(rendering.Size{Width: stackWidth, Height: stackHeight})
+	size := constraints.Constrain(graphics.Size{Width: stackWidth, Height: stackHeight})
 
 	// Second pass: finalize positioned children.
 	// Re-layout those that stretch (both edges set), and calculate offsets for all.
@@ -209,7 +209,7 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 			continue // Already positioned
 		}
 		offset := alignment.WithinRect(
-			rendering.RectFromLTWH(0, 0, size.Width, size.Height),
+			graphics.RectFromLTWH(0, 0, size.Width, size.Height),
 			child.Size(),
 		)
 		child.SetParentData(&layout.BoxParentData{Offset: offset})
@@ -284,9 +284,9 @@ func positionedFirstPassConstraints(pos *renderPositioned, constraints layout.Co
 // Note: The first pass already applied explicit Width/Height and single-edge constraints.
 // This function only re-layouts when edge-based stretching is needed (both edges set
 // without explicit dimension), since stretching depends on final stack size.
-func layoutPositionedChild(pos *renderPositioned, stackSize rendering.Size, alignment layout.Alignment) {
+func layoutPositionedChild(pos *renderPositioned, stackSize graphics.Size, alignment layout.Alignment) {
 	if pos.child == nil {
-		pos.SetSize(rendering.Size{})
+		pos.SetSize(graphics.Size{})
 		return
 	}
 
@@ -342,10 +342,10 @@ func layoutPositionedChild(pos *renderPositioned, stackSize rendering.Size, alig
 	hasVerticalPosition := pos.top != nil || pos.bottom != nil
 
 	// Compute alignment offset once for unset axes
-	var alignedOffset rendering.Offset
+	var alignedOffset graphics.Offset
 	if !hasHorizontalPosition || !hasVerticalPosition {
 		alignedOffset = alignment.WithinRect(
-			rendering.RectFromLTWH(0, 0, stackSize.Width, stackSize.Height),
+			graphics.RectFromLTWH(0, 0, stackSize.Width, stackSize.Height),
 			childSize,
 		)
 	}
@@ -367,16 +367,16 @@ func layoutPositionedChild(pos *renderPositioned, stackSize rendering.Size, alig
 		y = alignedOffset.Y
 	}
 
-	pos.child.SetParentData(&layout.BoxParentData{Offset: rendering.Offset{}})
-	pos.SetParentData(&layout.BoxParentData{Offset: rendering.Offset{X: x, Y: y}})
+	pos.child.SetParentData(&layout.BoxParentData{Offset: graphics.Offset{}})
+	pos.SetParentData(&layout.BoxParentData{Offset: graphics.Offset{X: x, Y: y}})
 }
 
 // hitTestChildrenReverse tests children in reverse order and returns true if any child was hit.
-func hitTestChildrenReverse(children []layout.RenderBox, position rendering.Offset, result *layout.HitTestResult) bool {
+func hitTestChildrenReverse(children []layout.RenderBox, position graphics.Offset, result *layout.HitTestResult) bool {
 	for i := len(children) - 1; i >= 0; i-- {
 		child := children[i]
 		offset := getChildOffset(child)
-		local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+		local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 		if child.HitTest(local, result) {
 			return true
 		}
@@ -489,7 +489,7 @@ func (r *renderIndexedStack) activeChild() layout.RenderBox {
 	return r.children[r.index]
 }
 
-func (r *renderIndexedStack) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
@@ -498,7 +498,7 @@ func (r *renderIndexedStack) HitTest(position rendering.Offset, result *layout.H
 		return false
 	}
 	offset := getChildOffset(child)
-	local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+	local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 	if child.HitTest(local, result) {
 		return true
 	}
@@ -630,7 +630,7 @@ func (r *renderPositioned) VisitChildren(visitor func(layout.RenderObject)) {
 func (r *renderPositioned) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child == nil {
-		r.SetSize(rendering.Size{})
+		r.SetSize(graphics.Size{})
 		return
 	}
 	// When used outside a Stack, apply width/height constraints if specified.
@@ -655,11 +655,11 @@ func (r *renderPositioned) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderPositioned) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderPositioned) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if r.child == nil {
 		return false
 	}
 	offset := getChildOffset(r.child)
-	local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+	local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 	return r.child.HitTest(local, result)
 }

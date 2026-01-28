@@ -6,7 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // AnimatedContainer is a Container that animates changes to its properties.
@@ -39,8 +39,8 @@ type AnimatedContainer struct {
 	Padding     layout.EdgeInsets
 	Width       float64
 	Height      float64
-	Color       rendering.Color
-	Gradient    *rendering.Gradient
+	Color       graphics.Color
+	Gradient    *graphics.Gradient
 	Alignment   layout.Alignment
 	ChildWidget core.Widget
 }
@@ -65,14 +65,14 @@ type animatedContainerState struct {
 	paddingTween   *animation.Tween[layout.EdgeInsets]
 	widthTween     *animation.Tween[float64]
 	heightTween    *animation.Tween[float64]
-	colorTween     *animation.Tween[rendering.Color]
+	colorTween     *animation.Tween[graphics.Color]
 	alignmentTween *animation.Tween[layout.Alignment]
 
 	// Current values (used as starting point for new animations)
 	currentPadding   layout.EdgeInsets
 	currentWidth     float64
 	currentHeight    float64
-	currentColor     rendering.Color
+	currentColor     graphics.Color
 	currentAlignment layout.Alignment
 }
 

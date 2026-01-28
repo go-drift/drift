@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // TextFormField is a form-aware text input that wraps [TextField] and integrates
@@ -106,22 +106,22 @@ type TextFormField struct {
 	Padding layout.EdgeInsets
 
 	// BackgroundColor of the text field.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 
 	// BorderColor of the text field.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 
 	// FocusColor of the text field outline.
-	FocusColor rendering.Color
+	FocusColor graphics.Color
 
 	// BorderRadius for rounded corners.
 	BorderRadius float64
 
 	// Style for the text.
-	Style rendering.TextStyle
+	Style graphics.TextStyle
 
 	// PlaceholderColor for the placeholder text.
-	PlaceholderColor rendering.Color
+	PlaceholderColor graphics.Color
 }
 
 // CreateElement creates the element for the stateful widget.

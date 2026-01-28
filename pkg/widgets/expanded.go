@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Expanded makes its child fill all remaining space along the main axis of a
@@ -108,7 +108,7 @@ func (r *renderExpanded) VisitChildren(visitor func(layout.RenderObject)) {
 // PerformLayout expands to fill available space and constrains child to that size.
 func (r *renderExpanded) PerformLayout() {
 	constraints := r.Constraints()
-	size := constraints.Constrain(rendering.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
+	size := constraints.Constrain(graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
 	r.SetSize(size)
 
 	if r.child != nil {
@@ -124,12 +124,12 @@ func (r *renderExpanded) FlexFactor() int {
 // Paint paints the child.
 func (r *renderExpanded) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, rendering.Offset{})
+		ctx.PaintChild(r.child, graphics.Offset{})
 	}
 }
 
 // HitTest tests if the position hits this widget.
-func (r *renderExpanded) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderExpanded) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	size := r.Size()
 	if position.X < 0 || position.Y < 0 || position.X > size.Width || position.Y > size.Height {
 		return false

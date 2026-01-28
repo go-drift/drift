@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/semantics"
 	"github.com/go-drift/drift/pkg/theme"
 )
@@ -43,11 +43,11 @@ type Button struct {
 	// Disabled disables the button when true.
 	Disabled bool
 	// Color is the background color. Defaults to primary if zero.
-	Color rendering.Color
+	Color graphics.Color
 	// Gradient is the optional background gradient.
-	Gradient *rendering.Gradient
+	Gradient *graphics.Gradient
 	// TextColor is the label color. Defaults to onPrimary if zero.
-	TextColor rendering.Color
+	TextColor graphics.Color
 	// FontSize is the label font size. Defaults to 16 if zero.
 	FontSize float64
 	// Padding is the button padding. Defaults to symmetric(24, 14) if zero.
@@ -73,14 +73,14 @@ func ButtonOf(label string, onTap func()) Button {
 }
 
 // WithColor returns a copy of the button with the specified background and text colors.
-func (b Button) WithColor(bg, text rendering.Color) Button {
+func (b Button) WithColor(bg, text graphics.Color) Button {
 	b.Color = bg
 	b.TextColor = text
 	return b
 }
 
 // WithGradient returns a copy of the button with the specified background gradient.
-func (b Button) WithGradient(gradient *rendering.Gradient) Button {
+func (b Button) WithGradient(gradient *graphics.Gradient) Button {
 	b.Gradient = gradient
 	return b
 }
@@ -171,7 +171,7 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 		Padding: padding,
 		ChildWidget: Text{
 			Content: b.Label,
-			Style:   rendering.TextStyle{Color: textColor, FontSize: fontSize},
+			Style:   graphics.TextStyle{Color: textColor, FontSize: fontSize},
 		},
 	}
 
@@ -180,7 +180,7 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 		box = DecoratedBox{
 			Gradient:     b.Gradient,
 			BorderRadius: borderRadius,
-			Overflow:     rendering.OverflowClip,
+			Overflow:     OverflowClip,
 			ChildWidget:  content,
 		}
 	} else {

@@ -2,19 +2,19 @@ package theme
 
 import (
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // ButtonThemeData defines default styling for Button widgets.
 type ButtonThemeData struct {
 	// BackgroundColor is the default button background.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// ForegroundColor is the default text/icon color.
-	ForegroundColor rendering.Color
+	ForegroundColor graphics.Color
 	// DisabledBackgroundColor is the background when disabled.
-	DisabledBackgroundColor rendering.Color
+	DisabledBackgroundColor graphics.Color
 	// DisabledForegroundColor is the text color when disabled.
-	DisabledForegroundColor rendering.Color
+	DisabledForegroundColor graphics.Color
 	// Padding is the default button padding.
 	Padding layout.EdgeInsets
 	// BorderRadius is the default corner radius.
@@ -26,17 +26,17 @@ type ButtonThemeData struct {
 // CheckboxThemeData defines default styling for Checkbox widgets.
 type CheckboxThemeData struct {
 	// ActiveColor is the fill color when checked.
-	ActiveColor rendering.Color
+	ActiveColor graphics.Color
 	// CheckColor is the checkmark color.
-	CheckColor rendering.Color
+	CheckColor graphics.Color
 	// BorderColor is the outline color when unchecked.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 	// BackgroundColor is the fill color when unchecked.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// DisabledActiveColor is the fill color when checked and disabled.
-	DisabledActiveColor rendering.Color
+	DisabledActiveColor graphics.Color
 	// DisabledCheckColor is the checkmark color when disabled.
-	DisabledCheckColor rendering.Color
+	DisabledCheckColor graphics.Color
 	// Size is the default checkbox size.
 	Size float64
 	// BorderRadius is the default corner radius.
@@ -46,17 +46,17 @@ type CheckboxThemeData struct {
 // SwitchThemeData defines default styling for Switch widgets.
 type SwitchThemeData struct {
 	// ActiveTrackColor is the track color when on.
-	ActiveTrackColor rendering.Color
+	ActiveTrackColor graphics.Color
 	// InactiveTrackColor is the track color when off.
-	InactiveTrackColor rendering.Color
+	InactiveTrackColor graphics.Color
 	// ThumbColor is the thumb fill color.
-	ThumbColor rendering.Color
+	ThumbColor graphics.Color
 	// DisabledActiveTrackColor is the track color when on and disabled.
-	DisabledActiveTrackColor rendering.Color
+	DisabledActiveTrackColor graphics.Color
 	// DisabledInactiveTrackColor is the track color when off and disabled.
-	DisabledInactiveTrackColor rendering.Color
+	DisabledInactiveTrackColor graphics.Color
 	// DisabledThumbColor is the thumb color when disabled.
-	DisabledThumbColor rendering.Color
+	DisabledThumbColor graphics.Color
 	// Width is the default switch width.
 	Width float64
 	// Height is the default switch height.
@@ -66,19 +66,19 @@ type SwitchThemeData struct {
 // TextFieldThemeData defines default styling for TextField widgets.
 type TextFieldThemeData struct {
 	// BackgroundColor is the field background.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// BorderColor is the default border color.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 	// FocusColor is the border color when focused.
-	FocusColor rendering.Color
+	FocusColor graphics.Color
 	// ErrorColor is the border color when in error state.
-	ErrorColor rendering.Color
+	ErrorColor graphics.Color
 	// LabelColor is the label text color.
-	LabelColor rendering.Color
+	LabelColor graphics.Color
 	// TextColor is the input text color.
-	TextColor rendering.Color
+	TextColor graphics.Color
 	// PlaceholderColor is the placeholder text color.
-	PlaceholderColor rendering.Color
+	PlaceholderColor graphics.Color
 	// Padding is the default inner padding.
 	Padding layout.EdgeInsets
 	// BorderRadius is the default corner radius.
@@ -90,13 +90,13 @@ type TextFieldThemeData struct {
 // TabBarThemeData defines default styling for TabBar widgets.
 type TabBarThemeData struct {
 	// BackgroundColor is the tab bar background.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// ActiveColor is the color for the selected tab.
-	ActiveColor rendering.Color
+	ActiveColor graphics.Color
 	// InactiveColor is the color for unselected tabs.
-	InactiveColor rendering.Color
+	InactiveColor graphics.Color
 	// IndicatorColor is the color for the selection indicator.
-	IndicatorColor rendering.Color
+	IndicatorColor graphics.Color
 	// IndicatorHeight is the height of the selection indicator.
 	IndicatorHeight float64
 	// Padding is the default tab item padding.
@@ -108,15 +108,15 @@ type TabBarThemeData struct {
 // RadioThemeData defines default styling for Radio widgets.
 type RadioThemeData struct {
 	// ActiveColor is the fill color when selected.
-	ActiveColor rendering.Color
+	ActiveColor graphics.Color
 	// InactiveColor is the border color when unselected.
-	InactiveColor rendering.Color
+	InactiveColor graphics.Color
 	// BackgroundColor is the fill color when unselected.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// DisabledActiveColor is the fill color when selected and disabled.
-	DisabledActiveColor rendering.Color
+	DisabledActiveColor graphics.Color
 	// DisabledInactiveColor is the border color when disabled.
-	DisabledInactiveColor rendering.Color
+	DisabledInactiveColor graphics.Color
 	// Size is the default radio diameter.
 	Size float64
 }
@@ -124,19 +124,19 @@ type RadioThemeData struct {
 // DropdownThemeData defines default styling for Dropdown widgets.
 type DropdownThemeData struct {
 	// BackgroundColor is the trigger background.
-	BackgroundColor rendering.Color
+	BackgroundColor graphics.Color
 	// BorderColor is the trigger border color.
-	BorderColor rendering.Color
+	BorderColor graphics.Color
 	// MenuBackgroundColor is the dropdown menu background.
-	MenuBackgroundColor rendering.Color
+	MenuBackgroundColor graphics.Color
 	// MenuBorderColor is the dropdown menu border color.
-	MenuBorderColor rendering.Color
+	MenuBorderColor graphics.Color
 	// SelectedItemColor is the background for the selected item.
-	SelectedItemColor rendering.Color
+	SelectedItemColor graphics.Color
 	// TextColor is the default text color.
-	TextColor rendering.Color
+	TextColor graphics.Color
 	// DisabledTextColor is the text color when disabled.
-	DisabledTextColor rendering.Color
+	DisabledTextColor graphics.Color
 	// BorderRadius is the default corner radius.
 	BorderRadius float64
 	// ItemPadding is the default padding for menu items.

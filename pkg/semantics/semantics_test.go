@@ -5,7 +5,7 @@ package semantics
 import (
 	"testing"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 func TestSemanticsNode_Creation(t *testing.T) {
@@ -297,7 +297,7 @@ func TestBuildSemanticsTree(t *testing.T) {
 		},
 	}
 
-	rect := rendering.RectFromLTWH(0, 0, 100, 50)
+	rect := graphics.RectFromLTWH(0, 0, 100, 50)
 	node := BuildSemanticsTree(config, rect)
 
 	if node == nil {

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/go-drift/drift/pkg/animation"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // This example shows how to create and control an animation.
@@ -35,8 +35,8 @@ func ExampleAnimationController_withTween() {
 	// Create tweens to map 0-1 range to other values
 	sizeTween := animation.TweenFloat64(100, 200)
 	colorTween := animation.TweenColor(
-		rendering.RGB(255, 0, 0),   // red
-		rendering.RGB(0, 0, 255),   // blue
+		graphics.RGB(255, 0, 0),   // red
+		graphics.RGB(0, 0, 255),   // blue
 	)
 
 	controller.AddListener(func() {
@@ -76,8 +76,8 @@ func ExampleTween() {
 	// Create tweens for different value types
 	opacity := animation.TweenFloat64(0.0, 1.0)
 	position := animation.TweenOffset(
-		rendering.Offset{X: 0, Y: 0},
-		rendering.Offset{X: 100, Y: 50},
+		graphics.Offset{X: 0, Y: 0},
+		graphics.Offset{X: 100, Y: 50},
 	)
 
 	// Evaluate at different progress values

@@ -2,7 +2,7 @@ package layout
 
 import (
 	"github.com/go-drift/drift/pkg/gestures"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // HitTestResult collects hit test entries in paint order.
@@ -27,15 +27,15 @@ type PointerHandler interface {
 
 // PaintContext provides the canvas for painting render objects.
 type PaintContext struct {
-	Canvas         rendering.Canvas
-	clipStack      []rendering.Rect   // Each entry is already-intersected global clip
-	transformStack []rendering.Offset // Stack of translation deltas
-	transform      rendering.Offset   // Current accumulated translation
+	Canvas         graphics.Canvas
+	clipStack      []graphics.Rect   // Each entry is already-intersected global clip
+	transformStack []graphics.Offset // Stack of translation deltas
+	transform      graphics.Offset   // Current accumulated translation
 }
 
 // PushTranslation adds a translation delta to the stack.
 func (p *PaintContext) PushTranslation(dx, dy float64) {
-	p.transformStack = append(p.transformStack, rendering.Offset{X: dx, Y: dy})
+	p.transformStack = append(p.transformStack, graphics.Offset{X: dx, Y: dy})
 	p.transform.X += dx
 	p.transform.Y += dy
 }
@@ -53,7 +53,7 @@ func (p *PaintContext) PopTranslation() {
 
 // PushClipRect pushes a clip rectangle (in local coordinates).
 // The rect is transformed to global coordinates and intersected with current clip.
-func (p *PaintContext) PushClipRect(localRect rendering.Rect) {
+func (p *PaintContext) PushClipRect(localRect graphics.Rect) {
 	// Transform local rect to global coordinates
 	globalRect := localRect.Translate(p.transform.X, p.transform.Y)
 
@@ -74,20 +74,20 @@ func (p *PaintContext) PopClipRect() {
 
 // CurrentClipBounds returns the effective clip in global coordinates.
 // Returns (clip, true) if a clip is active, (Rect{}, false) if not.
-func (p *PaintContext) CurrentClipBounds() (rendering.Rect, bool) {
+func (p *PaintContext) CurrentClipBounds() (graphics.Rect, bool) {
 	if len(p.clipStack) == 0 {
-		return rendering.Rect{}, false
+		return graphics.Rect{}, false
 	}
 	return p.clipStack[len(p.clipStack)-1], true
 }
 
 // CurrentTransform returns the accumulated translation offset.
-func (p *PaintContext) CurrentTransform() rendering.Offset {
+func (p *PaintContext) CurrentTransform() graphics.Offset {
 	return p.transform
 }
 
 // PaintChild paints a child render box at the given offset.
-func (p *PaintContext) PaintChild(child RenderBox, offset rendering.Offset) {
+func (p *PaintContext) PaintChild(child RenderBox, offset graphics.Offset) {
 	if child == nil {
 		return
 	}
@@ -100,7 +100,7 @@ func (p *PaintContext) PaintChild(child RenderBox, offset rendering.Offset) {
 }
 
 // PaintChildWithLayer paints a child, using its cached layer if available.
-func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset rendering.Offset) {
+func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offset) {
 	if child == nil {
 		return
 	}
@@ -112,7 +112,7 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset rendering.Off
 	// Use cached layer if child is a repaint boundary with valid cache
 	if boundary, ok := child.(interface {
 		IsRepaintBoundary() bool
-		Layer() *rendering.DisplayList
+		Layer() *graphics.DisplayList
 		NeedsPaint() bool
 	}); ok && boundary.IsRepaintBoundary() {
 		if layer := boundary.Layer(); layer != nil && !boundary.NeedsPaint() {

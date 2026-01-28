@@ -5,27 +5,27 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // geometryUpdate represents a pending geometry change for a platform view.
 type geometryUpdate struct {
 	viewID     int64
-	offset     rendering.Offset
-	size       rendering.Size
-	clipBounds *rendering.Rect // nil = no clipping
+	offset     graphics.Offset
+	size       graphics.Size
+	clipBounds *graphics.Rect // nil = no clipping
 }
 
 // viewGeometryCache tracks the last sent geometry to avoid redundant updates.
 type viewGeometryCache struct {
-	offset     rendering.Offset
-	size       rendering.Size
-	clipBounds *rendering.Rect
+	offset     graphics.Offset
+	size       graphics.Size
+	clipBounds *graphics.Rect
 }
 
 // rectsEqual compares two clip bounds with tolerance (handles nil).
 // Uses epsilon to avoid defeating dedupe due to sub-pixel drift from animation/scroll.
-func rectsEqual(a, b *rendering.Rect) bool {
+func rectsEqual(a, b *graphics.Rect) bool {
 	if a == nil && b == nil {
 		return true
 	}
@@ -54,10 +54,10 @@ type PlatformView interface {
 	Dispose()
 
 	// SetSize updates the view size in logical pixels.
-	SetSize(size rendering.Size)
+	SetSize(size graphics.Size)
 
 	// SetOffset updates the view position in logical pixels.
-	SetOffset(offset rendering.Offset)
+	SetOffset(offset graphics.Offset)
 
 	// SetVisible shows or hides the native view.
 	SetVisible(visible bool)
@@ -232,7 +232,7 @@ func (r *PlatformViewRegistry) GetView(viewID int64) PlatformView {
 
 // UpdateViewGeometry notifies native of a view's position, size, and clip bounds.
 // If batching is active, the update is queued; otherwise sent immediately.
-func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset rendering.Offset, size rendering.Size, clipBounds *rendering.Rect) error {
+func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) error {
 	r.batchMu.Lock()
 
 	// Mark this view as updated this frame (for culling detection)
@@ -505,8 +505,8 @@ func (r *PlatformViewRegistry) handleSwitchChanged(args map[string]any) (any, er
 type basePlatformView struct {
 	viewID   int64
 	viewType string
-	offset   rendering.Offset
-	size     rendering.Size
+	offset   graphics.Offset
+	size     graphics.Size
 	visible  bool
 }
 
@@ -518,18 +518,18 @@ func (v *basePlatformView) ViewType() string {
 	return v.viewType
 }
 
-func (v *basePlatformView) SetSize(size rendering.Size) {
+func (v *basePlatformView) SetSize(size graphics.Size) {
 	v.size = size
 	GetPlatformViewRegistry().UpdateViewGeometry(v.viewID, v.offset, v.size, nil)
 }
 
-func (v *basePlatformView) SetOffset(offset rendering.Offset) {
+func (v *basePlatformView) SetOffset(offset graphics.Offset) {
 	v.offset = offset
 	GetPlatformViewRegistry().UpdateViewGeometry(v.viewID, v.offset, v.size, nil)
 }
 
 // SetGeometry updates position, size, and clip bounds in a single call.
-func (v *basePlatformView) SetGeometry(offset rendering.Offset, size rendering.Size, clipBounds *rendering.Rect) {
+func (v *basePlatformView) SetGeometry(offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) {
 	v.offset = offset
 	v.size = size
 	GetPlatformViewRegistry().UpdateViewGeometry(v.viewID, v.offset, v.size, clipBounds)

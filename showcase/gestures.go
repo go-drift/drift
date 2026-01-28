@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -127,7 +127,7 @@ func (s *gesturesDemoState) buildPanDemo(colors theme.ColorScheme) core.Widget {
 								Width:  boxSize,
 								Height: boxSize,
 								ChildWidget: widgets.Center{
-									ChildWidget: widgets.TextOf("Drag me", rendering.TextStyle{
+									ChildWidget: widgets.TextOf("Drag me", graphics.TextStyle{
 										Color:    colors.OnPrimary,
 										FontSize: 12,
 									}),
@@ -220,7 +220,7 @@ func (s *gesturesDemoState) buildVerticalDemo(colors theme.ColorScheme) core.Wid
 								Width:  boxWidth,
 								Height: boxHeight,
 								ChildWidget: widgets.Center{
-									ChildWidget: widgets.TextOf("Drag up/down", rendering.TextStyle{
+									ChildWidget: widgets.TextOf("Drag up/down", graphics.TextStyle{
 										Color:    colors.OnSecondary,
 										FontSize: 12,
 									}),
@@ -258,7 +258,7 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 								CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 								MainAxisSize:       widgets.MainAxisSizeMax,
 								ChildrenWidgets: []core.Widget{
-									widgets.TextOf("Swipe", rendering.TextStyle{
+									widgets.TextOf("Swipe", graphics.TextStyle{
 										Color:    colors.OnError,
 										FontSize: 14,
 									}),
@@ -294,7 +294,7 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 								Height: cardHeight,
 								ChildWidget: widgets.Padding{
 									Padding: layout.EdgeInsetsAll(16),
-									ChildWidget: widgets.TextOf("Swipe me left", rendering.TextStyle{
+									ChildWidget: widgets.TextOf("Swipe me left", graphics.TextStyle{
 										Color:    colors.OnSurface,
 										FontSize: 14,
 									}),

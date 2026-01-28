@@ -1,7 +1,7 @@
 package gestures
 
 import (
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"math"
 	"time"
 )
@@ -9,15 +9,15 @@ import (
 // DragStartDetails describes the start of a drag.
 type DragStartDetails struct {
 	// Position is the global position where the drag started.
-	Position rendering.Offset
+	Position graphics.Offset
 }
 
 // DragUpdateDetails describes a drag update.
 type DragUpdateDetails struct {
 	// Position is the current global position of the pointer.
-	Position rendering.Offset
+	Position graphics.Offset
 	// Delta is the change in position since the last update.
-	Delta rendering.Offset
+	Delta graphics.Offset
 	// PrimaryDelta is the axis-specific delta (0 for Pan, non-zero for axis-locked drags).
 	PrimaryDelta float64
 }
@@ -25,9 +25,9 @@ type DragUpdateDetails struct {
 // DragEndDetails describes the end of a drag.
 type DragEndDetails struct {
 	// Position is the final global position of the pointer.
-	Position rendering.Offset
+	Position graphics.Offset
 	// Velocity is the velocity of the pointer at release in pixels per second.
-	Velocity rendering.Offset
+	Velocity graphics.Offset
 	// PrimaryVelocity is the axis-specific velocity (0 for Pan, non-zero for axis-locked drags).
 	PrimaryVelocity float64
 }
@@ -37,7 +37,7 @@ type TapGestureRecognizer struct {
 	Arena   *GestureArena
 	OnTap   func()
 	pointer int64
-	start   rendering.Offset
+	start   graphics.Offset
 	slop    float64
 	won     bool
 	reject  bool
@@ -128,10 +128,10 @@ type PanGestureRecognizer struct {
 	OnEnd    func(DragEndDetails)
 	OnCancel func()
 	pointer  int64
-	start    rendering.Offset
-	last     rendering.Offset
+	start    graphics.Offset
+	last     graphics.Offset
 	lastTime time.Time
-	velocity rendering.Offset
+	velocity graphics.Offset
 	slop     float64
 	accepted bool
 	reject   bool
@@ -152,7 +152,7 @@ func (p *PanGestureRecognizer) AddPointer(event PointerEvent) {
 	p.start = event.Position
 	p.last = event.Position
 	p.lastTime = time.Now()
-	p.velocity = rendering.Offset{}
+	p.velocity = graphics.Offset{}
 	p.slop = DefaultTouchSlop
 	p.accepted = false
 	p.reject = false
@@ -173,15 +173,15 @@ func (p *PanGestureRecognizer) HandleEvent(event PointerEvent) {
 		dt := now.Sub(p.lastTime).Seconds()
 		dx := event.Position.X - p.last.X
 		dy := event.Position.Y - p.last.Y
-		delta := rendering.Offset{X: dx, Y: dy}
+		delta := graphics.Offset{X: dx, Y: dy}
 		if dt > 0 {
-			inst := rendering.Offset{X: dx / dt, Y: dy / dt}
-			p.velocity = rendering.Offset{
+			inst := graphics.Offset{X: dx / dt, Y: dy / dt}
+			p.velocity = graphics.Offset{
 				X: p.velocity.X*0.8 + inst.X*0.2,
 				Y: p.velocity.Y*0.8 + inst.Y*0.2,
 			}
 		}
-		total := rendering.Offset{X: event.Position.X - p.start.X, Y: event.Position.Y - p.start.Y}
+		total := graphics.Offset{X: event.Position.X - p.start.X, Y: event.Position.Y - p.start.Y}
 		if !p.accepted && distance(total) > p.slop {
 			p.Arena.Resolve(event.PointerID, p)
 		}
@@ -240,7 +240,7 @@ func (p *PanGestureRecognizer) ensureStarted() {
 	}
 }
 
-func distance(offset rendering.Offset) float64 {
+func distance(offset graphics.Offset) float64 {
 	return math.Hypot(offset.X, offset.Y)
 }
 
@@ -265,8 +265,8 @@ type axisDragRecognizer struct {
 	axis     DragAxis
 	self     ArenaMember // concrete type for arena registration
 	pointer  int64
-	start    rendering.Offset
-	last     rendering.Offset
+	start    graphics.Offset
+	last     graphics.Offset
 	lastTime time.Time
 	velocity float64 // primary axis velocity
 	slop     float64
@@ -275,14 +275,14 @@ type axisDragRecognizer struct {
 	started  bool
 }
 
-func (d *axisDragRecognizer) primaryOffset(offset rendering.Offset) float64 {
+func (d *axisDragRecognizer) primaryOffset(offset graphics.Offset) float64 {
 	if d.axis == DragAxisHorizontal {
 		return offset.X
 	}
 	return offset.Y
 }
 
-func (d *axisDragRecognizer) orthogonalOffset(offset rendering.Offset) float64 {
+func (d *axisDragRecognizer) orthogonalOffset(offset graphics.Offset) float64 {
 	if d.axis == DragAxisHorizontal {
 		return offset.Y
 	}
@@ -325,7 +325,7 @@ func (d *axisDragRecognizer) handleMove(event PointerEvent) {
 	now := time.Now()
 	dt := now.Sub(d.lastTime).Seconds()
 
-	total := rendering.Offset{X: event.Position.X - d.start.X, Y: event.Position.Y - d.start.Y}
+	total := graphics.Offset{X: event.Position.X - d.start.X, Y: event.Position.Y - d.start.Y}
 	primary := math.Abs(d.primaryOffset(total))
 	orthogonal := math.Abs(d.orthogonalOffset(total))
 
@@ -343,7 +343,7 @@ func (d *axisDragRecognizer) handleMove(event PointerEvent) {
 	}
 
 	// Update velocity tracking
-	delta := rendering.Offset{X: event.Position.X - d.last.X, Y: event.Position.Y - d.last.Y}
+	delta := graphics.Offset{X: event.Position.X - d.last.X, Y: event.Position.Y - d.last.Y}
 	primaryDelta := d.primaryOffset(delta)
 	if dt > 0 {
 		inst := primaryDelta / dt
@@ -368,11 +368,11 @@ func (d *axisDragRecognizer) handleMove(event PointerEvent) {
 func (d *axisDragRecognizer) handleUp(event PointerEvent) {
 	if d.accepted {
 		if d.OnEnd != nil {
-			var vel rendering.Offset
+			var vel graphics.Offset
 			if d.axis == DragAxisHorizontal {
-				vel = rendering.Offset{X: d.velocity, Y: 0}
+				vel = graphics.Offset{X: d.velocity, Y: 0}
 			} else {
-				vel = rendering.Offset{X: 0, Y: d.velocity}
+				vel = graphics.Offset{X: 0, Y: d.velocity}
 			}
 			d.OnEnd(DragEndDetails{
 				Position:        event.Position,

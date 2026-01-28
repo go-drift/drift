@@ -3,7 +3,7 @@ package widgets
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 // Padding adds empty space around its child widget.
@@ -70,19 +70,19 @@ func (r *renderPadding) VisitChildren(visitor func(layout.RenderObject)) {
 func (r *renderPadding) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child == nil {
-		r.SetSize(constraints.Constrain(rendering.Size{}))
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 		return
 	}
 	childConstraints := constraints.Deflate(r.padding)
 	r.child.Layout(childConstraints, true) // true: we read child.Size()
 	childSize := r.child.Size()
-	size := constraints.Constrain(rendering.Size{
+	size := constraints.Constrain(graphics.Size{
 		Width:  childSize.Width + r.padding.Horizontal(),
 		Height: childSize.Height + r.padding.Vertical(),
 	})
 	r.SetSize(size)
 	r.child.SetParentData(&layout.BoxParentData{
-		Offset: rendering.Offset{X: r.padding.Left, Y: r.padding.Top},
+		Offset: graphics.Offset{X: r.padding.Left, Y: r.padding.Top},
 	})
 }
 
@@ -92,12 +92,12 @@ func (r *renderPadding) Paint(ctx *layout.PaintContext) {
 	}
 }
 
-func (r *renderPadding) HitTest(position rendering.Offset, result *layout.HitTestResult) bool {
+func (r *renderPadding) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false
 	}
 	offset := getChildOffset(r.child)
-	local := rendering.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
+	local := graphics.Offset{X: position.X - offset.X, Y: position.Y - offset.Y}
 	if r.child != nil && r.child.HitTest(local, result) {
 		return true
 	}

@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 )
 
 func TestScrollView_VerticalScrollRejectsHorizontal(t *testing.T) {
@@ -37,7 +37,7 @@ func TestScrollView_VerticalScrollRejectsHorizontal(t *testing.T) {
 	// Simulate horizontal drag (should be rejected)
 	down := gestures.PointerEvent{
 		PointerID: 10,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	scroll.HandlePointer(down)
@@ -46,14 +46,14 @@ func TestScrollView_VerticalScrollRejectsHorizontal(t *testing.T) {
 	// Move horizontally
 	move := gestures.PointerEvent{
 		PointerID: 10,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 30, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 30, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move)
 
 	up := gestures.PointerEvent{
 		PointerID: 10,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 30, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 30, Y: 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	scroll.HandlePointer(up)
@@ -72,7 +72,7 @@ func TestScrollView_VerticalScrollAcceptsVertical(t *testing.T) {
 		physics:   ClampingScrollPhysics{},
 	}
 	scroll.SetSelf(scroll)
-	scroll.SetSize(rendering.Size{Width: 400, Height: 600})
+	scroll.SetSize(graphics.Size{Width: 400, Height: 600})
 	scroll.position = NewScrollPosition(nil, scroll.physics, func() {})
 	scroll.position.SetExtents(0, 1000) // Content is taller than viewport
 	scroll.configurePan()
@@ -86,7 +86,7 @@ func TestScrollView_VerticalScrollAcceptsVertical(t *testing.T) {
 	// Simulate vertical drag (should be accepted)
 	down := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	scroll.HandlePointer(down)
@@ -95,7 +95,7 @@ func TestScrollView_VerticalScrollAcceptsVertical(t *testing.T) {
 	// Move vertically
 	move := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 50},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 50},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move)
@@ -103,14 +103,14 @@ func TestScrollView_VerticalScrollAcceptsVertical(t *testing.T) {
 	// Continue moving
 	move2 := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 100},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move2)
 
 	up := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 100},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	scroll.HandlePointer(up)
@@ -151,7 +151,7 @@ func TestScrollView_HorizontalScrollRejectsVertical(t *testing.T) {
 	// Simulate vertical drag (should be rejected)
 	down := gestures.PointerEvent{
 		PointerID: 12,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	scroll.HandlePointer(down)
@@ -160,14 +160,14 @@ func TestScrollView_HorizontalScrollRejectsVertical(t *testing.T) {
 	// Move vertically
 	move := gestures.PointerEvent{
 		PointerID: 12,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 30},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 30},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move)
 
 	up := gestures.PointerEvent{
 		PointerID: 12,
-		Position:  rendering.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 30},
+		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 30},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	scroll.HandlePointer(up)
@@ -186,7 +186,7 @@ func TestScrollView_HorizontalScrollAcceptsHorizontal(t *testing.T) {
 		physics:   ClampingScrollPhysics{},
 	}
 	scroll.SetSelf(scroll)
-	scroll.SetSize(rendering.Size{Width: 400, Height: 600})
+	scroll.SetSize(graphics.Size{Width: 400, Height: 600})
 	scroll.position = NewScrollPosition(nil, scroll.physics, func() {})
 	scroll.position.SetExtents(0, 1000) // Content is wider than viewport
 	scroll.configurePan()
@@ -200,7 +200,7 @@ func TestScrollView_HorizontalScrollAcceptsHorizontal(t *testing.T) {
 	// Simulate horizontal drag (should be accepted)
 	down := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  rendering.Offset{X: 100, Y: 100},
+		Position:  graphics.Offset{X: 100, Y: 100},
 		Phase:     gestures.PointerPhaseDown,
 	}
 	scroll.HandlePointer(down)
@@ -209,7 +209,7 @@ func TestScrollView_HorizontalScrollAcceptsHorizontal(t *testing.T) {
 	// Move horizontally
 	move := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 50, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 50, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move)
@@ -217,14 +217,14 @@ func TestScrollView_HorizontalScrollAcceptsHorizontal(t *testing.T) {
 	// Continue moving
 	move2 := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 100, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 100, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move2)
 
 	up := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  rendering.Offset{X: 100 + gestures.DefaultTouchSlop + 100, Y: 100},
+		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 100, Y: 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	scroll.HandlePointer(up)
@@ -270,7 +270,7 @@ func TestScrollView_PrimaryVelocityUsed(t *testing.T) {
 		physics:   ClampingScrollPhysics{},
 	}
 	scroll.SetSelf(scroll)
-	scroll.SetSize(rendering.Size{Width: 400, Height: 600})
+	scroll.SetSize(graphics.Size{Width: 400, Height: 600})
 	scroll.position = NewScrollPosition(nil, scroll.physics, func() {})
 	scroll.position.SetExtents(0, 1000)
 	scroll.configurePan()
@@ -292,7 +292,7 @@ type mockRenderBox struct {
 
 func (m *mockRenderBox) PerformLayout() {
 	constraints := m.Constraints()
-	m.SetSize(rendering.Size{Width: constraints.MaxWidth, Height: 2000})
+	m.SetSize(graphics.Size{Width: constraints.MaxWidth, Height: 2000})
 }
 
 func (m *mockRenderBox) Paint(ctx *layout.PaintContext) {}

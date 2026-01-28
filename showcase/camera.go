@@ -4,7 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/platform"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -135,7 +135,7 @@ func (s *cameraState) imagePreview(path string, colors theme.ColorScheme) core.W
 					CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 					MainAxisSize:       widgets.MainAxisSizeMin,
 					ChildrenWidgets: []core.Widget{
-						widgets.TextOf("No image captured", rendering.TextStyle{
+						widgets.TextOf("No image captured", graphics.TextStyle{
 							Color:    colors.OnSurfaceVariant,
 							FontSize: 14,
 						}),
@@ -154,24 +154,24 @@ func (s *cameraState) imagePreview(path string, colors theme.ColorScheme) core.W
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 				MainAxisSize:       widgets.MainAxisSizeMin,
 				ChildrenWidgets: []core.Widget{
-					widgets.TextOf("Captured Image", rendering.TextStyle{
+					widgets.TextOf("Captured Image", graphics.TextStyle{
 						Color:      colors.OnSurface,
 						FontSize:   14,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 					widgets.VSpace(8),
-					widgets.TextOf(imageInfo, rendering.TextStyle{
+					widgets.TextOf(imageInfo, graphics.TextStyle{
 						Color:    colors.OnSurfaceVariant,
 						FontSize: 12,
 					}),
 					widgets.VSpace(8),
-					widgets.TextOf("Path:", rendering.TextStyle{
+					widgets.TextOf("Path:", graphics.TextStyle{
 						Color:      colors.OnSurfaceVariant,
 						FontSize:   12,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 					widgets.VSpace(4),
-					widgets.TextOf(path, rendering.TextStyle{
+					widgets.TextOf(path, graphics.TextStyle{
 						Color:    colors.OnSurface,
 						FontSize: 12,
 					}),

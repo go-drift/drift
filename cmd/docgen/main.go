@@ -28,7 +28,7 @@ var packages = []Package{
 	{Name: "drift", Path: "pkg/drift", Position: 2},
 	{Name: "widgets", Path: "pkg/widgets", Position: 3},
 	{Name: "layout", Path: "pkg/layout", Position: 4},
-	{Name: "rendering", Path: "pkg/rendering", Position: 5},
+	{Name: "graphics", Path: "pkg/graphics", Position: 5},
 	{Name: "theme", Path: "pkg/theme", Position: 6},
 	{Name: "animation", Path: "pkg/animation", Position: 7},
 	{Name: "navigation", Path: "pkg/navigation", Position: 8},

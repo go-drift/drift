@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -21,10 +21,10 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 		platformLabel = "Cupertino (iOS)"
 	}
 
-	gradientText := rendering.NewLinearGradient(
-		rendering.Offset{X: 0, Y: 0},
-		rendering.Offset{X: 280, Y: 0},
-		[]rendering.GradientStop{
+	gradientText := graphics.NewLinearGradient(
+		graphics.Offset{X: 0, Y: 0},
+		graphics.Offset{X: 280, Y: 0},
+		[]graphics.GradientStop{
 			{Position: 0, Color: colors.Primary},
 			{Position: 1, Color: colors.Tertiary},
 		},
@@ -39,13 +39,13 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 					widgets.MainAxisAlignmentStart,
 					widgets.CrossAxisAlignmentCenter,
 					widgets.MainAxisSizeMin,
-					widgets.TextOf(modeLabel, rendering.TextStyle{
+					widgets.TextOf(modeLabel, graphics.TextStyle{
 						Color:      colors.OnPrimary,
 						FontSize:   18,
-						FontWeight: rendering.FontWeightBold,
+						FontWeight: graphics.FontWeightBold,
 					}),
 					widgets.VSpace(4),
-					widgets.TextOf(platformLabel, rendering.TextStyle{
+					widgets.TextOf(platformLabel, graphics.TextStyle{
 						Color:    colors.OnPrimary,
 						FontSize: 14,
 					}),
@@ -103,11 +103,11 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 		// Gradient text section
 		sectionTitle("Gradient Text", colors),
 		widgets.VSpace(12),
-		widgets.TextOf("Gradient headlines", rendering.TextStyle{
+		widgets.TextOf("Gradient headlines", graphics.TextStyle{
 			Color:      colors.OnSurface,
 			Gradient:   gradientText,
 			FontSize:   28,
-			FontWeight: rendering.FontWeightBold,
+			FontWeight: graphics.FontWeightBold,
 		}),
 	}
 
@@ -118,15 +118,15 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 			widgets.VSpace(24),
 			sectionTitle("Cupertino System Colors", colors),
 			widgets.VSpace(12),
-			colorSwatch("SystemBlue", cupertinoColors.SystemBlue, rendering.RGB(255, 255, 255)),
+			colorSwatch("SystemBlue", cupertinoColors.SystemBlue, graphics.RGB(255, 255, 255)),
 			widgets.VSpace(8),
-			colorSwatch("SystemGreen", cupertinoColors.SystemGreen, rendering.RGB(255, 255, 255)),
+			colorSwatch("SystemGreen", cupertinoColors.SystemGreen, graphics.RGB(255, 255, 255)),
 			widgets.VSpace(8),
-			colorSwatch("SystemRed", cupertinoColors.SystemRed, rendering.RGB(255, 255, 255)),
+			colorSwatch("SystemRed", cupertinoColors.SystemRed, graphics.RGB(255, 255, 255)),
 			widgets.VSpace(8),
-			colorSwatch("SystemOrange", cupertinoColors.SystemOrange, rendering.RGB(0, 0, 0)),
+			colorSwatch("SystemOrange", cupertinoColors.SystemOrange, graphics.RGB(0, 0, 0)),
 			widgets.VSpace(8),
-			colorSwatch("SystemPurple", cupertinoColors.SystemPurple, rendering.RGB(255, 255, 255)),
+			colorSwatch("SystemPurple", cupertinoColors.SystemPurple, graphics.RGB(255, 255, 255)),
 			widgets.VSpace(8),
 			colorSwatch("Label", cupertinoColors.Label, cupertinoColors.SystemBackground),
 			widgets.VSpace(8),
@@ -140,7 +140,7 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 }
 
 // colorSwatch displays a color with its name.
-func colorSwatch(name string, bg, fg rendering.Color) core.Widget {
+func colorSwatch(name string, bg, fg graphics.Color) core.Widget {
 	return widgets.Container{
 		Color: bg,
 		ChildWidget: widgets.PaddingSym(16, 12,
@@ -148,11 +148,11 @@ func colorSwatch(name string, bg, fg rendering.Color) core.Widget {
 				widgets.MainAxisAlignmentSpaceBetween,
 				widgets.CrossAxisAlignmentStart,
 				widgets.MainAxisSizeMax,
-				widgets.TextOf(name, rendering.TextStyle{
+				widgets.TextOf(name, graphics.TextStyle{
 					Color:    fg,
 					FontSize: 16,
 				}),
-				widgets.TextOf(colorHex(bg), rendering.TextStyle{
+				widgets.TextOf(colorHex(bg), graphics.TextStyle{
 					Color:    fg,
 					FontSize: 12,
 				}),
@@ -162,7 +162,7 @@ func colorSwatch(name string, bg, fg rendering.Color) core.Widget {
 }
 
 // colorHex formats a color as a hex string.
-func colorHex(c rendering.Color) string {
+func colorHex(c graphics.Color) string {
 	r := (c >> 16) & 0xFF
 	g := (c >> 8) & 0xFF
 	b := c & 0xFF

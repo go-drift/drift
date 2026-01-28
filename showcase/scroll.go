@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/rendering"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -85,7 +85,7 @@ func buildScrollPage(ctx core.BuildContext) core.Widget {
 }
 
 // listItem creates a styled list item.
-func listItem(index int, bgColor rendering.Color, colors theme.ColorScheme) core.Widget {
+func listItem(index int, bgColor graphics.Color, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color: bgColor,
 		ChildWidget: widgets.PaddingSym(16, 14,
@@ -96,14 +96,14 @@ func listItem(index int, bgColor rendering.Color, colors theme.ColorScheme) core
 				widgets.Container{
 					Color: colors.Primary,
 					ChildWidget: widgets.PaddingAll(8,
-						widgets.TextOf(itoa(index), rendering.TextStyle{
+						widgets.TextOf(itoa(index), graphics.TextStyle{
 							Color:    colors.OnPrimary,
 							FontSize: 12,
 						}),
 					),
 				},
 				widgets.HSpace(16),
-				widgets.TextOf("List Item "+itoa(index), rendering.TextStyle{
+				widgets.TextOf("List Item "+itoa(index), graphics.TextStyle{
 					Color:    colors.OnSurface,
 					FontSize: 16,
 				}),
