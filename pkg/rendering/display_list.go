@@ -96,6 +96,9 @@ func (c *recordingCanvas) SaveLayer(bounds Rect, paint *Paint) {
 	var paintCopy *Paint
 	if paint != nil {
 		p := *paint
+		// Deep copy filter chains to ensure immutability
+		p.ColorFilter = paint.ColorFilter.clone()
+		p.ImageFilter = paint.ImageFilter.clone()
 		paintCopy = &p
 	}
 	c.recorder.append(opSaveLayer{bounds: bounds, paint: paintCopy})

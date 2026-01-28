@@ -120,10 +120,27 @@ func (c *SkiaCanvas) SaveLayer(bounds Rect, paint *Paint) {
 	if !(alpha >= 0 && alpha <= 1) {
 		alpha = 1.0
 	}
-	skia.CanvasSaveLayer(
+
+	// Check if filters are present
+	hasFilters := paint.ColorFilter != nil || paint.ImageFilter != nil
+	if !hasFilters {
+		skia.CanvasSaveLayer(
+			c.canvas,
+			float32(bounds.Left), float32(bounds.Top), float32(bounds.Right), float32(bounds.Bottom),
+			blend, alpha,
+		)
+		return
+	}
+
+	// Encode filters for C bridge
+	cfData := encodeColorFilter(paint.ColorFilter)
+	ifData := encodeImageFilter(paint.ImageFilter)
+
+	skia.CanvasSaveLayerFiltered(
 		c.canvas,
 		float32(bounds.Left), float32(bounds.Top), float32(bounds.Right), float32(bounds.Bottom),
 		blend, alpha,
+		cfData, ifData,
 	)
 }
 

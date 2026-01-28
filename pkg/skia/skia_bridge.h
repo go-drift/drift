@@ -58,6 +58,14 @@ void drift_skia_canvas_save_layer(
     int blend_mode,
     float alpha
 );
+void drift_skia_canvas_save_layer_filtered(
+    DriftSkiaCanvas canvas,
+    float l, float t, float r, float b,
+    int blend_mode,
+    float alpha,
+    const float* color_filter_data, int color_filter_len,
+    const float* image_filter_data, int image_filter_len
+);
 void drift_skia_canvas_clear(DriftSkiaCanvas canvas, uint32_t argb);
 void drift_skia_canvas_draw_rect(
     DriftSkiaCanvas canvas, float l, float t, float r, float b,

@@ -97,6 +97,18 @@ type Paint struct {
 	// Compositing
 	BlendMode BlendMode // Compositing mode; negative defaults to BlendModeSrcOver
 	Alpha     float64   // Overall opacity 0.0-1.0; negative defaults to 1.0
+
+	// Filters (only applied via SaveLayer, not individual draw calls)
+	//
+	// ColorFilter transforms colors when the layer is composited. Use with
+	// SaveLayer to apply effects like tinting, grayscale, or brightness
+	// adjustment to grouped content.
+	ColorFilter *ColorFilter
+
+	// ImageFilter applies pixel-based effects when the layer is composited.
+	// Use with SaveLayer to apply blur, drop shadow, or other effects to
+	// grouped content.
+	ImageFilter *ImageFilter
 }
 
 // DefaultPaint returns a basic opaque white fill paint with standard compositing.

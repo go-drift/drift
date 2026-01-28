@@ -35,6 +35,7 @@
 #include "core/SkScalar.h"
 #include "core/SkSurface.h"
 #include "effects/SkImageFilters.h"
+#include "core/SkColorFilter.h"
 #include "core/SkSurfaceProps.h"
 #include "core/SkTypeface.h"
 #include "core/SkFontMgr.h"
@@ -392,6 +393,170 @@ struct ImageCache {
 };
 thread_local ImageCache g_image_cache;
 
+// Filter type constants (must match Go constants in filter_encode.go)
+constexpr float kColorFilterBlend = 0;
+constexpr float kColorFilterMatrix = 1;
+
+constexpr float kImageFilterBlur = 0;
+constexpr float kImageFilterDropShadow = 1;
+constexpr float kImageFilterColorFilter = 2;
+
+// Parse serialized ColorFilter data and create SkColorFilter
+// Returns nullptr if data is invalid or empty
+sk_sp<SkColorFilter> parse_color_filter(const float* data, int len, int& consumed) {
+    consumed = 0;
+    if (!data || len < 1) {
+        return nullptr;
+    }
+
+    float type = data[0];
+    sk_sp<SkColorFilter> filter;
+
+    if (type == kColorFilterBlend) {
+        // Format: [0, color_bits, blend_mode, inner_len, ...inner]
+        if (len < 4) return nullptr;
+        uint32_t color_bits;
+        std::memcpy(&color_bits, &data[1], sizeof(float));
+        SkColor color = to_sk_color(color_bits);
+        SkBlendMode mode = static_cast<SkBlendMode>(static_cast<int>(data[2]));
+        filter = SkColorFilters::Blend(color, mode);
+        consumed = 3;
+    } else if (type == kColorFilterMatrix) {
+        // Format: [1, m0..m19, inner_len, ...inner]
+        if (len < 22) return nullptr;
+        float matrix[20];
+        for (int i = 0; i < 20; ++i) {
+            matrix[i] = data[1 + i];
+        }
+        filter = SkColorFilters::Matrix(matrix);
+        consumed = 21;
+    } else {
+        return nullptr;
+    }
+
+    // Parse inner filter for composition
+    if (consumed < len) {
+        int inner_len = static_cast<int>(data[consumed]);
+        consumed += 1;
+        if (inner_len > 0 && consumed + inner_len <= len) {
+            int inner_consumed = 0;
+            auto inner = parse_color_filter(data + consumed, inner_len, inner_consumed);
+            if (inner) {
+                filter = SkColorFilters::Compose(filter, inner);
+            }
+            consumed += inner_len;
+        }
+    }
+
+    return filter;
+}
+
+// Parse serialized ImageFilter data and create SkImageFilter
+// Returns nullptr if data is invalid or empty
+sk_sp<SkImageFilter> parse_image_filter(const float* data, int len, int& consumed) {
+    consumed = 0;
+    if (!data || len < 1) {
+        return nullptr;
+    }
+
+    float type = data[0];
+    sk_sp<SkImageFilter> filter;
+    int base_consumed = 0;
+
+    if (type == kImageFilterBlur) {
+        // Format: [0, sigma_x, sigma_y, tile_mode, input_len, ...input]
+        if (len < 5) return nullptr;
+        float sigma_x = data[1];
+        float sigma_y = data[2];
+        int tile_mode_int = static_cast<int>(data[3]);
+        SkTileMode tile_mode;
+        switch (tile_mode_int) {
+            case 1: tile_mode = SkTileMode::kRepeat; break;
+            case 2: tile_mode = SkTileMode::kMirror; break;
+            case 3: tile_mode = SkTileMode::kDecal; break;
+            default: tile_mode = SkTileMode::kClamp; break;
+        }
+        base_consumed = 4;
+
+        // Parse input filter
+        int input_len = static_cast<int>(data[base_consumed]);
+        base_consumed += 1;
+        sk_sp<SkImageFilter> input;
+        if (input_len > 0 && base_consumed + input_len <= len) {
+            int input_consumed = 0;
+            input = parse_image_filter(data + base_consumed, input_len, input_consumed);
+            base_consumed += input_len;
+        }
+
+        filter = SkImageFilters::Blur(sigma_x, sigma_y, tile_mode, input);
+        consumed = base_consumed;
+
+    } else if (type == kImageFilterDropShadow) {
+        // Format: [1, dx, dy, sigma_x, sigma_y, color_bits, shadow_only, input_len, ...input]
+        if (len < 8) return nullptr;
+        float dx = data[1];
+        float dy = data[2];
+        float sigma_x = data[3];
+        float sigma_y = data[4];
+        uint32_t color_bits;
+        std::memcpy(&color_bits, &data[5], sizeof(float));
+        SkColor color = to_sk_color(color_bits);
+        bool shadow_only = data[6] != 0;
+        base_consumed = 7;
+
+        // Parse input filter
+        int input_len = static_cast<int>(data[base_consumed]);
+        base_consumed += 1;
+        sk_sp<SkImageFilter> input;
+        if (input_len > 0 && base_consumed + input_len <= len) {
+            int input_consumed = 0;
+            input = parse_image_filter(data + base_consumed, input_len, input_consumed);
+            base_consumed += input_len;
+        }
+
+        if (shadow_only) {
+            filter = SkImageFilters::DropShadowOnly(dx, dy, sigma_x, sigma_y, color, input);
+        } else {
+            filter = SkImageFilters::DropShadow(dx, dy, sigma_x, sigma_y, color, input);
+        }
+        consumed = base_consumed;
+
+    } else if (type == kImageFilterColorFilter) {
+        // Format: [2, cf_len, ...cf_encoding, input_len, ...input]
+        if (len < 3) return nullptr;
+        int cf_len = static_cast<int>(data[1]);
+        base_consumed = 2;
+
+        sk_sp<SkColorFilter> cf;
+        if (cf_len > 0 && base_consumed + cf_len <= len) {
+            int cf_consumed = 0;
+            cf = parse_color_filter(data + base_consumed, cf_len, cf_consumed);
+            base_consumed += cf_len;
+        }
+
+        // Parse input filter
+        if (base_consumed < len) {
+            int input_len = static_cast<int>(data[base_consumed]);
+            base_consumed += 1;
+            sk_sp<SkImageFilter> input;
+            if (input_len > 0 && base_consumed + input_len <= len) {
+                int input_consumed = 0;
+                input = parse_image_filter(data + base_consumed, input_len, input_consumed);
+                base_consumed += input_len;
+            }
+            filter = SkImageFilters::ColorFilter(cf, input);
+        } else {
+            filter = SkImageFilters::ColorFilter(cf, nullptr);
+        }
+        consumed = base_consumed;
+
+    } else {
+        return nullptr;
+    }
+
+    return filter;
+}
+
 }  // namespace
 
 // Provide a weak definition for the default font families used by skparagraph.
@@ -654,6 +819,48 @@ void drift_skia_canvas_save_layer(
     paint.setBlendMode(static_cast<SkBlendMode>(blend_mode));
     if (alpha < 1.0f) {
         paint.setAlphaf(alpha);
+    }
+
+    reinterpret_cast<SkCanvas*>(canvas)->saveLayer(boundsPtr, &paint);
+}
+
+void drift_skia_canvas_save_layer_filtered(
+    DriftSkiaCanvas canvas,
+    float l, float t, float r, float b,
+    int blend_mode,
+    float alpha,
+    const float* color_filter_data, int color_filter_len,
+    const float* image_filter_data, int image_filter_len
+) {
+    if (!canvas) {
+        return;
+    }
+
+    SkRect bounds = SkRect::MakeLTRB(l, t, r, b);
+    SkRect* boundsPtr = (l == 0 && t == 0 && r == 0 && b == 0) ? nullptr : &bounds;
+
+    SkPaint paint;
+    paint.setBlendMode(static_cast<SkBlendMode>(blend_mode));
+    if (alpha < 1.0f) {
+        paint.setAlphaf(alpha);
+    }
+
+    // Parse and apply color filter
+    if (color_filter_data && color_filter_len > 0) {
+        int consumed = 0;
+        auto cf = parse_color_filter(color_filter_data, color_filter_len, consumed);
+        if (cf) {
+            paint.setColorFilter(cf);
+        }
+    }
+
+    // Parse and apply image filter
+    if (image_filter_data && image_filter_len > 0) {
+        int consumed = 0;
+        auto imf = parse_image_filter(image_filter_data, image_filter_len, consumed);
+        if (imf) {
+            paint.setImageFilter(imf);
+        }
     }
 
     reinterpret_cast<SkCanvas*>(canvas)->saveLayer(boundsPtr, &paint);

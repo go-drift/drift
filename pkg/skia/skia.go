@@ -247,6 +247,35 @@ func CanvasSaveLayer(
 	)
 }
 
+// CanvasSaveLayerFiltered saves a layer with optional color and image filters.
+func CanvasSaveLayerFiltered(
+	canvas unsafe.Pointer,
+	left, top, right, bottom float32,
+	blendMode int32, alpha float32,
+	colorFilterData []float32,
+	imageFilterData []float32,
+) {
+	var cfPtr *C.float
+	cfLen := C.int(0)
+	if len(colorFilterData) > 0 {
+		cfPtr = (*C.float)(unsafe.Pointer(&colorFilterData[0]))
+		cfLen = C.int(len(colorFilterData))
+	}
+	var ifPtr *C.float
+	ifLen := C.int(0)
+	if len(imageFilterData) > 0 {
+		ifPtr = (*C.float)(unsafe.Pointer(&imageFilterData[0]))
+		ifLen = C.int(len(imageFilterData))
+	}
+	C.drift_skia_canvas_save_layer_filtered(
+		C.DriftSkiaCanvas(canvas),
+		C.float(left), C.float(top), C.float(right), C.float(bottom),
+		C.int(blendMode), C.float(alpha),
+		cfPtr, cfLen,
+		ifPtr, ifLen,
+	)
+}
+
 // CanvasClear clears the canvas with a solid color.
 func CanvasClear(canvas unsafe.Pointer, argb uint32) {
 	C.drift_skia_canvas_clear(C.DriftSkiaCanvas(canvas), C.uint(argb))
