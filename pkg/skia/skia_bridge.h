@@ -47,140 +47,97 @@ void drift_skia_canvas_clip_rrect(
     float ry4
 );
 void drift_skia_canvas_clear(DriftSkiaCanvas canvas, uint32_t argb);
-void drift_skia_canvas_draw_rect(DriftSkiaCanvas canvas, float l, float t, float r, float b, uint32_t argb, int style, float stroke_width, int aa);
+void drift_skia_canvas_draw_rect(
+    DriftSkiaCanvas canvas, float l, float t, float r, float b,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+);
 void drift_skia_canvas_draw_rrect(
     DriftSkiaCanvas canvas,
-    float l,
-    float t,
-    float r,
-    float b,
-    float rx1,
-    float ry1,
-    float rx2,
-    float ry2,
-    float rx3,
-    float ry3,
-    float rx4,
-    float ry4,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa
+    float l, float t, float r, float b,
+    float rx1, float ry1, float rx2, float ry2,
+    float rx3, float ry3, float rx4, float ry4,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
 );
-void drift_skia_canvas_draw_circle(DriftSkiaCanvas canvas, float cx, float cy, float radius, uint32_t argb, int style, float stroke_width, int aa);
-void drift_skia_canvas_draw_line(DriftSkiaCanvas canvas, float x1, float y1, float x2, float y2, uint32_t argb, float stroke_width, int aa);
+void drift_skia_canvas_draw_circle(
+    DriftSkiaCanvas canvas, float cx, float cy, float radius,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+);
+void drift_skia_canvas_draw_line(
+    DriftSkiaCanvas canvas, float x1, float y1, float x2, float y2,
+    uint32_t argb, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+);
 void drift_skia_canvas_draw_rect_gradient(
     DriftSkiaCanvas canvas,
-    float l,
-    float t,
-    float r,
-    float b,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    float l, float t, float r, float b,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float cx,
-    float cy,
-    float radius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float cx, float cy, float radius,
+    const uint32_t* colors, const float* positions, int count
 );
 void drift_skia_canvas_draw_rrect_gradient(
     DriftSkiaCanvas canvas,
-    float l,
-    float t,
-    float r,
-    float b,
-    float rx1,
-    float ry1,
-    float rx2,
-    float ry2,
-    float rx3,
-    float ry3,
-    float rx4,
-    float ry4,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    float l, float t, float r, float b,
+    float rx1, float ry1, float rx2, float ry2,
+    float rx3, float ry3, float rx4, float ry4,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float cx,
-    float cy,
-    float radius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float cx, float cy, float radius,
+    const uint32_t* colors, const float* positions, int count
 );
 void drift_skia_canvas_draw_circle_gradient(
     DriftSkiaCanvas canvas,
-    float cx,
-    float cy,
-    float radius,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    float cx, float cy, float radius,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float rcx,
-    float rcy,
-    float rradius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float rcx, float rcy, float rradius,
+    const uint32_t* colors, const float* positions, int count
 );
 void drift_skia_canvas_draw_line_gradient(
     DriftSkiaCanvas canvas,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    uint32_t argb,
-    float stroke_width,
-    int aa,
+    float x1, float y1, float x2, float y2,
+    uint32_t argb, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float lx1,
-    float ly1,
-    float lx2,
-    float ly2,
-    float rcx,
-    float rcy,
-    float rradius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float lx1, float ly1, float lx2, float ly2,
+    float rcx, float rcy, float rradius,
+    const uint32_t* colors, const float* positions, int count
 );
 void drift_skia_canvas_draw_path_gradient(
-    DriftSkiaCanvas canvas,
-    DriftSkiaPath path,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    DriftSkiaCanvas canvas, DriftSkiaPath path,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float rcx,
-    float rcy,
-    float rradius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float rcx, float rcy, float rradius,
+    const uint32_t* colors, const float* positions, int count
 );
 void drift_skia_canvas_draw_text_gradient(
     DriftSkiaCanvas canvas,
@@ -256,7 +213,13 @@ void drift_skia_path_line_to(DriftSkiaPath path, float x, float y);
 void drift_skia_path_quad_to(DriftSkiaPath path, float x1, float y1, float x2, float y2);
 void drift_skia_path_cubic_to(DriftSkiaPath path, float x1, float y1, float x2, float y2, float x3, float y3);
 void drift_skia_path_close(DriftSkiaPath path);
-void drift_skia_canvas_draw_path(DriftSkiaCanvas canvas, DriftSkiaPath path, uint32_t argb, int style, float stroke_width, int aa);
+void drift_skia_canvas_draw_path(
+    DriftSkiaCanvas canvas, DriftSkiaPath path,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+);
 
 void drift_skia_canvas_draw_rect_shadow(
     DriftSkiaCanvas canvas,

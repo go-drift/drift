@@ -91,8 +91,11 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.CrossAxisAlignmentCenter,
 			widgets.MainAxisSizeMin,
 			widgets.DecoratedBox{
-				Color:        colors.SurfaceVariant,
+				BorderColor:  colors.SecondaryContainer,
+				BorderWidth:  2,
+				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
+				Color:        colors.SurfaceVariant,
 				Shadow:       rendering.BoxShadowElevation(1, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
@@ -107,8 +110,11 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			},
 			widgets.HSpace(16),
 			widgets.DecoratedBox{
-				Color:        colors.SurfaceVariant,
+				BorderColor:  colors.SecondaryContainer,
+				BorderWidth:  2,
+				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
+				Color:        colors.SurfaceVariant,
 				Shadow:       rendering.BoxShadowElevation(2, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
@@ -123,8 +129,11 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			},
 			widgets.HSpace(16),
 			widgets.DecoratedBox{
-				Color:        colors.SurfaceVariant,
+				BorderColor:  colors.SecondaryContainer,
+				BorderWidth:  2,
+				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
+				Color:        colors.SurfaceVariant,
 				Shadow:       rendering.BoxShadowElevation(3, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,
@@ -139,8 +148,11 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			},
 			widgets.HSpace(16),
 			widgets.DecoratedBox{
-				Color:        colors.SurfaceVariant,
+				BorderColor:  colors.SecondaryContainer,
+				BorderWidth:  2,
+				BorderDash:   &rendering.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
 				BorderRadius: 12,
+				Color:        colors.SurfaceVariant,
 				Shadow:       rendering.BoxShadowElevation(5, colors.SurfaceTint.WithAlpha(80)),
 				ChildWidget: widgets.SizedBox{
 					Width:  72,

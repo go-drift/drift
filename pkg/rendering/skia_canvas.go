@@ -10,6 +10,44 @@ import (
 	"github.com/go-drift/drift/pkg/skia"
 )
 
+// paintParams extracts extended paint parameters with defaults applied.
+func paintParams(paint Paint) (cap, join int32, miter float32, dash []float32, dashPhase float32, blend int32, alpha float32) {
+	cap = int32(paint.StrokeCap)
+	join = int32(paint.StrokeJoin)
+	miter = float32(paint.MiterLimit)
+	if miter == 0 {
+		miter = 4.0
+	}
+	// Validate dash pattern: must have even count >= 2 with finite positive intervals
+	if paint.Dash != nil && len(paint.Dash.Intervals) >= 2 && len(paint.Dash.Intervals)%2 == 0 {
+		valid := true
+		for _, v := range paint.Dash.Intervals {
+			if !(v > 0) { // false for NaN, zero, and negative
+				valid = false
+				break
+			}
+		}
+		if valid {
+			dash = make([]float32, len(paint.Dash.Intervals))
+			for i, v := range paint.Dash.Intervals {
+				dash[i] = float32(v)
+			}
+			dashPhase = float32(paint.Dash.Phase)
+		}
+	}
+	// Clamp BlendMode to valid range, invalid values default to SrcOver
+	blend = int32(paint.BlendMode)
+	if blend < 0 || blend > int32(BlendModeLuminosity) {
+		blend = int32(BlendModeSrcOver)
+	}
+	// Clamp Alpha to [0,1]; invalid values (negative, >1, NaN) default to 1.0
+	alpha = float32(paint.Alpha)
+	if !(alpha >= 0 && alpha <= 1) {
+		alpha = 1.0
+	}
+	return
+}
+
 // SkiaCanvas implements Canvas using the Skia backend.
 type SkiaCanvas struct {
 	canvas unsafe.Pointer
@@ -82,166 +120,108 @@ func (c *SkiaCanvas) Clear(color Color) {
 }
 
 func (c *SkiaCanvas) DrawRect(rect Rect, paint Paint) {
+	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
 	if payload, ok := buildGradientPayload(paint.Gradient); ok {
 		skia.CanvasDrawRectGradient(
 			c.canvas,
-			float32(rect.Left),
-			float32(rect.Top),
-			float32(rect.Right),
-			float32(rect.Bottom),
-			uint32(paint.Color),
-			int32(paint.Style),
-			float32(paint.StrokeWidth),
-			true,
+			float32(rect.Left), float32(rect.Top), float32(rect.Right), float32(rect.Bottom),
+			uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+			cap, join, miter, dash, dashPhase, blend, alpha,
 			payload.gradientType,
-			float32(payload.start.X),
-			float32(payload.start.Y),
-			float32(payload.end.X),
-			float32(payload.end.Y),
-			float32(payload.center.X),
-			float32(payload.center.Y),
-			float32(payload.radius),
-			payload.colors,
-			payload.positions,
+			float32(payload.start.X), float32(payload.start.Y),
+			float32(payload.end.X), float32(payload.end.Y),
+			float32(payload.center.X), float32(payload.center.Y), float32(payload.radius),
+			payload.colors, payload.positions,
 		)
 		return
 	}
 	skia.CanvasDrawRect(
 		c.canvas,
-		float32(rect.Left),
-		float32(rect.Top),
-		float32(rect.Right),
-		float32(rect.Bottom),
-		uint32(paint.Color),
-		int32(paint.Style),
-		float32(paint.StrokeWidth),
-		true,
+		float32(rect.Left), float32(rect.Top), float32(rect.Right), float32(rect.Bottom),
+		uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+		cap, join, miter, dash, dashPhase, blend, alpha,
 	)
 }
 
 func (c *SkiaCanvas) DrawRRect(rrect RRect, paint Paint) {
+	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
 	if payload, ok := buildGradientPayload(paint.Gradient); ok {
 		skia.CanvasDrawRRectGradient(
 			c.canvas,
-			float32(rrect.Rect.Left),
-			float32(rrect.Rect.Top),
-			float32(rrect.Rect.Right),
-			float32(rrect.Rect.Bottom),
-			float32(rrect.TopLeft.X),
-			float32(rrect.TopLeft.Y),
-			float32(rrect.TopRight.X),
-			float32(rrect.TopRight.Y),
-			float32(rrect.BottomRight.X),
-			float32(rrect.BottomRight.Y),
-			float32(rrect.BottomLeft.X),
-			float32(rrect.BottomLeft.Y),
-			uint32(paint.Color),
-			int32(paint.Style),
-			float32(paint.StrokeWidth),
-			true,
+			float32(rrect.Rect.Left), float32(rrect.Rect.Top),
+			float32(rrect.Rect.Right), float32(rrect.Rect.Bottom),
+			float32(rrect.TopLeft.X), float32(rrect.TopLeft.Y),
+			float32(rrect.TopRight.X), float32(rrect.TopRight.Y),
+			float32(rrect.BottomRight.X), float32(rrect.BottomRight.Y),
+			float32(rrect.BottomLeft.X), float32(rrect.BottomLeft.Y),
+			uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+			cap, join, miter, dash, dashPhase, blend, alpha,
 			payload.gradientType,
-			float32(payload.start.X),
-			float32(payload.start.Y),
-			float32(payload.end.X),
-			float32(payload.end.Y),
-			float32(payload.center.X),
-			float32(payload.center.Y),
-			float32(payload.radius),
-			payload.colors,
-			payload.positions,
+			float32(payload.start.X), float32(payload.start.Y),
+			float32(payload.end.X), float32(payload.end.Y),
+			float32(payload.center.X), float32(payload.center.Y), float32(payload.radius),
+			payload.colors, payload.positions,
 		)
 		return
 	}
 	skia.CanvasDrawRRect(
 		c.canvas,
-		float32(rrect.Rect.Left),
-		float32(rrect.Rect.Top),
-		float32(rrect.Rect.Right),
-		float32(rrect.Rect.Bottom),
-		float32(rrect.TopLeft.X),
-		float32(rrect.TopLeft.Y),
-		float32(rrect.TopRight.X),
-		float32(rrect.TopRight.Y),
-		float32(rrect.BottomRight.X),
-		float32(rrect.BottomRight.Y),
-		float32(rrect.BottomLeft.X),
-		float32(rrect.BottomLeft.Y),
-		uint32(paint.Color),
-		int32(paint.Style),
-		float32(paint.StrokeWidth),
-		true,
+		float32(rrect.Rect.Left), float32(rrect.Rect.Top),
+		float32(rrect.Rect.Right), float32(rrect.Rect.Bottom),
+		float32(rrect.TopLeft.X), float32(rrect.TopLeft.Y),
+		float32(rrect.TopRight.X), float32(rrect.TopRight.Y),
+		float32(rrect.BottomRight.X), float32(rrect.BottomRight.Y),
+		float32(rrect.BottomLeft.X), float32(rrect.BottomLeft.Y),
+		uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+		cap, join, miter, dash, dashPhase, blend, alpha,
 	)
 }
 
 func (c *SkiaCanvas) DrawCircle(center Offset, radius float64, paint Paint) {
+	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
 	if payload, ok := buildGradientPayload(paint.Gradient); ok {
 		skia.CanvasDrawCircleGradient(
 			c.canvas,
-			float32(center.X),
-			float32(center.Y),
-			float32(radius),
-			uint32(paint.Color),
-			int32(paint.Style),
-			float32(paint.StrokeWidth),
-			true,
+			float32(center.X), float32(center.Y), float32(radius),
+			uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+			cap, join, miter, dash, dashPhase, blend, alpha,
 			payload.gradientType,
-			float32(payload.start.X),
-			float32(payload.start.Y),
-			float32(payload.end.X),
-			float32(payload.end.Y),
-			float32(payload.center.X),
-			float32(payload.center.Y),
-			float32(payload.radius),
-			payload.colors,
-			payload.positions,
+			float32(payload.start.X), float32(payload.start.Y),
+			float32(payload.end.X), float32(payload.end.Y),
+			float32(payload.center.X), float32(payload.center.Y), float32(payload.radius),
+			payload.colors, payload.positions,
 		)
 		return
 	}
 	skia.CanvasDrawCircle(
 		c.canvas,
-		float32(center.X),
-		float32(center.Y),
-		float32(radius),
-		uint32(paint.Color),
-		int32(paint.Style),
-		float32(paint.StrokeWidth),
-		true,
+		float32(center.X), float32(center.Y), float32(radius),
+		uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+		cap, join, miter, dash, dashPhase, blend, alpha,
 	)
 }
 
 func (c *SkiaCanvas) DrawLine(start, end Offset, paint Paint) {
+	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
 	if payload, ok := buildGradientPayload(paint.Gradient); ok {
 		skia.CanvasDrawLineGradient(
 			c.canvas,
-			float32(start.X),
-			float32(start.Y),
-			float32(end.X),
-			float32(end.Y),
-			uint32(paint.Color),
-			float32(paint.StrokeWidth),
-			true,
+			float32(start.X), float32(start.Y), float32(end.X), float32(end.Y),
+			uint32(paint.Color), float32(paint.StrokeWidth), true,
+			cap, join, miter, dash, dashPhase, blend, alpha,
 			payload.gradientType,
-			float32(payload.start.X),
-			float32(payload.start.Y),
-			float32(payload.end.X),
-			float32(payload.end.Y),
-			float32(payload.center.X),
-			float32(payload.center.Y),
-			float32(payload.radius),
-			payload.colors,
-			payload.positions,
+			float32(payload.start.X), float32(payload.start.Y),
+			float32(payload.end.X), float32(payload.end.Y),
+			float32(payload.center.X), float32(payload.center.Y), float32(payload.radius),
+			payload.colors, payload.positions,
 		)
 		return
 	}
 	skia.CanvasDrawLine(
 		c.canvas,
-		float32(start.X),
-		float32(start.Y),
-		float32(end.X),
-		float32(end.Y),
-		uint32(paint.Color),
-		float32(paint.StrokeWidth),
-		true,
+		float32(start.X), float32(start.Y), float32(end.X), float32(end.Y),
+		uint32(paint.Color), float32(paint.StrokeWidth), true,
+		cap, join, miter, dash, dashPhase, blend, alpha,
 	)
 }
 
@@ -417,35 +397,25 @@ func (c *SkiaCanvas) DrawPath(path *Path, paint Paint) {
 		}
 	}
 
+	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
 	if payload, ok := buildGradientPayload(paint.Gradient); ok {
 		skia.CanvasDrawPathGradient(
-			c.canvas,
-			skPath,
-			uint32(paint.Color),
-			int32(paint.Style),
-			float32(paint.StrokeWidth),
-			true,
+			c.canvas, skPath,
+			uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+			cap, join, miter, dash, dashPhase, blend, alpha,
 			payload.gradientType,
-			float32(payload.start.X),
-			float32(payload.start.Y),
-			float32(payload.end.X),
-			float32(payload.end.Y),
-			float32(payload.center.X),
-			float32(payload.center.Y),
-			float32(payload.radius),
-			payload.colors,
-			payload.positions,
+			float32(payload.start.X), float32(payload.start.Y),
+			float32(payload.end.X), float32(payload.end.Y),
+			float32(payload.center.X), float32(payload.center.Y), float32(payload.radius),
+			payload.colors, payload.positions,
 		)
 		return
 	}
 
 	skia.CanvasDrawPath(
-		c.canvas,
-		skPath,
-		uint32(paint.Color),
-		int32(paint.Style),
-		float32(paint.StrokeWidth),
-		true,
+		c.canvas, skPath,
+		uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,
+		cap, join, miter, dash, dashPhase, blend, alpha,
 	)
 }
 

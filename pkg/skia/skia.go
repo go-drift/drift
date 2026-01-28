@@ -223,23 +223,46 @@ func CanvasClear(canvas unsafe.Pointer, argb uint32) {
 }
 
 // CanvasDrawRect draws a rectangle.
-func CanvasDrawRect(canvas unsafe.Pointer, left, top, right, bottom float32, argb uint32, style int32, strokeWidth float32, aa bool) {
-	C.drift_skia_canvas_draw_rect(C.DriftSkiaCanvas(canvas), C.float(left), C.float(top), C.float(right), C.float(bottom), C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa))
+func CanvasDrawRect(
+	canvas unsafe.Pointer,
+	left, top, right, bottom float32,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
+	C.drift_skia_canvas_draw_rect(
+		C.DriftSkiaCanvas(canvas),
+		C.float(left), C.float(top), C.float(right), C.float(bottom),
+		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
+	)
 }
 
 // CanvasDrawRRect draws a rounded rectangle with per-corner radii.
 func CanvasDrawRRect(
 	canvas unsafe.Pointer,
 	left, top, right, bottom float32,
-	rx1, ry1 float32,
-	rx2, ry2 float32,
-	rx3, ry3 float32,
-	rx4, ry4 float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	rx1, ry1, rx2, ry2, rx3, ry3, rx4, ry4 float32,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 ) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
 	C.drift_skia_canvas_draw_rrect(
 		C.DriftSkiaCanvas(canvas),
 		C.float(left), C.float(top), C.float(right), C.float(bottom),
@@ -248,38 +271,89 @@ func CanvasDrawRRect(
 		C.float(rx3), C.float(ry3),
 		C.float(rx4), C.float(ry4),
 		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
 	)
 }
 
 // CanvasDrawCircle draws a circle.
-func CanvasDrawCircle(canvas unsafe.Pointer, cx, cy, radius float32, argb uint32, style int32, strokeWidth float32, aa bool) {
-	C.drift_skia_canvas_draw_circle(C.DriftSkiaCanvas(canvas), C.float(cx), C.float(cy), C.float(radius), C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa))
+func CanvasDrawCircle(
+	canvas unsafe.Pointer,
+	cx, cy, radius float32,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
+	C.drift_skia_canvas_draw_circle(
+		C.DriftSkiaCanvas(canvas),
+		C.float(cx), C.float(cy), C.float(radius),
+		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
+	)
 }
 
 // CanvasDrawLine draws a line segment.
-func CanvasDrawLine(canvas unsafe.Pointer, x1, y1, x2, y2 float32, argb uint32, strokeWidth float32, aa bool) {
-	C.drift_skia_canvas_draw_line(C.DriftSkiaCanvas(canvas), C.float(x1), C.float(y1), C.float(x2), C.float(y2), C.uint(argb), C.float(strokeWidth), boolToInt(aa))
+func CanvasDrawLine(
+	canvas unsafe.Pointer,
+	x1, y1, x2, y2 float32,
+	argb uint32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
+	C.drift_skia_canvas_draw_line(
+		C.DriftSkiaCanvas(canvas),
+		C.float(x1), C.float(y1), C.float(x2), C.float(y2),
+		C.uint(argb), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
+	)
 }
 
 // CanvasDrawRectGradient draws a rectangle with a gradient shader.
 func CanvasDrawRectGradient(
 	canvas unsafe.Pointer,
 	left, top, right, bottom float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_rect_gradient(
 		C.DriftSkiaCanvas(canvas),
 		C.float(left), C.float(top), C.float(right), C.float(bottom),
 		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
 		C.int(gradientType),
 		C.float(startX), C.float(startY), C.float(endX), C.float(endY),
 		C.float(centerX), C.float(centerY), C.float(radius),
@@ -292,16 +366,21 @@ func CanvasDrawRRectGradient(
 	canvas unsafe.Pointer,
 	left, top, right, bottom float32,
 	rx1, ry1, rx2, ry2, rx3, ry3, rx4, ry4 float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_rrect_gradient(
 		C.DriftSkiaCanvas(canvas),
@@ -309,6 +388,9 @@ func CanvasDrawRRectGradient(
 		C.float(rx1), C.float(ry1), C.float(rx2), C.float(ry2),
 		C.float(rx3), C.float(ry3), C.float(rx4), C.float(ry4),
 		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
 		C.int(gradientType),
 		C.float(startX), C.float(startY), C.float(endX), C.float(endY),
 		C.float(centerX), C.float(centerY), C.float(radius),
@@ -320,21 +402,29 @@ func CanvasDrawRRectGradient(
 func CanvasDrawCircleGradient(
 	canvas unsafe.Pointer,
 	cx, cy, radius float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, gradientRadius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_circle_gradient(
 		C.DriftSkiaCanvas(canvas),
 		C.float(cx), C.float(cy), C.float(radius),
 		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
 		C.int(gradientType),
 		C.float(startX), C.float(startY), C.float(endX), C.float(endY),
 		C.float(centerX), C.float(centerY), C.float(gradientRadius),
@@ -346,20 +436,29 @@ func CanvasDrawCircleGradient(
 func CanvasDrawLineGradient(
 	canvas unsafe.Pointer,
 	x1, y1, x2, y2 float32,
-	argb uint32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_line_gradient(
 		C.DriftSkiaCanvas(canvas),
 		C.float(x1), C.float(y1), C.float(x2), C.float(y2),
 		C.uint(argb), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
 		C.int(gradientType),
 		C.float(startX), C.float(startY), C.float(endX), C.float(endY),
 		C.float(centerX), C.float(centerY), C.float(radius),
@@ -371,24 +470,32 @@ func CanvasDrawLineGradient(
 func CanvasDrawPathGradient(
 	canvas unsafe.Pointer,
 	path *Path,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
 	if path == nil || path.ptr == nil {
 		return
+	}
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
 	}
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_path_gradient(
 		C.DriftSkiaCanvas(canvas),
 		path.ptr,
 		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
 		C.int(gradientType),
 		C.float(startX), C.float(startY), C.float(endX), C.float(endY),
 		C.float(centerX), C.float(centerY), C.float(radius),
@@ -779,11 +886,31 @@ func (p *Path) Close() {
 }
 
 // CanvasDrawPath draws a path with the provided paint settings.
-func CanvasDrawPath(canvas unsafe.Pointer, path *Path, argb uint32, style int32, strokeWidth float32, aa bool) {
+func CanvasDrawPath(
+	canvas unsafe.Pointer,
+	path *Path,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
 	if path == nil || path.ptr == nil {
 		return
 	}
-	C.drift_skia_canvas_draw_path(C.DriftSkiaCanvas(canvas), path.ptr, C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa))
+	var dashPtr *C.float
+	dashCount := C.int(0)
+	if len(dashIntervals) >= 2 {
+		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
+		dashCount = C.int(len(dashIntervals))
+	}
+	C.drift_skia_canvas_draw_path(
+		C.DriftSkiaCanvas(canvas),
+		path.ptr,
+		C.uint(argb), C.int(style), C.float(strokeWidth), boolToInt(aa),
+		C.int(strokeCap), C.int(strokeJoin), C.float(miterLimit),
+		dashPtr, dashCount, C.float(dashPhase),
+		C.int(blendMode), C.float(alpha),
+	)
 }
 
 // CanvasDrawRectShadow draws a shadow behind a rectangle.

@@ -11,7 +11,7 @@ import (
 // DecoratedBox applies decorations in this order:
 //  1. Shadow (drawn behind, naturally overflows bounds)
 //  2. Background color or gradient (overflow controlled by Overflow field)
-//  3. Border stroke (drawn on top of background)
+//  3. Border stroke (drawn on top of background, supports dashing)
 //  4. Child widget
 //
 // Use BorderRadius for rounded corners. When combined with gradients, the
@@ -21,13 +21,21 @@ import (
 //
 // For simpler use cases without borders or rounded corners, see [Container].
 type DecoratedBox struct {
-	ChildWidget  core.Widget
-	Color        rendering.Color
-	Gradient     *rendering.Gradient
-	BorderColor  rendering.Color
-	BorderWidth  float64
-	BorderRadius float64
-	Shadow       *rendering.BoxShadow
+	ChildWidget core.Widget // Child widget to display inside the decoration
+
+	// Background
+	Color    rendering.Color    // Background fill color
+	Gradient *rendering.Gradient // Background gradient; overrides Color if set
+
+	// Border
+	BorderColor  rendering.Color            // Border stroke color; transparent = no border
+	BorderWidth  float64                    // Border stroke width in pixels; 0 = no border
+	BorderRadius float64                    // Corner radius for rounded rectangles; 0 = sharp corners
+	BorderDash   *rendering.DashPattern // Dash pattern for border; nil = solid line
+
+	// Effects
+	Shadow *rendering.BoxShadow // Drop shadow drawn behind the box; nil = no shadow
+
 	// Overflow controls whether gradients extend beyond widget bounds.
 	// Defaults to OverflowVisible, allowing gradient effects like glows to
 	// extend beyond the widget area. Set to OverflowClip to confine gradients
@@ -60,6 +68,7 @@ func (d DecoratedBox) CreateRenderObject(ctx core.BuildContext) layout.RenderObj
 		borderColor:  d.BorderColor,
 		borderWidth:  d.BorderWidth,
 		borderRadius: d.BorderRadius,
+		borderDash:   d.BorderDash,
 		shadow:       d.Shadow,
 		overflow:     d.Overflow,
 	}
@@ -78,6 +87,7 @@ func (d DecoratedBox) UpdateRenderObject(ctx core.BuildContext, renderObject lay
 		box.borderColor = d.BorderColor
 		box.borderWidth = d.BorderWidth
 		box.borderRadius = d.BorderRadius
+		box.borderDash = d.BorderDash
 		box.shadow = d.Shadow
 		box.overflow = d.Overflow
 		box.MarkNeedsLayout()
@@ -93,6 +103,7 @@ type renderDecoratedBox struct {
 	borderColor  rendering.Color
 	borderWidth  float64
 	borderRadius float64
+	borderDash   *rendering.DashPattern
 	shadow       *rendering.BoxShadow
 	overflow     rendering.Overflow
 }
@@ -169,6 +180,7 @@ func (r *renderDecoratedBox) Paint(ctx *layout.PaintContext) {
 		borderPaint.Color = r.borderColor
 		borderPaint.Style = rendering.PaintStyleStroke
 		borderPaint.StrokeWidth = r.borderWidth
+		borderPaint.Dash = r.borderDash
 		r.drawShape(ctx, rect, borderPaint)
 	}
 	if r.child != nil {

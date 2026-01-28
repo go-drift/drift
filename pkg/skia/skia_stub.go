@@ -116,45 +116,62 @@ func CanvasClipRRect(
 func CanvasClear(canvas unsafe.Pointer, argb uint32) {}
 
 // CanvasDrawRect draws a rectangle.
-func CanvasDrawRect(canvas unsafe.Pointer, left, top, right, bottom float32, argb uint32, style int32, strokeWidth float32, aa bool) {
+func CanvasDrawRect(
+	canvas unsafe.Pointer,
+	left, top, right, bottom float32,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
 }
 
 // CanvasDrawRRect draws a rounded rectangle with per-corner radii.
 func CanvasDrawRRect(
 	canvas unsafe.Pointer,
 	left, top, right, bottom float32,
-	rx1, ry1 float32,
-	rx2, ry2 float32,
-	rx3, ry3 float32,
-	rx4, ry4 float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	rx1, ry1, rx2, ry2, rx3, ry3, rx4, ry4 float32,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 ) {
 }
 
 // CanvasDrawCircle draws a circle.
-func CanvasDrawCircle(canvas unsafe.Pointer, cx, cy, radius float32, argb uint32, style int32, strokeWidth float32, aa bool) {
+func CanvasDrawCircle(
+	canvas unsafe.Pointer,
+	cx, cy, radius float32,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
 }
 
 // CanvasDrawLine draws a line segment.
-func CanvasDrawLine(canvas unsafe.Pointer, x1, y1, x2, y2 float32, argb uint32, strokeWidth float32, aa bool) {
+func CanvasDrawLine(
+	canvas unsafe.Pointer,
+	x1, y1, x2, y2 float32,
+	argb uint32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
 }
 
 // CanvasDrawRectGradient draws a rectangle with a gradient shader.
 func CanvasDrawRectGradient(
 	canvas unsafe.Pointer,
 	left, top, right, bottom float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
 }
 
@@ -163,15 +180,14 @@ func CanvasDrawRRectGradient(
 	canvas unsafe.Pointer,
 	left, top, right, bottom float32,
 	rx1, ry1, rx2, ry2, rx3, ry3, rx4, ry4 float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
 }
 
@@ -179,15 +195,14 @@ func CanvasDrawRRectGradient(
 func CanvasDrawCircleGradient(
 	canvas unsafe.Pointer,
 	cx, cy, radius float32,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, gradientRadius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
 }
 
@@ -195,14 +210,14 @@ func CanvasDrawCircleGradient(
 func CanvasDrawLineGradient(
 	canvas unsafe.Pointer,
 	x1, y1, x2, y2 float32,
-	argb uint32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
 }
 
@@ -210,15 +225,14 @@ func CanvasDrawLineGradient(
 func CanvasDrawPathGradient(
 	canvas unsafe.Pointer,
 	path *Path,
-	argb uint32,
-	style int32,
-	strokeWidth float32,
-	aa bool,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
 	gradientType int32,
 	startX, startY, endX, endY float32,
 	centerX, centerY, radius float32,
-	colors []uint32,
-	positions []float32,
+	colors []uint32, positions []float32,
 ) {
 }
 
@@ -350,7 +364,14 @@ func (p *Path) CubicTo(x1, y1, x2, y2, x3, y3 float32) {}
 func (p *Path) Close() {}
 
 // CanvasDrawPath draws a path with the provided paint settings.
-func CanvasDrawPath(canvas unsafe.Pointer, path *Path, argb uint32, style int32, strokeWidth float32, aa bool) {
+func CanvasDrawPath(
+	canvas unsafe.Pointer,
+	path *Path,
+	argb uint32, style int32, strokeWidth float32, aa bool,
+	strokeCap, strokeJoin int32, miterLimit float32,
+	dashIntervals []float32, dashPhase float32,
+	blendMode int32, alpha float32,
+) {
 }
 
 // CanvasDrawRectShadow draws a shadow behind a rectangle.

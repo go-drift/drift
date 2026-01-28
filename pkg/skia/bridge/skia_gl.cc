@@ -28,6 +28,7 @@
 #include "core/SkImageInfo.h"
 #include "core/SkPaint.h"
 #include "effects/SkGradient.h"
+#include "effects/SkDashPathEffect.h"
 #include "core/SkBlurTypes.h"
 #include "core/SkMaskFilter.h"
 #include "core/SkRRect.h"
@@ -89,6 +90,66 @@ SkPaint make_paint(uint32_t argb, int style, float stroke_width, int aa) {
             paint.setStyle(SkPaint::kFill_Style);
             break;
     }
+    return paint;
+}
+
+SkPaint make_paint_ext(
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+) {
+    SkPaint paint;
+    paint.setAntiAlias(aa != 0);
+
+    // Apply alpha to color (clamp to valid range)
+    SkColor color = to_sk_color(argb);
+    float clamped_alpha = std::clamp(alpha, 0.0f, 1.0f);
+    if (clamped_alpha < 1.0f) {
+        int a = static_cast<int>(SkColorGetA(color) * clamped_alpha);
+        color = SkColorSetA(color, a);
+    }
+    paint.setColor(color);
+
+    // Style
+    switch (style) {
+        case 1:
+            paint.setStyle(SkPaint::kStroke_Style);
+            break;
+        case 2:
+            paint.setStyle(SkPaint::kStrokeAndFill_Style);
+            break;
+        default:
+            paint.setStyle(SkPaint::kFill_Style);
+            break;
+    }
+
+    // Stroke properties
+    if (stroke_width > 0) {
+        paint.setStrokeWidth(stroke_width);
+    }
+    switch (stroke_cap) {
+        case 1: paint.setStrokeCap(SkPaint::kRound_Cap); break;
+        case 2: paint.setStrokeCap(SkPaint::kSquare_Cap); break;
+        default: paint.setStrokeCap(SkPaint::kButt_Cap); break;
+    }
+    switch (stroke_join) {
+        case 1: paint.setStrokeJoin(SkPaint::kRound_Join); break;
+        case 2: paint.setStrokeJoin(SkPaint::kBevel_Join); break;
+        default: paint.setStrokeJoin(SkPaint::kMiter_Join); break;
+    }
+    if (miter_limit > 0) {
+        paint.setStrokeMiter(miter_limit);
+    }
+
+    // Dash pattern
+    if (dash_intervals && dash_count >= 2) {
+        paint.setPathEffect(SkDashPathEffect::Make(SkSpan(dash_intervals, dash_count), dash_phase));
+    }
+
+    // Blend mode (Skia's SkBlendMode enum values match our definitions)
+    paint.setBlendMode(static_cast<SkBlendMode>(blend_mode));
+
     return paint;
 }
 
@@ -566,33 +627,33 @@ void drift_skia_canvas_clear(DriftSkiaCanvas canvas, uint32_t argb) {
     reinterpret_cast<SkCanvas*>(canvas)->clear(to_sk_color(argb));
 }
 
-void drift_skia_canvas_draw_rect(DriftSkiaCanvas canvas, float l, float t, float r, float b, uint32_t argb, int style, float stroke_width, int aa) {
+void drift_skia_canvas_draw_rect(
+    DriftSkiaCanvas canvas, float l, float t, float r, float b,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+) {
     if (!canvas) {
         return;
     }
     SkRect rect = SkRect::MakeLTRB(l, t, r, b);
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     reinterpret_cast<SkCanvas*>(canvas)->drawRect(rect, paint);
 }
 
 void drift_skia_canvas_draw_rrect(
     DriftSkiaCanvas canvas,
-    float l,
-    float t,
-    float r,
-    float b,
-    float rx1,
-    float ry1,
-    float rx2,
-    float ry2,
-    float rx3,
-    float ry3,
-    float rx4,
-    float ry4,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa
+    float l, float t, float r, float b,
+    float rx1, float ry1, float rx2, float ry2,
+    float rx3, float ry3, float rx4, float ry4,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
 ) {
     if (!canvas) {
         return;
@@ -606,53 +667,67 @@ void drift_skia_canvas_draw_rrect(
     };
     SkRRect rrect;
     rrect.setRectRadii(rect, radii);
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     reinterpret_cast<SkCanvas*>(canvas)->drawRRect(rrect, paint);
 }
 
-void drift_skia_canvas_draw_circle(DriftSkiaCanvas canvas, float cx, float cy, float radius, uint32_t argb, int style, float stroke_width, int aa) {
+void drift_skia_canvas_draw_circle(
+    DriftSkiaCanvas canvas, float cx, float cy, float radius,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+) {
     if (!canvas) {
         return;
     }
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     reinterpret_cast<SkCanvas*>(canvas)->drawCircle(cx, cy, radius, paint);
 }
 
-void drift_skia_canvas_draw_line(DriftSkiaCanvas canvas, float x1, float y1, float x2, float y2, uint32_t argb, float stroke_width, int aa) {
+void drift_skia_canvas_draw_line(
+    DriftSkiaCanvas canvas, float x1, float y1, float x2, float y2,
+    uint32_t argb, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+) {
     if (!canvas) {
         return;
     }
-    SkPaint paint = make_paint(argb, 1, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, 1, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     reinterpret_cast<SkCanvas*>(canvas)->drawLine(x1, y1, x2, y2, paint);
 }
 
 void drift_skia_canvas_draw_rect_gradient(
     DriftSkiaCanvas canvas,
-    float l,
-    float t,
-    float r,
-    float b,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    float l, float t, float r, float b,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float cx,
-    float cy,
-    float radius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float cx, float cy, float radius,
+    const uint32_t* colors, const float* positions, int count
 ) {
     if (!canvas) {
         return;
     }
     SkRect rect = SkRect::MakeLTRB(l, t, r, b);
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     auto shader = make_gradient_shader(gradient_type, x1, y1, x2, y2, cx, cy, radius, colors, positions, count);
     if (shader) {
         paint.setShader(shader);
@@ -662,33 +737,17 @@ void drift_skia_canvas_draw_rect_gradient(
 
 void drift_skia_canvas_draw_rrect_gradient(
     DriftSkiaCanvas canvas,
-    float l,
-    float t,
-    float r,
-    float b,
-    float rx1,
-    float ry1,
-    float rx2,
-    float ry2,
-    float rx3,
-    float ry3,
-    float rx4,
-    float ry4,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    float l, float t, float r, float b,
+    float rx1, float ry1, float rx2, float ry2,
+    float rx3, float ry3, float rx4, float ry4,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float cx,
-    float cy,
-    float radius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float cx, float cy, float radius,
+    const uint32_t* colors, const float* positions, int count
 ) {
     if (!canvas) {
         return;
@@ -702,7 +761,10 @@ void drift_skia_canvas_draw_rrect_gradient(
     };
     SkRRect rrect;
     rrect.setRectRadii(rect, radii);
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     auto shader = make_gradient_shader(gradient_type, x1, y1, x2, y2, cx, cy, radius, colors, positions, count);
     if (shader) {
         paint.setShader(shader);
@@ -712,29 +774,23 @@ void drift_skia_canvas_draw_rrect_gradient(
 
 void drift_skia_canvas_draw_circle_gradient(
     DriftSkiaCanvas canvas,
-    float cx,
-    float cy,
-    float radius,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    float cx, float cy, float radius,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float rcx,
-    float rcy,
-    float rradius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float rcx, float rcy, float rradius,
+    const uint32_t* colors, const float* positions, int count
 ) {
     if (!canvas) {
         return;
     }
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     auto shader = make_gradient_shader(gradient_type, x1, y1, x2, y2, rcx, rcy, rradius, colors, positions, count);
     if (shader) {
         paint.setShader(shader);
@@ -744,29 +800,23 @@ void drift_skia_canvas_draw_circle_gradient(
 
 void drift_skia_canvas_draw_line_gradient(
     DriftSkiaCanvas canvas,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    uint32_t argb,
-    float stroke_width,
-    int aa,
+    float x1, float y1, float x2, float y2,
+    uint32_t argb, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float lx1,
-    float ly1,
-    float lx2,
-    float ly2,
-    float rcx,
-    float rcy,
-    float rradius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float lx1, float ly1, float lx2, float ly2,
+    float rcx, float rcy, float rradius,
+    const uint32_t* colors, const float* positions, int count
 ) {
     if (!canvas) {
         return;
     }
-    SkPaint paint = make_paint(argb, 1, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, 1, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     auto shader = make_gradient_shader(gradient_type, lx1, ly1, lx2, ly2, rcx, rcy, rradius, colors, positions, count);
     if (shader) {
         paint.setShader(shader);
@@ -775,28 +825,23 @@ void drift_skia_canvas_draw_line_gradient(
 }
 
 void drift_skia_canvas_draw_path_gradient(
-    DriftSkiaCanvas canvas,
-    DriftSkiaPath path,
-    uint32_t argb,
-    int style,
-    float stroke_width,
-    int aa,
+    DriftSkiaCanvas canvas, DriftSkiaPath path,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha,
     int gradient_type,
-    float x1,
-    float y1,
-    float x2,
-    float y2,
-    float rcx,
-    float rcy,
-    float rradius,
-    const uint32_t* colors,
-    const float* positions,
-    int count
+    float x1, float y1, float x2, float y2,
+    float rcx, float rcy, float rradius,
+    const uint32_t* colors, const float* positions, int count
 ) {
     if (!canvas || !path) {
         return;
     }
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     auto shader = make_gradient_shader(gradient_type, x1, y1, x2, y2, rcx, rcy, rradius, colors, positions, count);
     if (shader) {
         paint.setShader(shader);
@@ -1136,11 +1181,20 @@ void drift_skia_path_close(DriftSkiaPath path) {
     drift_skia_path_close_impl(path);
 }
 
-void drift_skia_canvas_draw_path(DriftSkiaCanvas canvas, DriftSkiaPath path, uint32_t argb, int style, float stroke_width, int aa) {
+void drift_skia_canvas_draw_path(
+    DriftSkiaCanvas canvas, DriftSkiaPath path,
+    uint32_t argb, int style, float stroke_width, int aa,
+    int stroke_cap, int stroke_join, float miter_limit,
+    const float* dash_intervals, int dash_count, float dash_phase,
+    int blend_mode, float alpha
+) {
     if (!canvas || !path) {
         return;
     }
-    SkPaint paint = make_paint(argb, style, stroke_width, aa);
+    SkPaint paint = make_paint_ext(argb, style, stroke_width, aa,
+        stroke_cap, stroke_join, miter_limit,
+        dash_intervals, dash_count, dash_phase,
+        blend_mode, alpha);
     reinterpret_cast<SkCanvas*>(canvas)->drawPath(drift_skia_path_snapshot(path), paint);
 }
 
