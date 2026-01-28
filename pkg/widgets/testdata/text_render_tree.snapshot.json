@@ -1,0 +1,18 @@
+{
+  "renderTree": {
+    "id": "RenderText#0",
+    "type": "RenderText",
+    "size": [
+      800,
+      600
+    ],
+    "offset": [
+      0,
+      0
+    ],
+    "props": {
+      "maxLines": 0,
+      "text": "hello"
+    }
+  }
+}

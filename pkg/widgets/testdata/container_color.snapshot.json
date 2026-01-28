@@ -1,0 +1,39 @@
+{
+  "renderTree": {
+    "id": "RenderContainer#0",
+    "type": "RenderContainer",
+    "size": [
+      100,
+      50
+    ],
+    "offset": [
+      0,
+      0
+    ],
+    "props": {
+      "color": "0xFFFF0000",
+      "height": 50,
+      "padding": {
+        "Bottom": 0,
+        "Left": 0,
+        "Right": 0,
+        "Top": 0
+      },
+      "width": 100
+    }
+  },
+  "displayOps": [
+    {
+      "op": "drawRect",
+      "params": {
+        "color": "0xFFFF0000",
+        "rect": {
+          "bottom": 50,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
+    }
+  ]
+}

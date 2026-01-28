@@ -1,0 +1,102 @@
+{
+  "renderTree": {
+    "id": "RenderContainer#0",
+    "type": "RenderContainer",
+    "size": [
+      200,
+      100
+    ],
+    "offset": [
+      0,
+      0
+    ],
+    "props": {
+      "color": "0xFF646464",
+      "height": 100,
+      "padding": {
+        "Bottom": 0,
+        "Left": 0,
+        "Right": 0,
+        "Top": 0
+      },
+      "width": 200
+    },
+    "children": [
+      {
+        "id": "RenderContainer#1",
+        "type": "RenderContainer",
+        "size": [
+          200,
+          100
+        ],
+        "offset": [
+          0,
+          0
+        ],
+        "props": {
+          "color": "0xFFC80000",
+          "height": 50,
+          "padding": {
+            "Bottom": 0,
+            "Left": 0,
+            "Right": 0,
+            "Top": 0
+          },
+          "width": 50
+        }
+      }
+    ]
+  },
+  "displayOps": [
+    {
+      "op": "drawRectShadow",
+      "params": {
+        "blur": 4,
+        "color": "0x40000000",
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 200,
+          "top": 0
+        }
+      }
+    },
+    {
+      "op": "drawRect",
+      "params": {
+        "color": "0xFF646464",
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 200,
+          "top": 0
+        }
+      }
+    },
+    {
+      "op": "save"
+    },
+    {
+      "op": "translate",
+      "params": {
+        "dx": 0,
+        "dy": 0
+      }
+    },
+    {
+      "op": "drawRect",
+      "params": {
+        "color": "0xFFC80000",
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 200,
+          "top": 0
+        }
+      }
+    },
+    {
+      "op": "restore"
+    }
+  ]
+}

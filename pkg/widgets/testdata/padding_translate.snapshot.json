@@ -1,0 +1,55 @@
+{
+  "renderTree": {
+    "id": "RenderPadding#0",
+    "type": "RenderPadding",
+    "size": [
+      800,
+      600
+    ],
+    "offset": [
+      0,
+      0
+    ],
+    "props": {
+      "padding": {
+        "Bottom": 8,
+        "Left": 8,
+        "Right": 8,
+        "Top": 8
+      }
+    },
+    "children": [
+      {
+        "id": "RenderText#0",
+        "type": "RenderText",
+        "size": [
+          784,
+          584
+        ],
+        "offset": [
+          8,
+          8
+        ],
+        "props": {
+          "maxLines": 0,
+          "text": "offset"
+        }
+      }
+    ]
+  },
+  "displayOps": [
+    {
+      "op": "save"
+    },
+    {
+      "op": "translate",
+      "params": {
+        "dx": 8,
+        "dy": 8
+      }
+    },
+    {
+      "op": "restore"
+    }
+  ]
+}
