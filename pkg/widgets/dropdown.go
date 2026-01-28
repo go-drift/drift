@@ -46,8 +46,11 @@ type DropdownItem[T any] struct {
 // Each [DropdownItem] can have a custom ChildWidget instead of a text Label.
 // Items can be individually disabled by setting Disabled: true.
 //
-// The dropdown uses theme colors by default but supports full customization
-// of colors, borders, and text styling.
+// The dropdown uses colors from the current [theme.DropdownTheme] by default.
+// Visual properties fall back to theme defaults when their value is zero and
+// they have not been explicitly set via a WithX method. Use the WithX methods
+// to set a value that should be used even when it equals zero (e.g.,
+// [Dropdown.WithBorderRadius](0) for sharp corners).
 type Dropdown[T any] struct {
 	// Value is the current selected value.
 	Value T
@@ -77,6 +80,78 @@ type Dropdown[T any] struct {
 	TextStyle graphics.TextStyle
 	// ItemPadding sets padding for each menu item.
 	ItemPadding layout.EdgeInsets
+	// overrides tracks which fields were explicitly set via WithX methods.
+	overrides dropdownOverrides
+}
+
+type dropdownOverrides uint16
+
+const (
+	dropdownOverrideBackgroundColor     dropdownOverrides = 1 << iota
+	dropdownOverrideBorderColor
+	dropdownOverrideMenuBackgroundColor
+	dropdownOverrideMenuBorderColor
+	dropdownOverrideBorderRadius
+	dropdownOverrideHeight
+	dropdownOverrideItemPadding
+)
+
+// WithBackgroundColor returns a copy with the specified trigger background color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (d Dropdown[T]) WithBackgroundColor(c graphics.Color) Dropdown[T] {
+	d.BackgroundColor = c
+	d.overrides |= dropdownOverrideBackgroundColor
+	return d
+}
+
+// WithBorderColor returns a copy with the specified trigger border color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (d Dropdown[T]) WithBorderColor(c graphics.Color) Dropdown[T] {
+	d.BorderColor = c
+	d.overrides |= dropdownOverrideBorderColor
+	return d
+}
+
+// WithMenuBackgroundColor returns a copy with the specified menu panel background color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (d Dropdown[T]) WithMenuBackgroundColor(c graphics.Color) Dropdown[T] {
+	d.MenuBackgroundColor = c
+	d.overrides |= dropdownOverrideMenuBackgroundColor
+	return d
+}
+
+// WithMenuBorderColor returns a copy with the specified menu panel border color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (d Dropdown[T]) WithMenuBorderColor(c graphics.Color) Dropdown[T] {
+	d.MenuBorderColor = c
+	d.overrides |= dropdownOverrideMenuBorderColor
+	return d
+}
+
+// WithBorderRadius returns a copy with the specified corner radius.
+// The value is marked as explicitly set, so even zero (sharp corners)
+// will be used instead of falling back to the theme default.
+func (d Dropdown[T]) WithBorderRadius(radius float64) Dropdown[T] {
+	d.BorderRadius = radius
+	d.overrides |= dropdownOverrideBorderRadius
+	return d
+}
+
+// WithHeight returns a copy with the specified item row height.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (d Dropdown[T]) WithHeight(height float64) Dropdown[T] {
+	d.Height = height
+	d.overrides |= dropdownOverrideHeight
+	return d
+}
+
+// WithItemPadding returns a copy with the specified menu item padding.
+// The value is marked as explicitly set, so even a zero [layout.EdgeInsets]
+// will be used instead of falling back to the theme default.
+func (d Dropdown[T]) WithItemPadding(padding layout.EdgeInsets) Dropdown[T] {
+	d.ItemPadding = padding
+	d.overrides |= dropdownOverrideItemPadding
+	return d
 }
 
 func (d Dropdown[T]) CreateElement() core.Element {
@@ -196,31 +271,31 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	backgroundColor := w.BackgroundColor
-	if backgroundColor == 0 {
+	if w.overrides&dropdownOverrideBackgroundColor == 0 && backgroundColor == 0 {
 		backgroundColor = dropdownTheme.BackgroundColor
 	}
 	borderColor := w.BorderColor
-	if borderColor == 0 {
+	if w.overrides&dropdownOverrideBorderColor == 0 && borderColor == 0 {
 		borderColor = dropdownTheme.BorderColor
 	}
 	menuBackgroundColor := w.MenuBackgroundColor
-	if menuBackgroundColor == 0 {
+	if w.overrides&dropdownOverrideMenuBackgroundColor == 0 && menuBackgroundColor == 0 {
 		menuBackgroundColor = dropdownTheme.MenuBackgroundColor
 	}
 	menuBorderColor := w.MenuBorderColor
-	if menuBorderColor == 0 {
+	if w.overrides&dropdownOverrideMenuBorderColor == 0 && menuBorderColor == 0 {
 		menuBorderColor = dropdownTheme.MenuBorderColor
 	}
 	borderRadius := w.BorderRadius
-	if borderRadius == 0 {
+	if w.overrides&dropdownOverrideBorderRadius == 0 && borderRadius == 0 {
 		borderRadius = dropdownTheme.BorderRadius
 	}
 	itemPadding := w.ItemPadding
-	if itemPadding == (layout.EdgeInsets{}) {
+	if w.overrides&dropdownOverrideItemPadding == 0 && itemPadding == (layout.EdgeInsets{}) {
 		itemPadding = dropdownTheme.ItemPadding
 	}
 	itemHeight := w.Height
-	if itemHeight == 0 {
+	if w.overrides&dropdownOverrideHeight == 0 && itemHeight == 0 {
 		itemHeight = dropdownTheme.Height
 	}
 

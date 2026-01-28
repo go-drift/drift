@@ -18,6 +18,12 @@ import (
 // autocorrect, and multiline support. It handles focus management, gesture
 // recognition, and accessibility semantics automatically.
 //
+// Visual properties (BackgroundColor, BorderColor, etc.) fall back to built-in
+// defaults when their value is zero and they have not been explicitly set via
+// a WithX method. Use the WithX methods to set a value that should be used even
+// when it equals zero (e.g., [TextInput.WithBorderRadius](0) for sharp corners,
+// or [TextInput.WithBorderWidth](0) to remove the border).
+//
 // For most use cases, prefer [TextField] which adds labels, helper text, and
 // theme integration, or [TextFormField] which adds form validation support.
 //
@@ -108,6 +114,88 @@ type TextInput struct {
 
 	// PlaceholderColor is the color for placeholder text.
 	PlaceholderColor graphics.Color
+	// overrides tracks which fields were explicitly set via WithX methods.
+	overrides textInputOverrides
+}
+
+type textInputOverrides uint16
+
+const (
+	textInputOverrideBackgroundColor  textInputOverrides = 1 << iota
+	textInputOverrideBorderColor
+	textInputOverrideFocusColor
+	textInputOverridePlaceholderColor
+	textInputOverrideBorderRadius
+	textInputOverrideHeight
+	textInputOverridePadding
+	textInputOverrideBorderWidth
+)
+
+// WithBackgroundColor returns a copy with the specified background color.
+// The value is marked as explicitly set, bypassing defaults even when zero.
+func (n TextInput) WithBackgroundColor(c graphics.Color) TextInput {
+	n.BackgroundColor = c
+	n.overrides |= textInputOverrideBackgroundColor
+	return n
+}
+
+// WithBorderColor returns a copy with the specified border color.
+// The value is marked as explicitly set, bypassing defaults even when zero.
+func (n TextInput) WithBorderColor(c graphics.Color) TextInput {
+	n.BorderColor = c
+	n.overrides |= textInputOverrideBorderColor
+	return n
+}
+
+// WithFocusColor returns a copy with the specified focus outline color.
+// The value is marked as explicitly set, bypassing defaults even when zero.
+func (n TextInput) WithFocusColor(c graphics.Color) TextInput {
+	n.FocusColor = c
+	n.overrides |= textInputOverrideFocusColor
+	return n
+}
+
+// WithPlaceholderColor returns a copy with the specified placeholder text color.
+// The value is marked as explicitly set, bypassing defaults even when zero.
+func (n TextInput) WithPlaceholderColor(c graphics.Color) TextInput {
+	n.PlaceholderColor = c
+	n.overrides |= textInputOverridePlaceholderColor
+	return n
+}
+
+// WithBorderRadius returns a copy with the specified corner radius.
+// The value is marked as explicitly set, so even zero (sharp corners)
+// will be used instead of falling back to the default.
+func (n TextInput) WithBorderRadius(radius float64) TextInput {
+	n.BorderRadius = radius
+	n.overrides |= textInputOverrideBorderRadius
+	return n
+}
+
+// WithHeight returns a copy with the specified height.
+// The value is marked as explicitly set, bypassing defaults even when zero.
+func (n TextInput) WithHeight(height float64) TextInput {
+	n.Height = height
+	n.overrides |= textInputOverrideHeight
+	return n
+}
+
+// WithPadding returns a copy with the specified internal padding.
+// The value is marked as explicitly set, so even a zero [layout.EdgeInsets]
+// will be used instead of falling back to the default.
+func (n TextInput) WithPadding(padding layout.EdgeInsets) TextInput {
+	n.Padding = padding
+	n.overrides |= textInputOverridePadding
+	return n
+}
+
+// WithBorderWidth returns a copy with the specified border stroke width.
+// The value is marked as explicitly set, so even zero (no border)
+// will be used instead of falling back to the default.
+func (n TextInput) WithBorderWidth(width float64) TextInput {
+	n.BorderWidth = width
+	n.overrides |= textInputOverrideBorderWidth
+	return n
 }
 
 // CreateElement creates the element for the stateful widget.
@@ -232,34 +320,34 @@ func (s *textInputState) SetState(fn func()) {
 func (s *textInputState) Build(ctx core.BuildContext) core.Widget {
 	w := s.element.Widget().(TextInput)
 
-	// Default values
+	// Default values (only when not explicitly set via WithX)
 	height := w.Height
-	if height == 0 {
+	if w.overrides&textInputOverrideHeight == 0 && height == 0 {
 		height = 44 // Standard text field height
 	}
 
 	padding := w.Padding
-	if padding == (layout.EdgeInsets{}) {
+	if w.overrides&textInputOverridePadding == 0 && padding == (layout.EdgeInsets{}) {
 		padding = layout.EdgeInsetsSymmetric(12, 8)
 	}
 
 	bgColor := w.BackgroundColor
-	if bgColor == 0 {
+	if w.overrides&textInputOverrideBackgroundColor == 0 && bgColor == 0 {
 		bgColor = graphics.ColorWhite
 	}
 
 	borderColor := w.BorderColor
-	if borderColor == 0 {
+	if w.overrides&textInputOverrideBorderColor == 0 && borderColor == 0 {
 		borderColor = graphics.Color(0xFFCCCCCC)
 	}
 
 	focusColor := w.FocusColor
-	if focusColor == 0 {
+	if w.overrides&textInputOverrideFocusColor == 0 && focusColor == 0 {
 		focusColor = graphics.Color(0xFF007AFF)
 	}
 
 	borderWidth := w.BorderWidth
-	if borderWidth == 0 {
+	if w.overrides&textInputOverrideBorderWidth == 0 && borderWidth == 0 {
 		borderWidth = 1
 	}
 
@@ -342,7 +430,7 @@ func (s *textInputState) registerAsClient() {
 func (s *textInputState) buildPlatformViewConfig(w TextInput) platform.TextInputViewConfig {
 	// Apply default padding to match Skia chrome
 	padding := w.Padding
-	if padding == (layout.EdgeInsets{}) {
+	if w.overrides&textInputOverridePadding == 0 && padding == (layout.EdgeInsets{}) {
 		padding = layout.EdgeInsetsSymmetric(12, 8)
 	}
 
@@ -376,7 +464,7 @@ func (s *textInputState) buildPlatformViewConfig(w TextInput) platform.TextInput
 	config.TextColor = uint32(textColor)
 
 	placeholderColor := w.PlaceholderColor
-	if placeholderColor == 0 {
+	if w.overrides&textInputOverridePlaceholderColor == 0 && placeholderColor == 0 {
 		placeholderColor = graphics.Color(0xFF999999)
 	}
 	config.PlaceholderColor = uint32(placeholderColor)

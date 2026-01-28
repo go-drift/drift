@@ -38,8 +38,10 @@ import (
 //	}
 //
 // The checkbox automatically uses colors from the current [theme.CheckboxTheme].
-// Override individual colors using the ActiveColor, CheckColor, BorderColor,
-// and BackgroundColor fields.
+// Visual properties fall back to theme defaults when their value is zero and
+// they have not been explicitly set via a WithX method. Use the WithX methods
+// to set a value that should be used even when it equals zero (e.g.,
+// [Checkbox.WithBorderRadius](0) for sharp corners).
 type Checkbox struct {
 	// Value indicates whether the checkbox is checked.
 	Value bool
@@ -59,7 +61,20 @@ type Checkbox struct {
 	BorderColor graphics.Color
 	// BackgroundColor is the fill color when unchecked.
 	BackgroundColor graphics.Color
+	// overrides tracks which fields were explicitly set via WithX methods.
+	overrides checkboxOverrides
 }
+
+type checkboxOverrides uint16
+
+const (
+	checkboxOverrideActiveColor     checkboxOverrides = 1 << iota
+	checkboxOverrideCheckColor
+	checkboxOverrideBorderColor
+	checkboxOverrideBackgroundColor
+	checkboxOverrideSize
+	checkboxOverrideBorderRadius
+)
 
 // CheckboxOf creates a checkbox with the given value and change handler.
 // This is a convenience helper equivalent to:
@@ -69,16 +84,47 @@ func CheckboxOf(value bool, onChanged func(bool)) Checkbox {
 	return Checkbox{Value: value, OnChanged: onChanged}
 }
 
-// WithColors returns a copy of the checkbox with the specified colors.
+// WithColors returns a copy of the checkbox with the specified active fill and
+// checkmark colors. The values are marked as explicitly set, bypassing theme
+// defaults even when zero.
 func (c Checkbox) WithColors(activeColor, checkColor graphics.Color) Checkbox {
 	c.ActiveColor = activeColor
 	c.CheckColor = checkColor
+	c.overrides |= checkboxOverrideActiveColor | checkboxOverrideCheckColor
 	return c
 }
 
-// WithSize returns a copy of the checkbox with the specified size.
+// WithSize returns a copy of the checkbox with the specified square size.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
 func (c Checkbox) WithSize(size float64) Checkbox {
 	c.Size = size
+	c.overrides |= checkboxOverrideSize
+	return c
+}
+
+// WithBorderRadius returns a copy of the checkbox with the specified corner radius.
+// The value is marked as explicitly set, so even zero (sharp corners) will be
+// used instead of falling back to the theme default.
+func (c Checkbox) WithBorderRadius(radius float64) Checkbox {
+	c.BorderRadius = radius
+	c.overrides |= checkboxOverrideBorderRadius
+	return c
+}
+
+// WithBorderColor returns a copy of the checkbox with the specified outline color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (c Checkbox) WithBorderColor(color graphics.Color) Checkbox {
+	c.BorderColor = color
+	c.overrides |= checkboxOverrideBorderColor
+	return c
+}
+
+// WithBackgroundColor returns a copy of the checkbox with the specified unchecked
+// fill color. The value is marked as explicitly set, bypassing theme defaults
+// even when zero.
+func (c Checkbox) WithBackgroundColor(color graphics.Color) Checkbox {
+	c.BackgroundColor = color
+	c.overrides |= checkboxOverrideBackgroundColor
 	return c
 }
 
@@ -95,27 +141,27 @@ func (c Checkbox) Build(ctx core.BuildContext) core.Widget {
 	checkboxTheme := themeData.CheckboxThemeOf()
 
 	activeColor := c.ActiveColor
-	if activeColor == 0 {
+	if c.overrides&checkboxOverrideActiveColor == 0 && activeColor == 0 {
 		activeColor = checkboxTheme.ActiveColor
 	}
 	checkColor := c.CheckColor
-	if checkColor == 0 {
+	if c.overrides&checkboxOverrideCheckColor == 0 && checkColor == 0 {
 		checkColor = checkboxTheme.CheckColor
 	}
 	borderColor := c.BorderColor
-	if borderColor == 0 {
+	if c.overrides&checkboxOverrideBorderColor == 0 && borderColor == 0 {
 		borderColor = checkboxTheme.BorderColor
 	}
 	backgroundColor := c.BackgroundColor
-	if backgroundColor == 0 {
+	if c.overrides&checkboxOverrideBackgroundColor == 0 && backgroundColor == 0 {
 		backgroundColor = checkboxTheme.BackgroundColor
 	}
 	size := c.Size
-	if size == 0 {
+	if c.overrides&checkboxOverrideSize == 0 && size == 0 {
 		size = checkboxTheme.Size
 	}
 	borderRadius := c.BorderRadius
-	if borderRadius == 0 {
+	if c.overrides&checkboxOverrideBorderRadius == 0 && borderRadius == 0 {
 		borderRadius = checkboxTheme.BorderRadius
 	}
 

@@ -20,7 +20,7 @@ import "github.com/go-drift/drift/pkg/widgets"
 // Make a custom card tappable and accessible
 card := widgets.Tappable("Open settings", openSettings,
     widgets.Container{
-        Child: widgets.Text{Content: "Settings"},
+        ChildWidget: widgets.Text{Content: "Settings"},
     },
 )
 
@@ -109,7 +109,7 @@ Groups related widgets into a single accessibility unit. The screen reader annou
 // Price with currency - announced as "Price: $99.99" instead of "Price:" then "$99.99"
 widgets.SemanticGroup(
     widgets.Row{
-        Children: []core.Widget{
+        ChildrenWidgets: []core.Widget{
             widgets.Text{Content: "Price: "},
             widgets.Text{Content: "$99.99"},
         },
@@ -119,7 +119,7 @@ widgets.SemanticGroup(
 // Card with multiple text elements
 widgets.SemanticGroup(
     widgets.Column{
-        Children: []core.Widget{
+        ChildrenWidgets: []core.Widget{
             widgets.Text{Content: "John Smith"},
             widgets.Text{Content: "Software Engineer"},
             widgets.Text{Content: "San Francisco, CA"},
@@ -157,7 +157,7 @@ widgets.Decorative(backgroundImage)
 
 // Decorative icon next to text (text already conveys meaning)
 widgets.Row{
-    Children: []core.Widget{
+    ChildrenWidgets: []core.Widget{
         widgets.Decorative(checkmarkIcon),
         widgets.Text{Content: "Task completed"},
     },
@@ -257,7 +257,7 @@ Use `MergeSemantics` to combine multiple elements into one accessibility node:
 // Card with icon and label read as one unit
 card := widgets.MergeSemantics{
     ChildWidget: widgets.Row{
-        Children: []core.Widget{
+        ChildrenWidgets: []core.Widget{
             widgets.Icon{Icon: icons.Star},
             widgets.Text{Content: "Favorites"},
         },
@@ -462,7 +462,7 @@ widgets.SemanticLabel("Close dialog",
 ```go
 // Bad - each item announced separately
 widgets.Row{
-    Children: []core.Widget{
+    ChildrenWidgets: []core.Widget{
         widgets.Text{Content: "Price:"},
         widgets.Text{Content: "$99.99"},
     },
@@ -471,7 +471,7 @@ widgets.Row{
 // Good - grouped with SemanticGroup
 widgets.SemanticGroup(
     widgets.Row{
-        Children: []core.Widget{
+        ChildrenWidgets: []core.Widget{
             widgets.Text{Content: "Price:"},
             widgets.Text{Content: "$99.99"},
         },
@@ -498,7 +498,7 @@ widgets.Image{
 ```go
 // Good - headings help screen reader users navigate
 widgets.Column{
-    Children: []core.Widget{
+    ChildrenWidgets: []core.Widget{
         widgets.SemanticHeading(1, widgets.Text{Content: "Settings"}),
         widgets.SemanticHeading(2, widgets.Text{Content: "Account"}),
         // account settings...

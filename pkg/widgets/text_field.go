@@ -15,6 +15,11 @@ import (
 // border radius, padding, and typography from the current [theme.TextFieldTheme].
 // When ErrorText is set, the border color changes to the theme's error color.
 //
+// Visual properties (BackgroundColor, BorderColor, etc.) fall back to theme defaults
+// when their value is zero and they have not been explicitly set via a WithX method.
+// Use the WithX methods to set a value that should be used even when it equals zero
+// (e.g., [TextField.WithBorderRadius](0) for sharp corners).
+//
 // For form validation support, use [TextFormField] instead, which wraps TextField
 // and integrates with [Form] for validation, save, and reset operations.
 //
@@ -84,6 +89,78 @@ type TextField struct {
 	// useful for fields that TextField does not expose (e.g., future fields).
 	// To set Controller, Placeholder, etc., use TextField's fields directly.
 	Input *TextInput
+	// overrides tracks which fields were explicitly set via WithX methods.
+	overrides textFieldOverrides
+}
+
+type textFieldOverrides uint16
+
+const (
+	textFieldOverrideBackgroundColor  textFieldOverrides = 1 << iota
+	textFieldOverrideBorderColor
+	textFieldOverrideFocusColor
+	textFieldOverridePlaceholderColor
+	textFieldOverrideBorderRadius
+	textFieldOverrideHeight
+	textFieldOverridePadding
+)
+
+// WithBackgroundColor returns a copy with the specified background color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (t TextField) WithBackgroundColor(c graphics.Color) TextField {
+	t.BackgroundColor = c
+	t.overrides |= textFieldOverrideBackgroundColor
+	return t
+}
+
+// WithBorderColor returns a copy with the specified border color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (t TextField) WithBorderColor(c graphics.Color) TextField {
+	t.BorderColor = c
+	t.overrides |= textFieldOverrideBorderColor
+	return t
+}
+
+// WithFocusColor returns a copy with the specified focus outline color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (t TextField) WithFocusColor(c graphics.Color) TextField {
+	t.FocusColor = c
+	t.overrides |= textFieldOverrideFocusColor
+	return t
+}
+
+// WithPlaceholderColor returns a copy with the specified placeholder text color.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (t TextField) WithPlaceholderColor(c graphics.Color) TextField {
+	t.PlaceholderColor = c
+	t.overrides |= textFieldOverridePlaceholderColor
+	return t
+}
+
+// WithBorderRadius returns a copy with the specified corner radius.
+// The value is marked as explicitly set, so even zero (sharp corners)
+// will be used instead of falling back to the theme default.
+func (t TextField) WithBorderRadius(radius float64) TextField {
+	t.BorderRadius = radius
+	t.overrides |= textFieldOverrideBorderRadius
+	return t
+}
+
+// WithHeight returns a copy with the specified height.
+// The value is marked as explicitly set, bypassing theme defaults even when zero.
+func (t TextField) WithHeight(height float64) TextField {
+	t.Height = height
+	t.overrides |= textFieldOverrideHeight
+	return t
+}
+
+// WithPadding returns a copy with the specified internal padding.
+// The value is marked as explicitly set, so even a zero [layout.EdgeInsets]
+// will be used instead of falling back to the theme default.
+func (t TextField) WithPadding(padding layout.EdgeInsets) TextField {
+	t.Padding = padding
+	t.overrides |= textFieldOverridePadding
+	return t
 }
 
 func (t TextField) CreateElement() core.Element {
@@ -112,19 +189,19 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	backgroundColor := t.BackgroundColor
-	if backgroundColor == 0 {
+	if t.overrides&textFieldOverrideBackgroundColor == 0 && backgroundColor == 0 {
 		backgroundColor = textFieldTheme.BackgroundColor
 	}
 	borderColor := t.BorderColor
-	if borderColor == 0 {
+	if t.overrides&textFieldOverrideBorderColor == 0 && borderColor == 0 {
 		borderColor = textFieldTheme.BorderColor
 	}
 	focusColor := t.FocusColor
-	if focusColor == 0 {
+	if t.overrides&textFieldOverrideFocusColor == 0 && focusColor == 0 {
 		focusColor = textFieldTheme.FocusColor
 	}
 	borderRadius := t.BorderRadius
-	if borderRadius == 0 {
+	if t.overrides&textFieldOverrideBorderRadius == 0 && borderRadius == 0 {
 		borderRadius = textFieldTheme.BorderRadius
 	}
 
@@ -136,12 +213,12 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	height := t.Height
-	if height == 0 {
+	if t.overrides&textFieldOverrideHeight == 0 && height == 0 {
 		height = textFieldTheme.Height
 	}
 
 	padding := t.Padding
-	if padding == (layout.EdgeInsets{}) {
+	if t.overrides&textFieldOverridePadding == 0 && padding == (layout.EdgeInsets{}) {
 		padding = textFieldTheme.Padding
 	}
 
@@ -152,7 +229,7 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	placeholderColor := t.PlaceholderColor
-	if placeholderColor == 0 {
+	if t.overrides&textFieldOverridePlaceholderColor == 0 && placeholderColor == 0 {
 		placeholderColor = textFieldTheme.PlaceholderColor
 	}
 
