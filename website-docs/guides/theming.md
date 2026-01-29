@@ -222,6 +222,7 @@ require you to set their colors, sizes, and text styles.
 | `theme.CheckboxOf(ctx, value, onChanged)` | `widgets.Checkbox` | `CheckboxThemeData` |
 | `theme.DropdownOf[T](ctx, value, items, onChanged)` | `widgets.Dropdown[T]` | `DropdownThemeData` |
 | `theme.TextFieldOf(ctx, controller)` | `widgets.TextField` | `TextFieldThemeData` |
+| `theme.TextFormFieldOf(ctx)` | `widgets.TextFormField` | `TextFieldThemeData` |
 | `theme.ToggleOf(ctx, value, onChanged)` | `widgets.Toggle` | `SwitchThemeData` |
 | `theme.RadioOf[T](ctx, value, groupValue, onChanged)` | `widgets.Radio[T]` | `RadioThemeData` |
 | `theme.TabBarOf(ctx, tabs, selectedIndex, onChanged)` | `widgets.TabBar` | `TabBarThemeData` |

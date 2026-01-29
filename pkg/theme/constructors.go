@@ -214,6 +214,35 @@ func TextFieldOf(ctx core.BuildContext, controller *platform.TextEditingControll
 	}
 }
 
+// TextFormFieldOf creates a [widgets.TextFormField] with visual properties filled
+// from the current theme's [TextFieldThemeData].
+//
+// This is the recommended way to create form text fields that follow the app's theme.
+// The returned text form field has all visual properties pre-filled from the theme
+// via an embedded TextField, including colors, dimensions, and typography styles.
+//
+// To override specific properties, chain WithX methods on the returned text form field.
+//
+// For fully explicit text form fields without theme styling, use [widgets.TextFormField]
+// struct literals (you must provide all visual properties).
+//
+// Example:
+//
+//	theme.TextFormFieldOf(ctx).
+//	    WithLabel("Email").
+//	    WithPlaceholder("Enter your email").
+//	    WithValidator(func(value string) string {
+//	        if !strings.Contains(value, "@") {
+//	            return "Invalid email address"
+//	        }
+//	        return ""
+//	    })
+func TextFormFieldOf(ctx core.BuildContext) widgets.TextFormField {
+	return widgets.TextFormField{
+		TextField: TextFieldOf(ctx, nil),
+	}
+}
+
 // ToggleOf creates a [widgets.Toggle] with visual properties filled from the
 // current theme's [SwitchThemeData].
 //

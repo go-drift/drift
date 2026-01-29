@@ -39,13 +39,11 @@ func (f loginForm) Build(ctx core.BuildContext) core.Widget {
         widgets.CrossAxisAlignmentStretch,
         widgets.MainAxisSizeMin,
 
-        widgets.TextFormField{
-            Label:        "Email",
-            Placeholder:  "you@example.com",
-            KeyboardType: platform.KeyboardTypeEmail,
-            InputAction:  platform.TextInputActionNext,
-            BorderRadius: 8,
-            Validator: func(value string) string {
+        // Themed form field (recommended)
+        theme.TextFormFieldOf(ctx).
+            WithLabel("Email").
+            WithPlaceholder("you@example.com").
+            WithValidator(func(value string) string {
                 if value == "" {
                     return "Email is required"
                 }
@@ -53,41 +51,33 @@ func (f loginForm) Build(ctx core.BuildContext) core.Widget {
                     return "Please enter a valid email"
                 }
                 return ""
-            },
-            OnSaved: func(value string) {
+            }).
+            WithOnSaved(func(value string) {
                 f.parent.email = value
-            },
-        },
+            }),
         widgets.VSpace(16),
 
-        widgets.TextFormField{
-            Label:        "Password",
-            Placeholder:  "Enter password",
-            InputAction:  platform.TextInputActionDone,
-            Obscure:      true,
-            BorderRadius: 8,
-            Validator: func(value string) string {
+        theme.TextFormFieldOf(ctx).
+            WithLabel("Password").
+            WithPlaceholder("Enter password").
+            WithObscure(true).
+            WithValidator(func(value string) string {
                 if len(value) < 8 {
                     return "Password must be at least 8 characters"
                 }
                 return ""
-            },
-            OnSaved: func(value string) {
+            }).
+            WithOnSaved(func(value string) {
                 f.parent.password = value
-            },
-        },
+            }),
         widgets.VSpace(24),
 
-        widgets.Button{
-            Label: "Submit",
-            OnTap: func() {
-                if form.Validate() {
-                    form.Save()
-                    // Use f.parent.email and f.parent.password
-                }
-            },
-            Haptic: true,
-        },
+        theme.ButtonOf(ctx, "Submit", func() {
+            if form.Validate() {
+                form.Save()
+                // Use f.parent.email and f.parent.password
+            }
+        }),
     )
 }
 ```
@@ -104,6 +94,7 @@ func (f loginForm) Build(ctx core.BuildContext) core.Widget {
 
 | Field | Description |
 |-------|-------------|
+| `TextField` | Base TextField for theme styling (use with `theme.TextFieldOf`) |
 | `InitialValue` | Starting value when no Controller is provided |
 | `Validator` | Returns error message or empty string if valid |
 | `OnSaved` | Called when the form is saved |
@@ -112,6 +103,27 @@ func (f loginForm) Build(ctx core.BuildContext) core.Widget {
 | `Obscure` | Hide text (for passwords) |
 | `KeyboardType` | Keyboard type (`KeyboardTypeEmail`, `KeyboardTypeNumber`, etc.) |
 | `InputAction` | Action button (`TextInputActionNext`, `TextInputActionDone`, etc.) |
+| `LabelStyle` | Style for the label text above the field |
+| `HelperStyle` | Style for helper/error text below the field |
+| `ErrorColor` | Color for error text and border when validation fails |
+
+### Themed vs Explicit
+
+```go
+// Themed (recommended) - inherits colors, typography from theme
+theme.TextFormFieldOf(ctx).
+    WithLabel("Email").
+    WithValidator(validateEmail)
+
+// Explicit - must provide all visual properties
+widgets.TextFormField{
+    Label:      "Email",
+    LabelStyle: graphics.TextStyle{Color: labelColor, FontSize: 14},
+    HelperStyle: graphics.TextStyle{Color: helperColor, FontSize: 12},
+    ErrorColor: errorColor,
+    Validator:  validateEmail,
+}
+```
 
 ## Selection Controls
 

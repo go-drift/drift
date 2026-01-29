@@ -47,6 +47,11 @@ import (
 //	    },
 //	}
 type TextFormField struct {
+	// TextField provides styling defaults. If set, its styling properties are used
+	// as a base, with individual properties below taking precedence if non-zero.
+	// This enables: TextFormField{TextField: theme.TextFieldOf(ctx, nil), ...}
+	TextField TextField
+
 	// Controller manages the text content and selection.
 	// If provided, it is the source of truth and InitialValue is ignored.
 	Controller *platform.TextEditingController
@@ -122,6 +127,81 @@ type TextFormField struct {
 
 	// PlaceholderColor for the placeholder text.
 	PlaceholderColor graphics.Color
+
+	// LabelStyle for the label text above the field.
+	LabelStyle graphics.TextStyle
+
+	// HelperStyle for helper/error text below the field.
+	HelperStyle graphics.TextStyle
+
+	// ErrorColor for error text and border when validation fails.
+	ErrorColor graphics.Color
+}
+
+// WithLabel sets the label text shown above the field.
+func (t TextFormField) WithLabel(label string) TextFormField {
+	t.Label = label
+	return t
+}
+
+// WithPlaceholder sets the placeholder text shown when the field is empty.
+func (t TextFormField) WithPlaceholder(placeholder string) TextFormField {
+	t.Placeholder = placeholder
+	return t
+}
+
+// WithHelperText sets the helper text shown below the field.
+func (t TextFormField) WithHelperText(helper string) TextFormField {
+	t.HelperText = helper
+	return t
+}
+
+// WithValidator sets the validation function.
+func (t TextFormField) WithValidator(validator func(string) string) TextFormField {
+	t.Validator = validator
+	return t
+}
+
+// WithOnSaved sets the callback invoked when the form is saved.
+func (t TextFormField) WithOnSaved(onSaved func(string)) TextFormField {
+	t.OnSaved = onSaved
+	return t
+}
+
+// WithOnChanged sets the callback invoked when the field value changes.
+func (t TextFormField) WithOnChanged(onChanged func(string)) TextFormField {
+	t.OnChanged = onChanged
+	return t
+}
+
+// WithAutovalidate enables validation on every value change.
+func (t TextFormField) WithAutovalidate(autovalidate bool) TextFormField {
+	t.Autovalidate = autovalidate
+	return t
+}
+
+// WithInitialValue sets the initial value when no controller is provided.
+func (t TextFormField) WithInitialValue(value string) TextFormField {
+	t.InitialValue = value
+	return t
+}
+
+// WithController sets the text editing controller.
+func (t TextFormField) WithController(controller *platform.TextEditingController) TextFormField {
+	t.Controller = controller
+	return t
+}
+
+// WithObscure sets whether the text is obscured (for passwords).
+func (t TextFormField) WithObscure(obscure bool) TextFormField {
+	t.Obscure = obscure
+	return t
+}
+
+// WithDisabled sets whether the field is disabled.
+func (t TextFormField) WithDisabled(disabled bool) TextFormField {
+	t.Disabled = disabled
+	return t
 }
 
 // CreateElement creates the element for the stateful widget.
@@ -209,32 +289,87 @@ func (s *textFormFieldState) Build(ctx core.BuildContext) core.Widget {
 		controller = s.controller
 	}
 
-	return TextField{
-		Controller:        controller,
-		Label:             w.Label,
-		Placeholder:       w.Placeholder,
-		HelperText:        w.HelperText,
-		ErrorText:         s.errorText, // From validation, not widget
-		KeyboardType:      w.KeyboardType,
-		InputAction:       w.InputAction,
-		Obscure:           w.Obscure,
-		Autocorrect:       w.Autocorrect,
-		OnSubmitted:       w.OnSubmitted,
-		OnEditingComplete: w.OnEditingComplete,
-		Disabled:          w.Disabled,
-		Width:             w.Width,
-		Height:            w.Height,
-		Padding:           w.Padding,
-		BackgroundColor:   w.BackgroundColor,
-		BorderColor:       w.BorderColor,
-		FocusColor:        w.FocusColor,
-		BorderRadius:      w.BorderRadius,
-		Style:             w.Style,
-		PlaceholderColor:  w.PlaceholderColor,
-		OnChanged: func(text string) {
-			s.didChange(text)
-		},
+	// Start with provided TextField as base (for theme defaults)
+	tf := w.TextField
+
+	// Always set controller and form-managed fields
+	tf.Controller = controller
+	tf.ErrorText = s.errorText
+	tf.OnChanged = func(text string) { s.didChange(text) }
+
+	// Override content fields if set
+	if w.Label != "" {
+		tf.Label = w.Label
 	}
+	if w.Placeholder != "" {
+		tf.Placeholder = w.Placeholder
+	}
+	if w.HelperText != "" {
+		tf.HelperText = w.HelperText
+	}
+
+	// Override behavior fields
+	if w.KeyboardType != 0 {
+		tf.KeyboardType = w.KeyboardType
+	}
+	if w.InputAction != 0 {
+		tf.InputAction = w.InputAction
+	}
+	if w.Obscure {
+		tf.Obscure = true
+	}
+	if w.Autocorrect {
+		tf.Autocorrect = true
+	}
+	if w.OnSubmitted != nil {
+		tf.OnSubmitted = w.OnSubmitted
+	}
+	if w.OnEditingComplete != nil {
+		tf.OnEditingComplete = w.OnEditingComplete
+	}
+	if w.Disabled {
+		tf.Disabled = true
+	}
+
+	// Override styling fields if explicitly set
+	if w.Width != 0 {
+		tf.Width = w.Width
+	}
+	if w.Height != 0 {
+		tf.Height = w.Height
+	}
+	if w.Padding != (layout.EdgeInsets{}) {
+		tf.Padding = w.Padding
+	}
+	if w.BackgroundColor != 0 {
+		tf.BackgroundColor = w.BackgroundColor
+	}
+	if w.BorderColor != 0 {
+		tf.BorderColor = w.BorderColor
+	}
+	if w.FocusColor != 0 {
+		tf.FocusColor = w.FocusColor
+	}
+	if w.BorderRadius != 0 {
+		tf.BorderRadius = w.BorderRadius
+	}
+	if w.Style != (graphics.TextStyle{}) {
+		tf.Style = w.Style
+	}
+	if w.PlaceholderColor != 0 {
+		tf.PlaceholderColor = w.PlaceholderColor
+	}
+	if w.LabelStyle != (graphics.TextStyle{}) {
+		tf.LabelStyle = w.LabelStyle
+	}
+	if w.HelperStyle != (graphics.TextStyle{}) {
+		tf.HelperStyle = w.HelperStyle
+	}
+	if w.ErrorColor != 0 {
+		tf.ErrorColor = w.ErrorColor
+	}
+
+	return tf
 }
 
 // SetState executes fn and schedules rebuild.
