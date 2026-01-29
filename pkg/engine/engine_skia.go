@@ -4,6 +4,7 @@ package engine
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"unsafe"
 
@@ -28,11 +29,12 @@ var (
 // InitSkiaGL initializes the Skia GL context using the current OpenGL context.
 func InitSkiaGL() error {
 	skiaState.mu.Lock()
-	defer skiaState.mu.Unlock()
 
 	if skiaState.ctx != nil {
 		if skiaState.backend != "gl" {
-			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+			err := skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+			skiaState.mu.Unlock()
+			return err
 		}
 		skiaState.ctx.Destroy()
 		skiaState.ctx = nil
@@ -40,31 +42,53 @@ func InitSkiaGL() error {
 
 	ctx, err := skia.NewGLContext()
 	if err != nil {
-		return skiaState.setError(err)
+		err = skiaState.setError(err)
+		skiaState.mu.Unlock()
+		return err
 	}
 	skiaState.ctx = ctx
 	skiaState.backend = "gl"
+	skiaState.mu.Unlock()
+
+	// Warmup shaders outside the lock (runs on GL thread, logs on failure).
+	// This avoids blocking other callers if warmup is slow.
+	if err := ctx.WarmupShaders("gl"); err != nil {
+		log.Printf("skia: shader warmup failed: %v", err)
+	}
+
 	return nil
 }
 
 // InitSkiaMetal initializes the Skia Metal context using the provided device/queue.
 func InitSkiaMetal(device, queue unsafe.Pointer) error {
 	skiaState.mu.Lock()
-	defer skiaState.mu.Unlock()
 
 	if skiaState.ctx != nil {
 		if skiaState.backend != "metal" {
-			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+			err := skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+			skiaState.mu.Unlock()
+			return err
 		}
+		skiaState.mu.Unlock()
 		return nil
 	}
 
 	ctx, err := skia.NewMetalContext(device, queue)
 	if err != nil {
-		return skiaState.setError(err)
+		err = skiaState.setError(err)
+		skiaState.mu.Unlock()
+		return err
 	}
 	skiaState.ctx = ctx
 	skiaState.backend = "metal"
+	skiaState.mu.Unlock()
+
+	// Warmup shaders outside the lock (runs on main thread, logs on failure).
+	// This avoids blocking other callers if warmup is slow.
+	if err := ctx.WarmupShaders("metal"); err != nil {
+		log.Printf("skia: shader warmup failed: %v", err)
+	}
+
 	return nil
 }
 

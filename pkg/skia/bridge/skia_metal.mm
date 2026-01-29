@@ -50,6 +50,7 @@ extern "C" {
 #include "gpu/ganesh/GrBackendSurface.h"
 #include "gpu/ganesh/GrDirectContext.h"
 #include "gpu/ganesh/SkSurfaceGanesh.h"
+#include "gpu/GpuTypes.h"
 #include "gpu/ganesh/mtl/GrMtlBackendContext.h"
 #include "gpu/ganesh/mtl/GrMtlBackendSurface.h"
 #include "gpu/ganesh/mtl/GrMtlDirectContext.h"
@@ -1512,6 +1513,45 @@ void drift_skia_svg_dom_set_size_to_container(DriftSkiaSVGDOM svg) {
 void drift_skia_svg_dom_render_tinted(DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
     float width, float height, uint32_t tint_argb) {
     drift_skia_svg_dom_render_tinted_impl(svg, canvas, width, height, tint_argb);
+}
+
+DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height) {
+    (void)ctx;
+    (void)width;
+    (void)height;
+    return nullptr;
+}
+
+DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx, int width, int height) {
+    if (!ctx || width <= 0 || height <= 0) {
+        return nullptr;
+    }
+    auto context = reinterpret_cast<GrDirectContext*>(ctx);
+    SkImageInfo info = SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
+    SkSurfaceProps props(0, kRGB_H_SkPixelGeometry);
+    auto surface = SkSurfaces::RenderTarget(context, skgpu::Budgeted::kNo, info, 0, kTopLeft_GrSurfaceOrigin, &props);
+    if (!surface) {
+        return nullptr;
+    }
+    return surface.release();
+}
+
+void drift_skia_context_flush_and_submit(DriftSkiaContext ctx, int sync_cpu) {
+    if (!ctx) {
+        return;
+    }
+    auto context = reinterpret_cast<GrDirectContext*>(ctx);
+    context->flushAndSubmit(sync_cpu ? GrSyncCpu::kYes : GrSyncCpu::kNo);
+}
+
+int drift_skia_gl_get_framebuffer_binding(void) {
+    // No-op on Metal - framebuffer binding is a GL concept
+    return 0;
+}
+
+void drift_skia_gl_bind_framebuffer(int fbo) {
+    // No-op on Metal - framebuffer binding is a GL concept
+    (void)fbo;
 }
 
 }  // extern "C"

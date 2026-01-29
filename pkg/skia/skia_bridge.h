@@ -271,6 +271,12 @@ void drift_skia_svg_dom_set_size_to_container(DriftSkiaSVGDOM svg);
 void drift_skia_svg_dom_render_tinted(DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
     float width, float height, uint32_t tint_argb);
 
+DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height);
+DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx, int width, int height);
+void drift_skia_context_flush_and_submit(DriftSkiaContext ctx, int sync_cpu);
+int drift_skia_gl_get_framebuffer_binding(void);
+void drift_skia_gl_bind_framebuffer(int fbo);
+
 #ifdef __cplusplus
 }
 #endif

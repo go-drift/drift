@@ -110,6 +110,31 @@ func (c *Context) Destroy() {
 	c.ptr = nil
 }
 
+// FlushAndSubmit flushes pending GPU work and optionally waits for completion.
+// If syncCPU is true, blocks until all GPU work finishes.
+func (c *Context) FlushAndSubmit(syncCPU bool) {
+	if c == nil || c.ptr == nil {
+		return
+	}
+	sync := C.int(0)
+	if syncCPU {
+		sync = 1
+	}
+	C.drift_skia_context_flush_and_submit(c.ptr, sync)
+}
+
+// GLGetFramebufferBinding returns the currently bound GL framebuffer.
+// Returns 0 on non-GL backends.
+func GLGetFramebufferBinding() int {
+	return int(C.drift_skia_gl_get_framebuffer_binding())
+}
+
+// GLBindFramebuffer binds the specified GL framebuffer.
+// No-op on non-GL backends.
+func GLBindFramebuffer(fbo int) {
+	C.drift_skia_gl_bind_framebuffer(C.int(fbo))
+}
+
 // MakeGLSurface creates a Skia surface targeting the current GL framebuffer.
 func (c *Context) MakeGLSurface(width, height int) (*Surface, error) {
 	if c == nil || c.ptr == nil {
@@ -118,6 +143,30 @@ func (c *Context) MakeGLSurface(width, height int) (*Surface, error) {
 	surface := C.drift_skia_surface_create_gl(c.ptr, C.int(width), C.int(height))
 	if surface == nil {
 		return nil, errors.New("skia: failed to create GL surface")
+	}
+	return &Surface{ptr: surface, ctx: c}, nil
+}
+
+// MakeOffscreenSurfaceGL creates a GPU-backed offscreen surface for GL.
+func (c *Context) MakeOffscreenSurfaceGL(width, height int) (*Surface, error) {
+	if c == nil || c.ptr == nil {
+		return nil, errors.New("skia: nil context")
+	}
+	surface := C.drift_skia_surface_create_offscreen_gl(c.ptr, C.int(width), C.int(height))
+	if surface == nil {
+		return nil, errors.New("skia: failed to create offscreen GL surface")
+	}
+	return &Surface{ptr: surface, ctx: c}, nil
+}
+
+// MakeOffscreenSurfaceMetal creates a GPU-backed offscreen surface for Metal.
+func (c *Context) MakeOffscreenSurfaceMetal(width, height int) (*Surface, error) {
+	if c == nil || c.ptr == nil {
+		return nil, errors.New("skia: nil context")
+	}
+	surface := C.drift_skia_surface_create_offscreen_metal(c.ptr, C.int(width), C.int(height))
+	if surface == nil {
+		return nil, errors.New("skia: failed to create offscreen Metal surface")
 	}
 	return &Surface{ptr: surface, ctx: c}, nil
 }
