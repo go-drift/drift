@@ -77,18 +77,12 @@ func buildTabRootPage(ctx core.BuildContext, label string) core.Widget {
 
 				widgets.Text{Content: label + " Tab", Style: textTheme.HeadlineMedium},
 				widgets.VSpace(16),
-				widgets.Button{
-					Label: "Open details",
-					OnTap: func() {
-						nav := navigation.NavigatorOf(ctx)
-						if nav != nil {
-							nav.PushNamed("/detail", nil)
-						}
-					},
-					Color:     colors.Primary,
-					TextColor: colors.OnPrimary,
-					Haptic:    true,
-				},
+				theme.ButtonOf(ctx, "Open details", func() {
+					nav := navigation.NavigatorOf(ctx)
+					if nav != nil {
+						nav.PushNamed("/detail", nil)
+					}
+				}),
 			),
 		),
 	}

@@ -63,11 +63,11 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 	navigator := navigation.Navigator{
 		InitialRoute: "/",
 		OnGenerateRoute: func(settings navigation.RouteSettings) navigation.Route {
-			// Home page (special case with state callbacks)
+			// Home page
 			if settings.Name == "/" {
 				return navigation.NewMaterialPageRoute(
 					func(ctx core.BuildContext) core.Widget {
-						return buildHomePage(ctx, s.isDark, s.isCupertino, s.toggleTheme, s.togglePlatform)
+						return buildHomePage(ctx, s.isDark, s.toggleTheme)
 					},
 					settings,
 				)
@@ -81,6 +81,31 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 					},
 					settings,
 				)
+			}
+
+			// Category hub pages (new 6-category layout)
+			switch settings.Name {
+			case "/theming-hub":
+				return navigation.NewMaterialPageRoute(buildThemingHubPage, settings)
+			case "/layout-hub":
+				return navigation.NewMaterialPageRoute(buildLayoutHubPage, settings)
+			case "/widgets-hub":
+				return navigation.NewMaterialPageRoute(buildWidgetsHubPage, settings)
+			case "/motion-hub":
+				return navigation.NewMaterialPageRoute(buildMotionHubPage, settings)
+			case "/media-hub":
+				return navigation.NewMaterialPageRoute(buildMediaHubPage, settings)
+			case "/system-hub":
+				return navigation.NewMaterialPageRoute(buildSystemHubPage, settings)
+			// Legacy routes (redirect to new)
+			case "/foundations":
+				return navigation.NewMaterialPageRoute(buildLayoutHubPage, settings)
+			case "/components":
+				return navigation.NewMaterialPageRoute(buildWidgetsHubPage, settings)
+			case "/interactions":
+				return navigation.NewMaterialPageRoute(buildMotionHubPage, settings)
+			case "/platform":
+				return navigation.NewMaterialPageRoute(buildSystemHubPage, settings)
 			}
 
 			// All other demos from registry
@@ -108,20 +133,40 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 
 // getAppThemeData returns memoized theme data, recreating only when state changes.
 func (s *showcaseState) getAppThemeData() *theme.AppThemeData {
-	brightness := theme.BrightnessLight
-	if s.isDark {
-		brightness = theme.BrightnessDark
-	}
 	targetPlatform := theme.TargetPlatformMaterial
 	if s.isCupertino {
 		targetPlatform = theme.TargetPlatformCupertino
+	}
+
+	brightness := theme.BrightnessLight
+	if s.isDark {
+		brightness = theme.BrightnessDark
 	}
 
 	// Only recreate if values changed
 	if s.cachedThemeData == nil ||
 		s.cachedThemeData.Platform != targetPlatform ||
 		s.cachedThemeData.Brightness() != brightness {
-		s.cachedThemeData = theme.NewAppThemeData(targetPlatform, brightness)
+
+		// Create new theme data
+		var material *theme.ThemeData
+		var cupertino *theme.CupertinoThemeData
+
+		if s.isDark {
+			// Use showcase dark theme
+			material = ShowcaseDarkTheme()
+			cupertino = theme.DefaultCupertinoDarkTheme()
+		} else {
+			// Use showcase light theme for light mode
+			material = ShowcaseLightTheme()
+			cupertino = theme.DefaultCupertinoLightTheme()
+		}
+
+		s.cachedThemeData = &theme.AppThemeData{
+			Platform:  targetPlatform,
+			Material:  material,
+			Cupertino: cupertino,
+		}
 	}
 	return s.cachedThemeData
 }
@@ -166,6 +211,25 @@ func (s *showcaseState) deepLinkRoute(link platform.DeepLink) (navigation.DeepLi
 		return navigation.DeepLinkRoute{Name: "/"}, true
 	}
 
+	// Category hub routes (new 6-category layout)
+	categoryRoutes := map[string]string{
+		"theming-hub": "/theming-hub",
+		"layout-hub":  "/layout-hub",
+		"widgets-hub": "/widgets-hub",
+		"motion-hub":  "/motion-hub",
+		"media-hub":   "/media-hub",
+		"system-hub":  "/system-hub",
+		// Legacy routes (redirect to new)
+		"foundations":  "/layout-hub",
+		"components":   "/widgets-hub",
+		"interactions": "/motion-hub",
+		"platform":     "/system-hub",
+	}
+	if route, ok := categoryRoutes[candidate]; ok {
+		log.Printf("deep link received: %s (source=%s)", link.URL, link.Source)
+		return navigation.DeepLinkRoute{Name: route}, true
+	}
+
 	// Theming route (special case)
 	if candidate == "theming" {
 		log.Printf("deep link received: %s (source=%s)", link.URL, link.Source)
@@ -193,14 +257,6 @@ func (s *showcaseState) toggleTheme() {
 	s.applySystemUI()
 }
 
-func (s *showcaseState) togglePlatform() {
-	s.SetState(func() {
-		s.isCupertino = !s.isCupertino
-	})
-	s.updateBackgroundColor()
-	s.applySystemUI()
-}
-
 // pageScaffold creates a consistent page layout with title and back button.
 func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core.Widget {
 	_, colors, textTheme := theme.UseTheme(ctx)
@@ -222,7 +278,7 @@ func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core
 						Padding: headerPadding,
 						ChildWidget: widgets.RowOf(
 							widgets.MainAxisAlignmentStart,
-							widgets.CrossAxisAlignmentStart,
+							widgets.CrossAxisAlignmentCenter,
 							widgets.MainAxisSizeMax,
 							widgets.Button{
 								Label: "Back",
@@ -232,11 +288,12 @@ func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core
 										nav.Pop(nil)
 									}
 								},
-								Color:     colors.SurfaceVariant,
-								TextColor: colors.OnSurfaceVariant,
-								Padding:   layout.EdgeInsetsSymmetric(16, 10),
-								FontSize:  14,
-								Haptic:    true,
+								Color:        colors.SurfaceContainerHigh,
+								TextColor:    colors.OnSurface,
+								Padding:      layout.EdgeInsetsSymmetric(16, 10),
+								BorderRadius: 8,
+								FontSize:     14,
+								Haptic:       true,
 							},
 							widgets.HSpace(16),
 							widgets.Text{Content: title, Style: textTheme.HeadlineMedium},

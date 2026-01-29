@@ -95,12 +95,9 @@ func (s *permissionsState) Build(ctx core.BuildContext) core.Widget {
 	statuses := s.statuses.Get()
 
 	// Build permission rows
-	permissionNames := []string{"Camera", "Location", "Photos", "Microphone", "Notifications"}
-	rows := make([]core.Widget, 0, len(permissionNames)*2)
-	for _, name := range permissionNames {
-		status := statuses[name]
-		rows = append(rows, s.permissionRow(name, status, colors))
-		rows = append(rows, widgets.VSpace(12))
+	var rows []core.Widget
+	for _, name := range []string{"Camera", "Location", "Photos", "Microphone", "Notifications"} {
+		rows = append(rows, s.permissionRow(name, statuses[name], colors), widgets.VSpace(12))
 	}
 
 	return demoPage(ctx, "Permissions",
@@ -123,24 +120,18 @@ func (s *permissionsState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("Settings", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Open app settings to manage permissions:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-
-		widgets.Button{
-			Label: "Open Settings",
-			OnTap: func() {
-				s.openSettings()
-			},
-			Color:     colors.Secondary,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
-		},
+		widgets.VSpace(12),
+		theme.ButtonOf(ctx, "Open Settings", func() {
+			s.openSettings()
+		}).WithColor(colors.Secondary, colors.OnSecondary),
 		widgets.VSpace(40),
 	)
 }
 
 func (s *permissionsState) permissionRow(name string, status platform.PermissionResult, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
+		Color:        colors.SurfaceVariant,
+		BorderRadius: 8,
 		ChildWidget: widgets.PaddingAll(12,
 			widgets.Row{
 				MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,

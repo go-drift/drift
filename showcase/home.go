@@ -4,158 +4,255 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/navigation"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
 // buildHomePage creates the main landing page with navigation to demos.
-func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleTheme func(), togglePlatform func()) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+func buildHomePage(ctx core.BuildContext, isDark bool, toggleTheme func()) core.Widget {
+	_, colors, _ := theme.UseTheme(ctx)
 
-	themeLabel := "Switch to Dark"
-	if isDark {
-		themeLabel = "Switch to Light"
-	}
-
-	platformLabel := "Switch to Cupertino"
-	if isCupertino {
-		platformLabel = "Switch to Material"
-	}
-
-	// Separate demos by category
-	var widgetDemos, platformDemos []Demo
-	for _, demo := range demos {
-		switch demo.Category {
-		case CategoryWidgets:
-			widgetDemos = append(widgetDemos, demo)
-		case CategoryPlatform:
-			platformDemos = append(platformDemos, demo)
-		}
-	}
-
-	// Build navigation items grouped by category
-	navItems := make([]core.Widget, 0, len(demos)*2+20)
-
-	// Widgets & UI section
-	navItems = append(navItems, sectionHeader("Widgets & UI", colors))
-	navItems = append(navItems, widgets.VSpace(12))
-	for i, demo := range widgetDemos {
-		navItems = append(navItems, navButton(ctx, demo.Title, demo.Subtitle, demo.Route, colors))
-		// Insert theming after gestures
-		if demo.Route == "/gestures" {
-			navItems = append(navItems, widgets.VSpace(12))
-			td := themingDemo()
-			navItems = append(navItems, navButton(ctx, td.Title, td.Subtitle, td.Route, colors))
-		}
-		if i < len(widgetDemos)-1 {
-			navItems = append(navItems, widgets.VSpace(12))
-		}
-	}
-
-	// Platform Services section
-	navItems = append(navItems, widgets.VSpace(24))
-	navItems = append(navItems, sectionHeader("Platform Services", colors))
-	navItems = append(navItems, widgets.VSpace(12))
-	for i, demo := range platformDemos {
-		navItems = append(navItems, navButton(ctx, demo.Title, demo.Subtitle, demo.Route, colors))
-		if i < len(platformDemos)-1 {
-			navItems = append(navItems, widgets.VSpace(12))
-		}
-	}
-
-	// ScrollView with SafeAreaPadding: content scrolls behind the status bar
-	// but starts with safe area padding plus 20px on all sides.
 	return widgets.Expanded{
 		ChildWidget: widgets.Container{
 			Color: colors.Background,
-			ChildWidget: widgets.ScrollView{
-				ScrollDirection: widgets.AxisVertical,
-				Physics:         widgets.BouncingScrollPhysics{},
-				Padding:         widgets.SafeAreaPadding(ctx).Add(20),
-				ChildWidget: widgets.Column{
-					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-					CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-					MainAxisSize:       widgets.MainAxisSizeMin,
-					ChildrenWidgets: append([]core.Widget{
-						// Logo/Title section
-						widgets.Container{
-							Width:    200,
-							Height:   100,
-							Overflow: widgets.OverflowVisible,
-							Color:    graphics.ColorWhite,
-							Gradient: graphics.NewRadialGradient(
-								graphics.AlignCenter, // Center of widget
-								2.0,                  // Radius = 2x half the min dimension (fills width)
-								[]graphics.GradientStop{
-									{Position: 0, Color: graphics.RGBA(47, 249, 238, 0.2)},   // cyan center
-									{Position: 0.5, Color: graphics.RGBA(238, 23, 130, 0.2)}, // magenta mid
-									{Position: 1, Color: graphics.RGBA(238, 23, 130, 0)},     // fade out
-								},
-							),
-							Alignment: layout.AlignmentCenter,
-							ChildWidget: widgets.SvgImage{
-								Source: loadSVGAsset("drift.svg"),
-								Width:  200,
-							},
-						}, widgets.VSpace(8),
-						widgets.Text{Content: "Cross-platform UI for Go", Style: textTheme.HeadlineSmall},
-						widgets.VSpace(4),
-						widgets.Text{Content: "Build native iOS & Android apps with idiomatic Go", Style: graphics.TextStyle{
-							Color:    colors.OnSurfaceVariant,
-							FontSize: 14,
-						}},
-						widgets.VSpace(40),
-					}, append(navItems,
-						widgets.VSpace(32),
-
-						// Theme toggle
-						widgets.Button{
-							Label:     themeLabel,
-							OnTap:     toggleTheme,
-							Color:     colors.Secondary,
-							TextColor: colors.OnSecondary,
-							Haptic:    true,
-						},
-						widgets.VSpace(12),
-						// Platform toggle
-						widgets.Button{
-							Label:     platformLabel,
-							OnTap:     togglePlatform,
-							Color:     colors.Tertiary,
-							TextColor: colors.OnTertiary,
-							Haptic:    true,
-						},
-						widgets.VSpace(40),
-					)...),
+			ChildWidget: widgets.Stack{
+				ChildrenWidgets: []core.Widget{
+					heroGradientBackground(isDark),
+					homeScrollContent(ctx, colors, isDark, toggleTheme),
 				},
 			},
 		},
 	}
 }
 
-// sectionHeader creates a styled section header for the home page.
-func sectionHeader(text string, colors theme.ColorScheme) core.Widget {
-	return widgets.Text{Content: text, Style: graphics.TextStyle{
-		Color:      colors.OnSurface,
-		FontSize:   20,
-		FontWeight: graphics.FontWeightBold,
-	}}
+// heroGradientBackground creates the radial gradient overlay behind the home content.
+func heroGradientBackground(isDark bool) core.Widget {
+	cyanAlpha := 0.12
+	pinkAlpha := 0.08
+	if !isDark {
+		cyanAlpha = 0.15
+		pinkAlpha = 0.1
+	}
+
+	return widgets.Container{
+		Gradient: graphics.NewRadialGradient(
+			graphics.Alignment{X: 0, Y: -0.4}, // Center-top
+			1.5,
+			[]graphics.GradientStop{
+				{Position: 0, Color: CyanSeed.WithAlpha(cyanAlpha)},
+				{Position: 0.5, Color: PinkSeed.WithAlpha(pinkAlpha)},
+				{Position: 1, Color: graphics.RGBA(0, 0, 0, 0)},
+			},
+		),
+	}
 }
 
-// navButton creates a navigation button for the home page.
-func navButton(ctx core.BuildContext, title, subtitle, route string, colors theme.ColorScheme) core.Widget {
-	return widgets.Button{
-		Label: title,
-		OnTap: func() {
-			nav := navigation.NavigatorOf(ctx)
-			if nav != nil {
-				nav.PushNamed(route, nil)
-			}
+// homeScrollContent builds the scrollable content area of the home page.
+func homeScrollContent(ctx core.BuildContext, colors theme.ColorScheme, isDark bool, toggleTheme func()) core.Widget {
+	return widgets.ScrollView{
+		ScrollDirection: widgets.AxisVertical,
+		Physics:         widgets.BouncingScrollPhysics{},
+		Padding:         widgets.SafeAreaPadding(ctx).Add(20),
+		ChildWidget: widgets.Column{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			ChildrenWidgets: []core.Widget{
+				// Header
+				headerRow(ctx, isDark, toggleTheme),
+
+				// Hero section
+				widgets.VSpace(60),
+				logoWithGlow(),
+				widgets.VSpace(28),
+				taglineText(colors),
+				widgets.VSpace(16),
+				techPill(ctx, isDark),
+
+				// Category grid
+				widgets.VSpace(56),
+				homeCategoryGrid(ctx, colors, isDark),
+
+				// Footer
+				widgets.VSpace(60),
+				crashButton(ctx, colors),
+				widgets.VSpace(40),
+			},
 		},
-		Color:        colors.SurfaceContainerHigh,
-		TextColor:    colors.OnSurface,
-		Padding:      layout.EdgeInsetsAll(16),
-		BorderRadius: 8,
+	}
+}
+
+// headerRow creates the top row with the theme toggle aligned right.
+func headerRow(ctx core.BuildContext, isDark bool, toggleTheme func()) core.Widget {
+	return widgets.Row{
+		MainAxisAlignment:  widgets.MainAxisAlignmentEnd,
+		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+		MainAxisSize:       widgets.MainAxisSizeMax,
+		ChildrenWidgets: []core.Widget{
+			themeToggleButton(ctx, isDark, toggleTheme),
+		},
+	}
+}
+
+// logoWithGlow creates the Drift logo with a decorative glow effect underneath.
+func logoWithGlow() core.Widget {
+	return widgets.DecoratedBox{
+		Overflow: widgets.OverflowVisible,
+		Gradient: graphics.NewRadialGradient(
+			graphics.Alignment{X: 0, Y: -0.2},
+			5,
+			[]graphics.GradientStop{
+				{Position: 0, Color: CyanSeed.WithAlpha(0.06)},
+				{Position: 0.5, Color: PinkSeed.WithAlpha(0.1)},
+				{Position: 1, Color: graphics.RGBA(0, 0, 0, 0)},
+			},
+		),
+		ChildWidget: widgets.SvgImage{
+			Source: loadSVGAsset("drift.svg"),
+			Width:  200,
+		},
+	}
+}
+
+// taglineText creates the "Cross-platform mobile UI for Go" text.
+func taglineText(colors theme.ColorScheme) core.Widget {
+	return widgets.Text{
+		Content: "Cross-platform mobile UI for Go",
+		Style: graphics.TextStyle{
+			Color:      colors.OnSurface,
+			FontSize:   18,
+			FontWeight: graphics.FontWeightMedium,
+		},
+	}
+}
+
+// techPill creates the "GPU Accelerated • Powered by Skia" pill badge.
+func techPill(ctx core.BuildContext, isDark bool) core.Widget {
+	colors := theme.ColorsOf(ctx)
+
+	// Theme-dependent opacity values
+	pillAlpha, borderAlpha, shadowAlpha := 0.15, 0.2, 0.15
+	if !isDark {
+		pillAlpha, borderAlpha, shadowAlpha = 0.1, 0.2, 0.1
+	}
+
+	return widgets.Container{
+		Gradient: graphics.NewLinearGradient(
+			graphics.AlignTopLeft,
+			graphics.AlignBottomRight,
+			[]graphics.GradientStop{
+				{Position: 0, Color: PinkSeed.WithAlpha(pillAlpha)},
+				{Position: 1, Color: CyanSeed.WithAlpha(pillAlpha)},
+			},
+		),
+		BorderRadius: 100,
+		BorderWidth:  1,
+		BorderColor:  colors.Primary.WithAlpha(borderAlpha),
+		Padding:      layout.EdgeInsetsSymmetric(16, 8),
+		Shadow: &graphics.BoxShadow{
+			Color:      colors.Primary.WithAlpha(shadowAlpha),
+			Offset:     graphics.Offset{X: 0, Y: 0},
+			BlurStyle:  graphics.BlurStyleNormal,
+			BlurRadius: 20,
+		},
+		ChildWidget: widgets.Row{
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				widgets.Text{
+					Content: "GPU Accelerated",
+					Style: graphics.TextStyle{
+						Color:    colors.OnSurface,
+						FontSize: 14,
+					},
+				},
+				widgets.HSpace(8),
+				widgets.Text{
+					Content: "\u2022", // Bullet
+					Style: graphics.TextStyle{
+						Color:    colors.OnSurface.WithAlpha(0.5),
+						FontSize: 14,
+					},
+				},
+				widgets.HSpace(8),
+				widgets.Text{
+					Content: "Powered by Skia",
+					Style: graphics.TextStyle{
+						Color:    colors.OnSurface,
+						FontSize: 14,
+					},
+				},
+			},
+		},
+	}
+}
+
+// crashButton creates a playful skull button that triggers an error to demo error boundaries.
+func crashButton(_ core.BuildContext, colors theme.ColorScheme) core.Widget {
+	icon := loadSVGAsset("icon-skull.svg")
+
+	return widgets.GestureDetector{
+		OnTap: func() {
+			// Trigger a panic to demonstrate error boundaries
+			panic("You found the skull! This crash demonstrates Drift's error boundary recovery.")
+		},
+		ChildWidget: widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMax,
+			ChildrenWidgets: []core.Widget{
+				widgets.Container{
+					Width:        32,
+					Height:       32,
+					BorderRadius: 8,
+					Color:        colors.SurfaceContainer,
+					Alignment:    layout.AlignmentCenter,
+					ChildWidget: widgets.SvgImage{
+						Source:    icon,
+						Width:     18,
+						Height:    18,
+						TintColor: colors.OnSurfaceVariant.WithAlpha(0.5),
+					},
+				},
+			},
+		},
+	}
+}
+
+// homeCategoryGrid creates the 3x2 grid of category cards.
+func homeCategoryGrid(ctx core.BuildContext, colors theme.ColorScheme, isDark bool) core.Widget {
+	// Build all card widgets
+	cards := make([]core.Widget, len(categories))
+	for i, cat := range categories {
+		cards[i] = widgets.Expanded{
+			ChildWidget: gradientBorderCard(ctx, cat.Title, cat.Description, cat.Route, colors, isDark),
+		}
+	}
+
+	// Arrange cards into 2-column rows
+	var rows []core.Widget
+	for i := 0; i < len(cards); i += 2 {
+		left := cards[i]
+		right := core.Widget(widgets.Expanded{ChildWidget: widgets.SizedBox{}}) // Empty spacer
+		if i+1 < len(cards) {
+			right = cards[i+1]
+		}
+
+		rows = append(rows,
+			widgets.Row{
+				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+				MainAxisSize:       widgets.MainAxisSizeMax,
+				ChildrenWidgets:    []core.Widget{left, widgets.HSpace(20), right},
+			},
+			widgets.VSpace(20),
+		)
+	}
+
+	return widgets.Column{
+		MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+		MainAxisSize:       widgets.MainAxisSizeMin,
+		ChildrenWidgets:    rows,
 	}
 }

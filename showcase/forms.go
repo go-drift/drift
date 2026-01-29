@@ -51,10 +51,6 @@ type formsState struct {
 	selectedDate *core.ManagedState[*time.Time]
 	selectedHour *core.ManagedState[int]
 	selectedMin  *core.ManagedState[int]
-
-	// Progress indicator state
-	progressValue *core.ManagedState[float64]
-	isLoading     *core.ManagedState[bool]
 }
 
 func (s *formsState) InitState() {
@@ -68,10 +64,6 @@ func (s *formsState) InitState() {
 	s.selectedDate = core.NewManagedState[*time.Time](&s.StateBase, nil)
 	s.selectedHour = core.NewManagedState(&s.StateBase, 9)
 	s.selectedMin = core.NewManagedState(&s.StateBase, 0)
-
-	// Initialize progress state
-	s.progressValue = core.NewManagedState(&s.StateBase, 0.35)
-	s.isLoading = core.NewManagedState(&s.StateBase, false)
 }
 
 func (s *formsState) Build(ctx core.BuildContext) core.Widget {
@@ -185,107 +177,6 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 			s.selectedHour.Set(hour)
 			s.selectedMin.Set(minute)
 		}),
-		widgets.VSpace(24),
-
-		// Progress Indicators
-		sectionTitle("Progress Indicators", colors),
-		widgets.VSpace(12),
-
-		// Native Activity Indicator
-		widgets.Text{Content: "Native Activity Indicator", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			widgets.ActivityIndicator{
-				Animating: s.isLoading.Get(),
-				Size:      widgets.ActivityIndicatorSizeSmall,
-			},
-			widgets.HSpace(16),
-			widgets.ActivityIndicator{
-				Animating: s.isLoading.Get(),
-				Size:      widgets.ActivityIndicatorSizeMedium,
-			},
-			widgets.HSpace(16),
-			widgets.ActivityIndicator{
-				Animating: s.isLoading.Get(),
-				Size:      widgets.ActivityIndicatorSizeLarge,
-				Color:     colors.Primary,
-			},
-		),
-		widgets.VSpace(16),
-
-		// Circular Progress Indicators (indeterminate only when loading)
-		widgets.Text{Content: "Circular Progress (toggle loading to animate)", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			widgets.CircularProgressIndicator{
-				Value: s.indeterminateValue(),
-				Size:  24,
-			},
-			widgets.HSpace(16),
-			widgets.CircularProgressIndicator{
-				Value: s.indeterminateValue(),
-				Size:  36,
-				Color: colors.Secondary,
-			},
-			widgets.HSpace(16),
-			widgets.CircularProgressIndicator{
-				Value: s.indeterminateValue(),
-				Size:  48,
-				Color: colors.Tertiary,
-			},
-		),
-		widgets.VSpace(16),
-		widgets.Text{Content: "Circular Progress (Determinate: " + itoa(int(s.progressValue.Get()*100)) + "%)", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		s.buildDeterminateCircular(colors),
-		widgets.VSpace(16),
-
-		// Linear Progress Indicators (indeterminate only when loading)
-		widgets.Text{Content: "Linear Progress (toggle loading to animate)", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.LinearProgressIndicator{
-			Value: s.indeterminateValue(),
-		},
-		widgets.VSpace(16),
-		widgets.Text{Content: "Linear Progress (Determinate: " + itoa(int(s.progressValue.Get()*100)) + "%)", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		s.buildDeterminateLinear(colors),
-		widgets.VSpace(16),
-
-		// Progress control buttons
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			theme.ButtonOf(ctx, "-10%", func() {
-				v := s.progressValue.Get() - 0.1
-				if v < 0 {
-					v = 0
-				}
-				s.progressValue.Set(v)
-			}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
-			widgets.HSpace(8),
-			theme.ButtonOf(ctx, "+10%", func() {
-				v := s.progressValue.Get() + 0.1
-				if v > 1 {
-					v = 1
-				}
-				s.progressValue.Set(v)
-			}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
-			widgets.HSpace(16),
-			theme.ButtonOf(ctx, "Toggle Loading", func() {
-				s.isLoading.Set(!s.isLoading.Get())
-			}),
-		),
 		widgets.VSpace(40),
 	)
 }
@@ -335,15 +226,11 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 		widgets.MainAxisSizeMin,
 
 		// Username field with validation
-		widgets.TextFormField{
-			Label:        "Username",
-			Placeholder:  "Enter username",
-			KeyboardType: platform.KeyboardTypeText,
-			InputAction:  platform.TextInputActionNext,
-			Autocorrect:  false,
-			BorderRadius: 8,
-			HelperText:   "Letters and numbers only",
-			Validator: func(value string) string {
+		theme.TextFormFieldOf(ctx).
+			WithLabel("Username").
+			WithPlaceholder("Enter username").
+			WithHelperText("Letters and numbers only").
+			WithValidator(func(value string) string {
 				if value == "" {
 					return "Username is required"
 				}
@@ -351,22 +238,17 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 					return "Username must be at least 3 characters"
 				}
 				return ""
-			},
-			OnSaved: func(value string) {
+			}).
+			WithOnSaved(func(value string) {
 				f.parent.data.Username = value
-			},
-		},
+			}),
 		widgets.VSpace(16),
 
 		// Email field with validation
-		widgets.TextFormField{
-			Label:        "Email",
-			Placeholder:  "you@example.com",
-			KeyboardType: platform.KeyboardTypeEmail,
-			InputAction:  platform.TextInputActionNext,
-			Autocorrect:  false,
-			BorderRadius: 8,
-			Validator: func(value string) string {
+		theme.TextFormFieldOf(ctx).
+			WithLabel("Email").
+			WithPlaceholder("you@example.com").
+			WithValidator(func(value string) string {
 				if value == "" {
 					return "Email is required"
 				}
@@ -374,24 +256,19 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 					return "Please enter a valid email"
 				}
 				return ""
-			},
-			OnSaved: func(value string) {
+			}).
+			WithOnSaved(func(value string) {
 				f.parent.data.Email = value
-			},
-		},
+			}),
 		widgets.VSpace(16),
 
 		// Password field with validation
-		widgets.TextFormField{
-			Label:        "Password",
-			Placeholder:  "Enter password",
-			KeyboardType: platform.KeyboardTypeText,
-			InputAction:  platform.TextInputActionDone,
-			Obscure:      true,
-			Autocorrect:  false,
-			BorderRadius: 8,
-			HelperText:   "Minimum 8 characters",
-			Validator: func(value string) string {
+		theme.TextFormFieldOf(ctx).
+			WithLabel("Password").
+			WithPlaceholder("Enter password").
+			WithHelperText("Minimum 8 characters").
+			WithObscure(true).
+			WithValidator(func(value string) string {
 				if value == "" {
 					return "Password is required"
 				}
@@ -399,16 +276,10 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 					return "Password must be at least 8 characters"
 				}
 				return ""
-			},
-			OnSaved: func(value string) {
+			}).
+			WithOnSaved(func(value string) {
 				f.parent.data.Password = value
-			},
-			OnSubmitted: func(value string) {
-				if form != nil {
-					f.parent.handleSubmit(form)
-				}
-			},
-		},
+			}),
 		widgets.VSpace(24),
 
 		// Buttons
@@ -439,37 +310,4 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 			),
 		},
 	)
-}
-
-// indeterminateValue returns nil when loading (indeterminate animation) or 0 when not (stopped).
-func (s *formsState) indeterminateValue() *float64 {
-	if s.isLoading.Get() {
-		return nil // Indeterminate - will animate
-	}
-	zero := 0.0
-	return &zero // Determinate at 0 - no animation
-}
-
-// buildDeterminateCircular creates a determinate circular progress indicator.
-func (s *formsState) buildDeterminateCircular(colors theme.ColorScheme) core.Widget {
-	progress := s.progressValue.Get()
-	return widgets.CircularProgressIndicator{
-		Value:       &progress,
-		Size:        48,
-		StrokeWidth: 5,
-		Color:       colors.Primary,
-		TrackColor:  colors.SurfaceVariant,
-	}
-}
-
-// buildDeterminateLinear creates a determinate linear progress indicator.
-func (s *formsState) buildDeterminateLinear(colors theme.ColorScheme) core.Widget {
-	progress := s.progressValue.Get()
-	return widgets.LinearProgressIndicator{
-		Value:        &progress,
-		Height:       6,
-		BorderRadius: 3,
-		Color:        colors.Primary,
-		TrackColor:   colors.SurfaceVariant,
-	}
 }

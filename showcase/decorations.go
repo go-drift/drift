@@ -90,81 +90,13 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			widgets.MainAxisAlignmentStart,
 			widgets.CrossAxisAlignmentCenter,
 			widgets.MainAxisSizeMin,
-			widgets.DecoratedBox{
-				BorderColor:  colors.SecondaryContainer,
-				BorderWidth:  2,
-				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
-				BorderRadius: 12,
-				Color:        colors.SurfaceVariant,
-				Shadow:       graphics.BoxShadowElevation(1, colors.SurfaceTint.WithAlpha(80)),
-				ChildWidget: widgets.SizedBox{
-					Width:  72,
-					Height: 72,
-					ChildWidget: widgets.Center{
-						ChildWidget: widgets.Text{Content: "1", Style: graphics.TextStyle{
-							Color:    colors.OnSurface,
-							FontSize: 14,
-						}},
-					},
-				},
-			},
+			elevationBox("1", 1, colors),
 			widgets.HSpace(16),
-			widgets.DecoratedBox{
-				BorderColor:  colors.SecondaryContainer,
-				BorderWidth:  2,
-				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
-				BorderRadius: 12,
-				Color:        colors.SurfaceVariant,
-				Shadow:       graphics.BoxShadowElevation(2, colors.SurfaceTint.WithAlpha(80)),
-				ChildWidget: widgets.SizedBox{
-					Width:  72,
-					Height: 72,
-					ChildWidget: widgets.Center{
-						ChildWidget: widgets.Text{Content: "2", Style: graphics.TextStyle{
-							Color:    colors.OnSurface,
-							FontSize: 14,
-						}},
-					},
-				},
-			},
+			elevationBox("2", 2, colors),
 			widgets.HSpace(16),
-			widgets.DecoratedBox{
-				BorderColor:  colors.SecondaryContainer,
-				BorderWidth:  2,
-				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
-				BorderRadius: 12,
-				Color:        colors.SurfaceVariant,
-				Shadow:       graphics.BoxShadowElevation(3, colors.SurfaceTint.WithAlpha(80)),
-				ChildWidget: widgets.SizedBox{
-					Width:  72,
-					Height: 72,
-					ChildWidget: widgets.Center{
-						ChildWidget: widgets.Text{Content: "3", Style: graphics.TextStyle{
-							Color:    colors.OnSurface,
-							FontSize: 14,
-						}},
-					},
-				},
-			},
+			elevationBox("3", 3, colors),
 			widgets.HSpace(16),
-			widgets.DecoratedBox{
-				BorderColor:  colors.SecondaryContainer,
-				BorderWidth:  2,
-				BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}}, // 5px on, 3px off
-				BorderRadius: 12,
-				Color:        colors.SurfaceVariant,
-				Shadow:       graphics.BoxShadowElevation(5, colors.SurfaceTint.WithAlpha(80)),
-				ChildWidget: widgets.SizedBox{
-					Width:  72,
-					Height: 72,
-					ChildWidget: widgets.Center{
-						ChildWidget: widgets.Text{Content: "5", Style: graphics.TextStyle{
-							Color:    colors.OnSurface,
-							FontSize: 14,
-						}},
-					},
-				},
-			},
+			elevationBox("5", 5, colors),
 		),
 		widgets.VSpace(24),
 		sectionTitle("Backdrop Blur", colors),
@@ -223,7 +155,7 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 				FontSize:   24,
 				FontWeight: graphics.FontWeightBold,
 				Shadow: &graphics.TextShadow{
-					Color:  colors.Primary.WithAlpha(80),
+					Color:  colors.Primary.WithAlpha(0.31),
 					Offset: graphics.Offset{X: 2, Y: 2},
 				},
 			}},
@@ -233,7 +165,7 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 				FontSize:   24,
 				FontWeight: graphics.FontWeightBold,
 				Shadow: &graphics.TextShadow{
-					Color:      colors.Primary.WithAlpha(100),
+					Color:      colors.Primary.WithAlpha(0.39),
 					Offset:     graphics.Offset{X: 2, Y: 3},
 					BlurRadius: 4,
 				},
@@ -244,7 +176,7 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 				FontSize:   24,
 				FontWeight: graphics.FontWeightBold,
 				Shadow: &graphics.TextShadow{
-					Color:      colors.SurfaceTint.WithAlpha(200),
+					Color:      colors.SurfaceTint.WithAlpha(0.78),
 					Offset:     graphics.Offset{X: 0, Y: 0},
 					BlurRadius: 8,
 				},
@@ -252,4 +184,26 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		),
 		widgets.VSpace(40),
 	)
+}
+
+// elevationBox creates a 72x72 box demonstrating a Material elevation level.
+func elevationBox(label string, level int, colors theme.ColorScheme) core.Widget {
+	return widgets.DecoratedBox{
+		BorderColor:  colors.SecondaryContainer,
+		BorderWidth:  2,
+		BorderDash:   &graphics.DashPattern{Intervals: []float64{5, 3}},
+		BorderRadius: 12,
+		Color:        colors.SurfaceVariant,
+		Shadow:       graphics.BoxShadowElevation(level, colors.SurfaceTint.WithAlpha(0.31)),
+		ChildWidget: widgets.SizedBox{
+			Width:  72,
+			Height: 72,
+			ChildWidget: widgets.Center{
+				ChildWidget: widgets.Text{Content: label, Style: graphics.TextStyle{
+					Color:    colors.OnSurface,
+					FontSize: 14,
+				}},
+			},
+		},
+	}
 }

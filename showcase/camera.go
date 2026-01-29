@@ -4,6 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -93,44 +94,28 @@ func (s *cameraState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("Capture Photo", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Take a photo using the device camera:", Style: labelStyle(colors)},
-		widgets.VSpace(16),
-
-		widgets.Button{
-			Label: "Take Photo",
-			OnTap: func() {
-				s.takePhoto(false)
-			},
-			Color:     colors.Primary,
-			TextColor: colors.OnPrimary,
-			Haptic:    true,
-		},
 		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: "Take Selfie",
-			OnTap: func() {
-				s.takePhoto(true)
+		widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Take Photo", func() {
+					s.takePhoto(false)
+				}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Take Selfie", func() {
+					s.takePhoto(true)
+				}).WithColor(colors.Secondary, colors.OnSecondary),
 			},
-			Color:     colors.Secondary,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
 		},
 		widgets.VSpace(24),
 
 		sectionTitle("Gallery", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Pick an image from the photo library:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-
-		widgets.Button{
-			Label: "Pick from Gallery",
-			OnTap: func() {
-				s.pickFromGallery()
-			},
-			Color:     colors.Tertiary,
-			TextColor: colors.OnTertiary,
-			Haptic:    true,
-		},
+		widgets.VSpace(12),
+		theme.ButtonOf(ctx, "Pick from Gallery", func() {
+			s.pickFromGallery()
+		}).WithColor(colors.Tertiary, colors.OnTertiary),
 		widgets.VSpace(24),
 
 		sectionTitle("Preview", colors),
@@ -146,27 +131,22 @@ func (s *cameraState) Build(ctx core.BuildContext) core.Widget {
 func (s *cameraState) imagePreview(path string, colors theme.ColorScheme) core.Widget {
 	if path == "" {
 		return widgets.Container{
-			Color: colors.SurfaceVariant,
-			ChildWidget: widgets.PaddingAll(24,
-				widgets.Column{
-					MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
-					CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-					MainAxisSize:       widgets.MainAxisSizeMin,
-					ChildrenWidgets: []core.Widget{
-						widgets.Text{Content: "No image captured", Style: graphics.TextStyle{
-							Color:    colors.OnSurfaceVariant,
-							FontSize: 14,
-						}},
-					},
-				},
-			),
+			Color:        colors.SurfaceVariant,
+			BorderRadius: 8,
+			Padding:      layout.EdgeInsetsAll(24),
+			Alignment:    layout.AlignmentCenter,
+			ChildWidget: widgets.Text{Content: "No image captured yet", Style: graphics.TextStyle{
+				Color:    colors.OnSurfaceVariant,
+				FontSize: 14,
+			}},
 		}
 	}
 
 	imageInfo := s.imageInfo.Get()
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
-		ChildWidget: widgets.PaddingAll(12,
+		Color:        colors.SurfaceVariant,
+		BorderRadius: 8,
+		ChildWidget: widgets.PaddingAll(16,
 			widgets.Column{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
@@ -174,25 +154,19 @@ func (s *cameraState) imagePreview(path string, colors theme.ColorScheme) core.W
 				ChildrenWidgets: []core.Widget{
 					widgets.Text{Content: "Captured Image", Style: graphics.TextStyle{
 						Color:      colors.OnSurface,
-						FontSize:   14,
-						FontWeight: graphics.FontWeightBold,
+						FontSize:   16,
+						FontWeight: graphics.FontWeightSemibold,
 					}},
 					widgets.VSpace(8),
 					widgets.Text{Content: imageInfo, Style: graphics.TextStyle{
 						Color:    colors.OnSurfaceVariant,
-						FontSize: 12,
+						FontSize: 13,
 					}},
-					widgets.VSpace(8),
-					widgets.Text{Content: "Path:", Style: graphics.TextStyle{
-						Color:      colors.OnSurfaceVariant,
-						FontSize:   12,
-						FontWeight: graphics.FontWeightBold,
-					}},
-					widgets.VSpace(4),
+					widgets.VSpace(12),
 					widgets.Text{Content: path, Style: graphics.TextStyle{
-						Color:    colors.OnSurface,
-						FontSize: 12,
-					}},
+						Color:    colors.OnSurfaceVariant,
+						FontSize: 11,
+					}, Wrap: true},
 				},
 			},
 		),

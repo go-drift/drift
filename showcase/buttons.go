@@ -30,24 +30,36 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 		theme.ButtonOf(ctx, "Tap Me", func() {
 			platform.Haptics.LightImpact()
 		}),
-		widgets.VSpace(20),
+		widgets.VSpace(24),
 
 		// Section: Colored Buttons
 		sectionTitle("Colored Buttons", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Override theme with WithColor():", Style: labelStyle(colors)},
 		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Primary", func() {}),
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Primary", func() {}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Secondary", func() {}).
+					WithColor(colors.Secondary, colors.OnSecondary),
+			},
+		},
 		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Secondary", func() {}).
-			WithColor(colors.Secondary, colors.OnSecondary),
-		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Error", func() {}).
-			WithColor(colors.Error, colors.OnError),
-		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Surface", func() {}).
-			WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
-		widgets.VSpace(20),
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Error", func() {}).
+					WithColor(colors.Error, colors.OnError),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Surface", func() {}).
+					WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
+			},
+		},
+		widgets.VSpace(24),
 
 		// Section: Gradient Buttons
 		sectionTitle("Gradient Buttons", colors),
@@ -56,21 +68,27 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(8),
 		theme.ButtonOf(ctx, "Sunset", func() {}).
 			WithGradient(buttonGradient),
-		widgets.VSpace(20),
+		widgets.VSpace(24),
 
 		// Section: Custom Sizing
 		sectionTitle("Custom Sizing", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Adjust padding and font size:", Style: labelStyle(colors)},
 		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Small", func() {}).
-			WithPadding(layout.EdgeInsetsSymmetric(12, 8)).
-			WithFontSize(12),
-		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Large", func() {}).
-			WithPadding(layout.EdgeInsetsSymmetric(32, 18)).
-			WithFontSize(20),
-		widgets.VSpace(20),
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Small", func() {}).
+					WithPadding(layout.EdgeInsetsSymmetric(12, 8)).
+					WithFontSize(12),
+				widgets.HSpace(12),
+				theme.ButtonOf(ctx, "Large", func() {}).
+					WithPadding(layout.EdgeInsetsSymmetric(32, 18)).
+					WithFontSize(20),
+			},
+		},
+		widgets.VSpace(24),
 
 		// Section: Explicit Buttons
 		sectionTitle("Explicit Buttons", colors),
@@ -87,20 +105,26 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 			BorderRadius: 8,
 			Haptic:       true,
 		},
-		widgets.VSpace(20),
+		widgets.VSpace(24),
 
 		// Section: Haptic Feedback
 		sectionTitle("Haptic Feedback", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Buttons include haptic feedback by default:", Style: labelStyle(colors)},
 		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "With Haptics (default)", func() {
-			platform.Haptics.LightImpact()
-		}),
-		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "No Haptics", func() {}).
-			WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant).
-			WithHaptic(false),
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "With Haptics", func() {
+					platform.Haptics.LightImpact()
+				}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "No Haptics", func() {}).
+					WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant).
+					WithHaptic(false),
+			},
+		},
 		widgets.VSpace(40),
 	)
 }

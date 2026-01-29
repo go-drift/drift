@@ -42,54 +42,24 @@ func (s *clipboardState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("Copy & Paste", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Interact with the system clipboard:", Style: labelStyle(colors)},
-		widgets.VSpace(16),
-
-		widgets.Button{
-			Label: "Copy Sample Text",
-			OnTap: func() {
-				s.copyText()
-			},
-			Color:     colors.Primary,
-			TextColor: colors.OnPrimary,
-			Haptic:    true,
-		},
 		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: "Read Clipboard",
-			OnTap: func() {
-				s.readClipboard()
+		widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Copy", func() {
+					s.copyText()
+				}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Read", func() {
+					s.readClipboard()
+				}).WithColor(colors.Tertiary, colors.OnTertiary),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Clear", func() {
+					s.clearClipboard()
+				}).WithColor(colors.SurfaceContainerHigh, colors.OnSurface),
 			},
-			Color:     colors.Secondary,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
-		},
-		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: "Check Has Text",
-			OnTap: func() {
-				s.checkHasText()
-			},
-			Color:     colors.Tertiary,
-			TextColor: colors.OnTertiary,
-			Haptic:    true,
-		},
-		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: "Clear Clipboard",
-			OnTap: func() {
-				s.clearClipboard()
-			},
-			Color:     colors.Error,
-			TextColor: colors.OnError,
-			Haptic:    true,
 		},
 		widgets.VSpace(24),
-
-		sectionTitle("Result", colors),
-		widgets.VSpace(12),
 		statusCard(s.statusText.Get(), colors),
 		widgets.VSpace(40),
 	)
@@ -115,19 +85,6 @@ func (s *clipboardState) readClipboard() {
 		return
 	}
 	s.statusText.Set("Clipboard contents: " + text)
-}
-
-func (s *clipboardState) checkHasText() {
-	hasText, err := platform.Clipboard.HasText()
-	if err != nil {
-		s.statusText.Set("Error checking: " + err.Error())
-		return
-	}
-	if hasText {
-		s.statusText.Set("Clipboard has text: true")
-	} else {
-		s.statusText.Set("Clipboard has text: false")
-	}
 }
 
 func (s *clipboardState) clearClipboard() {

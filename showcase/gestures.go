@@ -77,7 +77,7 @@ func (s *gesturesDemoState) Build(ctx core.BuildContext) core.Widget {
 		// Section 4: Axis Competition
 		sectionTitle("Axis Competition", colors),
 		widgets.VSpace(8),
-		widgets.Text{Content: "Horizontal swipe on card inside vertical scroll - card moves, scroll doesn't:", Style: labelStyle(colors)},
+		widgets.Text{Content: "Horizontal swipe on card inside vertical scroll - card moves, scroll doesn't:", Style: labelStyle(colors), Wrap: true},
 		widgets.VSpace(12),
 		s.buildSwipeCard(colors),
 		widgets.VSpace(40),

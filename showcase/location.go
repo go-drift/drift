@@ -84,27 +84,18 @@ func (s *locationState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("Location Services", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: enabledText, Style: labelStyle(colors)},
-		widgets.VSpace(16),
-
-		widgets.Button{
-			Label: "Get Current Location",
-			OnTap: func() {
-				s.getCurrentLocation()
-			},
-			Color:     colors.Primary,
-			TextColor: colors.OnPrimary,
-			Haptic:    true,
-		},
 		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: toggleLabel,
-			OnTap: func() {
-				s.toggleUpdates()
+		widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Get Location", func() {
+					s.getCurrentLocation()
+				}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, toggleLabel, func() {
+					s.toggleUpdates()
+				}).WithColor(toggleColor, colors.OnSecondary),
 			},
-			Color:     toggleColor,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
 		},
 		widgets.VSpace(24),
 
@@ -123,7 +114,8 @@ func (s *locationState) locationCard(colors theme.ColorScheme) core.Widget {
 
 	if loc == nil {
 		return widgets.Container{
-			Color: colors.SurfaceVariant,
+			Color:        colors.SurfaceVariant,
+			BorderRadius: 8,
 			ChildWidget: widgets.PaddingAll(16,
 				widgets.Text{Content: "No location data yet", Style: graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
@@ -134,7 +126,8 @@ func (s *locationState) locationCard(colors theme.ColorScheme) core.Widget {
 	}
 
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
+		Color:        colors.SurfaceVariant,
+		BorderRadius: 8,
 		ChildWidget: widgets.PaddingAll(16,
 			widgets.Column{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,

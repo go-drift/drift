@@ -12,102 +12,90 @@ import (
 func buildScrollPage(ctx core.BuildContext) core.Widget {
 	_, colors, _ := theme.UseTheme(ctx)
 
-	// Build a list of items
-	items := make([]core.Widget, 0, 50)
-
-	items = append(items,
+	return demoPage(ctx, "Scrolling",
 		sectionTitle("ListView", colors),
 		widgets.VSpace(8),
-		widgets.Text{Content: "ListView builds a scrollable column for simple lists:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.SizedBox{
-			Height: 220,
-			ChildWidget: widgets.ListView{
-				Physics: widgets.ClampingScrollPhysics{},
-				ChildrenWidgets: []core.Widget{
-					listItem(1, colors.Surface, colors),
-					widgets.VSpace(4),
-					listItem(2, colors.SurfaceVariant, colors),
-					widgets.VSpace(4),
-					listItem(3, colors.Surface, colors),
-					widgets.VSpace(4),
-					listItem(4, colors.SurfaceVariant, colors),
+		widgets.Text{Content: "Static list with explicit children:", Style: labelStyle(colors)},
+		widgets.VSpace(12),
+		widgets.Container{
+			Color:        colors.SurfaceVariant,
+			BorderRadius: 8,
+			ChildWidget: widgets.SizedBox{
+				Height: 200,
+				ChildWidget: widgets.ListView{
+					Padding: layout.EdgeInsetsAll(8),
+					Physics: widgets.BouncingScrollPhysics{},
+					ChildrenWidgets: []core.Widget{
+						listItem(1, colors.Surface, colors),
+						widgets.VSpace(6),
+						listItem(2, colors.Surface, colors),
+						widgets.VSpace(6),
+						listItem(3, colors.Surface, colors),
+						widgets.VSpace(6),
+						listItem(4, colors.Surface, colors),
+						widgets.VSpace(6),
+						listItem(5, colors.Surface, colors),
+					},
 				},
 			},
 		},
-		widgets.VSpace(20),
-		sectionTitle("ListView Builder", colors),
+		widgets.VSpace(24),
+
+		sectionTitle("ListViewBuilder", colors),
 		widgets.VSpace(8),
-		widgets.Text{Content: "Use ListViewBuilder for item generation:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.SizedBox{
-			Height: 220,
-			ChildWidget: widgets.ListViewBuilder{
-				ItemCount:   12,
-				ItemExtent:  52,
-				CacheExtent: 104,
-				ItemBuilder: func(ctx core.BuildContext, index int) core.Widget {
-					bg := colors.Surface
-					if index%2 == 1 {
-						bg = colors.SurfaceVariant
-					}
-					return listItem(index+1, bg, colors)
+		widgets.Text{Content: "Dynamic list with lazy item generation:", Style: labelStyle(colors)},
+		widgets.VSpace(12),
+		widgets.Container{
+			Color:        colors.SurfaceVariant,
+			BorderRadius: 8,
+			ChildWidget: widgets.SizedBox{
+				Height: 200,
+				ChildWidget: widgets.ListViewBuilder{
+					Padding:     layout.EdgeInsetsAll(8),
+					ItemCount:   50,
+					ItemExtent:  56,
+					CacheExtent: 112,
+					ItemBuilder: func(ctx core.BuildContext, index int) core.Widget {
+						return widgets.Padding{
+							Padding:     layout.EdgeInsets{Bottom: 6},
+							ChildWidget: listItem(index+1, colors.Surface, colors),
+						}
+					},
 				},
 			},
 		},
-		widgets.VSpace(20),
-		sectionTitle("Scrollable List", colors),
-		widgets.VSpace(8),
-		widgets.Text{Content: "Drag to scroll through 40 items", Style: labelStyle(colors)},
-		widgets.VSpace(16),
-	)
-
-	for i := 1; i <= 40; i++ {
-		bgColor := colors.Surface
-		if i%2 == 0 {
-			bgColor = colors.SurfaceVariant
-		}
-		items = append(items, listItem(i, bgColor, colors))
-		items = append(items, widgets.VSpace(4))
-	}
-
-	items = append(items,
 		widgets.VSpace(40),
 	)
-
-	content := widgets.ListView{
-		Padding:         layout.EdgeInsetsAll(20),
-		Physics:         widgets.BouncingScrollPhysics{},
-		ChildrenWidgets: items,
-	}
-
-	return pageScaffold(ctx, "Scrolling", content)
 }
 
 // listItem creates a styled list item.
 func listItem(index int, bgColor graphics.Color, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color: bgColor,
-		ChildWidget: widgets.PaddingSym(16, 14,
-			widgets.RowOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentStart,
-				widgets.MainAxisSizeMax,
-				widgets.Container{
-					Color: colors.Primary,
-					ChildWidget: widgets.PaddingAll(8,
-						widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
-							Color:    colors.OnPrimary,
-							FontSize: 12,
+		Color:        bgColor,
+		BorderRadius: 6,
+		ChildWidget: widgets.PaddingSym(12, 12,
+			widgets.Row{
+				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				ChildrenWidgets: []core.Widget{
+					widgets.Container{
+						Color:        colors.PrimaryContainer,
+						BorderRadius: 4,
+						Width:        32,
+						Height:       32,
+						Alignment:    layout.AlignmentCenter,
+						ChildWidget: widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
+							Color:    colors.OnPrimaryContainer,
+							FontSize: 14,
 						}},
-					),
+					},
+					widgets.HSpace(12),
+					widgets.Text{Content: "Item " + itoa(index), Style: graphics.TextStyle{
+						Color:    colors.OnSurface,
+						FontSize: 15,
+					}},
 				},
-				widgets.HSpace(16),
-				widgets.Text{Content: "List Item " + itoa(index), Style: graphics.TextStyle{
-					Color:    colors.OnSurface,
-					FontSize: 16,
-				}},
-			),
+			},
 		),
 	}
 }

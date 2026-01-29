@@ -12,8 +12,8 @@ import (
 )
 
 // buildAnimationsPage creates the animations demo page.
-func buildAnimationsPage(ctx core.BuildContext) core.Widget {
-	return pageScaffold(ctx, "Animations", AnimationsDemo{})
+func buildAnimationsPage(_ core.BuildContext) core.Widget {
+	return AnimationsDemo{}
 }
 
 // AnimationsDemo showcases implicit animation widgets.
@@ -33,153 +33,158 @@ func (a AnimationsDemo) CreateState() core.State {
 
 type animationsDemoState struct {
 	core.StateBase
-	containerExpanded bool
-	containerColorIdx int
-	opacityVisible    bool
+	curveIdx       int
+	curveExpanded  bool
+	colorIdx       int
+	opacityVisible bool
 }
 
 func (s *animationsDemoState) InitState() {
-	s.containerExpanded = false
-	s.containerColorIdx = 0
+	s.curveIdx = 0
+	s.curveExpanded = false
+	s.colorIdx = 0
 	s.opacityVisible = true
 }
 
 func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	_, colors, _ := theme.UseTheme(ctx)
 
-	// Colors to cycle through for AnimatedContainer demo
-	containerColors := []graphics.Color{
-		colors.Primary,
-		colors.Secondary,
-		colors.Error,
-		colors.Outline,
-	}
-	currentColor := containerColors[s.containerColorIdx%len(containerColors)]
+	// Available curves
+	curveNames := []string{"Linear", "EaseIn", "EaseOut", "EaseInOut"}
+	curves := []func(float64) float64{animation.LinearCurve, animation.EaseIn, animation.EaseOut, animation.EaseInOut}
+	currentCurveName := curveNames[s.curveIdx%len(curveNames)]
+	currentCurve := curves[s.curveIdx%len(curves)]
 
-	// Container size based on expanded state
-	containerWidth := 100.0
-	containerHeight := 100.0
-	if s.containerExpanded {
-		containerWidth = 200.0
-		containerHeight = 150.0
+	// Position for curve demo (280 width - 32 box - 4 padding = 244 max)
+	curvePos := 4.0
+	if s.curveExpanded {
+		curvePos = 244.0
 	}
 
-	return widgets.ScrollView{
-		ScrollDirection: widgets.AxisVertical,
-		Physics:         widgets.BouncingScrollPhysics{},
-		Padding:         layout.EdgeInsetsAll(20),
-		ChildWidget: widgets.ColumnOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMin,
+	// Colors and sizes for animation
+	demoColors := []graphics.Color{CyanSeed, PinkSeed, colors.Tertiary, colors.Primary}
+	currentColor := demoColors[s.colorIdx%len(demoColors)]
+	sizes := []float64{80, 100, 60, 90}
+	currentSize := sizes[s.colorIdx%len(sizes)]
 
-			// AnimatedContainer section
-			widgets.Text{Content: "AnimatedContainer", Style: textTheme.TitleLarge},
-			widgets.VSpace(8),
-			widgets.Text{Content: "Automatically animates size, color, and padding changes", Style: graphics.TextStyle{
-				Color:    colors.OnSurfaceVariant,
-				FontSize: 14,
-			}},
-			widgets.VSpace(16),
+	return demoPage(ctx, "Animations",
+		// Easing Curves section
+		sectionTitle("Easing Curves", colors),
+		widgets.VSpace(8),
+		widgets.Text{Content: "Tap 'Animate' to see curve: " + currentCurveName, Style: labelStyle(colors)},
+		widgets.VSpace(12),
 
-			// AnimatedContainer demo
-			widgets.AnimatedContainer{
-				Duration:  300 * time.Millisecond,
-				Curve:     animation.EaseInOut,
-				Width:     containerWidth,
-				Height:    containerHeight,
-				Color:     currentColor,
-				Alignment: layout.AlignmentCenter,
-				ChildWidget: widgets.Text{Content: "Tap buttons", Style: graphics.TextStyle{
-					Color:      colors.OnPrimary,
-					FontSize:   14,
-					FontWeight: graphics.FontWeightBold,
-				}},
-			},
-			widgets.VSpace(16),
-
-			// Controls for AnimatedContainer
-			widgets.RowOf(
-				widgets.MainAxisAlignmentCenter,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMax,
-				widgets.Button{
-					Label: "Toggle Size",
-					OnTap: func() {
-						s.SetState(func() {
-							s.containerExpanded = !s.containerExpanded
-						})
-					},
-					Color:     colors.SurfaceVariant,
-					TextColor: colors.OnSurfaceVariant,
-					Padding:   layout.EdgeInsetsSymmetric(16, 10),
-					FontSize:  14,
-					Haptic:    true,
-				},
-				widgets.HSpace(12),
-				widgets.Button{
-					Label: "Change Color",
-					OnTap: func() {
-						s.SetState(func() {
-							s.containerColorIdx++
-						})
-					},
-					Color:     colors.SurfaceVariant,
-					TextColor: colors.OnSurfaceVariant,
-					Padding:   layout.EdgeInsetsSymmetric(16, 10),
-					FontSize:  14,
-					Haptic:    true,
-				},
-			),
-
-			widgets.VSpace(40),
-
-			// AnimatedOpacity section
-			widgets.Text{Content: "AnimatedOpacity", Style: textTheme.TitleLarge},
-			widgets.VSpace(8),
-			widgets.Text{Content: "Smoothly fades widgets in and out", Style: graphics.TextStyle{
-				Color:    colors.OnSurfaceVariant,
-				FontSize: 14,
-			}},
-			widgets.VSpace(16),
-
-			// AnimatedOpacity demo
-			widgets.AnimatedOpacity{
-				Duration: 500 * time.Millisecond,
-				Curve:    animation.EaseOut,
-				Opacity:  boolToOpacity(s.opacityVisible),
+		// Single curve demo - AnimatedContainer with padding positions the child
+		widgets.Container{
+			Color:  colors.SurfaceVariant,
+			Width:  280,
+			Height: 40,
+			ChildWidget: widgets.AnimatedContainer{
+				Duration:  500 * time.Millisecond,
+				Curve:     currentCurve,
+				Width:     280,
+				Height:    40,
+				Padding:   layout.EdgeInsets{Left: curvePos, Top: 4, Bottom: 4},
+				Alignment: layout.AlignmentCenterLeft,
 				ChildWidget: widgets.Container{
-					Width:     150,
-					Height:    80,
-					Color:     colors.Secondary,
+					Width:  32,
+					Height: 32,
+					Color:  PinkSeed,
+				},
+			},
+		},
+		widgets.VSpace(12),
+
+		widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Animate", func() {
+					s.SetState(func() {
+						s.curveExpanded = !s.curveExpanded
+					})
+				}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Next Curve", func() {
+					s.SetState(func() {
+						s.curveIdx++
+						s.curveExpanded = false // Reset position
+					})
+				}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
+			},
+		},
+		widgets.VSpace(24),
+
+		// AnimatedContainer section
+		sectionTitle("AnimatedContainer", colors),
+		widgets.VSpace(8),
+		widgets.Text{Content: "Animates size, color, and padding:", Style: labelStyle(colors)},
+		widgets.VSpace(12),
+
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				widgets.AnimatedContainer{
+					Duration:  400 * time.Millisecond,
+					Curve:     animation.EaseInOut,
+					Width:     currentSize,
+					Height:    currentSize,
+					Color:     currentColor,
 					Alignment: layout.AlignmentCenter,
-					ChildWidget: widgets.Text{Content: "Fade me!", Style: graphics.TextStyle{
-						Color:      colors.OnSecondary,
-						FontSize:   16,
-						FontWeight: graphics.FontWeightBold,
+					ChildWidget: widgets.Text{Content: "Tap", Style: graphics.TextStyle{
+						Color:    textColorFor(currentColor),
+						FontSize: 14,
 					}},
 				},
+				widgets.HSpace(16),
+				theme.ButtonOf(ctx, "Change", func() {
+					s.SetState(func() {
+						s.colorIdx++
+					})
+				}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
 			},
-			widgets.VSpace(16),
+		},
+		widgets.VSpace(24),
 
-			// Control for AnimatedOpacity
-			widgets.Button{
-				Label: "Toggle Visibility",
-				OnTap: func() {
+		// AnimatedOpacity section
+		sectionTitle("AnimatedOpacity", colors),
+		widgets.VSpace(8),
+		widgets.Text{Content: "Smooth fade transitions:", Style: labelStyle(colors)},
+		widgets.VSpace(12),
+
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			ChildrenWidgets: []core.Widget{
+				widgets.SizedBox{
+					Width:  100,
+					Height: 60,
+					ChildWidget: widgets.AnimatedOpacity{
+						Duration: 300 * time.Millisecond,
+						Curve:    animation.EaseOut,
+						Opacity:  boolToOpacity(s.opacityVisible),
+						ChildWidget: widgets.Container{
+							Width:     100,
+							Height:    60,
+							Color:     colors.Secondary,
+							Alignment: layout.AlignmentCenter,
+							ChildWidget: widgets.Text{Content: "Hello!", Style: graphics.TextStyle{
+								Color:    colors.OnSecondary,
+								FontSize: 14,
+							}},
+						},
+					},
+				},
+				widgets.HSpace(16),
+				theme.ButtonOf(ctx, "Toggle", func() {
 					s.SetState(func() {
 						s.opacityVisible = !s.opacityVisible
 					})
-				},
-				Color:     colors.SurfaceVariant,
-				TextColor: colors.OnSurfaceVariant,
-				Padding:   layout.EdgeInsetsSymmetric(20, 12),
-				FontSize:  14,
-				Haptic:    true,
+				}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
 			},
-
-			widgets.VSpace(40),
-		),
-	}
+		},
+		widgets.VSpace(40),
+	)
 }
 
 func boolToOpacity(visible bool) float64 {

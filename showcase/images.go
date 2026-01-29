@@ -39,60 +39,67 @@ func loadGoLogo() image.Image {
 }
 
 func buildImagesPage(ctx core.BuildContext) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	_, colors, _ := theme.UseTheme(ctx)
 	logo := loadGoLogo()
 
 	return demoPage(ctx, "Images",
-		widgets.Text{Content: "Images", Style: textTheme.TitleLarge},
+		sectionTitle("Raster Images", colors),
 		widgets.VSpace(12),
-		widgets.Text{Content: "Raster images are decoded with Go's image package.", Style: labelStyle(colors)},
+		widgets.Text{Content: "Decoded with Go's image package:", Style: labelStyle(colors)},
+		widgets.VSpace(12),
+		widgets.Image{
+			Source: logo,
+			Width:  180,
+		},
 		widgets.VSpace(24),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentCenter,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMax,
-			widgets.Image{
-				Source: logo,
-				Width:  220,
+
+		sectionTitle("Fit Modes", colors),
+		widgets.VSpace(12),
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				fitPreview("Fill", widgets.ImageFitFill, logo, colors),
+				widgets.HSpace(12),
+				fitPreview("Contain", widgets.ImageFitContain, logo, colors),
 			},
-		),
+		},
 		widgets.VSpace(12),
-		widgets.Text{Content: "Go logo (PNG)", Style: textTheme.BodySmall},
-		widgets.VSpace(32),
-		widgets.Text{Content: "Fit modes", Style: textTheme.TitleMedium},
+		widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				fitPreview("Cover", widgets.ImageFitCover, logo, colors),
+				widgets.HSpace(12),
+				fitPreview("None", widgets.ImageFitNone, logo, colors),
+			},
+		},
 		widgets.VSpace(12),
-		fitPreview("Fill", widgets.ImageFitFill, logo, colors, textTheme),
-		widgets.VSpace(16),
-		fitPreview("Contain", widgets.ImageFitContain, logo, colors, textTheme),
-		widgets.VSpace(16),
-		fitPreview("Cover", widgets.ImageFitCover, logo, colors, textTheme),
-		widgets.VSpace(16),
-		fitPreview("None", widgets.ImageFitNone, logo, colors, textTheme),
-		widgets.VSpace(16),
-		fitPreview("ScaleDown", widgets.ImageFitScaleDown, logo, colors, textTheme),
+		fitPreview("ScaleDown", widgets.ImageFitScaleDown, logo, colors),
 		widgets.VSpace(40),
 	)
 }
 
-func fitPreview(label string, fit widgets.ImageFit, logo image.Image, colors theme.ColorScheme, textTheme theme.TextTheme) core.Widget {
-	return widgets.ColumnOf(
-		widgets.MainAxisAlignmentStart,
-		widgets.CrossAxisAlignmentStart,
-		widgets.MainAxisSizeMin,
-		widgets.Text{Content: label, Style: textTheme.BodyMedium},
-		widgets.VSpace(8),
-		widgets.Container{
-			Color:     colors.SurfaceVariant,
-			Width:     240,
-			Height:    140,
-			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Image{
-				Source:    logo,
-				Width:     220,
-				Height:    120,
-				Fit:       fit,
+func fitPreview(label string, fit widgets.ImageFit, logo image.Image, colors theme.ColorScheme) core.Widget {
+	return widgets.Column{
+		MainAxisSize:       widgets.MainAxisSizeMin,
+		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+		ChildrenWidgets: []core.Widget{
+			widgets.Text{Content: label, Style: labelStyle(colors)},
+			widgets.VSpace(4),
+			widgets.Container{
+				Color:     colors.SurfaceVariant,
+				Width:     100,
+				Height:    100,
 				Alignment: layout.AlignmentCenter,
+				ChildWidget: widgets.Image{
+					Source:    logo,
+					Width:     100,
+					Height:    100,
+					Fit:       fit,
+					Alignment: layout.AlignmentCenter,
+				},
 			},
 		},
-	)
+	}
 }

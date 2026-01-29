@@ -45,44 +45,24 @@ func (s *shareState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Text{Content: "Enter custom text to share:", Style: labelStyle(colors)},
 		widgets.VSpace(8),
-		widgets.TextField{
-			Label:        "Text to share",
-			Controller:   s.textController,
-			Placeholder:  "Enter text...",
-			KeyboardType: platform.KeyboardTypeText,
-			BorderRadius: 8,
-		},
-		widgets.VSpace(16),
-
-		widgets.Button{
-			Label: "Share Text",
-			OnTap: func() {
-				s.shareText()
-			},
-			Color:     colors.Primary,
-			TextColor: colors.OnPrimary,
-			Haptic:    true,
-		},
+		theme.TextFieldOf(ctx, s.textController).
+			WithLabel("Text to share").
+			WithPlaceholder("Enter text..."),
+		widgets.VSpace(12),
+		theme.ButtonOf(ctx, "Share Text", func() {
+			s.shareText()
+		}),
 		widgets.VSpace(24),
 
 		sectionTitle("Share URL", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Share the Drift GitHub repository:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-
-		widgets.Button{
-			Label: "Share URL",
-			OnTap: func() {
-				s.shareURL()
-			},
-			Color:     colors.Secondary,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
-		},
+		widgets.VSpace(12),
+		theme.ButtonOf(ctx, "Share URL", func() {
+			s.shareURL()
+		}).WithColor(colors.Secondary, colors.OnSecondary),
 		widgets.VSpace(24),
 
-		sectionTitle("Result", colors),
-		widgets.VSpace(12),
 		statusCard(s.statusText.Get(), colors),
 		widgets.VSpace(40),
 	)

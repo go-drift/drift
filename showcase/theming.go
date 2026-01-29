@@ -32,75 +32,61 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 
 	contentWidgets := []core.Widget{
 		// Current mode indicator
-		widgets.Container{
-			Color: colors.Primary,
-			ChildWidget: widgets.PaddingAll(16,
-				widgets.ColumnOf(
-					widgets.MainAxisAlignmentStart,
-					widgets.CrossAxisAlignmentCenter,
-					widgets.MainAxisSizeMin,
-					widgets.Text{Content: modeLabel, Style: graphics.TextStyle{
-						Color:      colors.OnPrimary,
-						FontSize:   18,
-						FontWeight: graphics.FontWeightBold,
-					}},
-					widgets.VSpace(4),
-					widgets.Text{Content: platformLabel, Style: graphics.TextStyle{
-						Color:    colors.OnPrimary,
-						FontSize: 14,
-					}},
-				),
-			),
-		},
+		themeModeCard(modeLabel, platformLabel, colors),
 		widgets.VSpace(24),
 
 		// Color palette section
 		sectionTitle("Color Palette", colors),
 		widgets.VSpace(12),
-		colorSwatch("Primary", colors.Primary, colors.OnPrimary),
-		widgets.VSpace(8),
-		colorSwatch("PrimaryContainer", colors.PrimaryContainer, colors.OnPrimaryContainer),
-		widgets.VSpace(8),
-		colorSwatch("Secondary", colors.Secondary, colors.OnSecondary),
-		widgets.VSpace(8),
-		colorSwatch("SecondaryContainer", colors.SecondaryContainer, colors.OnSecondaryContainer),
-		widgets.VSpace(8),
-		colorSwatch("Tertiary", colors.Tertiary, colors.OnTertiary),
-		widgets.VSpace(8),
-		colorSwatch("TertiaryContainer", colors.TertiaryContainer, colors.OnTertiaryContainer),
-		widgets.VSpace(8),
-		colorSwatch("Error", colors.Error, colors.OnError),
-		widgets.VSpace(8),
-		colorSwatch("Background", colors.Background, colors.OnBackground),
-		widgets.VSpace(8),
-		colorSwatch("Surface", colors.Surface, colors.OnSurface),
-		widgets.VSpace(8),
-		colorSwatch("SurfaceVariant", colors.SurfaceVariant, colors.OnSurfaceVariant),
-		widgets.VSpace(8),
-		colorSwatch("SurfaceContainer", colors.SurfaceContainer, colors.OnSurface),
-		widgets.VSpace(24),
+	}
 
-		// Text theme section
+	// Add color swatches
+	swatches := []struct {
+		name   string
+		bg, fg graphics.Color
+	}{
+		{"Primary", colors.Primary, colors.OnPrimary},
+		{"PrimaryContainer", colors.PrimaryContainer, colors.OnPrimaryContainer},
+		{"Secondary", colors.Secondary, colors.OnSecondary},
+		{"SecondaryContainer", colors.SecondaryContainer, colors.OnSecondaryContainer},
+		{"Tertiary", colors.Tertiary, colors.OnTertiary},
+		{"TertiaryContainer", colors.TertiaryContainer, colors.OnTertiaryContainer},
+		{"Error", colors.Error, colors.OnError},
+		{"Background", colors.Background, colors.OnBackground},
+		{"Surface", colors.Surface, colors.OnSurface},
+		{"SurfaceVariant", colors.SurfaceVariant, colors.OnSurfaceVariant},
+		{"SurfaceContainer", colors.SurfaceContainer, colors.OnSurface},
+	}
+	for _, s := range swatches {
+		contentWidgets = append(contentWidgets, colorSwatch(s.name, s.bg, s.fg), widgets.VSpace(8))
+	}
+
+	// Text theme section
+	contentWidgets = append(contentWidgets,
+		widgets.VSpace(16),
 		sectionTitle("Text Theme", colors),
 		widgets.VSpace(12),
-		widgets.Text{Content: "HeadlineLarge", Style: textTheme.HeadlineLarge},
-		widgets.VSpace(8),
-		widgets.Text{Content: "HeadlineMedium", Style: textTheme.HeadlineMedium},
-		widgets.VSpace(8),
-		widgets.Text{Content: "HeadlineSmall", Style: textTheme.HeadlineSmall},
-		widgets.VSpace(8),
-		widgets.Text{Content: "TitleLarge", Style: textTheme.TitleLarge},
-		widgets.VSpace(8),
-		widgets.Text{Content: "TitleMedium", Style: textTheme.TitleMedium},
-		widgets.VSpace(8),
-		widgets.Text{Content: "BodyLarge", Style: textTheme.BodyLarge},
-		widgets.VSpace(8),
-		widgets.Text{Content: "BodyMedium", Style: textTheme.BodyMedium},
-		widgets.VSpace(8),
-		widgets.Text{Content: "LabelLarge", Style: textTheme.LabelLarge},
-		widgets.VSpace(24),
+	)
+	textStyles := []struct {
+		name  string
+		style graphics.TextStyle
+	}{
+		{"HeadlineLarge", textTheme.HeadlineLarge},
+		{"HeadlineMedium", textTheme.HeadlineMedium},
+		{"HeadlineSmall", textTheme.HeadlineSmall},
+		{"TitleLarge", textTheme.TitleLarge},
+		{"TitleMedium", textTheme.TitleMedium},
+		{"BodyLarge", textTheme.BodyLarge},
+		{"BodyMedium", textTheme.BodyMedium},
+		{"LabelLarge", textTheme.LabelLarge},
+	}
+	for _, ts := range textStyles {
+		contentWidgets = append(contentWidgets, widgets.Text{Content: ts.name, Style: ts.style}, widgets.VSpace(8))
+	}
 
-		// Gradient text section
+	// Gradient text section
+	contentWidgets = append(contentWidgets,
+		widgets.VSpace(16),
 		sectionTitle("Gradient Text", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Gradient headlines", Style: graphics.TextStyle{
@@ -109,7 +95,7 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 			FontSize:   28,
 			FontWeight: graphics.FontWeightBold,
 		}},
-	}
+	)
 
 	// Add Cupertino colors section if Cupertino theme is active
 	if isCupertino {
@@ -172,4 +158,28 @@ func colorHex(c graphics.Color) string {
 func hexByte(b uint8) string {
 	const hexChars = "0123456789ABCDEF"
 	return string([]byte{hexChars[b>>4], hexChars[b&0x0F]})
+}
+
+// themeModeCard displays the current theme mode and platform.
+func themeModeCard(mode, platform string, colors theme.ColorScheme) core.Widget {
+	return widgets.Container{
+		Color: colors.Primary,
+		ChildWidget: widgets.PaddingAll(16,
+			widgets.ColumnOf(
+				widgets.MainAxisAlignmentStart,
+				widgets.CrossAxisAlignmentCenter,
+				widgets.MainAxisSizeMin,
+				widgets.Text{Content: mode, Style: graphics.TextStyle{
+					Color:      colors.OnPrimary,
+					FontSize:   18,
+					FontWeight: graphics.FontWeightBold,
+				}},
+				widgets.VSpace(4),
+				widgets.Text{Content: platform, Style: graphics.TextStyle{
+					Color:    colors.OnPrimary,
+					FontSize: 14,
+				}},
+			),
+		),
+	}
 }

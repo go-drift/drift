@@ -100,38 +100,22 @@ func (s *storageState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("File Picker", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Pick files and directories:", Style: labelStyle(colors)},
-		widgets.VSpace(16),
-
-		widgets.Button{
-			Label: "Pick File",
-			OnTap: func() {
-				s.pickFile()
-			},
-			Color:     colors.Primary,
-			TextColor: colors.OnPrimary,
-			Haptic:    true,
-		},
 		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: "Pick Directory",
-			OnTap: func() {
-				s.pickDirectory()
+		widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+			ChildrenWidgets: []core.Widget{
+				theme.ButtonOf(ctx, "Pick File", func() {
+					s.pickFile()
+				}),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Pick Dir", func() {
+					s.pickDirectory()
+				}).WithColor(colors.Secondary, colors.OnSecondary),
+				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Save File", func() {
+					s.saveFile()
+				}).WithColor(colors.Tertiary, colors.OnTertiary),
 			},
-			Color:     colors.Secondary,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
-		},
-		widgets.VSpace(12),
-
-		widgets.Button{
-			Label: "Save File",
-			OnTap: func() {
-				s.saveFile()
-			},
-			Color:     colors.Tertiary,
-			TextColor: colors.OnTertiary,
-			Haptic:    true,
 		},
 		widgets.VSpace(24),
 
@@ -156,7 +140,8 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 
 	if file == nil && path == "" {
 		return widgets.Container{
-			Color: colors.SurfaceVariant,
+			Color:        colors.SurfaceVariant,
+			BorderRadius: 8,
 			ChildWidget: widgets.PaddingAll(16,
 				widgets.Text{Content: "No item selected", Style: graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
@@ -168,7 +153,8 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 
 	if file != nil {
 		return widgets.Container{
-			Color: colors.SurfaceVariant,
+			Color:        colors.SurfaceVariant,
+			BorderRadius: 8,
 			ChildWidget: widgets.PaddingAll(16,
 				widgets.Column{
 					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
@@ -198,7 +184,8 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 	}
 
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
+		Color:        colors.SurfaceVariant,
+		BorderRadius: 8,
 		ChildWidget: widgets.PaddingAll(16,
 			widgets.Column{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
@@ -223,47 +210,21 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 
 func (s *storageState) appDirectoriesCard(colors theme.ColorScheme) core.Widget {
 	dirs := s.appDirs.Get()
-
 	if len(dirs) == 0 {
-		return widgets.Container{
-			Color: colors.SurfaceVariant,
-			ChildWidget: widgets.PaddingAll(16,
-				widgets.Text{Content: "Loading directories...", Style: graphics.TextStyle{
-					Color:    colors.OnSurfaceVariant,
-					FontSize: 14,
-				}},
-			),
-		}
+		return statusCard("Loading directories...", colors)
 	}
 
-	rows := make([]core.Widget, 0)
+	var rows []core.Widget
 	for name, path := range dirs {
 		if len(rows) > 0 {
 			rows = append(rows, widgets.VSpace(12))
 		}
-		rows = append(rows,
-			widgets.Column{
-				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-				MainAxisSize:       widgets.MainAxisSizeMin,
-				ChildrenWidgets: []core.Widget{
-					widgets.Text{Content: name + ":", Style: graphics.TextStyle{
-						Color:      colors.OnSurfaceVariant,
-						FontSize:   12,
-						FontWeight: graphics.FontWeightBold,
-					}},
-					widgets.VSpace(2),
-					widgets.Text{Content: path, Style: graphics.TextStyle{
-						Color:    colors.OnSurface,
-						FontSize: 11,
-					}},
-				},
-			},
-		)
+		rows = append(rows, dirEntry(name, path, colors))
 	}
 
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
+		Color:        colors.SurfaceVariant,
+		BorderRadius: 8,
 		ChildWidget: widgets.PaddingAll(16,
 			widgets.Column{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
@@ -272,6 +233,27 @@ func (s *storageState) appDirectoriesCard(colors theme.ColorScheme) core.Widget 
 				ChildrenWidgets:    rows,
 			},
 		),
+	}
+}
+
+// dirEntry displays a directory name and path.
+func dirEntry(name, path string, colors theme.ColorScheme) core.Widget {
+	return widgets.Column{
+		MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+		MainAxisSize:       widgets.MainAxisSizeMin,
+		ChildrenWidgets: []core.Widget{
+			widgets.Text{Content: name + ":", Style: graphics.TextStyle{
+				Color:      colors.OnSurfaceVariant,
+				FontSize:   12,
+				FontWeight: graphics.FontWeightBold,
+			}},
+			widgets.VSpace(2),
+			widgets.Text{Content: path, Style: graphics.TextStyle{
+				Color:    colors.OnSurface,
+				FontSize: 11,
+			}},
+		},
 	}
 }
 

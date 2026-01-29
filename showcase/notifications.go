@@ -79,35 +79,24 @@ func (s *notificationsState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("Permissions", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Request notification permissions on iOS/Android:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.Button{
-			Label: "Request Permission",
-			OnTap: func() {
-				s.requestPermissions()
-			},
-			Color:     colors.Primary,
-			TextColor: colors.OnPrimary,
-			Haptic:    true,
-		},
+		widgets.VSpace(12),
+		theme.ButtonOf(ctx, "Request Permission", func() {
+			s.requestPermissions()
+		}),
 		widgets.VSpace(12),
 		statusCard(s.statusText.Get(), colors),
 		widgets.VSpace(24),
+
 		sectionTitle("Local Notifications", colors),
 		widgets.VSpace(12),
 		widgets.Text{Content: "Schedule a notification 5 seconds from now:", Style: labelStyle(colors)},
-		widgets.VSpace(8),
-		widgets.Button{
-			Label: "Schedule Local",
-			OnTap: func() {
-				s.scheduleLocal()
-			},
-			Color:     colors.Secondary,
-			TextColor: colors.OnSecondary,
-			Haptic:    true,
-		},
+		widgets.VSpace(12),
+		theme.ButtonOf(ctx, "Schedule Local", func() {
+			s.scheduleLocal()
+		}).WithColor(colors.Secondary, colors.OnSecondary),
 		widgets.VSpace(12),
 		statusCard(s.receivedText.Get(), colors),
-		widgets.VSpace(12),
+		widgets.VSpace(8),
 		statusCard(s.openedText.Get(), colors),
 		widgets.VSpace(40),
 	)
@@ -153,7 +142,8 @@ func (s *notificationsState) scheduleLocal() {
 
 func statusCard(text string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
+		Color:        colors.SurfaceVariant,
+		BorderRadius: 8,
 		ChildWidget: widgets.PaddingAll(12,
 			widgets.Text{Content: text, Style: graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
