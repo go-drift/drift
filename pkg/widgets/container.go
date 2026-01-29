@@ -55,9 +55,9 @@ type Container struct {
 	Alignment   layout.Alignment
 	Shadow *graphics.BoxShadow
 	// Overflow controls whether gradients extend beyond container bounds.
-	// Defaults to OverflowVisible, allowing gradient effects like glows to
-	// extend beyond the widget area. Set to OverflowClip to confine gradients
-	// strictly within bounds. Only affects gradients; shadows overflow
+	// Defaults to OverflowClip, confining gradients strictly within bounds.
+	// Set to OverflowVisible for glow effects where the gradient should
+	// extend beyond the widget. Only affects gradients; shadows overflow
 	// naturally and solid colors never overflow.
 	Overflow Overflow
 }

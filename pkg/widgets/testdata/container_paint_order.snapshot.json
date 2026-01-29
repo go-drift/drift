@@ -62,6 +62,20 @@
       }
     },
     {
+      "op": "save"
+    },
+    {
+      "op": "clipRect",
+      "params": {
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 200,
+          "top": 0
+        }
+      }
+    },
+    {
       "op": "drawRect",
       "params": {
         "color": "0xFF646464",
@@ -74,6 +88,9 @@
       }
     },
     {
+      "op": "restore"
+    },
+    {
       "op": "save"
     },
     {
@@ -81,6 +98,20 @@
       "params": {
         "dx": 0,
         "dy": 0
+      }
+    },
+    {
+      "op": "save"
+    },
+    {
+      "op": "clipRect",
+      "params": {
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 200,
+          "top": 0
+        }
       }
     },
     {
@@ -94,6 +125,9 @@
           "top": 0
         }
       }
+    },
+    {
+      "op": "restore"
     },
     {
       "op": "restore"

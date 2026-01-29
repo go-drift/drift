@@ -24,6 +24,20 @@
   },
   "displayOps": [
     {
+      "op": "save"
+    },
+    {
+      "op": "clipRect",
+      "params": {
+        "rect": {
+          "bottom": 50,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
+    },
+    {
       "op": "drawRect",
       "params": {
         "color": "0xFFFFFFFF",
@@ -34,6 +48,9 @@
           "top": 0
         }
       }
+    },
+    {
+      "op": "restore"
     }
   ]
 }

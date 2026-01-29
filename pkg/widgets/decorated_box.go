@@ -16,8 +16,8 @@ import (
 //
 // Use BorderRadius for rounded corners. When combined with gradients, the
 // Overflow field controls whether the gradient extends beyond bounds:
-//   - [OverflowVisible] (default): gradient can overflow, useful for glows
-//   - [OverflowClip]: gradient confined to bounds (or rounded shape)
+//   - [OverflowClip] (default): gradient confined to bounds (or rounded shape)
+//   - [OverflowVisible]: gradient can overflow, useful for glows
 //
 // For simpler use cases without borders or rounded corners, see [Container].
 type DecoratedBox struct {
@@ -37,9 +37,9 @@ type DecoratedBox struct {
 	Shadow *graphics.BoxShadow // Drop shadow drawn behind the box; nil = no shadow
 
 	// Overflow controls whether gradients extend beyond widget bounds.
-	// Defaults to OverflowVisible, allowing gradient effects like glows to
-	// extend beyond the widget area. Set to OverflowClip to confine gradients
-	// strictly within bounds (clipped to rounded shape if BorderRadius > 0).
+	// Defaults to OverflowClip, confining gradients strictly within bounds
+	// (clipped to rounded shape if BorderRadius > 0). Set to OverflowVisible
+	// for glow effects where the gradient should extend beyond the widget.
 	// Only affects gradients; shadows overflow naturally and solid colors
 	// never overflow.
 	Overflow Overflow
