@@ -211,6 +211,31 @@ func TestFlex_BoundedConstraints_NoPanic(t *testing.T) {
 	}
 }
 
+// TestExpanded_ClampsChildSize ensures Expanded clamps a misbehaving child to its constraints.
+func TestExpanded_ClampsChildSize(t *testing.T) {
+	expanded := &renderExpanded{flex: 1}
+	expanded.SetSelf(expanded)
+
+	child := &mockOversizeChild{width: 200, height: 80}
+	child.SetSelf(child)
+
+	expanded.SetChild(child)
+
+	constraints := layout.Constraints{
+		MinWidth:  100,
+		MaxWidth:  100,
+		MinHeight: 0,
+		MaxHeight: 50,
+	}
+
+	expanded.Layout(constraints, false)
+
+	size := expanded.Size()
+	if size.Width != 100 || size.Height != 50 {
+		t.Errorf("expected Expanded size 100x50, got %vx%v", size.Width, size.Height)
+	}
+}
+
 // TestCenter_UnboundedConstraints verifies Center shrink-wraps to child size
 // when given unbounded constraints.
 func TestCenter_UnboundedConstraints(t *testing.T) {
@@ -413,6 +438,22 @@ func (m *mockFixedChild) PerformLayout() {
 func (m *mockFixedChild) Paint(ctx *layout.PaintContext) {}
 
 func (m *mockFixedChild) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
+	return false
+}
+
+// mockOversizeChild ignores constraints and reports a fixed size.
+type mockOversizeChild struct {
+	layout.RenderBoxBase
+	width, height float64
+}
+
+func (m *mockOversizeChild) PerformLayout() {
+	m.SetSize(graphics.Size{Width: m.width, Height: m.height})
+}
+
+func (m *mockOversizeChild) Paint(ctx *layout.PaintContext) {}
+
+func (m *mockOversizeChild) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	return false
 }
 

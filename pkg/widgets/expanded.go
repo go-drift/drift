@@ -105,15 +105,23 @@ func (r *renderExpanded) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
-// PerformLayout expands to fill available space and constrains child to that size.
+// PerformLayout lays out the child with the constraints received from the parent Flex.
+// The parent Flex (Row/Column) already provides correctly-configured constraints:
+// - Main axis: tight to the allocated flex space
+// - Cross axis: loose or tight depending on CrossAxisAlignment
+// Expanded passes these through and sizes itself to match its child.
 func (r *renderExpanded) PerformLayout() {
 	constraints := r.Constraints()
-	size := constraints.Constrain(graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight})
-	r.SetSize(size)
 
 	if r.child != nil {
-		r.child.Layout(layout.Tight(size), false) // false: tight constraints, child is boundary
+		// Pass through constraints from parent Flex - they're already set up correctly
+		r.child.Layout(constraints, true)
+		// Clamp to constraints in case a child misbehaves.
+		r.SetSize(constraints.Constrain(r.child.Size()))
 		r.child.SetParentData(&layout.BoxParentData{})
+	} else {
+		// No child: take minimum size that satisfies constraints
+		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}
 }
 
