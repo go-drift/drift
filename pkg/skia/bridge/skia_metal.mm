@@ -1397,10 +1397,10 @@ void drift_skia_canvas_draw_rect_shadow(
     if (sigma > 0) {
         SkBlurStyle skStyle;
         switch (blur_style) {
-            case 1: skStyle = kSolid_SkBlurStyle; break;
-            case 2: skStyle = kOuter_SkBlurStyle; break;
+            case 1: skStyle = kNormal_SkBlurStyle; break;
+            case 2: skStyle = kSolid_SkBlurStyle; break;
             case 3: skStyle = kInner_SkBlurStyle; break;
-            default: skStyle = kNormal_SkBlurStyle; break;
+            default: skStyle = kOuter_SkBlurStyle; break;
         }
         paint.setMaskFilter(SkMaskFilter::MakeBlur(skStyle, sigma));
     }
@@ -1436,10 +1436,10 @@ void drift_skia_canvas_draw_rrect_shadow(
     if (sigma > 0) {
         SkBlurStyle skStyle;
         switch (blur_style) {
-            case 1: skStyle = kSolid_SkBlurStyle; break;
-            case 2: skStyle = kOuter_SkBlurStyle; break;
+            case 1: skStyle = kNormal_SkBlurStyle; break;
+            case 2: skStyle = kSolid_SkBlurStyle; break;
             case 3: skStyle = kInner_SkBlurStyle; break;
-            default: skStyle = kNormal_SkBlurStyle; break;
+            default: skStyle = kOuter_SkBlurStyle; break;
         }
         paint.setMaskFilter(SkMaskFilter::MakeBlur(skStyle, sigma));
     }

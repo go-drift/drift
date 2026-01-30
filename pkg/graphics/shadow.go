@@ -6,12 +6,12 @@ import "fmt"
 type BlurStyle int
 
 const (
+	// BlurStyleOuter draws nothing inside, blurs outside only.
+	BlurStyleOuter BlurStyle = iota
 	// BlurStyleNormal blurs inside and outside the shape.
-	BlurStyleNormal BlurStyle = iota
+	BlurStyleNormal
 	// BlurStyleSolid keeps the shape solid inside, blurs outside.
 	BlurStyleSolid
-	// BlurStyleOuter draws nothing inside, blurs outside only.
-	BlurStyleOuter
 	// BlurStyleInner blurs inside the shape only, nothing outside.
 	BlurStyleInner
 )
@@ -19,12 +19,12 @@ const (
 // String returns a human-readable representation of the blur style.
 func (s BlurStyle) String() string {
 	switch s {
+	case BlurStyleOuter:
+		return "outer"
 	case BlurStyleNormal:
 		return "normal"
 	case BlurStyleSolid:
 		return "solid"
-	case BlurStyleOuter:
-		return "outer"
 	case BlurStyleInner:
 		return "inner"
 	default:
@@ -79,7 +79,7 @@ func BoxShadowElevation(level int, color Color) *BoxShadow {
 		Offset:     Offset{X: 0, Y: offsets[level-1]},
 		BlurRadius: blurs[level-1],
 		Spread:     spreads[level-1],
-		BlurStyle:  BlurStyleNormal,
+		BlurStyle:  BlurStyleOuter,
 	}
 }
 
