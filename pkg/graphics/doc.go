@@ -17,7 +17,7 @@
 // Colors are stored as ARGB (0xAARRGGBB):
 //
 //	red := graphics.RGB(255, 0, 0)           // Opaque red
-//	semiTransparent := graphics.RGBA(0, 0, 0, 128)  // 50% black
+//	semiTransparent := graphics.RGBA(0, 0, 0, 0.5)  // 50% black
 //
 // # Drawing
 //

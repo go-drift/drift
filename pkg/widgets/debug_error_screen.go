@@ -36,12 +36,12 @@ func (d DebugErrorScreen) Key() any {
 
 func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 	// Colors
-	bgColor := graphics.RGBA(30, 30, 30, 255)       // Dark background
-	headerColor := graphics.RGBA(200, 50, 50, 255)  // Red header
-	errorBoxColor := graphics.RGBA(50, 50, 50, 255) // Darker box for error
+	bgColor := graphics.RGBA(30, 30, 30, 1.0)       // Dark background
+	headerColor := graphics.RGBA(200, 50, 50, 1.0)  // Red header
+	errorBoxColor := graphics.RGBA(50, 50, 50, 1.0) // Darker box for error
 	textColor := graphics.ColorWhite
-	dimTextColor := graphics.RGBA(180, 180, 180, 255)
-	stackBgColor := graphics.RGBA(40, 40, 40, 255)
+	dimTextColor := graphics.RGBA(180, 180, 180, 1.0)
+	stackBgColor := graphics.RGBA(40, 40, 40, 1.0)
 
 	// Build header text based on error phase
 	headerText := "Error"

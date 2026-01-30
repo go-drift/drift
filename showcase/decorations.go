@@ -194,10 +194,10 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 							Radius: 12,
 							ChildWidget: widgets.NewBackdropFilter(10,
 								widgets.DecoratedBox{
-									Color: graphics.RGBA(255, 255, 255, 77),
+									Color: graphics.RGBA(255, 255, 255, 0.3),
 									ChildWidget: widgets.Center{
 										ChildWidget: widgets.Text{Content: "Frosted Glass", Style: graphics.TextStyle{
-											Color:      graphics.RGBA(10, 10, 10, 90),
+											Color:      graphics.RGBA(10, 10, 10, 0.4),
 											FontSize:   14,
 											FontWeight: graphics.FontWeightBold,
 										}},

@@ -90,26 +90,26 @@ func LightCupertinoColors() CupertinoColors {
 		TertiarySystemGroupedBackground:  graphics.RGB(242, 242, 247),
 
 		// Label colors (iOS light mode)
-		Label:           graphics.RGBA(0, 0, 0, 255),
-		SecondaryLabel:  graphics.RGBA(60, 60, 67, 153),
-		TertiaryLabel:   graphics.RGBA(60, 60, 67, 76),
-		QuaternaryLabel: graphics.RGBA(60, 60, 67, 45),
+		Label:           graphics.RGBA(0, 0, 0, 1.0),
+		SecondaryLabel:  graphics.RGBA(60, 60, 67, 0.6),
+		TertiaryLabel:   graphics.RGBA(60, 60, 67, 0.3),
+		QuaternaryLabel: graphics.RGBA(60, 60, 67, 0.18),
 
 		// Fill colors (iOS light mode)
-		SystemFill:           graphics.RGBA(120, 120, 128, 51),
-		SecondarySystemFill:  graphics.RGBA(120, 120, 128, 40),
-		TertiarySystemFill:   graphics.RGBA(118, 118, 128, 30),
-		QuaternarySystemFill: graphics.RGBA(116, 116, 128, 20),
+		SystemFill:           graphics.RGBA(120, 120, 128, 0.2),
+		SecondarySystemFill:  graphics.RGBA(120, 120, 128, 0.16),
+		TertiarySystemFill:   graphics.RGBA(118, 118, 128, 0.12),
+		QuaternarySystemFill: graphics.RGBA(116, 116, 128, 0.08),
 
 		// Separator colors (iOS light mode)
-		Separator:       graphics.RGBA(60, 60, 67, 73),
+		Separator:       graphics.RGBA(60, 60, 67, 0.29),
 		OpaqueSeparator: graphics.RGB(198, 198, 200),
 
 		// Link color
 		Link: graphics.RGB(0, 122, 255),
 
 		// Placeholder text
-		PlaceholderText: graphics.RGBA(60, 60, 67, 76),
+		PlaceholderText: graphics.RGBA(60, 60, 67, 0.3),
 	}
 }
 
@@ -146,25 +146,25 @@ func DarkCupertinoColors() CupertinoColors {
 		TertiarySystemGroupedBackground:  graphics.RGB(44, 44, 46),
 
 		// Label colors (iOS dark mode)
-		Label:           graphics.RGBA(255, 255, 255, 255),
-		SecondaryLabel:  graphics.RGBA(235, 235, 245, 153),
-		TertiaryLabel:   graphics.RGBA(235, 235, 245, 76),
-		QuaternaryLabel: graphics.RGBA(235, 235, 245, 45),
+		Label:           graphics.RGBA(255, 255, 255, 1.0),
+		SecondaryLabel:  graphics.RGBA(235, 235, 245, 0.6),
+		TertiaryLabel:   graphics.RGBA(235, 235, 245, 0.3),
+		QuaternaryLabel: graphics.RGBA(235, 235, 245, 0.18),
 
 		// Fill colors (iOS dark mode)
-		SystemFill:           graphics.RGBA(120, 120, 128, 91),
-		SecondarySystemFill:  graphics.RGBA(120, 120, 128, 81),
-		TertiarySystemFill:   graphics.RGBA(118, 118, 128, 61),
-		QuaternarySystemFill: graphics.RGBA(118, 118, 128, 45),
+		SystemFill:           graphics.RGBA(120, 120, 128, 0.36),
+		SecondarySystemFill:  graphics.RGBA(120, 120, 128, 0.32),
+		TertiarySystemFill:   graphics.RGBA(118, 118, 128, 0.24),
+		QuaternarySystemFill: graphics.RGBA(118, 118, 128, 0.18),
 
 		// Separator colors (iOS dark mode)
-		Separator:       graphics.RGBA(84, 84, 88, 153),
+		Separator:       graphics.RGBA(84, 84, 88, 0.6),
 		OpaqueSeparator: graphics.RGB(56, 56, 58),
 
 		// Link color
 		Link: graphics.RGB(10, 132, 255),
 
 		// Placeholder text
-		PlaceholderText: graphics.RGBA(235, 235, 245, 76),
+		PlaceholderText: graphics.RGBA(235, 235, 245, 0.3),
 	}
 }

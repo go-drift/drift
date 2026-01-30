@@ -39,7 +39,7 @@ type TabItem struct {
 //	    OnTap:           func(i int) { s.SetState(func() { s.currentIndex = i }) },
 //	    BackgroundColor: graphics.RGB(33, 33, 33),
 //	    ActiveColor:     graphics.ColorWhite,
-//	    InactiveColor:   graphics.RGBA(255, 255, 255, 153),
+//	    InactiveColor:   graphics.RGBA(255, 255, 255, 0.6),
 //	    IndicatorColor:  graphics.RGB(33, 150, 243),
 //	    Height:          56,
 //	}

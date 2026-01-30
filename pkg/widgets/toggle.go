@@ -106,17 +106,17 @@ func (s Toggle) Build(ctx core.BuildContext) core.Widget {
 			if s.DisabledActiveColor != 0 {
 				activeColor = s.DisabledActiveColor
 			} else {
-				activeColor = activeColor.WithAlpha(128)
+				activeColor = activeColor.WithAlpha(0.5)
 			}
 			if s.DisabledInactiveColor != 0 {
 				inactiveColor = s.DisabledInactiveColor
 			} else {
-				inactiveColor = inactiveColor.WithAlpha(128)
+				inactiveColor = inactiveColor.WithAlpha(0.5)
 			}
 			if s.DisabledThumbColor != 0 {
 				thumbColor = s.DisabledThumbColor
 			} else {
-				thumbColor = thumbColor.WithAlpha(128)
+				thumbColor = thumbColor.WithAlpha(0.5)
 			}
 		} else {
 			// No disabled colors set - use opacity fallback

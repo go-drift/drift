@@ -171,12 +171,12 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 			if b.DisabledColor != 0 {
 				color = b.DisabledColor
 			} else {
-				color = color.WithAlpha(128)
+				color = color.WithAlpha(0.5)
 			}
 			if b.DisabledTextColor != 0 {
 				textColor = b.DisabledTextColor
 			} else {
-				textColor = textColor.WithAlpha(128)
+				textColor = textColor.WithAlpha(0.5)
 			}
 		} else {
 			// No disabled colors set — use opacity fallback on the entire widget.

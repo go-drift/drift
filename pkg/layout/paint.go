@@ -161,12 +161,12 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 
 // debugBoundsColors cycles through colors by depth for visual distinction.
 var debugBoundsColors = []graphics.Color{
-	graphics.RGBA(255, 100, 100, 180), // Red
-	graphics.RGBA(100, 255, 100, 180), // Green
-	graphics.RGBA(100, 100, 255, 180), // Blue
-	graphics.RGBA(255, 255, 100, 180), // Yellow
-	graphics.RGBA(255, 100, 255, 180), // Magenta
-	graphics.RGBA(100, 255, 255, 180), // Cyan
+	graphics.RGBA(255, 100, 100, 0.71), // Red
+	graphics.RGBA(100, 255, 100, 0.71), // Green
+	graphics.RGBA(100, 100, 255, 0.71), // Blue
+	graphics.RGBA(255, 255, 100, 0.71), // Yellow
+	graphics.RGBA(255, 100, 255, 0.71), // Magenta
+	graphics.RGBA(100, 255, 255, 0.71), // Cyan
 }
 
 // drawDebugBounds draws a colored border around the given size for debugging.

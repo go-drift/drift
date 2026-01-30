@@ -158,7 +158,7 @@ func (r *renderDiagnosticsHUD) Paint(ctx *layout.PaintContext) {
 
 	// Draw semi-transparent background
 	bgPaint := graphics.DefaultPaint()
-	bgPaint.Color = graphics.RGBA(0, 0, 0, 180)
+	bgPaint.Color = graphics.RGBA(0, 0, 0, 0.71)
 	bgRect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	bgRRect := graphics.RRectFromRectAndRadius(bgRect, graphics.CircularRadius(4))
 	ctx.Canvas.DrawRRect(bgRRect, bgPaint)
@@ -263,7 +263,7 @@ func (r *renderDiagnosticsHUD) Paint(ctx *layout.PaintContext) {
 			// Draw target line
 			targetY := graphTop + graphHeight - (float64(r.targetTime)/float64(maxTime))*graphHeight
 			linePaint := graphics.DefaultPaint()
-			linePaint.Color = graphics.RGBA(255, 255, 255, 128)
+			linePaint.Color = graphics.RGBA(255, 255, 255, 0.5)
 			ctx.Canvas.DrawRect(graphics.RectFromLTWH(graphLeft, targetY, graphWidth, 1), linePaint)
 		}
 	}

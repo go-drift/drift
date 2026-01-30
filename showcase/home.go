@@ -2,9 +2,9 @@ package main
 
 import (
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/navigation"
-	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -80,16 +80,17 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 					ChildrenWidgets: append([]core.Widget{
 						// Logo/Title section
 						widgets.Container{
-							Width:  200,
-							Height: 100,
-							Color:  graphics.ColorWhite,
+							Width:    200,
+							Height:   100,
+							Overflow: widgets.OverflowVisible,
+							Color:    graphics.ColorWhite,
 							Gradient: graphics.NewRadialGradient(
 								graphics.AlignCenter, // Center of widget
 								2.0,                  // Radius = 2x half the min dimension (fills width)
 								[]graphics.GradientStop{
-									{Position: 0, Color: graphics.RGBA(47, 249, 238, 60)},   // cyan center
-									{Position: 0.5, Color: graphics.RGBA(238, 23, 130, 20)}, // magenta mid
-									{Position: 1, Color: graphics.RGBA(238, 23, 130, 0)},    // fade out
+									{Position: 0, Color: graphics.RGBA(47, 249, 238, 0.2)},   // cyan center
+									{Position: 0.5, Color: graphics.RGBA(238, 23, 130, 0.2)}, // magenta mid
+									{Position: 1, Color: graphics.RGBA(238, 23, 130, 0)},     // fade out
 								},
 							),
 							Alignment: layout.AlignmentCenter,

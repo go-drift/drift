@@ -116,12 +116,12 @@ func (r Radio[T]) Build(ctx core.BuildContext) core.Widget {
 			if r.DisabledActiveColor != 0 {
 				activeColor = r.DisabledActiveColor
 			} else {
-				activeColor = activeColor.WithAlpha(128)
+				activeColor = activeColor.WithAlpha(0.5)
 			}
 			if r.DisabledInactiveColor != 0 {
 				inactiveColor = r.DisabledInactiveColor
 			} else {
-				inactiveColor = inactiveColor.WithAlpha(128)
+				inactiveColor = inactiveColor.WithAlpha(0.5)
 			}
 		} else {
 			// No disabled colors set - use opacity fallback

@@ -154,12 +154,12 @@ func (c Checkbox) Build(ctx core.BuildContext) core.Widget {
 			if c.DisabledActiveColor != 0 {
 				activeColor = c.DisabledActiveColor
 			} else {
-				activeColor = activeColor.WithAlpha(128)
+				activeColor = activeColor.WithAlpha(0.5)
 			}
 			if c.DisabledCheckColor != 0 {
 				checkColor = c.DisabledCheckColor
 			} else {
-				checkColor = checkColor.WithAlpha(128)
+				checkColor = checkColor.WithAlpha(0.5)
 			}
 		} else {
 			// No disabled colors set - use opacity fallback

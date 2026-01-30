@@ -300,7 +300,7 @@ func ExamplePositioned_stretch() {
 		Right:  widgets.Ptr(20),
 		Bottom: widgets.Ptr(20),
 		ChildWidget: widgets.Container{
-			Color: graphics.RGBA(0, 0, 0, 128), // Semi-transparent overlay
+			Color: graphics.RGBA(0, 0, 0, 0.5), // Semi-transparent overlay
 		},
 	}
 
@@ -427,7 +427,7 @@ func ExampleContainer_withGradient() {
 			},
 		),
 		Shadow: &graphics.BoxShadow{
-			Color:      graphics.RGBA(0, 0, 0, 64),
+			Color:      graphics.RGBA(0, 0, 0, 0.25),
 			BlurRadius: 8,
 			Offset:     graphics.Offset{X: 0, Y: 4},
 		},
@@ -839,7 +839,7 @@ func ExampleErrorBoundary() {
 		FallbackBuilder: func(err *drifterrors.BoundaryError) core.Widget {
 			return widgets.Container{
 				Padding:     layout.EdgeInsetsAll(16),
-				Color:       graphics.RGBA(255, 0, 0, 32),
+				Color:       graphics.RGBA(255, 0, 0, 0.13),
 				ChildWidget: widgets.Text{Content: "Something went wrong"},
 			}
 		},

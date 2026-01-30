@@ -35,7 +35,7 @@ func DefaultCupertinoLightTheme() *CupertinoThemeData {
 		PrimaryContrastingColor: graphics.RGB(255, 255, 255),
 		Colors:                  colors,
 		TextTheme:               DefaultCupertinoTextTheme(colors.Label),
-		BarBackgroundColor:      graphics.RGBA(249, 249, 249, 244), // iOS translucent bar
+		BarBackgroundColor:      graphics.RGBA(249, 249, 249, 0.96), // iOS translucent bar
 		ScaffoldBackgroundColor: colors.SystemBackground,
 	}
 }
@@ -49,7 +49,7 @@ func DefaultCupertinoDarkTheme() *CupertinoThemeData {
 		PrimaryContrastingColor: graphics.RGB(255, 255, 255),
 		Colors:                  colors,
 		TextTheme:               DefaultCupertinoTextTheme(colors.Label),
-		BarBackgroundColor:      graphics.RGBA(30, 30, 30, 244), // iOS translucent bar
+		BarBackgroundColor:      graphics.RGBA(30, 30, 30, 0.96), // iOS translucent bar
 		ScaffoldBackgroundColor: colors.SystemBackground,
 	}
 }

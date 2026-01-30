@@ -88,7 +88,7 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 			Text{
 				Content: errorText,
 				Style: graphics.TextStyle{
-					Color:    graphics.RGBA(255, 255, 255, 200),
+					Color:    graphics.RGBA(255, 255, 255, 0.78),
 					FontSize: 12,
 				},
 				Wrap:     true,
@@ -104,7 +104,7 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 	)
 
 	return Container{
-		Color:   graphics.RGBA(180, 0, 0, 255), // Dark red
+		Color:   graphics.RGBA(180, 0, 0, 1.0), // Dark red
 		Padding: layout.EdgeInsetsAll(16),
 		ChildWidget: Column{
 			MainAxisAlignment:  MainAxisAlignmentCenter,
@@ -145,12 +145,12 @@ func (s *errorRestartButtonState) Build(ctx core.BuildContext) core.Widget {
 	if s.restartFn == nil {
 		// No restart function registered, show disabled button
 		return Container{
-			Color:   graphics.RGBA(100, 100, 100, 200),
+			Color:   graphics.RGBA(100, 100, 100, 0.78),
 			Padding: layout.EdgeInsetsSymmetric(16, 8),
 			ChildWidget: Text{
 				Content: "Restart unavailable",
 				Style: graphics.TextStyle{
-					Color:    graphics.RGBA(200, 200, 200, 255),
+					Color:    graphics.RGBA(200, 200, 200, 1.0),
 					FontSize: 14,
 				},
 			},
@@ -160,7 +160,7 @@ func (s *errorRestartButtonState) Build(ctx core.BuildContext) core.Widget {
 	return GestureDetector{
 		OnTap: s.restartFn,
 		ChildWidget: Container{
-			Color:   graphics.RGBA(255, 255, 255, 220),
+			Color:   graphics.RGBA(255, 255, 255, 0.86),
 			Padding: layout.EdgeInsetsSymmetric(16, 8),
 			ChildWidget: Text{
 				Content: "Restart App",

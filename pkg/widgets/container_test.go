@@ -69,7 +69,7 @@ func TestContainer_Shadow(t *testing.T) {
 		Height: 50,
 		Color:  graphics.RGB(200, 200, 200),
 		Shadow: &graphics.BoxShadow{
-			Color:      graphics.RGBA(0, 0, 0, 64),
+			Color:      graphics.RGBA(0, 0, 0, 0.25),
 			BlurRadius: 8,
 			Offset:     graphics.Offset{X: 0, Y: 4},
 		},
@@ -94,7 +94,7 @@ func TestContainer_PaintOrder(t *testing.T) {
 		Height: 100,
 		Color:  graphics.RGB(100, 100, 100),
 		Shadow: &graphics.BoxShadow{
-			Color:      graphics.RGBA(0, 0, 0, 64),
+			Color:      graphics.RGBA(0, 0, 0, 0.25),
 			BlurRadius: 4,
 		},
 		ChildWidget: widgets.Container{
