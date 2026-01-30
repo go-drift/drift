@@ -192,6 +192,86 @@ widgets.RowOf(
 )
 ```
 
+## Wrap Layout
+
+`Wrap` lays out children in runs, automatically wrapping to the next line when space runs out. Similar to CSS flexbox with `flex-wrap: wrap`.
+
+### Basic Usage
+
+```go
+widgets.Wrap{
+    Direction:  widgets.AxisHorizontal,
+    Spacing:    8,
+    RunSpacing: 8,
+    ChildrenWidgets: []core.Widget{
+        chip("Go"),
+        chip("Rust"),
+        chip("TypeScript"),
+        chip("Python"),
+        chip("JavaScript"),
+    },
+}
+```
+
+### Direction
+
+Set `Direction` to control the flow direction:
+
+- `AxisHorizontal`: Children flow left-to-right, wrapping to new rows below
+- `AxisVertical`: Children flow top-to-bottom, wrapping to new columns to the right
+
+```go
+// Vertical wrap: items flow down, then wrap to the next column
+widgets.Wrap{
+    Direction:  widgets.AxisVertical,
+    Spacing:    8,
+    RunSpacing: 12,
+    ChildrenWidgets: tags,
+}
+```
+
+### Alignment
+
+Wrap provides three alignment properties:
+
+| Property | Purpose | Values |
+|----------|---------|--------|
+| `Alignment` | Main axis positioning within each run | Start, End, Center, SpaceBetween, SpaceAround, SpaceEvenly |
+| `CrossAxisAlignment` | Cross axis positioning within each run | Start, End, Center |
+| `RunAlignment` | Distribution of runs in cross axis | Start, End, Center, SpaceBetween, SpaceAround, SpaceEvenly |
+
+```go
+widgets.Wrap{
+    Alignment:          widgets.WrapAlignmentCenter,
+    CrossAxisAlignment: widgets.WrapCrossAlignmentCenter,
+    RunAlignment:       widgets.RunAlignmentSpaceEvenly,
+    Spacing:            8,
+    RunSpacing:         8,
+    ChildrenWidgets:    chips,
+}
+```
+
+### WrapOf Helper
+
+Use `WrapOf` for concise creation with spacing:
+
+```go
+widgets.WrapOf(8, 12, // spacing, runSpacing
+    chip("Tag 1"),
+    chip("Tag 2"),
+    chip("Tag 3"),
+)
+```
+
+### When to Use Wrap vs Row/Column
+
+| Use Case | Widget |
+|----------|--------|
+| Fixed number of items in a line | Row or Column |
+| Items should wrap when they don't fit | Wrap |
+| Need flexible children (Expanded) | Row or Column |
+| Dynamic tags, chips, or badges | Wrap |
+
 ## Stack Layout
 
 `Stack` overlays children on top of each other:
