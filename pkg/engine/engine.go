@@ -103,25 +103,42 @@ func SetBackgroundColor(color graphics.Color) {
 	backgroundColor.Store(uint32(color))
 }
 
-// SetDiagnostics configures the diagnostics HUD overlay.
-// Pass nil to disable diagnostics.
+// SetShowLayoutBounds enables or disables the layout bounds debug overlay.
+func SetShowLayoutBounds(show bool) {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+	app.showLayoutBounds = show
+	// Mark root for repaint to show/hide bounds
+	if app.rootRender != nil {
+		app.rootRender.MarkNeedsPaint()
+	}
+}
+
+// SetDiagnostics configures the diagnostics overlays.
+// Pass nil to disable all diagnostics.
 func SetDiagnostics(config *DiagnosticsConfig) {
 	frameLock.Lock()
 	defer frameLock.Unlock()
 	app.diagnosticsConfig = config
-	if config != nil && app.frameTiming == nil {
-		samples := config.GraphSamples
-		if samples <= 0 {
-			samples = 60
+	if config != nil {
+		app.showLayoutBounds = config.ShowLayoutBounds
+		if app.frameTiming == nil && (config.ShowFPS || config.ShowFrameGraph) {
+			samples := config.GraphSamples
+			if samples <= 0 {
+				samples = 60
+			}
+			app.frameTiming = NewFrameTimingBuffer(samples)
 		}
-		app.frameTiming = NewFrameTimingBuffer(samples)
-	}
-	if config == nil {
-		// Clear stale HUD reference when diagnostics disabled
+	} else {
+		// Clear state when diagnostics disabled
+		app.showLayoutBounds = false
 		app.hudRenderObject = nil
 	}
 	if app.root != nil {
 		app.root.MarkNeedsBuild()
+	}
+	if app.rootRender != nil {
+		app.rootRender.MarkNeedsPaint()
 	}
 }
 
@@ -190,10 +207,11 @@ type appRunner struct {
 	semanticsDeferredAt time.Time // when we first started deferring
 
 	// Diagnostics state
-	diagnosticsConfig *DiagnosticsConfig
-	frameTiming       *FrameTimingBuffer
-	lastFrameStart    time.Time
-	hudRenderObject   layout.RenderObject // Reference to HUD for targeted repaints
+	diagnosticsConfig  *DiagnosticsConfig
+	frameTiming        *FrameTimingBuffer
+	lastFrameStart     time.Time
+	hudRenderObject    layout.RenderObject // Reference to HUD for targeted repaints
+	showLayoutBounds   bool                // Debug overlay for widget bounds (independent of HUD)
 }
 
 func init() {
@@ -371,16 +389,26 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		platform.GetPlatformViewRegistry().BeginGeometryBatch()
 
 		// Process dirty repaint boundaries
+		showLayoutBounds := a.showLayoutBounds
+		debugStrokeWidth := 1.0
+		if showLayoutBounds {
+			debugStrokeWidth = 1.0 / scale // Scale-independent 1px stroke
+		}
+
 		dirtyBoundaries := pipeline.FlushPaint()
 		for _, boundary := range dirtyBoundaries {
-			paintBoundaryToLayer(boundary)
+			paintBoundaryToLayer(boundary, showLayoutBounds, debugStrokeWidth)
 		}
 
 		// Clear and composite tree using cached layers
 		canvas.Clear(graphics.Color(backgroundColor.Load()))
 		canvas.Save()
 		canvas.Scale(scale, scale)
-		paintTreeWithLayers(&layout.PaintContext{Canvas: canvas}, a.rootRender, graphics.Offset{})
+		paintTreeWithLayers(&layout.PaintContext{
+			Canvas:           canvas,
+			ShowLayoutBounds: showLayoutBounds,
+			DebugStrokeWidth: debugStrokeWidth,
+		}, a.rootRender, graphics.Offset{})
 		canvas.Restore()
 
 		// Flush geometry batch - blocks until native applies all updates.
@@ -548,8 +576,8 @@ func (e engineApp) Build(ctx core.BuildContext) core.Widget {
 		child = defaultPlaceholder{}
 	}
 
-	// Wrap with diagnostics HUD if enabled
-	if diagnosticsConfig != nil {
+	// Wrap with diagnostics HUD if FPS or frame graph is enabled
+	if diagnosticsConfig != nil && (diagnosticsConfig.ShowFPS || diagnosticsConfig.ShowFrameGraph) {
 		targetTime := diagnosticsConfig.TargetFrameTime
 		if targetTime == 0 {
 			targetTime = 16667 * time.Microsecond
@@ -707,13 +735,17 @@ func itoa(value int) string {
 	return string(buf[i:])
 }
 
-func paintBoundaryToLayer(boundary layout.RenderObject) {
+func paintBoundaryToLayer(boundary layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
 	size := boundary.Size()
 	recorder := &graphics.PictureRecorder{}
 	recordCanvas := recorder.BeginRecording(size)
 
 	// Paint boundary's content to recorded canvas
-	paintTreeWithLayers(&layout.PaintContext{Canvas: recordCanvas}, boundary, graphics.Offset{})
+	paintTreeWithLayers(&layout.PaintContext{
+		Canvas:           recordCanvas,
+		ShowLayoutBounds: showLayoutBounds,
+		DebugStrokeWidth: strokeWidth,
+	}, boundary, graphics.Offset{})
 
 	layer := recorder.EndRecording()
 

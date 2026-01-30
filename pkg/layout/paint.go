@@ -27,10 +27,13 @@ type PointerHandler interface {
 
 // PaintContext provides the canvas for painting render objects.
 type PaintContext struct {
-	Canvas         graphics.Canvas
-	clipStack      []graphics.Rect   // Each entry is already-intersected global clip
-	transformStack []graphics.Offset // Stack of translation deltas
-	transform      graphics.Offset   // Current accumulated translation
+	Canvas           graphics.Canvas
+	clipStack        []graphics.Rect   // Each entry is already-intersected global clip
+	transformStack   []graphics.Offset // Stack of translation deltas
+	transform        graphics.Offset   // Current accumulated translation
+	ShowLayoutBounds bool              // Debug flag to draw bounds around widgets
+	debugDepth       int               // For color cycling in debug bounds
+	DebugStrokeWidth float64           // Scaled stroke width (0 = use default 1.0)
 }
 
 // PushTranslation adds a translation delta to the stack.
@@ -94,7 +97,19 @@ func (p *PaintContext) PaintChild(child RenderBox, offset graphics.Offset) {
 	p.Canvas.Save()
 	p.Canvas.Translate(offset.X, offset.Y)
 	p.PushTranslation(offset.X, offset.Y)
+
+	if p.ShowLayoutBounds {
+		p.debugDepth++
+	}
+
 	child.Paint(p)
+
+	// Draw bounds after child paints so overlay is visible on top
+	if p.ShowLayoutBounds {
+		p.drawDebugBounds(child.Size())
+		p.debugDepth--
+	}
+
 	p.PopTranslation()
 	p.Canvas.Restore()
 }
@@ -109,6 +124,10 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 	p.Canvas.Translate(offset.X, offset.Y)
 	p.PushTranslation(offset.X, offset.Y)
 
+	if p.ShowLayoutBounds {
+		p.debugDepth++
+	}
+
 	// Use cached layer if child is a repaint boundary with valid cache
 	if boundary, ok := child.(interface {
 		IsRepaintBoundary() bool
@@ -117,6 +136,11 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 	}); ok && boundary.IsRepaintBoundary() {
 		if layer := boundary.Layer(); layer != nil && !boundary.NeedsPaint() {
 			layer.Paint(p.Canvas)
+			// Draw bounds after layer paints so overlay is visible on top
+			if p.ShowLayoutBounds {
+				p.drawDebugBounds(child.Size())
+				p.debugDepth--
+			}
 			p.PopTranslation()
 			p.Canvas.Restore()
 			return
@@ -124,6 +148,46 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 	}
 
 	child.Paint(p)
+
+	// Draw bounds after child paints so overlay is visible on top
+	if p.ShowLayoutBounds {
+		p.drawDebugBounds(child.Size())
+		p.debugDepth--
+	}
+
 	p.PopTranslation()
 	p.Canvas.Restore()
+}
+
+// debugBoundsColors cycles through colors by depth for visual distinction.
+var debugBoundsColors = []graphics.Color{
+	graphics.RGBA(255, 100, 100, 180), // Red
+	graphics.RGBA(100, 255, 100, 180), // Green
+	graphics.RGBA(100, 100, 255, 180), // Blue
+	graphics.RGBA(255, 255, 100, 180), // Yellow
+	graphics.RGBA(255, 100, 255, 180), // Magenta
+	graphics.RGBA(100, 255, 255, 180), // Cyan
+}
+
+// drawDebugBounds draws a colored border around the given size for debugging.
+func (p *PaintContext) drawDebugBounds(size graphics.Size) {
+	if size.Width <= 0 || size.Height <= 0 {
+		return
+	}
+
+	color := debugBoundsColors[p.debugDepth%len(debugBoundsColors)]
+
+	strokeWidth := p.DebugStrokeWidth
+	if strokeWidth <= 0 {
+		strokeWidth = 1.0
+	}
+
+	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
+	p.Canvas.DrawRect(rect, graphics.Paint{
+		Color:       color,
+		Style:       graphics.PaintStyleStroke,
+		StrokeWidth: strokeWidth,
+		BlendMode:   graphics.BlendModeSrcOver,
+		Alpha:       1.0,
+	})
 }

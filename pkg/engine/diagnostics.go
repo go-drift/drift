@@ -25,6 +25,8 @@ type DiagnosticsConfig struct {
 	ShowFPS bool
 	// ShowFrameGraph displays a graph of frame times.
 	ShowFrameGraph bool
+	// ShowLayoutBounds draws colored borders around all widget bounds.
+	ShowLayoutBounds bool
 	// Position controls where the HUD is displayed.
 	Position DiagnosticsPosition
 	// GraphSamples is the number of frame samples to display in the graph.
