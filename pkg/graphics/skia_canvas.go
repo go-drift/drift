@@ -5,6 +5,7 @@ package graphics
 import (
 	"image"
 	"image/draw"
+	"math"
 	"unsafe"
 
 	"github.com/go-drift/drift/pkg/skia"
@@ -203,7 +204,12 @@ func (c *SkiaCanvas) Clear(color Color) {
 
 func (c *SkiaCanvas) DrawRect(rect Rect, paint Paint) {
 	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
-	if payload, ok := buildGradientPayload(paint.Gradient); ok {
+	// Use GradientBounds if set, otherwise use the shape bounds
+	gradientBounds := rect
+	if paint.GradientBounds != nil {
+		gradientBounds = *paint.GradientBounds
+	}
+	if payload, ok := buildGradientPayload(paint.Gradient, gradientBounds); ok {
 		skia.CanvasDrawRectGradient(
 			c.canvas,
 			float32(rect.Left), float32(rect.Top), float32(rect.Right), float32(rect.Bottom),
@@ -227,7 +233,12 @@ func (c *SkiaCanvas) DrawRect(rect Rect, paint Paint) {
 
 func (c *SkiaCanvas) DrawRRect(rrect RRect, paint Paint) {
 	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
-	if payload, ok := buildGradientPayload(paint.Gradient); ok {
+	// Use GradientBounds if set, otherwise use the shape bounds
+	gradientBounds := rrect.Rect
+	if paint.GradientBounds != nil {
+		gradientBounds = *paint.GradientBounds
+	}
+	if payload, ok := buildGradientPayload(paint.Gradient, gradientBounds); ok {
 		skia.CanvasDrawRRectGradient(
 			c.canvas,
 			float32(rrect.Rect.Left), float32(rrect.Rect.Top),
@@ -261,7 +272,14 @@ func (c *SkiaCanvas) DrawRRect(rrect RRect, paint Paint) {
 
 func (c *SkiaCanvas) DrawCircle(center Offset, radius float64, paint Paint) {
 	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
-	if payload, ok := buildGradientPayload(paint.Gradient); ok {
+	// Compute bounding rect for the circle
+	bounds := RectFromLTWH(center.X-radius, center.Y-radius, radius*2, radius*2)
+	// Use GradientBounds if set, otherwise use the shape bounds
+	gradientBounds := bounds
+	if paint.GradientBounds != nil {
+		gradientBounds = *paint.GradientBounds
+	}
+	if payload, ok := buildGradientPayload(paint.Gradient, gradientBounds); ok {
 		skia.CanvasDrawCircleGradient(
 			c.canvas,
 			float32(center.X), float32(center.Y), float32(radius),
@@ -285,7 +303,19 @@ func (c *SkiaCanvas) DrawCircle(center Offset, radius float64, paint Paint) {
 
 func (c *SkiaCanvas) DrawLine(start, end Offset, paint Paint) {
 	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
-	if payload, ok := buildGradientPayload(paint.Gradient); ok {
+	// Compute bounding rect for the line
+	bounds := Rect{
+		Left:   math.Min(start.X, end.X),
+		Top:    math.Min(start.Y, end.Y),
+		Right:  math.Max(start.X, end.X),
+		Bottom: math.Max(start.Y, end.Y),
+	}
+	// Use GradientBounds if set, otherwise use the shape bounds
+	gradientBounds := bounds
+	if paint.GradientBounds != nil {
+		gradientBounds = *paint.GradientBounds
+	}
+	if payload, ok := buildGradientPayload(paint.Gradient, gradientBounds); ok {
 		skia.CanvasDrawLineGradient(
 			c.canvas,
 			float32(start.X), float32(start.Y), float32(end.X), float32(end.Y),
@@ -332,16 +362,18 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 	if lineHeight == 0 {
 		lineHeight = layout.Ascent + layout.Descent
 	}
-	payload, hasGradient := buildGradientPayload(layout.Style.Gradient)
+	// Use text bounds at drawing position for gradient resolution
+	textBounds := RectFromLTWH(position.X, position.Y, layout.Size.Width, layout.Size.Height)
+	payload, hasGradient := buildGradientPayload(layout.Style.Gradient, textBounds)
 	var startX, startY, endX, endY, centerX, centerY float32
 	var gradientRadius float32
 	if hasGradient {
-		startX = float32(payload.start.X + position.X)
-		startY = float32(payload.start.Y + position.Y)
-		endX = float32(payload.end.X + position.X)
-		endY = float32(payload.end.Y + position.Y)
-		centerX = float32(payload.center.X + position.X)
-		centerY = float32(payload.center.Y + position.Y)
+		startX = float32(payload.start.X)
+		startY = float32(payload.start.Y)
+		endX = float32(payload.end.X)
+		endY = float32(payload.end.Y)
+		centerX = float32(payload.center.X)
+		centerY = float32(payload.center.Y)
 		gradientRadius = float32(payload.radius)
 	}
 	shadow := layout.Style.Shadow
@@ -461,7 +493,22 @@ func (c *SkiaCanvas) DrawPath(path *Path, paint Paint) {
 	defer skPath.Destroy()
 
 	cap, join, miter, dash, dashPhase, blend, alpha := paintParams(paint)
-	if payload, ok := buildGradientPayload(paint.Gradient); ok {
+	bounds := path.Bounds()
+	// Expand bounds by half stroke width for stroke/fill-and-stroke styles
+	// so gradient alignment matches the rendered stroke extent
+	if paint.Style == PaintStyleStroke || paint.Style == PaintStyleFillAndStroke {
+		halfStroke := paint.StrokeWidth / 2
+		bounds.Left -= halfStroke
+		bounds.Top -= halfStroke
+		bounds.Right += halfStroke
+		bounds.Bottom += halfStroke
+	}
+	// Use GradientBounds if set, otherwise use the shape bounds
+	gradientBounds := bounds
+	if paint.GradientBounds != nil {
+		gradientBounds = *paint.GradientBounds
+	}
+	if payload, ok := buildGradientPayload(paint.Gradient, gradientBounds); ok {
 		skia.CanvasDrawPathGradient(
 			c.canvas, skPath,
 			uint32(paint.Color), int32(paint.Style), float32(paint.StrokeWidth), true,

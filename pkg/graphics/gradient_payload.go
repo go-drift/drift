@@ -10,8 +10,22 @@ type gradientPayload struct {
 	radius       float64
 }
 
-func buildGradientPayload(gradient *Gradient) (gradientPayload, bool) {
+// buildGradientPayload converts a Gradient with relative Alignment coordinates
+// to absolute pixel coordinates within the given bounds.
+//
+// The bounds parameter specifies the rectangle in which the gradient will be
+// rendered. Alignment values are resolved to pixel coordinates relative to
+// this bounds rectangle.
+//
+// Returns false if the gradient is invalid, bounds are completely empty (both
+// dimensions zero), or the resolved radial gradient radius is zero or negative.
+func buildGradientPayload(gradient *Gradient, bounds Rect) (gradientPayload, bool) {
 	if gradient == nil || !gradient.IsValid() {
+		return gradientPayload{}, false
+	}
+	// Guard against completely empty bounds (both dimensions zero)
+	// Linear gradients can work with zero in one dimension (e.g., horizontal/vertical lines)
+	if bounds.Width() <= 0 && bounds.Height() <= 0 {
 		return gradientPayload{}, false
 	}
 	stops := gradient.Stops()
@@ -28,11 +42,15 @@ func buildGradientPayload(gradient *Gradient) (gradientPayload, bool) {
 	}
 	switch gradient.Type {
 	case GradientTypeLinear:
-		payload.start = gradient.Linear.Start
-		payload.end = gradient.Linear.End
+		payload.start = gradient.Linear.Start.Resolve(bounds)
+		payload.end = gradient.Linear.End.Resolve(bounds)
 	case GradientTypeRadial:
-		payload.center = gradient.Radial.Center
-		payload.radius = gradient.Radial.Radius
+		payload.center = gradient.Radial.Center.Resolve(bounds)
+		payload.radius = ResolveRadius(gradient.Radial.Radius, bounds)
+		// Guard against zero/negative resolved radius (radial needs non-zero min dimension)
+		if payload.radius <= 0 {
+			return gradientPayload{}, false
+		}
 	default:
 		return gradientPayload{}, false
 	}

@@ -233,12 +233,55 @@ func layoutParagraph(text string, style TextStyle, family string, size float64, 
 	if maxWidth < 0 || math.IsInf(maxWidth, 0) {
 		maxWidth = 0
 	}
-	payload, hasGradient := buildGradientPayload(style.Gradient)
-	gradientType := int32(0)
+
+	var shadow *skia.ParagraphShadow
+	if style.Shadow != nil {
+		shadow = &skia.ParagraphShadow{
+			Color:   uint32(style.Shadow.Color),
+			OffsetX: float32(style.Shadow.Offset.X),
+			OffsetY: float32(style.Shadow.Offset.Y),
+			Sigma:   float32(style.Shadow.Sigma()),
+		}
+	}
+
+	// For gradients, we need actual layout dimensions to resolve relative coordinates.
+	// Do a two-pass approach: first layout without gradient to get size, then
+	// recreate with gradient using actual bounds.
+	hasGradient := style.Gradient != nil && style.Gradient.IsValid()
+
+	// First pass: create paragraph (without gradient if we'll need a second pass)
+	var gradientType int32
 	var colors []uint32
 	var positions []float32
 	var startX, startY, endX, endY, centerX, centerY, radius float32
+
+	paragraph, err := skia.NewParagraph(
+		text,
+		family,
+		float32(size),
+		weight,
+		int(style.FontStyle),
+		uint32(style.Color),
+		maxLines,
+		gradientType,
+		startX, startY, endX, endY, centerX, centerY, radius,
+		colors, positions,
+		shadow,
+	)
+	if err != nil {
+		return nil, err
+	}
+	paragraph.Layout(float32(maxWidth))
+
+	// If there's a gradient, get actual size and recreate paragraph with correct gradient bounds
 	if hasGradient {
+		metrics, err := paragraph.Metrics()
+		if err != nil {
+			paragraph.Destroy()
+			return nil, err
+		}
+		actualBounds := RectFromLTWH(0, 0, metrics.LongestLine, metrics.Height)
+		payload, _ := buildGradientPayload(style.Gradient, actualBounds)
 		gradientType = payload.gradientType
 		colors = payload.colors
 		positions = payload.positions
@@ -249,40 +292,27 @@ func layoutParagraph(text string, style TextStyle, family string, size float64, 
 		centerX = float32(payload.center.X)
 		centerY = float32(payload.center.Y)
 		radius = float32(payload.radius)
-	}
-	var shadow *skia.ParagraphShadow
-	if style.Shadow != nil {
-		shadow = &skia.ParagraphShadow{
-			Color:   uint32(style.Shadow.Color),
-			OffsetX: float32(style.Shadow.Offset.X),
-			OffsetY: float32(style.Shadow.Offset.Y),
-			Sigma:   float32(style.Shadow.Sigma()),
+
+		// Destroy first paragraph and create new one with gradient
+		paragraph.Destroy()
+		paragraph, err = skia.NewParagraph(
+			text,
+			family,
+			float32(size),
+			weight,
+			int(style.FontStyle),
+			uint32(style.Color),
+			maxLines,
+			gradientType,
+			startX, startY, endX, endY, centerX, centerY, radius,
+			colors, positions,
+			shadow,
+		)
+		if err != nil {
+			return nil, err
 		}
+		paragraph.Layout(float32(maxWidth))
 	}
-	paragraph, err := skia.NewParagraph(
-		text,
-		family,
-		float32(size),
-		weight,
-		int(style.FontStyle),
-		uint32(style.Color),
-		maxLines,
-		gradientType,
-		startX,
-		startY,
-		endX,
-		endY,
-		centerX,
-		centerY,
-		radius,
-		colors,
-		positions,
-		shadow,
-	)
-	if err != nil {
-		return nil, err
-	}
-	paragraph.Layout(float32(maxWidth))
 	metrics, err := paragraph.Metrics()
 	if err != nil {
 		paragraph.Destroy()

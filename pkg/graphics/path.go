@@ -1,6 +1,9 @@
 package graphics
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // PathOp represents a path drawing operation type.
 type PathOp int
@@ -131,4 +134,27 @@ func (p *Path) IsEmpty() bool {
 // Clear removes all commands from the path.
 func (p *Path) Clear() {
 	p.Commands = p.Commands[:0]
+}
+
+// Bounds returns the bounding rectangle of the path.
+// Returns an empty Rect if the path has no points.
+func (p *Path) Bounds() Rect {
+	if p == nil || len(p.Commands) == 0 {
+		return Rect{}
+	}
+	minX, minY := math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
+	for _, cmd := range p.Commands {
+		for i := 0; i+1 < len(cmd.Args); i += 2 {
+			x, y := cmd.Args[i], cmd.Args[i+1]
+			minX = math.Min(minX, x)
+			minY = math.Min(minY, y)
+			maxX = math.Max(maxX, x)
+			maxY = math.Max(maxY, y)
+		}
+	}
+	if math.IsInf(minX, 1) {
+		return Rect{}
+	}
+	return Rect{Left: minX, Top: minY, Right: maxX, Bottom: maxY}
 }

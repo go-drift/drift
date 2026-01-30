@@ -145,8 +145,15 @@ type DashPattern struct {
 // A zero-value Paint draws nothing (BlendModeClear with Alpha 0).
 // Use DefaultPaint for a basic opaque white fill.
 type Paint struct {
-	Color       Color
-	Gradient    *Gradient  // If set, overrides Color for the fill
+	Color    Color
+	Gradient *Gradient // If set, overrides Color for the fill
+
+	// GradientBounds optionally specifies the bounds to use for resolving
+	// gradient Alignment coordinates. If nil, the shape's drawing bounds are used.
+	// Set this when drawing to an expanded area (e.g., for overflow effects)
+	// but wanting the gradient to align to the original widget bounds.
+	GradientBounds *Rect
+
 	Style       PaintStyle // Fill, stroke, or both
 	StrokeWidth float64    // Width of stroke in pixels
 

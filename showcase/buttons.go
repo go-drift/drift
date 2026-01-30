@@ -13,8 +13,8 @@ import (
 func buildButtonsPage(ctx core.BuildContext) core.Widget {
 	_, colors, _ := theme.UseTheme(ctx)
 	buttonGradient := graphics.NewLinearGradient(
-		graphics.Offset{X: 0, Y: 0},
-		graphics.Offset{X: 100, Y: 0},
+		graphics.AlignCenterLeft,
+		graphics.AlignCenterRight,
 		[]graphics.GradientStop{
 			{Position: 0, Color: colors.Primary},
 			{Position: 1, Color: colors.Tertiary},

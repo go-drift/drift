@@ -61,8 +61,8 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(24),
 		widgets.DecoratedBox{
 			Gradient: graphics.NewLinearGradient(
-				graphics.Offset{X: 0, Y: 0},
-				graphics.Offset{X: 240, Y: 0},
+				graphics.AlignCenterLeft,
+				graphics.AlignCenterRight,
 				[]graphics.GradientStop{
 					{Position: 0, Color: colors.Primary},
 					{Position: 1, Color: colors.Secondary},

@@ -222,8 +222,36 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 // during the first layout pass. Explicit Width/Height are applied as tight constraints.
 // Single-edge offsets reduce the max constraint. Edge-based stretching (both edges set)
 // uses loose constraints since it depends on final stack size.
+//
+// When alignment mode is used (pos.alignment != nil), Left/Right/Top/Bottom are
+// positional offsets rather than edge distances, so they don't affect constraints.
 func positionedFirstPassConstraints(pos *renderPositioned, constraints layout.Constraints) layout.Constraints {
 	var minWidth, maxWidth, minHeight, maxHeight float64
+
+	// In alignment mode, edges are offsets not constraints - use loose constraints
+	// (only Width/Height apply as sizing constraints)
+	if pos.alignment != nil {
+		if pos.width != nil {
+			minWidth = *pos.width
+			maxWidth = *pos.width
+		} else {
+			maxWidth = constraints.MaxWidth
+		}
+		if pos.height != nil {
+			minHeight = *pos.height
+			maxHeight = *pos.height
+		} else {
+			maxHeight = constraints.MaxHeight
+		}
+		return layout.Constraints{
+			MinWidth:  minWidth,
+			MaxWidth:  maxWidth,
+			MinHeight: minHeight,
+			MaxHeight: maxHeight,
+		}
+	}
+
+	// Absolute positioning mode: edges affect constraints
 
 	// Width constraints
 	if pos.width != nil {
@@ -284,15 +312,16 @@ func positionedFirstPassConstraints(pos *renderPositioned, constraints layout.Co
 // Note: The first pass already applied explicit Width/Height and single-edge constraints.
 // This function only re-layouts when edge-based stretching is needed (both edges set
 // without explicit dimension), since stretching depends on final stack size.
-func layoutPositionedChild(pos *renderPositioned, stackSize graphics.Size, alignment layout.Alignment) {
+func layoutPositionedChild(pos *renderPositioned, stackSize graphics.Size, stackAlignment layout.Alignment) {
 	if pos.child == nil {
 		pos.SetSize(graphics.Size{})
 		return
 	}
 
 	// Only re-layout if stretching on either axis (both edges set without explicit dimension)
-	stretchesWidth := pos.width == nil && pos.left != nil && pos.right != nil
-	stretchesHeight := pos.height == nil && pos.top != nil && pos.bottom != nil
+	// Note: Stretching only applies in absolute positioning mode (no alignment)
+	stretchesWidth := pos.alignment == nil && pos.width == nil && pos.left != nil && pos.right != nil
+	stretchesHeight := pos.alignment == nil && pos.height == nil && pos.top != nil && pos.bottom != nil
 
 	if stretchesWidth || stretchesHeight {
 		childSize := pos.child.Size()
@@ -336,35 +365,61 @@ func layoutPositionedChild(pos *renderPositioned, stackSize graphics.Size, align
 	childSize := pos.child.Size()
 	pos.SetSize(childSize)
 
-	// Calculate offset based on position parameters.
-	// For axes with no position set, use alignment.
-	hasHorizontalPosition := pos.left != nil || pos.right != nil
-	hasVerticalPosition := pos.top != nil || pos.bottom != nil
-
-	// Compute alignment offset once for unset axes
-	var alignedOffset graphics.Offset
-	if !hasHorizontalPosition || !hasVerticalPosition {
-		alignedOffset = alignment.WithinRect(
-			graphics.RectFromLTWH(0, 0, stackSize.Width, stackSize.Height),
-			childSize,
-		)
-	}
-
 	var x, y float64
-	if pos.left != nil {
-		x = *pos.left
-	} else if pos.right != nil {
-		x = stackSize.Width - *pos.right - childSize.Width
-	} else {
-		x = alignedOffset.X
-	}
 
-	if pos.top != nil {
-		y = *pos.top
-	} else if pos.bottom != nil {
-		y = stackSize.Height - *pos.bottom - childSize.Height
+	// If Alignment is set, use relative positioning
+	if pos.alignment != nil {
+		// Resolve alignment to get the anchor point within the stack
+		stackBounds := graphics.RectFromLTWH(0, 0, stackSize.Width, stackSize.Height)
+		anchorPoint := pos.alignment.Resolve(stackBounds)
+
+		// Position child centered on anchor point, then apply offsets
+		x = anchorPoint.X - childSize.Width/2
+		y = anchorPoint.Y - childSize.Height/2
+
+		// Apply offsets from the alignment position
+		// Left/Top are positive offsets, Right/Bottom are negative offsets
+		if pos.left != nil {
+			x += *pos.left
+		}
+		if pos.right != nil {
+			x -= *pos.right
+		}
+		if pos.top != nil {
+			y += *pos.top
+		}
+		if pos.bottom != nil {
+			y -= *pos.bottom
+		}
 	} else {
-		y = alignedOffset.Y
+		// Traditional absolute positioning
+		hasHorizontalPosition := pos.left != nil || pos.right != nil
+		hasVerticalPosition := pos.top != nil || pos.bottom != nil
+
+		// Compute stack alignment offset for unset axes
+		var alignedOffset graphics.Offset
+		if !hasHorizontalPosition || !hasVerticalPosition {
+			alignedOffset = stackAlignment.WithinRect(
+				graphics.RectFromLTWH(0, 0, stackSize.Width, stackSize.Height),
+				childSize,
+			)
+		}
+
+		if pos.left != nil {
+			x = *pos.left
+		} else if pos.right != nil {
+			x = stackSize.Width - *pos.right - childSize.Width
+		} else {
+			x = alignedOffset.X
+		}
+
+		if pos.top != nil {
+			y = *pos.top
+		} else if pos.bottom != nil {
+			y = stackSize.Height - *pos.bottom - childSize.Height
+		} else {
+			y = alignedOffset.Y
+		}
 	}
 
 	pos.child.SetParentData(&layout.BoxParentData{Offset: graphics.Offset{}})
@@ -506,7 +561,7 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 	return true
 }
 
-// Positioned positions a child within a Stack using absolute positioning.
+// Positioned positions a child within a Stack using absolute or relative positioning.
 //
 // # Coordinate System
 //
@@ -514,7 +569,27 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 //   - Left/Right: Distance from the left/right edge of the Stack
 //   - Top/Bottom: Distance from the top/bottom edge of the Stack
 //
-// # Constraint Combinations
+// # Relative Positioning with Alignment
+//
+// When Alignment is set, the child is positioned relative to that point
+// within the Stack bounds. Left/Top/Right/Bottom become pixel offsets from
+// the alignment position:
+//
+//	// Center of stack
+//	Positioned{
+//	    Alignment: &graphics.AlignCenter,
+//	    ChildWidget: dialog,
+//	}
+//
+//	// Bottom-right corner, 16px inset
+//	Positioned{
+//	    Alignment: &graphics.AlignBottomRight,
+//	    Right: Ptr(16),
+//	    Bottom: Ptr(16),
+//	    ChildWidget: fab,
+//	}
+//
+// # Absolute Positioning
 //
 // Use pointer fields (nil = unset) to control positioning. The [Ptr] helper
 // creates float64 pointers conveniently:
@@ -542,13 +617,29 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 type Positioned struct {
 	// ChildWidget is the widget to position.
 	ChildWidget core.Widget
+
+	// Alignment positions the child relative to the Stack bounds using the
+	// graphics.Alignment coordinate system where (-1, -1) is top-left,
+	// (0, 0) is center, and (1, 1) is bottom-right.
+	//
+	// When set, Left/Top/Right/Bottom become offsets from this position
+	// rather than absolute pixel coordinates.
+	//
+	// If nil, Left/Top/Right/Bottom are absolute pixel coordinates from
+	// the Stack edges (traditional absolute positioning).
+	Alignment *graphics.Alignment
+
 	// Left is the distance from the left edge of the Stack (nil = unset).
+	// When Alignment is set, this is an offset from the alignment point.
 	Left *float64
 	// Top is the distance from the top edge of the Stack (nil = unset).
+	// When Alignment is set, this is an offset from the alignment point.
 	Top *float64
 	// Right is the distance from the right edge of the Stack (nil = unset).
+	// When Alignment is set, this is an offset from the alignment point.
 	Right *float64
 	// Bottom is the distance from the bottom edge of the Stack (nil = unset).
+	// When Alignment is set, this is an offset from the alignment point.
 	Bottom *float64
 	// Width overrides the child's width (nil = use child's intrinsic width).
 	Width *float64
@@ -574,12 +665,13 @@ func (p Positioned) Child() core.Widget {
 // CreateRenderObject creates the RenderPositioned.
 func (p Positioned) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
 	pos := &renderPositioned{
-		left:   p.Left,
-		top:    p.Top,
-		right:  p.Right,
-		bottom: p.Bottom,
-		width:  p.Width,
-		height: p.Height,
+		alignment: p.Alignment,
+		left:      p.Left,
+		top:       p.Top,
+		right:     p.Right,
+		bottom:    p.Bottom,
+		width:     p.Width,
+		height:    p.Height,
 	}
 	pos.SetSelf(pos)
 	return pos
@@ -588,6 +680,7 @@ func (p Positioned) CreateRenderObject(ctx core.BuildContext) layout.RenderObjec
 // UpdateRenderObject updates the RenderPositioned.
 func (p Positioned) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 	if pos, ok := renderObject.(*renderPositioned); ok {
+		pos.alignment = p.Alignment
 		pos.left = p.Left
 		pos.top = p.Top
 		pos.right = p.Right
@@ -600,13 +693,14 @@ func (p Positioned) UpdateRenderObject(ctx core.BuildContext, renderObject layou
 
 type renderPositioned struct {
 	layout.RenderBoxBase
-	child  layout.RenderBox
-	left   *float64
-	top    *float64
-	right  *float64
-	bottom *float64
-	width  *float64
-	height *float64
+	child     layout.RenderBox
+	alignment *graphics.Alignment
+	left      *float64
+	top       *float64
+	right     *float64
+	bottom    *float64
+	width     *float64
+	height    *float64
 }
 
 func (r *renderPositioned) SetChild(child layout.RenderObject) {

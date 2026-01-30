@@ -43,7 +43,10 @@ func (p *decorationPainter) paint(ctx *layout.PaintContext, rect graphics.Rect) 
 		} else if p.gradient != nil {
 			// OverflowVisible with gradient: draw expanded rect for overflow,
 			// then draw the normal shape on top for rounded corners in-bounds.
+			// Set GradientBounds so the gradient is resolved against the original
+			// widget bounds, not the expanded drawing area.
 			drawRect := p.gradient.Bounds(rect)
+			paint.GradientBounds = &rect
 			ctx.Canvas.DrawRect(drawRect, paint)
 			if p.borderRadius > 0 {
 				rrect := graphics.RRectFromRectAndRadius(rect, graphics.CircularRadius(p.borderRadius))

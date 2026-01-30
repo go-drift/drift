@@ -43,8 +43,8 @@ func TestContainer_Gradient(t *testing.T) {
 		Width:  100,
 		Height: 50,
 		Gradient: graphics.NewLinearGradient(
-			graphics.Offset{X: 0, Y: 0},
-			graphics.Offset{X: 1, Y: 1},
+			graphics.AlignTopLeft,
+			graphics.AlignBottomRight,
 			[]graphics.GradientStop{
 				{Position: 0.0, Color: graphics.RGB(66, 133, 244)},
 				{Position: 1.0, Color: graphics.RGB(15, 157, 88)},
@@ -194,8 +194,8 @@ func TestContainer_OverflowClip(t *testing.T) {
 		Width:  100,
 		Height: 50,
 		Gradient: graphics.NewLinearGradient(
-			graphics.Offset{X: 0, Y: 0},
-			graphics.Offset{X: 1, Y: 1},
+			graphics.AlignTopLeft,
+			graphics.AlignBottomRight,
 			[]graphics.GradientStop{
 				{Position: 0.0, Color: graphics.RGB(66, 133, 244)},
 				{Position: 1.0, Color: graphics.RGB(15, 157, 88)},

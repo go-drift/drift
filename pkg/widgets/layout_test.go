@@ -394,6 +394,143 @@ func TestAlign_PartiallyUnbounded(t *testing.T) {
 	}
 }
 
+// TestPositioned_AlignmentMode_IgnoresEdgeConstraints verifies that when Alignment is set,
+// Left/Right/Top/Bottom don't reduce the child's available constraints.
+func TestPositioned_AlignmentMode_IgnoresEdgeConstraints(t *testing.T) {
+	pos := &renderPositioned{
+		alignment: &graphics.AlignCenter,
+		left:      ptrFloat(50),  // Should be ignored for constraints in alignment mode
+		right:     ptrFloat(50),  // Should be ignored for constraints in alignment mode
+		top:       ptrFloat(100), // Should be ignored for constraints in alignment mode
+	}
+	pos.SetSelf(pos)
+
+	child := &mockFixedChild{width: 200, height: 100}
+	child.SetSelf(child)
+	pos.SetChild(child)
+
+	// Stack constraints: 400x300
+	stackConstraints := layout.Constraints{
+		MinWidth:  0,
+		MaxWidth:  400,
+		MinHeight: 0,
+		MaxHeight: 300,
+	}
+
+	// Get first-pass constraints for the positioned child
+	childConstraints := positionedFirstPassConstraints(pos, stackConstraints)
+
+	// In alignment mode, edges should NOT reduce max constraints
+	// Child should get full 400x300, not (400-50-50)x(300-100) = 300x200
+	if childConstraints.MaxWidth != 400 {
+		t.Errorf("expected MaxWidth 400 (alignment mode ignores Left/Right), got %v", childConstraints.MaxWidth)
+	}
+	if childConstraints.MaxHeight != 300 {
+		t.Errorf("expected MaxHeight 300 (alignment mode ignores Top/Bottom), got %v", childConstraints.MaxHeight)
+	}
+}
+
+// TestPositioned_AbsoluteMode_AppliesEdgeConstraints verifies that without Alignment,
+// Left/Right/Top/Bottom reduce the child's available constraints.
+func TestPositioned_AbsoluteMode_AppliesEdgeConstraints(t *testing.T) {
+	pos := &renderPositioned{
+		alignment: nil, // Absolute positioning mode
+		left:      ptrFloat(50),
+		right:     ptrFloat(50),
+	}
+	pos.SetSelf(pos)
+
+	child := &mockFixedChild{width: 200, height: 100}
+	child.SetSelf(child)
+	pos.SetChild(child)
+
+	// Stack constraints: 400x300
+	stackConstraints := layout.Constraints{
+		MinWidth:  0,
+		MaxWidth:  400,
+		MinHeight: 0,
+		MaxHeight: 300,
+	}
+
+	// Get first-pass constraints for the positioned child
+	childConstraints := positionedFirstPassConstraints(pos, stackConstraints)
+
+	// In absolute mode with both left+right, it's stretching mode - use loose constraints
+	// (actual stretching happens in second pass)
+	if childConstraints.MaxWidth != 400 {
+		t.Errorf("expected MaxWidth 400 (stretching mode uses loose), got %v", childConstraints.MaxWidth)
+	}
+}
+
+// TestPositioned_AbsoluteMode_SingleEdgeReducesConstraint verifies that a single edge
+// reduces available space in absolute mode.
+func TestPositioned_AbsoluteMode_SingleEdgeReducesConstraint(t *testing.T) {
+	pos := &renderPositioned{
+		alignment: nil, // Absolute positioning mode
+		left:      ptrFloat(100),
+		// right is nil - single edge
+	}
+	pos.SetSelf(pos)
+
+	child := &mockFixedChild{width: 200, height: 100}
+	child.SetSelf(child)
+	pos.SetChild(child)
+
+	// Stack constraints: 400x300
+	stackConstraints := layout.Constraints{
+		MinWidth:  0,
+		MaxWidth:  400,
+		MinHeight: 0,
+		MaxHeight: 300,
+	}
+
+	// Get first-pass constraints for the positioned child
+	childConstraints := positionedFirstPassConstraints(pos, stackConstraints)
+
+	// In absolute mode with single left edge, max width should be reduced
+	expectedMaxWidth := 400.0 - 100.0
+	if childConstraints.MaxWidth != expectedMaxWidth {
+		t.Errorf("expected MaxWidth %v (reduced by left), got %v", expectedMaxWidth, childConstraints.MaxWidth)
+	}
+}
+
+// TestPositioned_AlignmentMode_WidthHeightStillApply verifies that explicit Width/Height
+// still apply as tight constraints even in alignment mode.
+func TestPositioned_AlignmentMode_WidthHeightStillApply(t *testing.T) {
+	pos := &renderPositioned{
+		alignment: &graphics.AlignCenter,
+		width:     ptrFloat(150),
+		height:    ptrFloat(75),
+		left:      ptrFloat(999), // Should be ignored for constraints
+	}
+	pos.SetSelf(pos)
+
+	child := &mockFixedChild{width: 200, height: 100}
+	child.SetSelf(child)
+	pos.SetChild(child)
+
+	stackConstraints := layout.Constraints{
+		MinWidth:  0,
+		MaxWidth:  400,
+		MinHeight: 0,
+		MaxHeight: 300,
+	}
+
+	childConstraints := positionedFirstPassConstraints(pos, stackConstraints)
+
+	// Width/Height should apply as tight constraints
+	if childConstraints.MinWidth != 150 || childConstraints.MaxWidth != 150 {
+		t.Errorf("expected tight width 150, got min=%v max=%v", childConstraints.MinWidth, childConstraints.MaxWidth)
+	}
+	if childConstraints.MinHeight != 75 || childConstraints.MaxHeight != 75 {
+		t.Errorf("expected tight height 75, got min=%v max=%v", childConstraints.MinHeight, childConstraints.MaxHeight)
+	}
+}
+
+func ptrFloat(v float64) *float64 {
+	return &v
+}
+
 // mockFlexChild is a render box that reports a flex factor.
 type mockFlexChild struct {
 	layout.RenderBoxBase

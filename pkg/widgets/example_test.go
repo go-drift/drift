@@ -419,8 +419,8 @@ func ExampleContainer_withGradient() {
 		Width:  200,
 		Height: 100,
 		Gradient: graphics.NewLinearGradient(
-			graphics.Offset{X: 0, Y: 0},
-			graphics.Offset{X: 1, Y: 1},
+			graphics.AlignTopLeft,
+			graphics.AlignBottomRight,
 			[]graphics.GradientStop{
 				{Position: 0.0, Color: graphics.RGB(66, 133, 244)},
 				{Position: 1.0, Color: graphics.RGB(15, 157, 88)},

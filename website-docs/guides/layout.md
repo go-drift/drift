@@ -311,6 +311,37 @@ widgets.Stack{
 }
 ```
 
+### Positioned with Alignment
+
+`Positioned` also supports relative positioning via `Alignment`. When set, the child is centered on the alignment point within the Stack bounds.
+
+The `Alignment` type uses coordinates from -1 to 1, where (-1, -1) is top-left, (0, 0) is center, and (1, 1) is bottom-right. Use the named constants like `graphics.AlignCenter`, `graphics.AlignBottomRight`, etc.
+
+When `Alignment` is set, `Left`/`Top`/`Right`/`Bottom` become pixel offsets from that centered position:
+- `Left`/`Top` shift the child in the positive direction (right/down)
+- `Right`/`Bottom` shift the child in the negative direction (left/up, i.e., inward from edges)
+
+```go
+widgets.Stack{
+    ChildrenWidgets: []core.Widget{
+        background,
+        // Centered dialog (no offsets needed)
+        widgets.Positioned{
+            Alignment: &graphics.AlignCenter,
+            ChildWidget: dialog,
+        },
+        // Floating action button: starts at bottom-right corner,
+        // then shifts 16px left and 16px up (inward from corner)
+        widgets.Positioned{
+            Alignment: &graphics.AlignBottomRight,
+            Right:     widgets.Ptr(16),
+            Bottom:    widgets.Ptr(16),
+            ChildWidget: fab,
+        },
+    },
+}
+```
+
 ### Stack Fit
 
 | Fit | Effect |
@@ -525,8 +556,8 @@ widgets.DecoratedBox{
     Color:        colors.Surface,
     BorderRadius: 8,
     Gradient: graphics.NewLinearGradient(
-        graphics.Offset{X: 0, Y: 0},    // start
-        graphics.Offset{X: 0, Y: 100},  // end
+        graphics.AlignTopCenter,    // start (top center)
+        graphics.AlignBottomCenter, // end (bottom center)
         []graphics.GradientStop{
             {Position: 0, Color: color1},
             {Position: 1, Color: color2},
@@ -539,6 +570,40 @@ widgets.DecoratedBox{
     },
     ChildWidget: content,
 }
+```
+
+### Gradient Alignment
+
+Gradients use relative coordinates via `Alignment` where (-1, -1) is top-left, (0, 0) is center, and (1, 1) is bottom-right. This allows gradients to scale with widget dimensions:
+
+```go
+// Horizontal gradient (left to right)
+graphics.NewLinearGradient(
+    graphics.AlignCenterLeft,
+    graphics.AlignCenterRight,
+    stops,
+)
+
+// Vertical gradient (top to bottom)
+graphics.NewLinearGradient(
+    graphics.AlignTopCenter,
+    graphics.AlignBottomCenter,
+    stops,
+)
+
+// Diagonal gradient
+graphics.NewLinearGradient(
+    graphics.AlignTopLeft,
+    graphics.AlignBottomRight,
+    stops,
+)
+
+// Radial gradient centered in widget
+graphics.NewRadialGradient(
+    graphics.AlignCenter,
+    1.0, // radius = half the min dimension (touches nearest edge)
+    stops,
+)
 ```
 
 ### Container vs DecoratedBox

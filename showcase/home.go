@@ -84,8 +84,8 @@ func buildHomePage(ctx core.BuildContext, isDark bool, isCupertino bool, toggleT
 							Height: 100,
 							Color:  graphics.ColorWhite,
 							Gradient: graphics.NewRadialGradient(
-								graphics.Offset{X: 100, Y: 50}, // Center
-								100,                             // Radius
+								graphics.AlignCenter, // Center of widget
+								2.0,                  // Radius = 2x half the min dimension (fills width)
 								[]graphics.GradientStop{
 									{Position: 0, Color: graphics.RGBA(47, 249, 238, 60)},   // cyan center
 									{Position: 0.5, Color: graphics.RGBA(238, 23, 130, 20)}, // magenta mid
