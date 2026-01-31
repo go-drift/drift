@@ -91,3 +91,26 @@ func (p *decorationPainter) drawShadow(ctx *layout.PaintContext, rect graphics.R
 	}
 	ctx.Canvas.DrawRectShadow(rect, shadow)
 }
+
+// shouldClipChildren reports whether children should be clipped to the
+// decoration bounds. Returns true when overflow is OverflowClip.
+func (p *decorationPainter) shouldClipChildren() bool {
+	return p.overflow == OverflowClip
+}
+
+// applyChildClip applies the appropriate clip for children based on border radius.
+// Uses a rounded rect clip when borderRadius > 0, otherwise a regular rect clip.
+// The caller must call ctx.PopClipRect() and ctx.Canvas.Restore() after painting children.
+//
+// Note: Platform views (native text fields, etc.) are clipped to the rectangular
+// bounds only, not the rounded shape. This is a platform limitation.
+func (p *decorationPainter) applyChildClip(ctx *layout.PaintContext, rect graphics.Rect) {
+	ctx.Canvas.Save()
+	if p.borderRadius > 0 {
+		rrect := graphics.RRectFromRectAndRadius(rect, graphics.CircularRadius(p.borderRadius))
+		ctx.Canvas.ClipRRect(rrect)
+	} else {
+		ctx.Canvas.ClipRect(rect)
+	}
+	ctx.PushClipRect(rect) // platform views clip to rect only (no rounded corners)
+}

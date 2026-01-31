@@ -10,10 +10,10 @@ import (
 // and sizing operations into a single widget.
 //
 // Container applies decorations in this order:
-//  1. Shadow (drawn behind the container, respects BorderRadius)
-//  2. Background color or gradient (clipped to BorderRadius)
+//  1. Shadow (drawn behind the container, naturally overflows bounds)
+//  2. Background color or gradient (clipped to BorderRadius when Overflow is OverflowClip)
 //  3. Border stroke (if BorderWidth > 0)
-//  4. Child widget (positioned according to Alignment within the padded area)
+//  4. Child widget (clipped to bounds when Overflow is OverflowClip)
 //
 // # Sizing Behavior
 //
@@ -75,12 +75,12 @@ type Container struct {
 	// for dashed gradient borders.
 	BorderGradient *graphics.Gradient
 
-	// Overflow controls whether background gradients extend beyond container bounds.
-	// Defaults to OverflowClip, confining gradients strictly within bounds
-	// (clipped to rounded shape if BorderRadius > 0). Set to OverflowVisible
-	// for glow effects where the gradient should extend beyond the widget.
-	// Only affects background gradients; border gradients, shadows, and solid
-	// colors are not affected.
+	// Overflow controls clipping behavior for gradients and children.
+	// Defaults to OverflowClip, which confines gradients and children strictly
+	// within bounds (clipped to rounded shape when BorderRadius > 0).
+	// Set to OverflowVisible for glow effects where the gradient should extend
+	// beyond the container; children will not be clipped.
+	// Shadows always overflow naturally. Solid background colors never overflow.
 	Overflow Overflow
 }
 
@@ -277,7 +277,16 @@ func (r *renderContainer) Paint(ctx *layout.PaintContext) {
 	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	r.painter.paint(ctx, rect)
 
-	if r.child != nil {
+	if r.child == nil {
+		return
+	}
+
+	if r.painter.shouldClipChildren() {
+		r.painter.applyChildClip(ctx, rect)
+		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PopClipRect()
+		ctx.Canvas.Restore()
+	} else {
 		ctx.PaintChild(r.child, getChildOffset(r.child))
 	}
 }

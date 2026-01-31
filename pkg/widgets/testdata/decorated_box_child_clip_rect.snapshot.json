@@ -1,66 +1,42 @@
 {
   "renderTree": {
-    "id": "RenderContainer#0",
-    "type": "RenderContainer",
+    "id": "RenderDecoratedBox#0",
+    "type": "RenderDecoratedBox",
     "size": [
-      200,
+      100,
       100
     ],
     "offset": [
       0,
       0
     ],
-    "props": {
-      "color": "0xFF646464",
-      "height": 100,
-      "padding": {
-        "Bottom": 0,
-        "Left": 0,
-        "Right": 0,
-        "Top": 0
-      },
-      "width": 200
-    },
     "children": [
       {
-        "id": "RenderContainer#1",
+        "id": "RenderContainer#0",
         "type": "RenderContainer",
         "size": [
-          50,
-          50
+          100,
+          100
         ],
         "offset": [
-          75,
-          25
+          0,
+          0
         ],
         "props": {
-          "color": "0xFFC80000",
-          "height": 50,
+          "color": "0xFF00FF00",
+          "height": 100,
           "padding": {
             "Bottom": 0,
             "Left": 0,
             "Right": 0,
             "Top": 0
           },
-          "width": 50
+          "width": 100
         }
       }
     ]
   },
   "displayOps": [
-    {
-      "op": "drawRectShadow",
-      "params": {
-        "blur": 4,
-        "color": "0x40000000",
-        "rect": {
-          "bottom": 100,
-          "left": 0,
-          "right": 200,
-          "top": 0
-        }
-      }
-    },
     {
       "op": "save"
     },
@@ -70,7 +46,7 @@
         "rect": {
           "bottom": 100,
           "left": 0,
-          "right": 200,
+          "right": 100,
           "top": 0
         }
       }
@@ -78,11 +54,11 @@
     {
       "op": "drawRect",
       "params": {
-        "color": "0xFF646464",
+        "color": "0xFFC8C8C8",
         "rect": {
           "bottom": 100,
           "left": 0,
-          "right": 200,
+          "right": 100,
           "top": 0
         }
       }
@@ -99,7 +75,7 @@
         "rect": {
           "bottom": 100,
           "left": 0,
-          "right": 200,
+          "right": 100,
           "top": 0
         }
       }
@@ -110,38 +86,21 @@
     {
       "op": "translate",
       "params": {
-        "dx": 75,
-        "dy": 25
-      }
-    },
-    {
-      "op": "save"
-    },
-    {
-      "op": "clipRect",
-      "params": {
-        "rect": {
-          "bottom": 50,
-          "left": 0,
-          "right": 50,
-          "top": 0
-        }
+        "dx": 0,
+        "dy": 0
       }
     },
     {
       "op": "drawRect",
       "params": {
-        "color": "0xFFC80000",
+        "color": "0xFF00FF00",
         "rect": {
-          "bottom": 50,
+          "bottom": 100,
           "left": 0,
-          "right": 50,
+          "right": 100,
           "top": 0
         }
       }
-    },
-    {
-      "op": "restore"
     },
     {
       "op": "restore"

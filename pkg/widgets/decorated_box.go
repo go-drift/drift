@@ -12,12 +12,18 @@ import (
 //  1. Shadow (drawn behind, naturally overflows bounds)
 //  2. Background color or gradient (overflow controlled by Overflow field)
 //  3. Border stroke (drawn on top of background, supports dashing)
-//  4. Child widget
+//  4. Child widget (clipped to bounds when Overflow is OverflowClip)
 //
-// Use BorderRadius for rounded corners. When combined with gradients, the
-// Overflow field controls whether the gradient extends beyond bounds:
-//   - [OverflowClip] (default): gradient confined to bounds (or rounded shape)
-//   - [OverflowVisible]: gradient can overflow, useful for glows
+// Use BorderRadius for rounded corners. The Overflow field controls clipping:
+//   - [OverflowClip] (default): gradient and children clipped to bounds
+//   - [OverflowVisible]: gradient can overflow, children not clipped
+//
+// With OverflowClip, children are clipped to the widget bounds (rounded rectangle
+// when BorderRadius > 0). This ensures content like images or accent bars at the
+// edges conform to the bounds without needing a separate [ClipRRect].
+//
+// Note: Platform views (native text fields, etc.) are clipped to rectangular
+// bounds only, not rounded corners. This is a platform limitation.
 //
 // For combined layout and decoration (padding, sizing, alignment), use [Container]
 // which composes DecoratedBox internally. Use DecoratedBox directly when you need
@@ -42,12 +48,12 @@ type DecoratedBox struct {
 	// Effects
 	Shadow *graphics.BoxShadow // Drop shadow drawn behind the box; nil = no shadow
 
-	// Overflow controls whether background gradients extend beyond widget bounds.
-	// Defaults to OverflowClip, confining gradients strictly within bounds
-	// (clipped to rounded shape if BorderRadius > 0). Set to OverflowVisible
-	// for glow effects where the gradient should extend beyond the widget.
-	// Only affects background gradients; border gradients, shadows, and solid
-	// colors are not affected.
+	// Overflow controls clipping behavior for gradients and children.
+	// Defaults to OverflowClip, which confines gradients and children strictly
+	// within bounds (clipped to rounded shape when BorderRadius > 0).
+	// Set to OverflowVisible for glow effects where the gradient should extend
+	// beyond the widget; children will not be clipped.
+	// Shadows always overflow naturally. Solid background colors never overflow.
 	Overflow Overflow
 }
 
@@ -145,7 +151,16 @@ func (r *renderDecoratedBox) Paint(ctx *layout.PaintContext) {
 	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	r.painter.paint(ctx, rect)
 
-	if r.child != nil {
+	if r.child == nil {
+		return
+	}
+
+	if r.painter.shouldClipChildren() {
+		r.painter.applyChildClip(ctx, rect)
+		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PopClipRect()
+		ctx.Canvas.Restore()
+	} else {
 		ctx.PaintChild(r.child, getChildOffset(r.child))
 	}
 }

@@ -664,6 +664,39 @@ Container and DecoratedBox share the same painting implementation internally.
 
 **Use DecoratedBox** when you want decoration without any layout behavior (child sizes to parent constraints).
 
+### Overflow and Clipping
+
+The `Overflow` field controls whether children are clipped to the container bounds:
+
+```go
+// Children clipped to bounds (default)
+widgets.Container{
+    BorderRadius: 12,
+    Overflow:     widgets.OverflowClip,  // default
+    ChildWidget: widgets.Column{
+        ChildrenWidgets: []core.Widget{
+            // This gradient bar will have rounded top corners
+            widgets.Container{
+                Height:   4,
+                Gradient: accentGradient,
+            },
+            content,
+        },
+    },
+}
+```
+
+| Overflow | Gradient | Children |
+|----------|----------|----------|
+| `OverflowClip` (default) | Clipped to bounds | Clipped to bounds |
+| `OverflowVisible` | Can extend beyond bounds | Not clipped |
+
+With `OverflowClip`, children are clipped to the widget bounds. When `BorderRadius > 0`, content is clipped to the rounded shape. This is useful for cards with accent bars, images, or other content at the edges that should conform to the container's shape.
+
+Shadows are always drawn behind the decoration and naturally overflow bounds regardless of the `Overflow` setting.
+
+**Note:** Platform views (native text fields, switches, etc.) are clipped to rectangular bounds only, not rounded corners. This is a platform limitation.
+
 ## ClipRRect
 
 Clip with rounded corners:
@@ -695,18 +728,17 @@ Use when:
 ### Card Layout
 
 ```go
+// Image at top is automatically clipped to rounded corners
 widgets.DecoratedBox{
     Color:        colors.Surface,
     BorderRadius: 8,
+    Overflow:     widgets.OverflowClip,  // default, clips children to rounded shape
     ChildWidget: widgets.Column{
         MainAxisAlignment:  widgets.MainAxisAlignmentStart,
         CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
         MainAxisSize:       widgets.MainAxisSizeMin,
         ChildrenWidgets: []core.Widget{
-            widgets.ClipRRect{
-                BorderRadius: 8,
-                ChildWidget:  image,
-            },
+            image,  // clipped to parent's rounded corners
             widgets.PaddingAll(16,
                 widgets.ColumnOf(
                     widgets.MainAxisAlignmentStart,

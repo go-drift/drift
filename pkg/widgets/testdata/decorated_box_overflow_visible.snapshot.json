@@ -1,0 +1,82 @@
+{
+  "renderTree": {
+    "id": "RenderDecoratedBox#0",
+    "type": "RenderDecoratedBox",
+    "size": [
+      100,
+      100
+    ],
+    "offset": [
+      0,
+      0
+    ],
+    "children": [
+      {
+        "id": "RenderContainer#0",
+        "type": "RenderContainer",
+        "size": [
+          100,
+          100
+        ],
+        "offset": [
+          0,
+          0
+        ],
+        "props": {
+          "color": "0xFF0000FF",
+          "height": 100,
+          "padding": {
+            "Bottom": 0,
+            "Left": 0,
+            "Right": 0,
+            "Top": 0
+          },
+          "width": 100
+        }
+      }
+    ]
+  },
+  "displayOps": [
+    {
+      "op": "drawRRect",
+      "params": {
+        "color": "0xFFC8C8C8",
+        "radius": {
+          "x": 12,
+          "y": 12
+        },
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
+    },
+    {
+      "op": "save"
+    },
+    {
+      "op": "translate",
+      "params": {
+        "dx": 0,
+        "dy": 0
+      }
+    },
+    {
+      "op": "drawRect",
+      "params": {
+        "color": "0xFF0000FF",
+        "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
+    },
+    {
+      "op": "restore"
+    }
+  ]
+}
