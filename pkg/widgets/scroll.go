@@ -8,8 +8,8 @@ import (
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/gestures"
-	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 )
 
 // ScrollView provides scrollable content in a single direction.
@@ -23,7 +23,6 @@ import (
 // The Physics field controls scroll behavior:
 //   - [ClampingScrollPhysics] (default): Stops at edges, no overscroll
 //   - [BouncingScrollPhysics]: iOS-style bounce effect at edges
-//   - [NeverScrollableScrollPhysics]: Disables scrolling entirely
 //
 // # Scroll Controller
 //

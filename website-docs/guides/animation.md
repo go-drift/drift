@@ -1,7 +1,7 @@
 ---
 id: animation
 title: Animation
-sidebar_position: 5
+sidebar_position: 10
 ---
 
 # Animation

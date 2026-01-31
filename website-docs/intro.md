@@ -6,7 +6,9 @@ sidebar_position: 1
 
 # Drift
 
-Drift is a cross-platform mobile UI framework in Go. It lets you write UI and application logic in Go, then build native Android and iOS apps via the Drift CLI, which generates platform scaffolding in a build cache and compiles your app with CGO + Skia.
+Drift is a cross-platform mobile UI framework for Go. Write your app once in Go, then build native Android and iOS apps.
+
+<video src="/showcase.mp4" controls autoPlay muted playsInline width="300" />
 
 ## Why Drift?
 
@@ -16,53 +18,11 @@ Drift is a cross-platform mobile UI framework in Go. It lets you write UI and ap
 - **No bridge overhead** - Direct native compilation, no JavaScript or VM layer
 - **iOS builds on Linux** - Build iOS apps without a Mac using [xtool](https://xtool.sh)
 
-<video src="/showcase.mp4"  controls autoPlay muted playsInline width="300" />
+## How It Works
 
-## Prerequisites
-
-- Go 1.24
-- Android builds: Android SDK + NDK, Java 17+, and `ANDROID_HOME` + `ANDROID_NDK_HOME` env vars
-- iOS builds: macOS with Xcode installed
-- Skia: prebuilt binaries (downloaded automatically on first run)
-
-## Quick Start
-
-### 1. Install Drift
-
-```bash
-go install github.com/go-drift/drift/cmd/drift@latest
-```
-
-Make sure `$(go env GOPATH)/bin` or `GOBIN` is on your `PATH` so the `drift` command is available.
-
-### 2. Create a New Project
-
-**Option A: Using drift init (recommended)**
-
-```bash
-drift init hello-drift
-cd hello-drift
-```
-
-**Option B: Manual setup**
-
-```bash
-mkdir hello-drift && cd hello-drift
-go mod init example.com/hello-drift
-go get github.com/go-drift/drift@latest
-```
-
-Then create `main.go`:
+Drift apps are Go programs that return widgets. The Drift CLI compiles your Go code with CGO, links it against Skia, and packages it into a native Android APK or iOS app.
 
 ```go
-package main
-
-import (
-    "github.com/go-drift/drift/pkg/core"
-    "github.com/go-drift/drift/pkg/drift"
-    "github.com/go-drift/drift/pkg/widgets"
-)
-
 func main() {
     drift.NewApp(App()).Run()
 }
@@ -74,55 +34,20 @@ func App() core.Widget {
 }
 ```
 
-### 3. Run Your App
+## Requirements
 
-```bash
-drift run android
-# or
-drift run ios --simulator "iPhone 17"
-# or
-drift run xtool
-```
+- **Go 1.24** or later
+- **Android**: Android SDK + NDK, Java 17+
+- **iOS**: macOS with Xcode, or Linux with [xtool](/docs/guides/xtool-setup)
 
-Skia binaries are downloaded automatically on first run.
+## Get Started
 
-### 4. (Optional) Add Configuration
+Ready to build your first app?
 
-Create `drift.yaml` to customize app metadata:
+**[Getting Started Guide](/docs/guides/getting-started)** - Install the CLI and run your first app in minutes.
 
-```yaml
-app:
-  name: Hello Drift
-  id: com.example.hellodrift
-engine:
-  version: latest
-```
+## Learn More
 
-## Build Commands
-
-```bash
-# Build
-drift build android
-drift build ios
-drift build xtool
-
-# Run on devices/simulators
-drift run android
-drift run ios --simulator "iPhone 17"
-drift run xtool
-
-# Fetch Skia binaries
-drift fetch-skia              # all platforms
-drift fetch-skia --android    # android only
-drift fetch-skia --ios        # ios only
-
-# Clean build cache
-drift clean
-```
-
-## Next Steps
-
-- [Getting Started Guide](/docs/guides/getting-started) - Detailed setup instructions
-- [Widgets](/docs/guides/widgets) - Learn about available widgets
-- [State Management](/docs/guides/state-management) - Managing state in your app
+- [Widgets](/docs/guides/widgets) - UI building blocks
+- [State Management](/docs/guides/state-management) - Managing app state
 - [API Reference](/docs/api/core) - Full API documentation

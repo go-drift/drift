@@ -1,7 +1,7 @@
 ---
 id: state-management
 title: State Management
-sidebar_position: 3
+sidebar_position: 6
 ---
 
 # State Management

@@ -79,7 +79,7 @@
 //
 // ScrollView provides scrollable content with customizable physics:
 //
-//	widgets.ScrollView{Child: content, Physics: widgets.BouncingScrollPhysics{}}
+//	widgets.ScrollView{ChildWidget: content, Physics: widgets.BouncingScrollPhysics{}}
 //
 // # Style Guide for Widget Authors
 //

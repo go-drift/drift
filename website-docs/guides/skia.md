@@ -1,7 +1,7 @@
 ---
 id: skia
 title: Skia Build
-sidebar_position: 11
+sidebar_position: 16
 ---
 
 # Skia Build
