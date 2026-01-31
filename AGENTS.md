@@ -1,40 +1,39 @@
-# AGENTS.md
-
-## Project Overview
-Drift is a cross-platform mobile UI framework written in Go. It uses Skia for GPU-accelerated rendering and targets Android and iOS.
-
 ## Build Commands
 ```bash
 make cli                # Build drift CLI
-go build ./...          # Build all Go packages
-go test ./...           # Run tests
 go mod tidy             # Sync dependencies
 gofmt -w .              # Format code
 go vet ./...            # Lint
 ```
 
+## Testing
+```bash
+go test ./...                              
+DRIFT_UPDATE_SNAPSHOTS=1 go test ./pkg/...  # Update snapshot tests
+```
+
+## Documentation
+```bash
+go run cmd/docgen/main.go # Generate Docusaurus docs
+```
+
 ## Project Structure
 - `cmd/drift/` - CLI tool (build, run, clean, init, devices, log)
-- `pkg/` - Core framework packages (core, engine, graphics, layout, widgets, animation, theme, navigation, gestures, platform, skia, svg)
+- `cmd/docgen/` - Documentation generator
+- `pkg/` - Core framework packages
 - `showcase/` - Demo application
 - `scripts/` - Skia build scripts
 - `third_party/` - Skia source and prebuilt binaries
-
-## Code Style
-- Use `gofmt` for formatting
-- CamelCase for exported, lowerCamelCase for unexported
-- Group stdlib imports first, then module imports
-- Wrap errors with context: `fmt.Errorf("...: %w", err)`
-- Keep interfaces small and defined where used
-
-## Widget Patterns
-- Prefer struct literals for simple widgets
-- Use helper constructors when defaults matter (e.g., `widgets.ButtonOf`)
-- Compose UIs by nesting widgets
-- Only mutate state inside `SetState`
+- `website-docs/guides/` - Website guides source files
+- `website/` - Docusaurus website config
 
 ## CGO and Platform
 - CGO bridges Go to Skia (C++)
 - Android: Kotlin embedder, JNI bridge
 - iOS: Swift embedder, Metal rendering
 - Keep bridge functions thin; delegate logic to Go
+
+## Platform Native Code
+When adding iOS or Android native code, ensure these files in `cmd/drift/internal/templates/` are updated:
+- **iOS**: Info.plist, xcodeproj, and xtool project templates
+- **Android**: AndroidManifest.xml and project templates
