@@ -81,7 +81,7 @@ func TestDebugServer_StartStop(t *testing.T) {
 	}
 }
 
-func TestDebugServer_TreeEndpoint_NoRoot(t *testing.T) {
+func TestDebugServer_RenderTreeEndpoint_NoRoot(t *testing.T) {
 	port, err := startDebugServer(0)
 	if err != nil {
 		t.Fatalf("failed to start debug server: %v", err)
@@ -93,9 +93,32 @@ func TestDebugServer_TreeEndpoint_NoRoot(t *testing.T) {
 	}
 
 	// Without a root render object, should return 503
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/tree", port))
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/render-tree", port))
 	if err != nil {
-		t.Fatalf("failed to reach tree endpoint: %v", err)
+		t.Fatalf("failed to reach render-tree endpoint: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503 with no root, got %d", resp.StatusCode)
+	}
+}
+
+func TestDebugServer_WidgetTreeEndpoint_NoRoot(t *testing.T) {
+	port, err := startDebugServer(0)
+	if err != nil {
+		t.Fatalf("failed to start debug server: %v", err)
+	}
+	defer stopDebugServer()
+
+	if err := waitForServer(port, 2*time.Second); err != nil {
+		t.Fatalf("server not ready: %v", err)
+	}
+
+	// Without a root element, should return 503
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/widget-tree", port))
+	if err != nil {
+		t.Fatalf("failed to reach widget-tree endpoint: %v", err)
 	}
 	defer resp.Body.Close()
 

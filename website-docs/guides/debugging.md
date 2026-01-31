@@ -57,7 +57,8 @@ func main() {
 | Endpoint | Description |
 |----------|-------------|
 | `/health` | Server status check |
-| `/tree` | Render tree as JSON |
+| `/render-tree` | Render tree as JSON (layout and painting) |
+| `/widget-tree` | Widget/element tree as JSON (configuration and state) |
 | `/debug` | Basic root render object info |
 
 ### Accessing the Server
@@ -68,7 +69,7 @@ The debug server runs inside the app on the device. To access it from your devel
 
 ```bash
 adb forward tcp:9999 tcp:9999
-curl http://localhost:9999/tree | jq .
+curl http://localhost:9999/render-tree | jq .
 ```
 
 **iOS Simulator:**
@@ -76,7 +77,7 @@ curl http://localhost:9999/tree | jq .
 The simulator shares the host network, so no forwarding is needed:
 
 ```bash
-curl http://localhost:9999/tree | jq .
+curl http://localhost:9999/render-tree | jq .
 ```
 
 **iOS Device:**
@@ -84,18 +85,51 @@ curl http://localhost:9999/tree | jq .
 Use the device's IP address (find it in Settings > Wi-Fi):
 
 ```bash
-curl http://<device-ip>:9999/tree | jq .
+curl http://<device-ip>:9999/render-tree | jq .
 ```
 
-## Render Tree Inspection
+## Tree Inspection
 
-The `/tree` endpoint returns the render tree, not the widget tree. Render objects handle layout and painting.
+Drift maintains three parallel trees. The debug server exposes two of them:
 
 ### Widget vs Element vs RenderObject
 
-- **Widget**: Immutable configuration object
-- **Element**: Mutable instance that manages widget lifecycle
-- **RenderObject**: Handles layout and painting
+- **Widget**: Immutable configuration object describing what the UI should look like
+- **Element**: Mutable instance that manages widget lifecycle and holds state
+- **RenderObject**: Handles layout calculations and painting
+
+### Render Tree (`/render-tree`)
+
+Returns the render tree with layout and painting information:
+
+```json
+{
+  "type": "*layout.RenderFlex",
+  "size": {"width": 400, "height": 800},
+  "constraints": {"minWidth": 0, "maxWidth": 400, "minHeight": 0, "maxHeight": 800},
+  "needsLayout": false,
+  "needsPaint": false,
+  "isRepaintBoundary": false,
+  "children": [...]
+}
+```
+
+### Widget Tree (`/widget-tree`)
+
+Returns the element tree with widget configuration and state information:
+
+```json
+{
+  "widgetType": "widgets.Column",
+  "elementType": "*core.RenderObjectElement",
+  "depth": 3,
+  "needsBuild": false,
+  "hasState": false,
+  "children": [...]
+}
+```
+
+The `hasState` field is `true` for elements backed by a `StatefulWidget`, indicating they have associated state.
 
 ## Performance Optimization
 

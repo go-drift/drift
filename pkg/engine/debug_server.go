@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/layout"
 )
 
@@ -74,6 +75,17 @@ type SafeConstraints struct {
 	MaxHeight SafeFloat `json:"maxHeight"`
 }
 
+// WidgetTreeNode represents a node in the serialized widget/element tree.
+type WidgetTreeNode struct {
+	WidgetType  string           `json:"widgetType"`
+	ElementType string           `json:"elementType"`
+	Key         any              `json:"key,omitempty"`
+	Depth       int              `json:"depth"`
+	NeedsBuild  bool             `json:"needsBuild"`
+	HasState    bool             `json:"hasState,omitempty"`
+	Children    []WidgetTreeNode `json:"children,omitempty"`
+}
+
 // startDebugServer starts the HTTP debug server on the specified port.
 // Returns the actual port (useful when port=0 for ephemeral allocation).
 func startDebugServer(port int) (int, error) {
@@ -97,7 +109,8 @@ func startDebugServer(port int) (int, error) {
 	actualPort := listener.Addr().(*net.TCPAddr).Port
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/tree", handleTree)
+	mux.HandleFunc("/render-tree", handleRenderTree)
+	mux.HandleFunc("/widget-tree", handleWidgetTree)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/debug", handleDebug)
 
@@ -139,8 +152,8 @@ func stopDebugServer() {
 // maxTreeDepth limits recursion depth to prevent stack overflow from malformed trees.
 const maxTreeDepth = 500
 
-// handleTree returns the render tree as JSON.
-func handleTree(w http.ResponseWriter, r *http.Request) {
+// handleRenderTree returns the render tree as JSON.
+func handleRenderTree(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -209,6 +222,119 @@ func handleDebug(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(info)
+}
+
+// handleWidgetTree returns the widget/element tree as JSON.
+func handleWidgetTree(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Recover from panics during serialization
+	defer func() {
+		if rec := recover(); rec != nil {
+			http.Error(w, fmt.Sprintf("panic: %v", rec), http.StatusInternalServerError)
+		}
+	}()
+
+	frameLock.Lock()
+	root := app.root
+	if root == nil {
+		frameLock.Unlock()
+		http.Error(w, "no widget tree", http.StatusServiceUnavailable)
+		return
+	}
+	tree := serializeWidgetTree(root, 0)
+	frameLock.Unlock()
+
+	// Encode to buffer first so we can catch errors
+	data, err := json.MarshalIndent(tree, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// serializeWidgetTree recursively converts an element tree to JSON-serializable form.
+// The depth parameter limits recursion to prevent stack overflow.
+func serializeWidgetTree(elem core.Element, depth int) WidgetTreeNode {
+	if elem == nil {
+		return WidgetTreeNode{ElementType: "<nil>"}
+	}
+
+	widget := elem.Widget()
+	node := WidgetTreeNode{
+		ElementType: reflect.TypeOf(elem).String(),
+		Depth:       elem.Depth(),
+		NeedsBuild:  getNeedsBuild(elem),
+	}
+
+	if widget != nil {
+		node.WidgetType = reflect.TypeOf(widget).String()
+		node.Key = safeKey(widget.Key())
+	}
+
+	// Check if this is a stateful element
+	if _, ok := elem.(*core.StatefulElement); ok {
+		node.HasState = true
+	}
+
+	// Recurse into children (with depth limit)
+	if depth < maxTreeDepth {
+		elem.VisitChildren(func(child core.Element) bool {
+			node.Children = append(node.Children, serializeWidgetTree(child, depth+1))
+			return true
+		})
+	}
+
+	return node
+}
+
+// safeKey converts a widget key to a JSON-safe value.
+// Non-serializable types (funcs, chans, etc.) are converted to their string representation.
+func safeKey(key any) any {
+	if key == nil {
+		return nil
+	}
+	switch key.(type) {
+	case string, int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64, bool:
+		return key
+	default:
+		// For complex types, use string representation to avoid JSON errors
+		return fmt.Sprintf("%v", key)
+	}
+}
+
+// getNeedsBuild safely retrieves the dirty/needsBuild flag from an element.
+func getNeedsBuild(elem core.Element) bool {
+	if elem == nil {
+		return false
+	}
+	// The dirty field is unexported, but we can check via type assertion
+	// to a common interface if available. For now, we use reflection.
+	v := reflect.ValueOf(elem)
+	if !v.IsValid() {
+		return false
+	}
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return false
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	if dirty := v.FieldByName("dirty"); dirty.IsValid() && dirty.Kind() == reflect.Bool {
+		return dirty.Bool()
+	}
+	return false
 }
 
 // serializeRenderTreeWithDepth recursively converts a render object tree to JSON-serializable form.
