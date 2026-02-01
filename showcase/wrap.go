@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -16,21 +17,18 @@ func buildWrapPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(8),
 		widgets.Text{Content: "Children flow to the next line when space runs out:", Style: labelStyle(colors)},
 		widgets.VSpace(12),
-		wrapContainer(
-			widgets.Wrap{
-				Spacing:    8,
-				RunSpacing: 8,
-				ChildrenWidgets: []core.Widget{
-					chip("Go", colors),
-					chip("Rust", colors),
-					chip("TypeScript", colors),
-					chip("Python", colors),
-					chip("Swift", colors),
-					chip("Kotlin", colors),
-				},
-			},
-			colors,
-		),
+		widgets.Container{
+			Color:   colors.SurfaceVariant,
+			Padding: layout.EdgeInsetsAll(8),
+			ChildWidget: widgets.WrapOf(8, 8,
+				chip("Go", colors),
+				chip("Rust", colors),
+				chip("TypeScript", colors),
+				chip("Python", colors),
+				chip("Swift", colors),
+				chip("Kotlin", colors),
+			),
+		},
 		widgets.VSpace(24),
 
 		sectionTitle("Alignment", colors),
@@ -109,48 +107,35 @@ func chip(label string, colors theme.ColorScheme) core.Widget {
 	}
 }
 
-// wrapContainer wraps content with bounded height for Wrap demos.
-func wrapContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
-	return widgets.Container{
-		Color:       colors.SurfaceVariant,
-		Height:      80,
-		ChildWidget: widgets.PaddingAll(8, child),
-	}
-}
-
 // wrapAlignmentDemo shows Wrap with different alignment settings.
 func wrapAlignmentDemo(alignment widgets.WrapAlignment, colors theme.ColorScheme) core.Widget {
-	return wrapContainer(
-		widgets.Wrap{
-			Alignment:  alignment,
-			Spacing:    8,
-			RunSpacing: 8,
-			ChildrenWidgets: []core.Widget{
-				chip("One", colors),
-				chip("Two", colors),
-				chip("Three", colors),
-			},
+	return widgets.Container{
+		Color:   colors.SurfaceVariant,
+		Height:  80,
+		Padding: layout.EdgeInsetsAll(8),
+		ChildWidget: widgets.Wrap{
+			Direction:       widgets.WrapAxisHorizontal,
+			Alignment:       alignment,
+			Spacing:         8,
+			RunSpacing:      8,
+			ChildrenWidgets: []core.Widget{chip("One", colors), chip("Two", colors), chip("Three", colors)},
 		},
-		colors,
-	)
+	}
 }
 
 // wrapSpacingDemo shows Wrap with different spacing values.
 func wrapSpacingDemo(spacing, runSpacing float64, colors theme.ColorScheme) core.Widget {
-	return wrapContainer(
-		widgets.Wrap{
-			Spacing:    spacing,
-			RunSpacing: runSpacing,
-			ChildrenWidgets: []core.Widget{
-				chip("Alpha", colors),
-				chip("Beta", colors),
-				chip("Gamma", colors),
-				chip("Delta", colors),
-				chip("Epsilon", colors),
-			},
-		},
-		colors,
-	)
+	return widgets.Container{
+		Color:   colors.SurfaceVariant,
+		Padding: layout.EdgeInsetsAll(8),
+		ChildWidget: widgets.WrapOf(spacing, runSpacing,
+			chip("Alpha", colors),
+			chip("Beta", colors),
+			chip("Gamma", colors),
+			chip("Delta", colors),
+			chip("Epsilon", colors),
+		),
+	}
 }
 
 // wrapCrossDemo shows Wrap with different cross-axis alignments using varied heights.
@@ -160,6 +145,7 @@ func wrapCrossDemo(cross widgets.WrapCrossAlignment, colors theme.ColorScheme) c
 		Height: 64,
 		ChildWidget: widgets.PaddingAll(8,
 			widgets.Wrap{
+				Direction:          widgets.WrapAxisHorizontal,
 				CrossAxisAlignment: cross,
 				Spacing:            8,
 				RunSpacing:         8,

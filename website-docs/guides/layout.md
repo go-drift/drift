@@ -200,7 +200,7 @@ widgets.RowOf(
 
 ```go
 widgets.Wrap{
-    Direction:  widgets.AxisHorizontal,
+    Direction:  widgets.WrapAxisHorizontal,
     Spacing:    8,
     RunSpacing: 8,
     ChildrenWidgets: []core.Widget{
@@ -217,13 +217,13 @@ widgets.Wrap{
 
 Set `Direction` to control the flow direction:
 
-- `AxisHorizontal`: Children flow left-to-right, wrapping to new rows below
-- `AxisVertical`: Children flow top-to-bottom, wrapping to new columns to the right
+- `WrapAxisHorizontal` (default): Children flow left-to-right, wrapping to new rows below
+- `WrapAxisVertical`: Children flow top-to-bottom, wrapping to new columns to the right
 
 ```go
 // Vertical wrap: items flow down, then wrap to the next column
 widgets.Wrap{
-    Direction:  widgets.AxisVertical,
+    Direction:  widgets.WrapAxisVertical,
     Spacing:    8,
     RunSpacing: 12,
     ChildrenWidgets: tags,

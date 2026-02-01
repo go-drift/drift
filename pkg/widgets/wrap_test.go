@@ -10,7 +10,7 @@ import (
 
 func TestWrap_BasicHorizontalWrapping(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 	}
 	wrap.SetSelf(wrap)
 
@@ -55,7 +55,7 @@ func TestWrap_BasicHorizontalWrapping(t *testing.T) {
 
 func TestWrap_VerticalDirection(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisVertical,
+		direction: WrapAxisVertical,
 	}
 	wrap.SetSelf(wrap)
 
@@ -100,7 +100,7 @@ func TestWrap_VerticalDirection(t *testing.T) {
 
 func TestWrap_SpacingBetweenItems(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		spacing:   10,
 	}
 	wrap.SetSelf(wrap)
@@ -138,7 +138,7 @@ func TestWrap_SpacingBetweenItems(t *testing.T) {
 
 func TestWrap_RunSpacing(t *testing.T) {
 	wrap := &renderWrap{
-		direction:  AxisHorizontal,
+		direction:  WrapAxisHorizontal,
 		runSpacing: 15,
 	}
 	wrap.SetSelf(wrap)
@@ -180,7 +180,7 @@ func TestWrap_RunSpacing(t *testing.T) {
 
 func TestWrap_AlignmentCenter(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		alignment: WrapAlignmentCenter,
 	}
 	wrap.SetSelf(wrap)
@@ -209,7 +209,7 @@ func TestWrap_AlignmentCenter(t *testing.T) {
 
 func TestWrap_AlignmentEnd(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		alignment: WrapAlignmentEnd,
 	}
 	wrap.SetSelf(wrap)
@@ -236,7 +236,7 @@ func TestWrap_AlignmentEnd(t *testing.T) {
 
 func TestWrap_AlignmentSpaceBetween(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		alignment: WrapAlignmentSpaceBetween,
 	}
 	wrap.SetSelf(wrap)
@@ -270,7 +270,7 @@ func TestWrap_AlignmentSpaceBetween(t *testing.T) {
 
 func TestWrap_AlignmentSpaceAround(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		alignment: WrapAlignmentSpaceAround,
 	}
 	wrap.SetSelf(wrap)
@@ -305,7 +305,7 @@ func TestWrap_AlignmentSpaceAround(t *testing.T) {
 
 func TestWrap_AlignmentSpaceEvenly(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		alignment: WrapAlignmentSpaceEvenly,
 	}
 	wrap.SetSelf(wrap)
@@ -339,7 +339,7 @@ func TestWrap_AlignmentSpaceEvenly(t *testing.T) {
 
 func TestWrap_CrossAxisAlignmentCenter(t *testing.T) {
 	wrap := &renderWrap{
-		direction:          AxisHorizontal,
+		direction:          WrapAxisHorizontal,
 		crossAxisAlignment: WrapCrossAlignmentCenter,
 	}
 	wrap.SetSelf(wrap)
@@ -375,7 +375,7 @@ func TestWrap_CrossAxisAlignmentCenter(t *testing.T) {
 
 func TestWrap_CrossAxisAlignmentEnd(t *testing.T) {
 	wrap := &renderWrap{
-		direction:          AxisHorizontal,
+		direction:          WrapAxisHorizontal,
 		crossAxisAlignment: WrapCrossAlignmentEnd,
 	}
 	wrap.SetSelf(wrap)
@@ -409,7 +409,7 @@ func TestWrap_CrossAxisAlignmentEnd(t *testing.T) {
 
 func TestWrap_RunAlignmentCenter(t *testing.T) {
 	wrap := &renderWrap{
-		direction:    AxisHorizontal,
+		direction:    WrapAxisHorizontal,
 		runAlignment: RunAlignmentCenter,
 	}
 	wrap.SetSelf(wrap)
@@ -449,7 +449,7 @@ func TestWrap_RunAlignmentCenter(t *testing.T) {
 
 func TestWrap_RunAlignmentEnd(t *testing.T) {
 	wrap := &renderWrap{
-		direction:    AxisHorizontal,
+		direction:    WrapAxisHorizontal,
 		runAlignment: RunAlignmentEnd,
 	}
 	wrap.SetSelf(wrap)
@@ -486,7 +486,7 @@ func TestWrap_RunAlignmentEnd(t *testing.T) {
 
 func TestWrap_RunAlignmentSpaceBetween(t *testing.T) {
 	wrap := &renderWrap{
-		direction:    AxisHorizontal,
+		direction:    WrapAxisHorizontal,
 		runAlignment: RunAlignmentSpaceBetween,
 	}
 	wrap.SetSelf(wrap)
@@ -522,7 +522,7 @@ func TestWrap_RunAlignmentSpaceBetween(t *testing.T) {
 
 func TestWrap_RunAlignmentSpaceAround(t *testing.T) {
 	wrap := &renderWrap{
-		direction:    AxisHorizontal,
+		direction:    WrapAxisHorizontal,
 		runAlignment: RunAlignmentSpaceAround,
 	}
 	wrap.SetSelf(wrap)
@@ -558,7 +558,7 @@ func TestWrap_RunAlignmentSpaceAround(t *testing.T) {
 
 func TestWrap_RunAlignmentSpaceEvenly(t *testing.T) {
 	wrap := &renderWrap{
-		direction:    AxisHorizontal,
+		direction:    WrapAxisHorizontal,
 		runAlignment: RunAlignmentSpaceEvenly,
 	}
 	wrap.SetSelf(wrap)
@@ -594,7 +594,7 @@ func TestWrap_RunAlignmentSpaceEvenly(t *testing.T) {
 
 func TestWrap_RunAlignmentWithRunSpacing(t *testing.T) {
 	wrap := &renderWrap{
-		direction:    AxisHorizontal,
+		direction:    WrapAxisHorizontal,
 		runAlignment: RunAlignmentSpaceBetween,
 		runSpacing:   10, // RunSpacing should be added in addition to alignment spacing
 	}
@@ -634,7 +634,7 @@ func TestWrap_RunAlignmentWithRunSpacing(t *testing.T) {
 func TestWrap_VerticalCrossAxisSizing(t *testing.T) {
 	// Regression test: vertical wrap should use MinWidth for cross-axis, not MinHeight
 	wrap := &renderWrap{
-		direction: AxisVertical,
+		direction: WrapAxisVertical,
 	}
 	wrap.SetSelf(wrap)
 
@@ -665,7 +665,7 @@ func TestWrap_VerticalCrossAxisSizing(t *testing.T) {
 func TestWrap_VerticalCrossAxisMinWidth(t *testing.T) {
 	// Vertical wrap should respect MinWidth for cross-axis sizing
 	wrap := &renderWrap{
-		direction: AxisVertical,
+		direction: WrapAxisVertical,
 	}
 	wrap.SetSelf(wrap)
 
@@ -690,7 +690,7 @@ func TestWrap_VerticalCrossAxisMinWidth(t *testing.T) {
 
 func TestWrap_EmptyChildren(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 	}
 	wrap.SetSelf(wrap)
 	wrap.SetChildren([]layout.RenderObject{})
@@ -711,7 +711,7 @@ func TestWrap_EmptyChildren(t *testing.T) {
 
 func TestWrap_SingleChild(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 	}
 	wrap.SetSelf(wrap)
 
@@ -743,7 +743,7 @@ func TestWrap_SingleChild(t *testing.T) {
 
 func TestWrap_SingleRowFitsAll(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 		spacing:   10,
 	}
 	wrap.SetSelf(wrap)
@@ -782,7 +782,7 @@ func TestWrap_SingleRowFitsAll(t *testing.T) {
 
 func TestWrap_UnboundedMainAxisPanics(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 	}
 	wrap.SetSelf(wrap)
 
@@ -817,7 +817,7 @@ func TestWrap_UnboundedMainAxisPanics(t *testing.T) {
 
 func TestWrap_UnboundedMainAxisVerticalPanics(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisVertical,
+		direction: WrapAxisVertical,
 	}
 	wrap.SetSelf(wrap)
 
@@ -852,7 +852,7 @@ func TestWrap_UnboundedMainAxisVerticalPanics(t *testing.T) {
 
 func TestWrap_BoundedConstraintsNoPanic(t *testing.T) {
 	wrap := &renderWrap{
-		direction: AxisHorizontal,
+		direction: WrapAxisHorizontal,
 	}
 	wrap.SetSelf(wrap)
 
@@ -950,8 +950,8 @@ func TestWrapOf_Helper(t *testing.T) {
 	if wrap.RunSpacing != 12 {
 		t.Errorf("expected RunSpacing=12, got %v", wrap.RunSpacing)
 	}
-	// WrapOf uses default Direction which is AxisHorizontal
-	if wrap.Direction != AxisHorizontal {
-		t.Errorf("expected Direction=AxisHorizontal, got %v", wrap.Direction)
+	// WrapOf uses default Direction which is WrapAxisHorizontal
+	if wrap.Direction != WrapAxisHorizontal {
+		t.Errorf("expected Direction=WrapAxisHorizontal, got %v", wrap.Direction)
 	}
 }

@@ -76,6 +76,29 @@ func (a WrapCrossAlignment) String() string {
 	}
 }
 
+// WrapAxis controls the layout direction for Wrap.
+//
+// WrapAxisHorizontal is the zero value to make horizontal wrapping the default.
+// Use WrapAxisVertical for top-to-bottom flow that wraps into new columns.
+type WrapAxis int
+
+const (
+	WrapAxisHorizontal WrapAxis = iota
+	WrapAxisVertical
+)
+
+// String returns a human-readable representation of the wrap axis.
+func (a WrapAxis) String() string {
+	switch a {
+	case WrapAxisHorizontal:
+		return "horizontal"
+	case WrapAxisVertical:
+		return "vertical"
+	default:
+		return fmt.Sprintf("WrapAxis(%d)", int(a))
+	}
+}
+
 // RunAlignment controls how runs are distributed along the cross axis.
 type RunAlignment int
 
@@ -127,7 +150,7 @@ func (a RunAlignment) String() string {
 //
 // Wrap requires bounded constraints on the main axis (width for horizontal,
 // height for vertical). The cross axis can be unbounded - Wrap will size to
-// fit all runs.
+// fit all runs. If the main axis is unbounded, Wrap will panic with guidance.
 //
 // # Spacing
 //
@@ -143,9 +166,15 @@ func (a RunAlignment) String() string {
 //   - RunAlignment: Controls distribution of runs along the cross axis (Start, End, Center,
 //     SpaceBetween, SpaceAround, SpaceEvenly)
 //
+// # Direction
+//
+// Direction defaults to WrapAxisHorizontal (the zero value for WrapAxis).
+// For vertical wrapping, set Direction to WrapAxisVertical.
+//
 // Example:
 //
 //	Wrap{
+//	    Direction:  WrapAxisHorizontal,
 //	    Spacing:    8,
 //	    RunSpacing: 8,
 //	    ChildrenWidgets: []core.Widget{
@@ -160,7 +189,7 @@ func (a RunAlignment) String() string {
 // use [Column].
 type Wrap struct {
 	ChildrenWidgets    []core.Widget
-	Direction          Axis               // AxisHorizontal (default behavior) or AxisVertical
+	Direction          WrapAxis           // WrapAxisHorizontal (zero value); set WrapAxisVertical for column-style wrapping
 	Alignment          WrapAlignment      // Main axis alignment within runs
 	CrossAxisAlignment WrapCrossAlignment // Cross axis alignment within runs
 	RunAlignment       RunAlignment       // Distribution of runs in cross axis
@@ -173,7 +202,7 @@ type Wrap struct {
 func WrapOf(spacing, runSpacing float64, children ...core.Widget) Wrap {
 	return Wrap{
 		ChildrenWidgets: children,
-		Direction:       AxisHorizontal,
+		Direction:       WrapAxisHorizontal,
 		Spacing:         spacing,
 		RunSpacing:      runSpacing,
 	}
@@ -228,7 +257,7 @@ type runMetrics struct {
 type renderWrap struct {
 	layout.RenderBoxBase
 	children           []layout.RenderBox
-	direction          Axis
+	direction          WrapAxis
 	alignment          WrapAlignment
 	crossAxisAlignment WrapCrossAlignment
 	runAlignment       RunAlignment
@@ -256,28 +285,28 @@ func (r *renderWrap) VisitChildren(visitor func(layout.RenderObject)) {
 }
 
 func (r *renderWrap) mainAxis(size graphics.Size) float64 {
-	if r.direction == AxisVertical {
+	if r.direction == WrapAxisVertical {
 		return size.Height
 	}
 	return size.Width
 }
 
 func (r *renderWrap) crossAxis(size graphics.Size) float64 {
-	if r.direction == AxisVertical {
+	if r.direction == WrapAxisVertical {
 		return size.Width
 	}
 	return size.Height
 }
 
 func (r *renderWrap) makeSize(main, cross float64) graphics.Size {
-	if r.direction == AxisVertical {
+	if r.direction == WrapAxisVertical {
 		return graphics.Size{Width: cross, Height: main}
 	}
 	return graphics.Size{Width: main, Height: cross}
 }
 
 func (r *renderWrap) makeOffset(main, cross float64) graphics.Offset {
-	if r.direction == AxisVertical {
+	if r.direction == WrapAxisVertical {
 		return graphics.Offset{X: cross, Y: main}
 	}
 	return graphics.Offset{X: main, Y: cross}
@@ -293,7 +322,7 @@ func (r *renderWrap) PerformLayout() {
 	if maxMain == math.MaxFloat64 {
 		mainAxisName := "width"
 		containerType := "horizontal"
-		if r.direction == AxisVertical {
+		if r.direction == WrapAxisVertical {
 			mainAxisName = "height"
 			containerType = "vertical"
 		}
@@ -367,7 +396,7 @@ func (r *renderWrap) PerformLayout() {
 	// Determine final size
 	crossSize := totalCrossExtent
 	if maxCross != math.MaxFloat64 {
-		if r.direction == AxisVertical {
+		if r.direction == WrapAxisVertical {
 			crossSize = math.Max(crossSize, constraints.MinWidth)
 		} else {
 			crossSize = math.Max(crossSize, constraints.MinHeight)
