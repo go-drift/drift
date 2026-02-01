@@ -37,21 +37,33 @@ func (o Offstage) CreateRenderObject(ctx core.BuildContext) layout.RenderObject 
 
 func (o Offstage) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 	if box, ok := renderObject.(*renderOffstage); ok {
+		wasOffstage := box.offstage
 		box.offstage = o.Offstage
+		if wasOffstage && !box.offstage {
+			// Ensure layout refresh when becoming visible again.
+			box.MarkNeedsLayout()
+		}
 		box.MarkNeedsPaint()
 	}
 }
 
 type renderOffstage struct {
 	layout.RenderBoxBase
-	child    layout.RenderBox
-	offstage bool
+	child                layout.RenderBox
+	offstage             bool
+	lastChildSize        graphics.Size
+	lastChildConstraints layout.Constraints
+	hasChildSize         bool
 }
 
 func (r *renderOffstage) SetChild(child layout.RenderObject) {
 	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
 	setParentOnChild(r.child, r)
+	// Clear cached size/constraints when the child changes.
+	r.lastChildSize = graphics.Size{}
+	r.lastChildConstraints = layout.Constraints{}
+	r.hasChildSize = false
 }
 
 func (r *renderOffstage) VisitChildren(visitor func(layout.RenderObject)) {
@@ -63,8 +75,15 @@ func (r *renderOffstage) VisitChildren(visitor func(layout.RenderObject)) {
 func (r *renderOffstage) PerformLayout() {
 	constraints := r.Constraints()
 	if r.child != nil {
+		if r.offstage && r.hasChildSize && constraints == r.lastChildConstraints {
+			r.SetSize(r.lastChildSize)
+			return
+		}
 		r.child.Layout(constraints, true) // true: we read child.Size()
-		r.SetSize(r.child.Size())
+		r.lastChildSize = r.child.Size()
+		r.lastChildConstraints = constraints
+		r.hasChildSize = true
+		r.SetSize(r.lastChildSize)
 	} else {
 		r.SetSize(constraints.Constrain(graphics.Size{}))
 	}

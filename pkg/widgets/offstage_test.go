@@ -69,3 +69,62 @@ func TestOffstage_AllowsHitTestWhenVisible(t *testing.T) {
 		t.Fatal("expected visible offstage to hit test child")
 	}
 }
+
+type testLayoutBox struct {
+	layout.RenderBoxBase
+	layoutCalls int
+}
+
+func (b *testLayoutBox) PerformLayout() {
+	b.layoutCalls++
+	b.SetSize(graphics.Size{Width: 10, Height: 10})
+}
+
+func (b *testLayoutBox) Paint(ctx *layout.PaintContext) {}
+
+func (b *testLayoutBox) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
+	return false
+}
+
+func TestOffstage_SkipsChildLayoutWhenHiddenAndConstraintsStable(t *testing.T) {
+	child := &testLayoutBox{}
+	child.SetSelf(child)
+
+	offstage := &renderOffstage{offstage: true}
+	offstage.SetSelf(offstage)
+	offstage.SetChild(child)
+
+	constraints := layout.Tight(graphics.Size{Width: 10, Height: 10})
+	offstage.Layout(constraints, true)
+	if child.layoutCalls != 1 {
+		t.Fatalf("expected initial layout call, got %d", child.layoutCalls)
+	}
+
+	offstage.Layout(constraints, true)
+	if child.layoutCalls != 1 {
+		t.Fatalf("expected layout to be skipped when offstage, got %d", child.layoutCalls)
+	}
+}
+
+func TestOffstage_ChildSwapClearsCachedSize(t *testing.T) {
+	first := &testLayoutBox{}
+	first.SetSelf(first)
+	second := &testLayoutBox{}
+	second.SetSelf(second)
+
+	offstage := &renderOffstage{offstage: true}
+	offstage.SetSelf(offstage)
+	offstage.SetChild(first)
+
+	constraints := layout.Tight(graphics.Size{Width: 10, Height: 10})
+	offstage.Layout(constraints, true)
+	if first.layoutCalls != 1 {
+		t.Fatalf("expected first child layout, got %d", first.layoutCalls)
+	}
+
+	offstage.SetChild(second)
+	offstage.Layout(constraints, true)
+	if second.layoutCalls != 1 {
+		t.Fatalf("expected second child layout after swap, got %d", second.layoutCalls)
+	}
+}
