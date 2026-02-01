@@ -34,12 +34,12 @@ type CategoryInfo struct {
 
 // categories defines the main demo categories (6 categories for 3x2 grid).
 var categories = []CategoryInfo{
-	{CategoryTheming, "/theming-hub", "Theming", "Colors, gradients"},
-	{CategoryLayout, "/layout-hub", "Layout", "Row, Column, Stack, scrolling"},
-	{CategoryWidgets, "/widgets-hub", "Widgets", "Buttons, inputs"},
-	{CategoryMotion, "/motion-hub", "Motion", "Gestures, animations"},
-	{CategoryMedia, "/media-hub", "Media", "Camera, WebView"},
-	{CategorySystem, "/system-hub", "System", "Permissions, storage"},
+	{CategoryTheming, "/theming-hub", "Theming", "Colors, typography, themes, styles"},
+	{CategoryLayout, "/layout-hub", "Layout", "Row, Column, Stack, scroll layout"},
+	{CategoryWidgets, "/widgets-hub", "Widgets", "Buttons, forms, menus, media"},
+	{CategoryMotion, "/motion-hub", "Motion", "Gestures, animation, effects"},
+	{CategoryMedia, "/media-hub", "Media", "Camera, web content, images"},
+	{CategorySystem, "/system-hub", "System", "Permissions, storage, sharing"},
 }
 
 // demos is the registry of all showcase demo pages.
@@ -50,14 +50,14 @@ var demos = []Demo{
 	{"/decorations", "Decorations", "Rounded corners, borders, gradients", CategoryTheming, "icon-box.svg", buildDecorationsPage},
 
 	// Layout demos
-	{"/layouts", "Layouts", "Row, Column, Stack composition", CategoryLayout, "icon-grid.svg", buildLayoutsPage},
+	{"/layouts", "Layouts", "Row/Column/Stack composition", CategoryLayout, "icon-grid.svg", buildLayoutsPage},
 	{"/wrap", "Wrap", "Flowing layouts that wrap", CategoryLayout, "icon-grid.svg", buildWrapPage},
 	{"/positioning", "Positioning", "Center, Align, Expanded, SizedBox", CategoryLayout, "icon-grid.svg", buildPositioningPage},
 
 	// Widgets demos
 	{"/buttons", "Buttons", "Tappable buttons with haptics", CategoryWidgets, "icon-button.svg", buildButtonsPage},
 	{"/forms", "Forms", "Text input and selection controls", CategoryWidgets, "icon-form.svg", buildFormsPage},
-	{"/progress", "Progress", "Activity and progress indicators", CategoryWidgets, "icon-form.svg", buildProgressPage},
+	{"/progress", "Progress", "Loading and progress indicators", CategoryWidgets, "icon-form.svg", buildProgressPage},
 	{"/images", "Images", "PNG, JPG, and SVG rendering", CategoryWidgets, "icon-image.svg", buildImagesPage},
 
 	// Motion demos

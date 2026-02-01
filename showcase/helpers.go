@@ -104,6 +104,8 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 			BorderWidth:    1,
 			BorderRadius:   12,
 			Color:          colors.Background, // Inner fill matches page background
+			Height:         96,
+			Alignment:      layout.AlignmentTopLeft,
 			Shadow: &graphics.BoxShadow{
 				Color:      PinkSeed.WithAlpha(pinkAlpha),
 				Offset:     graphics.Offset{X: 0, Y: 0},
@@ -123,7 +125,7 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 				ChildWidget: widgets.Column{
 					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 					CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-					MainAxisSize:       widgets.MainAxisSizeMin,
+					MainAxisSize:       widgets.MainAxisSizeMax,
 					ChildrenWidgets: []core.Widget{
 						widgets.Text{
 							Content: title,
@@ -135,8 +137,9 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 						},
 						widgets.VSpace(6),
 						widgets.Text{
-							Content: description,
-							Wrap:    true,
+							Content:  description,
+							Wrap:     true,
+							MaxLines: 2,
 							Style: graphics.TextStyle{
 								Color:    colors.OnSurfaceVariant,
 								FontSize: 11,
