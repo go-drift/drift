@@ -146,8 +146,11 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 		// Always wrap in ExcludeSemantics to maintain element tree identity.
 		// Non-top routes are excluded from accessibility (hidden behind the top route).
 		children = append(children, widgets.ExcludeSemantics{
-			ChildWidget: rb,
-			Excluding:   !isTop,
+			ChildWidget: widgets.Offstage{
+				Offstage:    !isTop,
+				ChildWidget: rb,
+			},
+			Excluding: !isTop,
 		})
 	}
 
