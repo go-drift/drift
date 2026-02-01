@@ -88,7 +88,7 @@ func (r *renderPadding) PerformLayout() {
 
 func (r *renderPadding) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}
 }
 

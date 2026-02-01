@@ -144,7 +144,7 @@ func (r *renderStack) PerformLayout() {
 // Paint paints all children in order.
 func (r *renderStack) Paint(ctx *layout.PaintContext) {
 	for _, child := range r.children {
-		ctx.PaintChild(child, getChildOffset(child))
+		ctx.PaintChildWithLayer(child, getChildOffset(child))
 	}
 }
 
@@ -532,7 +532,7 @@ func (r *renderIndexedStack) PerformLayout() {
 
 func (r *renderIndexedStack) Paint(ctx *layout.PaintContext) {
 	if child := r.activeChild(); child != nil {
-		ctx.PaintChild(child, getChildOffset(child))
+		ctx.PaintChildWithLayer(child, getChildOffset(child))
 	}
 }
 
@@ -745,7 +745,7 @@ func (r *renderPositioned) PerformLayout() {
 
 func (r *renderPositioned) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}
 }
 

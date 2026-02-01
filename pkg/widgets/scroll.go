@@ -467,7 +467,7 @@ func (r *renderScrollView) paintFlex(
 		if childEnd < visibleStart || childStart > visibleEnd {
 			continue
 		}
-		ctx.PaintChild(child, offset)
+		ctx.PaintChildWithLayer(child, offset)
 	}
 }
 

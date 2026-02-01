@@ -341,7 +341,7 @@ func (r *renderErrorBoundary) Paint(ctx *layout.PaintContext) {
 				stack = errors.CaptureStack()
 			}
 		}()
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}()
 
 	if panicked {

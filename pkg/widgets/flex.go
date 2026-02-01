@@ -561,7 +561,7 @@ func (r *renderFlex) computeSpacing(freeSpace float64) (spacing, offset float64)
 
 func (r *renderFlex) Paint(ctx *layout.PaintContext) {
 	for _, child := range r.children {
-		ctx.PaintChild(child, getChildOffset(child))
+		ctx.PaintChildWithLayer(child, getChildOffset(child))
 	}
 }
 

@@ -115,7 +115,7 @@ func (r *renderAlign) PerformLayout() {
 
 func (r *renderAlign) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}
 }
 

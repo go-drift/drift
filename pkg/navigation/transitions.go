@@ -173,7 +173,7 @@ func (r *renderSlideTransition) Paint(ctx *layout.PaintContext) {
 	}
 
 	offset := r.slideOffset()
-	ctx.PaintChild(r.child, offset)
+	ctx.PaintChildWithLayer(r.child, offset)
 }
 
 func (r *renderSlideTransition) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
@@ -275,7 +275,7 @@ func (r *renderFadeTransition) Paint(ctx *layout.PaintContext) {
 	// Note: Full opacity support would require layer compositing.
 	// For now, just paint the child directly.
 	// In a full implementation, we'd use an OpacityLayer.
-	ctx.PaintChild(r.child, graphics.Offset{})
+	ctx.PaintChildWithLayer(r.child, graphics.Offset{})
 }
 
 func (r *renderFadeTransition) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {

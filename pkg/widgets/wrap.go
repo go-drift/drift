@@ -476,7 +476,7 @@ func (r *renderWrap) computeCrossOffset(runCrossExtent, childCrossExtent float64
 
 func (r *renderWrap) Paint(ctx *layout.PaintContext) {
 	for _, child := range r.children {
-		ctx.PaintChild(child, getChildOffset(child))
+		ctx.PaintChildWithLayer(child, getChildOffset(child))
 	}
 }
 

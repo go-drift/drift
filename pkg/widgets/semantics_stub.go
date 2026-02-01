@@ -89,7 +89,7 @@ func (r *renderSemanticsStub) PerformLayout() {
 
 func (r *renderSemanticsStub) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child.(layout.RenderBox), graphics.Offset{})
+		ctx.PaintChildWithLayer(r.child.(layout.RenderBox), graphics.Offset{})
 	}
 }
 
@@ -155,7 +155,7 @@ func (r *renderMergeSemanticsStub) PerformLayout() {
 
 func (r *renderMergeSemanticsStub) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child.(layout.RenderBox), graphics.Offset{})
+		ctx.PaintChildWithLayer(r.child.(layout.RenderBox), graphics.Offset{})
 	}
 }
 
@@ -227,7 +227,7 @@ func (r *renderExcludeSemanticsStub) PerformLayout() {
 
 func (r *renderExcludeSemanticsStub) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child.(layout.RenderBox), graphics.Offset{})
+		ctx.PaintChildWithLayer(r.child.(layout.RenderBox), graphics.Offset{})
 	}
 }
 

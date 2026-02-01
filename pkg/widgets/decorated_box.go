@@ -157,11 +157,11 @@ func (r *renderDecoratedBox) Paint(ctx *layout.PaintContext) {
 
 	if r.painter.shouldClipChildren() {
 		r.painter.applyChildClip(ctx, rect)
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 		ctx.PopClipRect()
 		ctx.Canvas.Restore()
 	} else {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}
 }
 

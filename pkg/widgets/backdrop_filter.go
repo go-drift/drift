@@ -105,7 +105,7 @@ func (r *renderBackdropFilter) Paint(ctx *layout.PaintContext) {
 	ctx.Canvas.Restore() // apply blur to backdrop
 	// Paint child on top (unblurred)
 	if r.child != nil {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}
 
 	ctx.PopClipRect()

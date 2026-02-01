@@ -119,7 +119,7 @@ func (r *renderSizedBox) PerformLayout() {
 
 func (r *renderSizedBox) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, graphics.Offset{})
+		ctx.PaintChildWithLayer(r.child, graphics.Offset{})
 	}
 }
 

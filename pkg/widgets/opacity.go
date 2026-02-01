@@ -101,14 +101,14 @@ func (r *renderOpacity) Paint(ctx *layout.PaintContext) {
 	}
 	// Paint normally when fully opaque (no layer overhead)
 	if r.opacity >= 1 {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 		return
 	}
 	// Use SaveLayerAlpha for intermediate opacity values
 	size := r.Size()
 	bounds := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	ctx.Canvas.SaveLayerAlpha(bounds, r.opacity)
-	ctx.PaintChild(r.child, getChildOffset(r.child))
+	ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	ctx.Canvas.Restore()
 }
 

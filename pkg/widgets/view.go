@@ -70,7 +70,7 @@ func (r *renderView) PerformLayout() {
 
 func (r *renderView) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, graphics.Offset{})
+		ctx.PaintChildWithLayer(r.child, graphics.Offset{})
 	}
 }
 

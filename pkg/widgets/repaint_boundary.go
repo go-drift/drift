@@ -70,7 +70,7 @@ func (r *renderRepaintBoundary) PerformLayout() {
 
 func (r *renderRepaintBoundary) Paint(ctx *layout.PaintContext) {
 	if r.child != nil {
-		ctx.PaintChild(r.child, getChildOffset(r.child))
+		ctx.PaintChildWithLayer(r.child, getChildOffset(r.child))
 	}
 }
 
