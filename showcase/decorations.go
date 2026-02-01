@@ -60,15 +60,16 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		},
 		widgets.VSpace(24),
 		widgets.DecoratedBox{
+			Color: graphics.ColorWhite,
 			Gradient: graphics.NewLinearGradient(
 				graphics.AlignCenterLeft,
 				graphics.AlignCenterRight,
 				[]graphics.GradientStop{
 					{Position: 0, Color: colors.Primary},
-					{Position: 1, Color: colors.Secondary},
+					{Position: 1, Color: colors.Tertiary},
 				},
 			),
-			BorderRadius: 20,
+			BorderRadius: 16,
 			ChildWidget: widgets.SizedBox{
 				Width:  240,
 				Height: 52,
@@ -176,7 +177,7 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 				FontSize:   24,
 				FontWeight: graphics.FontWeightBold,
 				Shadow: &graphics.TextShadow{
-					Color:      colors.SurfaceTint.WithAlpha(0.78),
+					Color:      colors.Tertiary.WithAlpha(0.9),
 					Offset:     graphics.Offset{X: 0, Y: 0},
 					BlurRadius: 8,
 				},
