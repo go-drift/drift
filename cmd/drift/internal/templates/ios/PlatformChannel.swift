@@ -973,4 +973,3 @@ private func encodeErrorPayload(_ error: Error) -> String {
     let data = codec.encode(payload)
     return String(data: data, encoding: .utf8) ?? nsError.localizedDescription
 }
-
