@@ -15,13 +15,44 @@ if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
   exit 1
 fi
 
+# Detect NDK major version from source.properties
+NDK_MAJOR=0
+if [[ -f "$ANDROID_NDK_HOME/source.properties" ]]; then
+  NDK_MAJOR=$(grep "Pkg.Revision" "$ANDROID_NDK_HOME/source.properties" | cut -d= -f2 | cut -d. -f1 | tr -d ' ')
+fi
+echo "Using NDK r${NDK_MAJOR} from $ANDROID_NDK_HOME"
+
 cd "$SKIA_DIR"
 python3 tools/git-sync-deps
+
+# COMPATIBILITY NOTE: -mno-outline-atomics
+#
+# NDK r23+ generates "outline atomics" for ARM64 by default - calls to helper
+# functions like __aarch64_ldadd4_relax instead of inline atomic instructions.
+# These helpers are only available in newer NDK runtimes, causing crashes when
+# users build their apps with older NDKs (e.g., r22) against our prebuilt libs.
+#
+# We disable outline atomics for arm64 to ensure compatibility with older NDKs.
+#
+# Trade-offs:
+# - May slightly reduce performance on some devices (inline atomics vs library calls)
+# - Targets lowest common denominator rather than optimal code for modern toolchains
+#
+# Future consideration: Could provide separate "modern" builds for users on newer
+# NDKs, or remove this flag once older NDK usage drops sufficiently.
 
 build() {
   local out_dir="$1"
   local target_cpu="$2"
-  bin/gn gen "$out_dir" --args="target_os=\"android\" target_cpu=\"$target_cpu\" ndk=\"$ANDROID_NDK_HOME\" ndk_api=21 is_official_build=true skia_use_gl=true skia_use_system_harfbuzz=false skia_use_harfbuzz=true skia_use_system_expat=false skia_use_system_libpng=false skia_use_system_zlib=false skia_use_system_freetype2=false skia_use_system_libjpeg_turbo=false skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true skia_use_system_libwebp=false skia_use_libwebp_decode=true skia_use_libwebp_encode=true skia_enable_svg=true skia_use_expat=true skia_use_icu=false skia_use_libgrapheme=true skia_enable_skparagraph=true skia_enable_skshaper=true"
+  local extra_cflags=""
+
+  # Disable outline atomics for arm64 on NDK r23+ (see COMPATIBILITY NOTE above)
+  # Older NDKs don't support this flag and don't generate outline atomics anyway.
+  if [[ "$target_cpu" == "arm64" && "$NDK_MAJOR" -ge 23 ]]; then
+    extra_cflags='extra_cflags=["-mno-outline-atomics"]'
+  fi
+
+  bin/gn gen "$out_dir" --args="target_os=\"android\" target_cpu=\"$target_cpu\" ndk=\"$ANDROID_NDK_HOME\" ndk_api=21 is_official_build=true skia_use_gl=true skia_use_system_harfbuzz=false skia_use_harfbuzz=true skia_use_system_expat=false skia_use_system_libpng=false skia_use_system_zlib=false skia_use_system_freetype2=false skia_use_system_libjpeg_turbo=false skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true skia_use_system_libwebp=false skia_use_libwebp_decode=true skia_use_libwebp_encode=true skia_enable_svg=true skia_use_expat=true skia_use_icu=false skia_use_libgrapheme=true skia_enable_skparagraph=true skia_enable_skshaper=true $extra_cflags"
   ninja -C "$out_dir" skia svg skresources skparagraph skshaper skunicode
 }
 
@@ -66,6 +97,13 @@ compile_bridge() {
   local arch="$1"
   local target_triple="$2"
   local out_dir="out/android/$arch"
+  local arch_flags=""
+
+  # Disable outline atomics for arm64 on NDK r23+ (see COMPATIBILITY NOTE above)
+  # Older NDKs don't support this flag and don't generate outline atomics anyway.
+  if [[ "$arch" == "arm64" && "$NDK_MAJOR" -ge 23 ]]; then
+    arch_flags="-mno-outline-atomics"
+  fi
 
   echo "Compiling bridge for Android $arch..."
   echo "Skia out dir: $SKIA_DIR/$out_dir"
@@ -74,7 +112,7 @@ compile_bridge() {
 
   # Compile bridge
   "$clang" --target="$target_triple" \
-    -std=c++17 -fPIC -DSKIA_GL \
+    -std=c++17 -fPIC -DSKIA_GL $arch_flags \
     -I. -I./include \
     -c "$ROOT_DIR/pkg/skia/bridge/skia_gl.cc" \
     -o "$out_dir/skia_bridge.o"
