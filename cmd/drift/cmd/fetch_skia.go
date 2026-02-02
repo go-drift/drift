@@ -122,6 +122,10 @@ func FetchSkia(ctx context.Context, opts FetchSkiaOptions) error {
 		return err
 	}
 
+	if manifest.NDKVersion != "" {
+		fmt.Printf("  Skia libraries built with NDK r%s\n", manifest.NDKVersion)
+	}
+
 	// Determine output directory
 	cacheRoot, err := cache.Root()
 	if err != nil {

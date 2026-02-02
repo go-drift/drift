@@ -141,6 +141,8 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 		return fmt.Errorf("ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set")
 	}
 
+	checkNDKVersion(ndkHome)
+
 	hostTag := "linux-x86_64"
 	if runtime.GOOS == "darwin" {
 		hostTag = "darwin-x86_64"
@@ -205,7 +207,15 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 			return fmt.Errorf("failed to build for %s: %w", abi.abi, err)
 		}
 
-		cppShared := filepath.Join(sysrootLib, abi.triple, "libc++_shared.so")
+		// Use libc++_shared.so from Skia cache (bundled with matching NDK)
+		cppShared := filepath.Join(skiaDir, "libc++_shared.so")
+		if _, err := os.Stat(cppShared); err != nil {
+			// Fallback to user's NDK (for custom DRIFT_SKIA_DIR or old cache)
+			cppShared = filepath.Join(sysrootLib, abi.triple, "libc++_shared.so")
+			if _, err := os.Stat(cppShared); err == nil {
+				fmt.Println("  Warning: using libc++_shared.so from local NDK (may cause ABI issues with older releases)")
+			}
+		}
 		if _, err := os.Stat(cppShared); err == nil {
 			if err := copyFile(cppShared, filepath.Join(outDir, "libc++_shared.so")); err != nil {
 				return fmt.Errorf("failed to copy libc++_shared.so: %w", err)
@@ -486,6 +496,28 @@ func androidSkiaLinkerFlags(skiaDir string) string {
 		"-llog",
 		"-lm",
 	}, " ")
+}
+
+func checkNDKVersion(ndkHome string) {
+	propsPath := filepath.Join(ndkHome, "source.properties")
+	data, err := os.ReadFile(propsPath)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "Pkg.Revision") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			majorStr := strings.Split(strings.TrimSpace(parts[1]), ".")[0]
+			var major int
+			if _, err := fmt.Sscanf(majorStr, "%d", &major); err == nil && major < 25 {
+				fmt.Printf("Warning: NDK r%d detected. Recommended r25 or newer.\n", major)
+			}
+			return
+		}
+	}
 }
 
 func findSkiaLib(projectRoot, platform, arch string, noFetch bool) (string, string, error) {

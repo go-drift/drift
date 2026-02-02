@@ -108,6 +108,7 @@ jobs:
           cat > "$out_dir/manifest.json" <<EOF
           {
             "drift_version": "${drift_version}",
+            "ndk_version": "${{ env.NDK_VERSION }}",
             "android": {
               "tarball": "drift-${drift_version}-android.tar.gz",
               "sha256": "${android_sha}",

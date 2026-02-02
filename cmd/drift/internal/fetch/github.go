@@ -19,8 +19,9 @@ const (
 
 // Manifest represents the manifest.json file in a release.
 type Manifest struct {
-	Android *PlatformManifest `json:"android,omitempty"`
-	IOS     *PlatformManifest `json:"ios,omitempty"`
+	NDKVersion string            `json:"ndk_version,omitempty"`
+	Android    *PlatformManifest `json:"android,omitempty"`
+	IOS        *PlatformManifest `json:"ios,omitempty"`
 }
 
 // PlatformManifest contains checksum information for a platform.

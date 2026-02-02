@@ -126,6 +126,50 @@ copy_lib() {
   cp "$src" "$dst/libdrift_skia.a"
 }
 
+detect_host_tag() {
+  local host_os host_arch
+  host_os="$(uname -s)"
+  host_arch="$(uname -m)"
+  case "$host_os" in
+    Linux*)
+      case "$host_arch" in
+        x86_64)  echo "linux-x86_64" ;;
+        aarch64) echo "linux-aarch64" ;;
+        *)       echo "linux-x86_64" ;;
+      esac
+      ;;
+    Darwin*)
+      case "$host_arch" in
+        x86_64) echo "darwin-x86_64" ;;
+        arm64)  echo "darwin-arm64" ;;
+        *)      echo "darwin-x86_64" ;;
+      esac
+      ;;
+    *)
+      echo "linux-x86_64"
+      ;;
+  esac
+}
+
+copy_cppshared() {
+  local arch="$1"
+  local triple="$2"
+  local host_tag
+  host_tag="$(detect_host_tag)"
+
+  local src="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$host_tag/sysroot/usr/lib/$triple/libc++_shared.so"
+  local dst="$out_dir/android/$arch"
+
+  if [[ ! -f "$src" ]]; then
+    echo "Error: libc++_shared.so not found at $src" >&2
+    echo "Ensure ANDROID_NDK_HOME is set correctly." >&2
+    exit 1
+  fi
+
+  cp "$src" "$dst/libc++_shared.so"
+  echo "Copied libc++_shared.so for $arch"
+}
+
 include_android=false
 include_ios=false
 
@@ -136,6 +180,9 @@ for platform in "${platforms[@]}"; do
       copy_lib android arm64
       copy_lib android arm
       copy_lib android amd64
+      copy_cppshared arm64 aarch64-linux-android
+      copy_cppshared arm arm-linux-androideabi
+      copy_cppshared amd64 x86_64-linux-android
       ;;
     ios)
       include_ios=true
