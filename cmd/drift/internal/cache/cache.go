@@ -11,13 +11,16 @@ import (
 )
 
 var global struct {
-	version  string
-	cacheDir string
+	version    string
+	rawVersion string
+	cacheDir   string
+	warned     bool
 }
 
 // SetGlobal initializes the cache resolver with the CLI version.
 // This should be called at startup from root.go.
 func SetGlobal(version string) {
+	global.rawVersion = strings.TrimSpace(version)
 	global.version = NormalizeVersion(version)
 }
 
@@ -118,7 +121,14 @@ func LibDir(platform, arch string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(os.Stderr, "Warning: using cached libraries (%s) - version may not match dev build\n", version)
+		if !global.warned {
+			raw := global.rawVersion
+			if raw == "" {
+				raw = "unknown"
+			}
+			fmt.Fprintf(os.Stderr, "Warning: using cached libraries (%s) for non-release CLI version %s\n", version, raw)
+			global.warned = true
+		}
 	}
 
 	return filepath.Join(root, "lib", version, platform, arch), nil
