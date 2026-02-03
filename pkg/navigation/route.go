@@ -66,7 +66,13 @@
 // for back button handling.
 package navigation
 
-import "github.com/go-drift/drift/pkg/core"
+import (
+	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/overlay"
+)
+
+// OverlayState is an alias for overlay.OverlayState for convenience.
+type OverlayState = overlay.OverlayState
 
 // RouteSettings contains configuration and parameters for a route.
 //
@@ -142,6 +148,10 @@ type Route interface {
 	// WillPop is called before the route is popped.
 	// Return false to prevent the pop.
 	WillPop() bool
+
+	// SetOverlay is called by Navigator when OverlayState becomes available.
+	// Routes that use overlay entries store this reference.
+	SetOverlay(overlay OverlayState)
 }
 
 // BaseRoute provides a default implementation of Route lifecycle methods.
@@ -175,3 +185,6 @@ func (r *BaseRoute) DidChangePrevious(previousRoute Route) {}
 func (r *BaseRoute) WillPop() bool {
 	return true
 }
+
+// SetOverlay is a no-op for non-modal routes.
+func (r *BaseRoute) SetOverlay(overlay OverlayState) {}

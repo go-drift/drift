@@ -9,6 +9,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
@@ -56,6 +57,9 @@ func NewWidgetTester() *WidgetTester {
 		recorder:   &graphics.PictureRecorder{},
 	}
 	t.prevClock = animation.SetClock(clk)
+	// Register this tester's dispatch function with the platform package
+	// so that platform.Dispatch works during tests
+	platform.RegisterDispatch(t.Dispatch)
 	return t
 }
 

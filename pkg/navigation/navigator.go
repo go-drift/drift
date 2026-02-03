@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/overlay"
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
@@ -264,9 +265,10 @@ type navigatorState struct {
 	element            *core.StatefulElement
 	navigator          Navigator
 	routes             []Route
-	exitingRoute       Route  // route currently animating out
-	isRefreshing       bool   // guard against re-entrant refresh
-	unsubscribeRefresh func() // cleanup for RefreshListenable
+	exitingRoute       Route        // route currently animating out
+	overlayState       OverlayState // stored when OnOverlayReady fires
+	isRefreshing       bool         // guard against re-entrant refresh
+	unsubscribeRefresh func()       // cleanup for RefreshListenable
 }
 
 func (s *navigatorState) setElement(element *core.StatefulElement) {
@@ -352,13 +354,32 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 		})
 	}
 
+	// Build route stack
+	routeStack := widgets.Stack{
+		Children: children,
+		Fit:      widgets.StackFitExpand,
+	}
+
+	// Wrap in Overlay for modal routes support
+	overlayWidget := overlay.Overlay{
+		Child: routeStack,
+		OnOverlayReady: func(overlayState OverlayState) {
+			// Called via Dispatch, safe to mutate
+			s.overlayState = overlayState
+			// Notify existing routes that overlay is ready
+			for _, route := range s.routes {
+				route.SetOverlay(overlayState)
+			}
+			// Rebuild navigator to update routes that switched rendering mode
+			// (ModalRoute switches from direct to overlay rendering)
+			s.SetState(func() {})
+		},
+	}
+
 	// Wrap in inherited widget so descendants can access NavigatorState
 	return navigatorInherited{
 		state: s,
-		child: widgets.Stack{
-			Children: children,
-			Fit:      widgets.StackFitExpand,
-		},
+		child: overlayWidget,
 	}
 }
 
@@ -439,6 +460,11 @@ func (s *navigatorState) doPush(route Route) {
 
 		// Notify new route of its previous
 		route.DidChangePrevious(previousTop)
+
+		// Pass overlay state to the route if available
+		if s.overlayState != nil {
+			route.SetOverlay(s.overlayState)
+		}
 
 		route.DidPush()
 
@@ -652,6 +678,11 @@ func (s *navigatorState) doPushReplacement(route Route) {
 
 		// Notify new route of previous
 		route.DidChangePrevious(previousOfOld)
+
+		// Pass overlay state to the route if available
+		if s.overlayState != nil {
+			route.SetOverlay(s.overlayState)
+		}
 
 		route.DidPush()
 
