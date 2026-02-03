@@ -45,7 +45,7 @@ func (s *clipboardState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Row{
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Copy", func() {
 					s.copyText()
 				}),

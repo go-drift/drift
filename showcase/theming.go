@@ -129,7 +129,7 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 func colorSwatch(name string, bg, fg graphics.Color) core.Widget {
 	return widgets.Container{
 		Color: bg,
-		ChildWidget: widgets.PaddingSym(16, 12,
+		Child: widgets.PaddingSym(16, 12,
 			widgets.RowOf(
 				widgets.MainAxisAlignmentSpaceBetween,
 				widgets.CrossAxisAlignmentStart,
@@ -164,7 +164,7 @@ func hexByte(b uint8) string {
 func themeModeCard(mode, platform string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color: colors.Primary,
-		ChildWidget: widgets.PaddingAll(16,
+		Child: widgets.PaddingAll(16,
 			widgets.ColumnOf(
 				widgets.MainAxisAlignmentStart,
 				widgets.CrossAxisAlignmentCenter,

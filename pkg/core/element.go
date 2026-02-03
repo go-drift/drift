@@ -425,8 +425,8 @@ func (e *RenderObjectElement) RebuildIfNeeded() {
 	widget.UpdateRenderObject(e, e.renderObject)
 
 	switch typed := e.widget.(type) {
-	case interface{ Child() Widget }:
-		childWidget := typed.Child()
+	case interface{ ChildWidget() Widget }:
+		childWidget := typed.ChildWidget()
 		var child Element
 		if len(e.children) > 0 {
 			child = e.children[0]
@@ -439,8 +439,8 @@ func (e *RenderObjectElement) RebuildIfNeeded() {
 		}
 		// NO SetChild call - attachment handled in child's Mount/Unmount
 
-	case interface{ Children() []Widget }:
-		widgets := typed.Children()
+	case interface{ ChildrenWidgets() []Widget }:
+		widgets := typed.ChildrenWidgets()
 		e.children = updateChildren(e, e.children, widgets, e.buildOwner)
 		e.rebuildChildrenRenderList()
 	}

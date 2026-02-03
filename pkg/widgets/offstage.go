@@ -13,8 +13,8 @@ import (
 type Offstage struct {
 	// Offstage controls whether the child is hidden.
 	Offstage bool
-	// ChildWidget is the widget to lay out and optionally hide.
-	ChildWidget core.Widget
+	// Child is the widget to lay out and optionally hide.
+	Child core.Widget
 }
 
 func (o Offstage) CreateElement() core.Element {
@@ -25,8 +25,8 @@ func (o Offstage) Key() any {
 	return nil
 }
 
-func (o Offstage) Child() core.Widget {
-	return o.ChildWidget
+func (o Offstage) ChildWidget() core.Widget {
+	return o.Child
 }
 
 func (o Offstage) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

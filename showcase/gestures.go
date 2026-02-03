@@ -87,11 +87,11 @@ func (s *gesturesDemoState) Build(ctx core.BuildContext) core.Widget {
 		ScrollDirection: widgets.AxisVertical,
 		Physics:         widgets.BouncingScrollPhysics{},
 		Padding:         layout.EdgeInsetsAll(20),
-		ChildWidget: widgets.Column{
+		Child: widgets.Column{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 			MainAxisSize:       widgets.MainAxisSizeMin,
-			ChildrenWidgets:    items,
+			Children:           items,
 		},
 	}
 
@@ -107,15 +107,15 @@ func (s *gesturesDemoState) buildPanDemo(colors theme.ColorScheme) core.Widget {
 	return widgets.DecoratedBox{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 12,
-		ChildWidget: widgets.SizedBox{
+		Child: widgets.SizedBox{
 			Width:  areaWidth,
 			Height: areaHeight,
-			ChildWidget: widgets.Stack{
-				ChildrenWidgets: []core.Widget{
+			Child: widgets.Stack{
+				Children: []core.Widget{
 					widgets.Positioned{
 						Left: widgets.Ptr(s.panX),
 						Top:  widgets.Ptr(s.panY),
-						ChildWidget: widgets.Drag(func(d widgets.DragUpdateDetails) {
+						Child: widgets.Drag(func(d widgets.DragUpdateDetails) {
 							s.SetState(func() {
 								s.panX = widgets.Clamp(s.panX+d.Delta.X, 0, areaWidth-boxSize)
 								s.panY = widgets.Clamp(s.panY+d.Delta.Y, 0, areaHeight-boxSize)
@@ -123,11 +123,11 @@ func (s *gesturesDemoState) buildPanDemo(colors theme.ColorScheme) core.Widget {
 						}, widgets.DecoratedBox{
 							Color:        colors.Primary,
 							BorderRadius: 8,
-							ChildWidget: widgets.SizedBox{
+							Child: widgets.SizedBox{
 								Width:  boxSize,
 								Height: boxSize,
-								ChildWidget: widgets.Center{
-									ChildWidget: widgets.Text{Content: "Drag me", Style: graphics.TextStyle{
+								Child: widgets.Center{
+									Child: widgets.Text{Content: "Drag me", Style: graphics.TextStyle{
 										Color:    colors.OnPrimary,
 										FontSize: 12,
 									}},
@@ -150,18 +150,18 @@ func (s *gesturesDemoState) buildHorizontalSlider(colors theme.ColorScheme) core
 		MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 		MainAxisSize:       widgets.MainAxisSizeMin,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.SizedBox{
 				Width:  trackWidth,
 				Height: thumbSize,
-				ChildWidget: widgets.Stack{
+				Child: widgets.Stack{
 					Alignment: layout.AlignmentCenterLeft,
-					ChildrenWidgets: []core.Widget{
+					Children: []core.Widget{
 						// Track
 						widgets.DecoratedBox{
 							Color:        colors.SurfaceVariant,
 							BorderRadius: 4,
-							ChildWidget: widgets.SizedBox{
+							Child: widgets.SizedBox{
 								Width:  trackWidth,
 								Height: 8,
 							},
@@ -169,14 +169,14 @@ func (s *gesturesDemoState) buildHorizontalSlider(colors theme.ColorScheme) core
 						// Thumb
 						widgets.Positioned{
 							Left: widgets.Ptr(s.sliderX - thumbSize/2),
-							ChildWidget: widgets.HorizontalDrag(func(d widgets.DragUpdateDetails) {
+							Child: widgets.HorizontalDrag(func(d widgets.DragUpdateDetails) {
 								s.SetState(func() {
 									s.sliderX = widgets.Clamp(s.sliderX+d.PrimaryDelta, thumbSize/2, trackWidth-thumbSize/2)
 								})
 							}, widgets.DecoratedBox{
 								Color:        colors.Primary,
 								BorderRadius: thumbSize / 2,
-								ChildWidget: widgets.SizedBox{
+								Child: widgets.SizedBox{
 									Width:  thumbSize,
 									Height: thumbSize,
 								},
@@ -201,26 +201,26 @@ func (s *gesturesDemoState) buildVerticalDemo(colors theme.ColorScheme) core.Wid
 	return widgets.DecoratedBox{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 12,
-		ChildWidget: widgets.SizedBox{
+		Child: widgets.SizedBox{
 			Width:  areaWidth,
 			Height: areaHeight,
-			ChildWidget: widgets.Stack{
-				ChildrenWidgets: []core.Widget{
+			Child: widgets.Stack{
+				Children: []core.Widget{
 					widgets.Positioned{
 						Left: widgets.Ptr((areaWidth - boxWidth) / 2), // Center horizontally
 						Top:  widgets.Ptr(s.verticalY),
-						ChildWidget: widgets.VerticalDrag(func(d widgets.DragUpdateDetails) {
+						Child: widgets.VerticalDrag(func(d widgets.DragUpdateDetails) {
 							s.SetState(func() {
 								s.verticalY = widgets.Clamp(s.verticalY+d.PrimaryDelta, 0, areaHeight-boxHeight)
 							})
 						}, widgets.DecoratedBox{
 							Color:        colors.Secondary,
 							BorderRadius: 8,
-							ChildWidget: widgets.SizedBox{
+							Child: widgets.SizedBox{
 								Width:  boxWidth,
 								Height: boxHeight,
-								ChildWidget: widgets.Center{
-									ChildWidget: widgets.Text{Content: "Drag up/down", Style: graphics.TextStyle{
+								Child: widgets.Center{
+									Child: widgets.Text{Content: "Drag up/down", Style: graphics.TextStyle{
 										Color:    colors.OnSecondary,
 										FontSize: 12,
 									}},
@@ -242,22 +242,22 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 	return widgets.SizedBox{
 		Width:  cardWidth,
 		Height: cardHeight,
-		ChildWidget: widgets.Stack{
-			ChildrenWidgets: []core.Widget{
+		Child: widgets.Stack{
+			Children: []core.Widget{
 				// Background (delete indicator)
 				widgets.DecoratedBox{
 					Color:        colors.Error,
 					BorderRadius: 8,
-					ChildWidget: widgets.SizedBox{
+					Child: widgets.SizedBox{
 						Width:  cardWidth,
 						Height: cardHeight,
-						ChildWidget: widgets.Padding{
+						Child: widgets.Padding{
 							Padding: layout.EdgeInsetsOnly(0, 0, 16, 0),
-							ChildWidget: widgets.Row{
+							Child: widgets.Row{
 								MainAxisAlignment:  widgets.MainAxisAlignmentEnd,
 								CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 								MainAxisSize:       widgets.MainAxisSizeMax,
-								ChildrenWidgets: []core.Widget{
+								Children: []core.Widget{
 									widgets.Text{Content: "Swipe", Style: graphics.TextStyle{
 										Color:    colors.OnError,
 										FontSize: 14,
@@ -270,7 +270,7 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 				// Foreground card
 				widgets.Positioned{
 					Left: widgets.Ptr(s.cardX),
-					ChildWidget: widgets.GestureDetector{
+					Child: widgets.GestureDetector{
 						OnHorizontalDragUpdate: func(d widgets.DragUpdateDetails) {
 							s.SetState(func() {
 								s.cardX = widgets.Clamp(s.cardX+d.PrimaryDelta, -100, 0)
@@ -286,15 +286,15 @@ func (s *gesturesDemoState) buildSwipeCard(colors theme.ColorScheme) core.Widget
 								}
 							})
 						},
-						ChildWidget: widgets.DecoratedBox{
+						Child: widgets.DecoratedBox{
 							Color:        colors.SurfaceVariant,
 							BorderRadius: 8,
-							ChildWidget: widgets.SizedBox{
+							Child: widgets.SizedBox{
 								Width:  cardWidth,
 								Height: cardHeight,
-								ChildWidget: widgets.Padding{
+								Child: widgets.Padding{
 									Padding: layout.EdgeInsetsAll(16),
-									ChildWidget: widgets.Text{Content: "Swipe me left", Style: graphics.TextStyle{
+									Child: widgets.Text{Content: "Swipe me left", Style: graphics.TextStyle{
 										Color:    colors.OnSurface,
 										FontSize: 14,
 									}},

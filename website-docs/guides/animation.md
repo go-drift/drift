@@ -36,13 +36,13 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
                 s.expanded = !s.expanded
             })
         },
-        ChildWidget: widgets.AnimatedContainer{
+        Child: widgets.AnimatedContainer{
             Duration:    300 * time.Millisecond,
             Curve:       animation.EaseInOut,
             Width:       width,
             Height:      100,
             Color:       colors.Primary,
-            ChildWidget: widgets.Text{Content: "Tap me"},
+            Child: widgets.Text{Content: "Tap me"},
         },
     }
 }
@@ -56,7 +56,7 @@ Fades widgets in and out:
 widgets.AnimatedOpacity{
     Opacity:     isVisible ? 1.0 : 0.0,
     Duration:    200 * time.Millisecond,
-    ChildWidget: content,
+    Child: content,
 }
 ```
 
@@ -88,7 +88,7 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 
     return widgets.Opacity{
         Opacity:     opacity,
-        ChildWidget: content,
+        Child: content,
     }
 }
 ```
@@ -288,7 +288,7 @@ func (s *fadeInState) InitState() {
 func (s *fadeInState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Opacity{
         Opacity:     s.controller.Value,
-        ChildWidget: content,
+        Child: content,
     }
 }
 ```

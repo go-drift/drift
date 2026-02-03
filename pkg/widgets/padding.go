@@ -13,14 +13,14 @@ import (
 //
 // Use [layout.EdgeInsets] helpers to create padding values:
 //
-//	Padding{Padding: layout.EdgeInsetsAll(16), ChildWidget: child}
-//	Padding{Padding: layout.EdgeInsetsSymmetric(24, 12), ChildWidget: child}
-//	Padding{Padding: layout.EdgeInsetsOnly(Left: 8, Right: 8), ChildWidget: child}
+//	Padding{Padding: layout.EdgeInsetsAll(16), Child: child}
+//	Padding{Padding: layout.EdgeInsetsSymmetric(24, 12), Child: child}
+//	Padding{Padding: layout.EdgeInsetsOnly(Left: 8, Right: 8), Child: child}
 //
 // For padding combined with background color, consider [Container] instead.
 type Padding struct {
-	Padding     layout.EdgeInsets
-	ChildWidget core.Widget
+	Padding layout.EdgeInsets
+	Child   core.Widget
 }
 
 func (p Padding) CreateElement() core.Element {
@@ -31,8 +31,8 @@ func (p Padding) Key() any {
 	return nil
 }
 
-func (p Padding) Child() core.Widget {
-	return p.ChildWidget
+func (p Padding) ChildWidget() core.Widget {
+	return p.Child
 }
 
 func (p Padding) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

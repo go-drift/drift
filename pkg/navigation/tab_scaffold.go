@@ -74,18 +74,18 @@ func (s *tabScaffoldState) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	return widgets.Column{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Expanded{
-				ChildWidget: widgets.IndexedStack{
-					ChildrenWidgets: bodies,
-					Alignment:       layout.AlignmentTopLeft,
-					Fit:             widgets.StackFitExpand,
-					Index:           index,
+				Child: widgets.IndexedStack{
+					Children:  bodies,
+					Alignment: layout.AlignmentTopLeft,
+					Fit:       widgets.StackFitExpand,
+					Index:     index,
 				},
 			},
 			widgets.SafeArea{
-				Bottom:      true,
-				ChildWidget: theme.TabBarOf(ctx, tabItems, index, func(tabIndex int) { s.controller.SetIndex(tabIndex) }),
+				Bottom: true,
+				Child:  theme.TabBarOf(ctx, tabItems, index, func(tabIndex int) { s.controller.SetIndex(tabIndex) }),
 			},
 		},
 		MainAxisAlignment:  widgets.MainAxisAlignmentStart,

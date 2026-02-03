@@ -25,7 +25,7 @@ widgets.GestureDetector{
     OnTap: func() {
         fmt.Println("Tapped!")
     },
-    ChildWidget: myButton,
+    Child: myButton,
 }
 ```
 
@@ -73,7 +73,7 @@ widgets.GestureDetector{
             s.isDragging = false
         })
     },
-    ChildWidget: draggableBox,
+    Child: draggableBox,
 }
 ```
 
@@ -113,7 +113,7 @@ widgets.GestureDetector{
         }
     },
     OnHorizontalDragCancel: func() {},
-    ChildWidget: swipeableCard,
+    Child: swipeableCard,
 }
 ```
 
@@ -151,7 +151,7 @@ widgets.GestureDetector{
         }
     },
     OnVerticalDragCancel: func() {},
-    ChildWidget: bottomSheet,
+    Child: bottomSheet,
 }
 ```
 
@@ -170,8 +170,8 @@ This enables patterns like swipe-to-dismiss cards inside a vertical ScrollView:
 // Vertical ScrollView with horizontally-swipeable cards
 widgets.ScrollView{
     ScrollDirection: widgets.AxisVertical,
-    ChildWidget: widgets.Column{
-        ChildrenWidgets: []core.Widget{
+    Child: widgets.Column{
+        Children: []core.Widget{
             // This card responds to horizontal swipes
             // while the parent ScrollView responds to vertical swipes
             widgets.GestureDetector{
@@ -180,7 +180,7 @@ widgets.ScrollView{
                         s.cardOffset += d.PrimaryDelta
                     })
                 },
-                ChildWidget: swipeCard,
+                Child: swipeCard,
             },
         },
     },
@@ -255,12 +255,12 @@ func (s *swipeState) Build(ctx core.BuildContext) core.Widget {
                 })
             }
         },
-        ChildWidget: widgets.Stack{
-            ChildrenWidgets: []core.Widget{
+        Child: widgets.Stack{
+            Children: []core.Widget{
                 widgets.Positioned{
                     Left: widgets.Ptr(s.offset),
                     Top:  widgets.Ptr(0),
-                    ChildWidget: card,
+                    Child: card,
                 },
             },
         },
@@ -298,7 +298,7 @@ func (s *refreshState) Build(ctx core.BuildContext) core.Widget {
                 })
             }
         },
-        ChildWidget: content,
+        Child: content,
     }
 }
 ```
@@ -313,18 +313,18 @@ type draggableState struct {
 
 func (s *draggableState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Stack{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Positioned{
                 Left: &s.x,
                 Top:  &s.y,
-                ChildWidget: widgets.GestureDetector{
+                Child: widgets.GestureDetector{
                     OnPanUpdate: func(d widgets.DragUpdateDetails) {
                         s.SetState(func() {
                             s.x += d.Delta.X
                             s.y += d.Delta.Y
                         })
                     },
-                    ChildWidget: draggableHandle,
+                    Child: draggableHandle,
                 },
             },
         },
@@ -381,7 +381,7 @@ widgets.GestureDetector{
         platform.Haptics.LightImpact()
         handleTap()
     },
-    ChildWidget: button,
+    Child: button,
 }
 ```
 

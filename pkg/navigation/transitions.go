@@ -54,9 +54,9 @@ const (
 
 // SlideTransition animates a child sliding from a direction.
 type SlideTransition struct {
-	Animation   *animation.AnimationController
-	Direction   SlideDirection
-	ChildWidget core.Widget
+	Animation *animation.AnimationController
+	Direction SlideDirection
+	Child     core.Widget
 }
 
 // CreateElement returns a RenderObjectElement for this SlideTransition.
@@ -69,9 +69,9 @@ func (s SlideTransition) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (s SlideTransition) Child() core.Widget {
-	return s.ChildWidget
+// ChildWidget returns the child widget.
+func (s SlideTransition) ChildWidget() core.Widget {
+	return s.Child
 }
 
 // CreateRenderObject creates the RenderSlideTransition.
@@ -185,8 +185,8 @@ func (r *renderSlideTransition) HitTest(position graphics.Offset, result *layout
 
 // FadeTransition animates the opacity of its child.
 type FadeTransition struct {
-	Animation   *animation.AnimationController
-	ChildWidget core.Widget
+	Animation *animation.AnimationController
+	Child     core.Widget
 }
 
 // CreateElement returns a RenderObjectElement for this FadeTransition.
@@ -199,9 +199,9 @@ func (f FadeTransition) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (f FadeTransition) Child() core.Widget {
-	return f.ChildWidget
+// ChildWidget returns the child widget.
+func (f FadeTransition) ChildWidget() core.Widget {
+	return f.Child
 }
 
 // CreateRenderObject creates the RenderFadeTransition.

@@ -79,14 +79,14 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 			Color:  colors.SurfaceVariant,
 			Width:  280,
 			Height: 40,
-			ChildWidget: widgets.AnimatedContainer{
+			Child: widgets.AnimatedContainer{
 				Duration:  500 * time.Millisecond,
 				Curve:     currentCurve,
 				Width:     280,
 				Height:    40,
 				Padding:   layout.EdgeInsets{Left: curvePos, Top: 4, Bottom: 4},
 				Alignment: layout.AlignmentCenterLeft,
-				ChildWidget: widgets.Container{
+				Child: widgets.Container{
 					Width:  32,
 					Height: 32,
 					Color:  PinkSeed,
@@ -97,7 +97,7 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 
 		widgets.Row{
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Animate", func() {
 					s.SetState(func() {
 						s.curveExpanded = !s.curveExpanded
@@ -123,7 +123,7 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.AnimatedContainer{
 					Duration:  400 * time.Millisecond,
 					Curve:     animation.EaseInOut,
@@ -131,7 +131,7 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 					Height:    currentSize,
 					Color:     currentColor,
 					Alignment: layout.AlignmentCenter,
-					ChildWidget: widgets.Text{Content: "Tap", Style: graphics.TextStyle{
+					Child: widgets.Text{Content: "Tap", Style: graphics.TextStyle{
 						Color:    textColorFor(currentColor),
 						FontSize: 14,
 					}},
@@ -155,20 +155,20 @@ func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.SizedBox{
 					Width:  100,
 					Height: 60,
-					ChildWidget: widgets.AnimatedOpacity{
+					Child: widgets.AnimatedOpacity{
 						Duration: 300 * time.Millisecond,
 						Curve:    animation.EaseOut,
 						Opacity:  boolToOpacity(s.opacityVisible),
-						ChildWidget: widgets.Container{
+						Child: widgets.Container{
 							Width:     100,
 							Height:    60,
 							Color:     colors.Secondary,
 							Alignment: layout.AlignmentCenter,
-							ChildWidget: widgets.Text{Content: "Hello!", Style: graphics.TextStyle{
+							Child: widgets.Text{Content: "Hello!", Style: graphics.TextStyle{
 								Color:    colors.OnSecondary,
 								FontSize: 14,
 							}},

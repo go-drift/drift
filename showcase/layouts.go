@@ -127,9 +127,9 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.SizedBox{
 			Width:  200,
 			Height: 120,
-			ChildWidget: widgets.Stack{
+			Child: widgets.Stack{
 				Alignment: layout.AlignmentCenter,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					widgets.Container{Color: boxA, Width: 200, Height: 120},
 					widgets.Container{Color: boxB, Width: 140, Height: 80},
 					widgets.Container{Color: boxC, Width: 80, Height: 40},
@@ -146,18 +146,18 @@ func columnDemo(label string, cross widgets.CrossAxisAlignment, a, b, c graphics
 	return widgets.Column{
 		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 		MainAxisSize:       widgets.MainAxisSizeMin,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: label, Style: labelStyle(colors)},
 			widgets.VSpace(4),
 			widgets.Container{
 				Color:  colors.SurfaceVariant,
 				Width:  80,
 				Height: 120,
-				ChildWidget: widgets.Column{
+				Child: widgets.Column{
 					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 					CrossAxisAlignment: cross,
 					MainAxisSize:       widgets.MainAxisSizeMin,
-					ChildrenWidgets: []core.Widget{
+					Children: []core.Widget{
 						widgets.Container{Color: a, Width: 50, Height: 30},
 						widgets.VSpace(4),
 						widgets.Container{Color: b, Width: 30, Height: 30},
@@ -173,17 +173,17 @@ func columnDemo(label string, cross widgets.CrossAxisAlignment, a, b, c graphics
 // layoutContainer wraps layout demos in a styled container.
 func layoutContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color:       colors.SurfaceVariant,
-		ChildWidget: widgets.PaddingAll(8, child),
+		Color: colors.SurfaceVariant,
+		Child: widgets.PaddingAll(8, child),
 	}
 }
 
 // crossAxisContainer wraps layout demos with fixed height for cross-axis demos.
 func crossAxisContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color:       colors.SurfaceVariant,
-		Height:      80,
-		ChildWidget: widgets.PaddingAll(8, child),
+		Color:  colors.SurfaceVariant,
+		Height: 80,
+		Child:  widgets.PaddingAll(8, child),
 	}
 }
 
@@ -199,7 +199,7 @@ func textColorFor(bg graphics.Color) graphics.Color {
 func colorBox(color graphics.Color, label string) core.Widget {
 	return widgets.Container{
 		Color: color,
-		ChildWidget: widgets.PaddingAll(12,
+		Child: widgets.PaddingAll(12,
 			widgets.Text{Content: label, Style: graphics.TextStyle{
 				Color:    textColorFor(color),
 				FontSize: 14,
@@ -213,7 +213,7 @@ func tallBox(color graphics.Color, label string, height float64) core.Widget {
 	return widgets.Container{
 		Color:  color,
 		Height: height,
-		ChildWidget: widgets.PaddingAll(12,
+		Child: widgets.PaddingAll(12,
 			widgets.Text{Content: label, Style: graphics.TextStyle{
 				Color:    textColorFor(color),
 				FontSize: 14,

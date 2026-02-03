@@ -32,7 +32,7 @@
 //
 //	// In Build
 //	opacity := s.opacityTween.Transform(s.controller)
-//	return widgets.Opacity{Opacity: opacity, ChildWidget: child}
+//	return widgets.Opacity{Opacity: opacity, Child: child}
 //
 //	// In Dispose
 //	s.controller.Dispose()

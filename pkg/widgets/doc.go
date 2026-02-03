@@ -56,8 +56,8 @@
 //
 // Use Row and Column for horizontal and vertical layouts:
 //
-//	widgets.Row{ChildrenWidgets: []core.Widget{...}}
-//	widgets.Column{ChildrenWidgets: []core.Widget{...}}
+//	widgets.Row{Children: []core.Widget{...}}
+//	widgets.Column{Children: []core.Widget{...}}
 //
 // Helper functions provide a more concise syntax:
 //
@@ -79,7 +79,7 @@
 //
 // ScrollView provides scrollable content with customizable physics:
 //
-//	widgets.ScrollView{ChildWidget: content, Physics: widgets.BouncingScrollPhysics{}}
+//	widgets.ScrollView{Child: content, Physics: widgets.BouncingScrollPhysics{}}
 //
 // # Style Guide for Widget Authors
 //

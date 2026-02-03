@@ -8,8 +8,8 @@ import (
 
 // DeviceScale provides the current device pixel scale factor to descendants.
 type DeviceScale struct {
-	Scale       float64
-	ChildWidget core.Widget
+	Scale float64
+	Child core.Widget
 }
 
 func (d DeviceScale) CreateElement() core.Element {
@@ -20,8 +20,8 @@ func (d DeviceScale) Key() any {
 	return nil
 }
 
-func (d DeviceScale) Child() core.Widget {
-	return d.ChildWidget
+func (d DeviceScale) ChildWidget() core.Widget {
+	return d.Child
 }
 
 func (d DeviceScale) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {

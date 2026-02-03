@@ -20,12 +20,12 @@ func buildScrollPage(ctx core.BuildContext) core.Widget {
 		widgets.Container{
 			Color:        colors.SurfaceVariant,
 			BorderRadius: 8,
-			ChildWidget: widgets.SizedBox{
+			Child: widgets.SizedBox{
 				Height: 200,
-				ChildWidget: widgets.ListView{
+				Child: widgets.ListView{
 					Padding: layout.EdgeInsetsAll(8),
 					Physics: widgets.BouncingScrollPhysics{},
-					ChildrenWidgets: []core.Widget{
+					Children: []core.Widget{
 						listItem(1, colors.Surface, colors),
 						widgets.VSpace(6),
 						listItem(2, colors.Surface, colors),
@@ -48,17 +48,17 @@ func buildScrollPage(ctx core.BuildContext) core.Widget {
 		widgets.Container{
 			Color:        colors.SurfaceVariant,
 			BorderRadius: 8,
-			ChildWidget: widgets.SizedBox{
+			Child: widgets.SizedBox{
 				Height: 200,
-				ChildWidget: widgets.ListViewBuilder{
+				Child: widgets.ListViewBuilder{
 					Padding:     layout.EdgeInsetsAll(8),
 					ItemCount:   50,
 					ItemExtent:  56,
 					CacheExtent: 112,
 					ItemBuilder: func(ctx core.BuildContext, index int) core.Widget {
 						return widgets.Padding{
-							Padding:     layout.EdgeInsets{Bottom: 6},
-							ChildWidget: listItem(index+1, colors.Surface, colors),
+							Padding: layout.EdgeInsets{Bottom: 6},
+							Child:   listItem(index+1, colors.Surface, colors),
 						}
 					},
 				},
@@ -73,18 +73,18 @@ func listItem(index int, bgColor graphics.Color, colors theme.ColorScheme) core.
 	return widgets.Container{
 		Color:        bgColor,
 		BorderRadius: 6,
-		ChildWidget: widgets.PaddingSym(12, 12,
+		Child: widgets.PaddingSym(12, 12,
 			widgets.Row{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					widgets.Container{
 						Color:        colors.PrimaryContainer,
 						BorderRadius: 4,
 						Width:        32,
 						Height:       32,
 						Alignment:    layout.AlignmentCenter,
-						ChildWidget: widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
+						Child: widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
 							Color:    colors.OnPrimaryContainer,
 							FontSize: 14,
 						}},

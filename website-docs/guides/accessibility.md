@@ -107,7 +107,7 @@ widgets.Semantics{
     Role:    semantics.SemanticsRoleButton,
     Flags:   semantics.SemanticsIsEnabled | semantics.SemanticsIsButton,
     OnTap:   func() { /* handle tap */ },
-    ChildWidget: myWidget,
+    Child: myWidget,
 }
 ```
 
@@ -139,7 +139,7 @@ volume := widgets.Semantics{
     MaxValue:     ptr(100),
     OnIncrease:   func() { setVolume(currentVolume + 10) },
     OnDecrease:   func() { setVolume(currentVolume - 10) },
-    ChildWidget:  slider,
+    Child:  slider,
 }
 ```
 

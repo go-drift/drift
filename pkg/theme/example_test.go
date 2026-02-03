@@ -30,7 +30,7 @@ func ExampleColorsOf() {
 	//     colors := theme.ColorsOf(ctx)
 	//     return widgets.Container{
 	//         Color: colors.Primary,
-	//         ChildWidget: widgets.Text{
+	//         Child: widgets.Text{
 	//             Content: "Themed text",
 	//             Style: graphics.TextStyle{Color: colors.OnPrimary},
 	//         },
@@ -41,7 +41,7 @@ func ExampleColorsOf() {
 	colors := theme.LightColorScheme()
 	_ = widgets.Container{
 		Color: colors.Primary,
-		ChildWidget: widgets.Text{
+		Child: widgets.Text{
 			Content: "Themed text",
 			Style:   graphics.TextStyle{Color: colors.OnPrimary},
 		},
@@ -65,13 +65,13 @@ func ExampleThemeData_CopyWith() {
 // This example shows how to wrap your app with a Theme provider.
 func ExampleTheme() {
 	root := widgets.Center{
-		ChildWidget: widgets.Text{Content: "Themed App"},
+		Child: widgets.Text{Content: "Themed App"},
 	}
 
 	// Wrap the root widget with a Theme
 	themedApp := theme.Theme{
-		Data:        theme.DefaultDarkTheme(),
-		ChildWidget: root,
+		Data:  theme.DefaultDarkTheme(),
+		Child: root,
 	}
 	_ = themedApp
 }
@@ -84,14 +84,14 @@ func ExampleUseTheme() {
 	//     themeData, colors, textTheme := theme.UseTheme(ctx)
 	//
 	//     return widgets.Column{
-	//         ChildrenWidgets: []core.Widget{
+	//         Children: []core.Widget{
 	//             widgets.Text{
 	//                 Content: "Headline",
 	//                 Style:   textTheme.HeadlineMedium,
 	//             },
 	//             widgets.Container{
 	//                 Color: colors.Surface,
-	//                 ChildWidget: widgets.Text{
+	//                 Child: widgets.Text{
 	//                     Content: "Body text",
 	//                     Style:   textTheme.BodyLarge,
 	//                 },

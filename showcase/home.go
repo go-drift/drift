@@ -13,10 +13,10 @@ func buildHomePage(ctx core.BuildContext, isDark bool, toggleTheme func()) core.
 	_, colors, _ := theme.UseTheme(ctx)
 
 	return widgets.Expanded{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color: colors.Background,
-			ChildWidget: widgets.Stack{
-				ChildrenWidgets: []core.Widget{
+			Child: widgets.Stack{
+				Children: []core.Widget{
 					heroGradientBackground(isDark),
 					homeScrollContent(ctx, colors, isDark, toggleTheme),
 				},
@@ -53,11 +53,11 @@ func homeScrollContent(ctx core.BuildContext, colors theme.ColorScheme, isDark b
 		ScrollDirection: widgets.AxisVertical,
 		Physics:         widgets.BouncingScrollPhysics{},
 		Padding:         widgets.SafeAreaPadding(ctx).Add(20),
-		ChildWidget: widgets.Column{
+		Child: widgets.Column{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 			MainAxisSize:       widgets.MainAxisSizeMin,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				// Header
 				headerRow(ctx, isDark, toggleTheme),
 
@@ -88,7 +88,7 @@ func headerRow(ctx core.BuildContext, isDark bool, toggleTheme func()) core.Widg
 		MainAxisAlignment:  widgets.MainAxisAlignmentEnd,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 		MainAxisSize:       widgets.MainAxisSizeMax,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			themeToggleButton(ctx, isDark, toggleTheme),
 		},
 	}
@@ -107,7 +107,7 @@ func logoWithGlow() core.Widget {
 				{Position: 1, Color: graphics.RGBA(0, 0, 0, 0)},
 			},
 		),
-		ChildWidget: widgets.SvgImage{
+		Child: widgets.SvgImage{
 			Source: loadSVGAsset("drift.svg"),
 			Width:  200,
 		},
@@ -155,10 +155,10 @@ func techPill(ctx core.BuildContext, isDark bool) core.Widget {
 			BlurStyle:  graphics.BlurStyleNormal,
 			BlurRadius: 20,
 		},
-		ChildWidget: widgets.Row{
+		Child: widgets.Row{
 			MainAxisSize:       widgets.MainAxisSizeMin,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Text{
 					Content: "GPU Accelerated",
 					Style: graphics.TextStyle{
@@ -196,18 +196,18 @@ func crashButton(_ core.BuildContext, colors theme.ColorScheme) core.Widget {
 			// Trigger a panic to demonstrate error boundaries
 			panic("You found the skull! This crash demonstrates Drift's error boundary recovery.")
 		},
-		ChildWidget: widgets.Row{
+		Child: widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 			MainAxisSize:       widgets.MainAxisSizeMax,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Container{
 					Width:        32,
 					Height:       32,
 					BorderRadius: 8,
 					Color:        colors.SurfaceContainer,
 					Alignment:    layout.AlignmentCenter,
-					ChildWidget: widgets.SvgImage{
+					Child: widgets.SvgImage{
 						Source:    icon,
 						Width:     18,
 						Height:    18,
@@ -225,7 +225,7 @@ func homeCategoryGrid(ctx core.BuildContext, colors theme.ColorScheme, isDark bo
 	cards := make([]core.Widget, len(categories))
 	for i, cat := range categories {
 		cards[i] = widgets.Expanded{
-			ChildWidget: gradientBorderCard(ctx, cat.Title, cat.Description, cat.Route, colors, isDark),
+			Child: gradientBorderCard(ctx, cat.Title, cat.Description, cat.Route, colors, isDark),
 		}
 	}
 
@@ -233,7 +233,7 @@ func homeCategoryGrid(ctx core.BuildContext, colors theme.ColorScheme, isDark bo
 	var rows []core.Widget
 	for i := 0; i < len(cards); i += 2 {
 		left := cards[i]
-		right := core.Widget(widgets.Expanded{ChildWidget: widgets.SizedBox{}}) // Empty spacer
+		right := core.Widget(widgets.Expanded{Child: widgets.SizedBox{}}) // Empty spacer
 		if i+1 < len(cards) {
 			right = cards[i+1]
 		}
@@ -243,7 +243,7 @@ func homeCategoryGrid(ctx core.BuildContext, colors theme.ColorScheme, isDark bo
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 				MainAxisSize:       widgets.MainAxisSizeMax,
-				ChildrenWidgets:    []core.Widget{left, widgets.HSpace(20), right},
+				Children:           []core.Widget{left, widgets.HSpace(20), right},
 			},
 			widgets.VSpace(20),
 		)
@@ -253,6 +253,6 @@ func homeCategoryGrid(ctx core.BuildContext, colors theme.ColorScheme, isDark bo
 		MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 		MainAxisSize:       widgets.MainAxisSizeMin,
-		ChildrenWidgets:    rows,
+		Children:           rows,
 	}
 }

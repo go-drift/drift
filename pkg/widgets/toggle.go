@@ -137,7 +137,7 @@ func (s Toggle) Build(ctx core.BuildContext) core.Widget {
 
 	// Fall back to opacity if no disabled colors provided
 	if useOpacityFallback {
-		result = Opacity{Opacity: 0.5, ChildWidget: result}
+		result = Opacity{Opacity: 0.5, Child: result}
 	}
 
 	return result

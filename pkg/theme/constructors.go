@@ -27,7 +27,7 @@ import (
 //	func (s *myState) Build(ctx core.BuildContext) core.Widget {
 //	    _, _, textTheme := theme.UseTheme(ctx)
 //	    return widgets.Column{
-//	        ChildrenWidgets: []core.Widget{
+//	        Children: []core.Widget{
 //	            theme.TextOf(ctx, "Welcome", textTheme.HeadlineMedium),
 //	            widgets.VSpace(8),
 //	            theme.TextOf(ctx, "Please sign in to continue", textTheme.BodyLarge),
@@ -68,7 +68,7 @@ func TextOf(ctx core.BuildContext, content string, style graphics.TextStyle) wid
 //
 //	func (s *myState) Build(ctx core.BuildContext) core.Widget {
 //	    return widgets.Column{
-//	        ChildrenWidgets: []core.Widget{
+//	        Children: []core.Widget{
 //	            theme.ButtonOf(ctx, "Primary Action", s.onPrimary),
 //	            widgets.VSpace(12),
 //	            theme.ButtonOf(ctx, "Secondary", s.onSecondary).

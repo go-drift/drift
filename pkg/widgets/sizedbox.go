@@ -15,7 +15,7 @@ import (
 // Common uses:
 //
 //	// Fixed-size box
-//	SizedBox{Width: 100, Height: 50, ChildWidget: child}
+//	SizedBox{Width: 100, Height: 50, Child: child}
 //
 //	// Horizontal spacer in a Row
 //	SizedBox{Width: 16}
@@ -24,13 +24,13 @@ import (
 //	SizedBox{Height: 24}
 //
 //	// Force child to specific width only
-//	SizedBox{Width: 200, ChildWidget: textField}
+//	SizedBox{Width: 200, Child: textField}
 //
 // For convenience, use [HSpace] and [VSpace] helper functions for spacers.
 type SizedBox struct {
-	Width       float64
-	Height      float64
-	ChildWidget core.Widget
+	Width  float64
+	Height float64
+	Child  core.Widget
 }
 
 func (s SizedBox) CreateElement() core.Element {
@@ -41,8 +41,8 @@ func (s SizedBox) Key() any {
 	return nil
 }
 
-func (s SizedBox) Child() core.Widget {
-	return s.ChildWidget
+func (s SizedBox) ChildWidget() core.Widget {
+	return s.Child
 }
 
 func (s SizedBox) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

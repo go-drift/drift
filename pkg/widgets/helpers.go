@@ -61,17 +61,17 @@ func setParentOnChild(child, parent layout.RenderObject) {
 
 // Root creates a top-level view widget with the given child.
 func Root(child core.Widget) View {
-	return View{ChildWidget: child}
+	return View{Child: child}
 }
 
 // Centered wraps a child in a Center widget.
 func Centered(child core.Widget) Center {
-	return Center{ChildWidget: child}
+	return Center{Child: child}
 }
 
 // Padded wraps a child with the specified padding.
 func Padded(padding layout.EdgeInsets, child core.Widget) Padding {
-	return Padding{Padding: padding, ChildWidget: child}
+	return Padding{Padding: padding, Child: child}
 }
 
 // VSpace creates a fixed-height vertical spacer.
@@ -86,22 +86,22 @@ func HSpace(width float64) SizedBox {
 
 // Tap wraps a child with a tap handler.
 func Tap(onTap func(), child core.Widget) GestureDetector {
-	return GestureDetector{OnTap: onTap, ChildWidget: child}
+	return GestureDetector{OnTap: onTap, Child: child}
 }
 
 // Drag wraps a child with pan (omnidirectional) drag handlers.
 func Drag(onUpdate func(DragUpdateDetails), child core.Widget) GestureDetector {
-	return GestureDetector{OnPanUpdate: onUpdate, ChildWidget: child}
+	return GestureDetector{OnPanUpdate: onUpdate, Child: child}
 }
 
 // HorizontalDrag wraps a child with horizontal-only drag handlers.
 func HorizontalDrag(onUpdate func(DragUpdateDetails), child core.Widget) GestureDetector {
-	return GestureDetector{OnHorizontalDragUpdate: onUpdate, ChildWidget: child}
+	return GestureDetector{OnHorizontalDragUpdate: onUpdate, Child: child}
 }
 
 // VerticalDrag wraps a child with vertical-only drag handlers.
 func VerticalDrag(onUpdate func(DragUpdateDetails), child core.Widget) GestureDetector {
-	return GestureDetector{OnVerticalDragUpdate: onUpdate, ChildWidget: child}
+	return GestureDetector{OnVerticalDragUpdate: onUpdate, Child: child}
 }
 
 // Clamp constrains a value between min and max bounds.
@@ -117,17 +117,17 @@ func Clamp(value, min, max float64) float64 {
 
 // PaddingAll wraps a child with uniform padding on all sides.
 func PaddingAll(value float64, child core.Widget) Padding {
-	return Padding{Padding: layout.EdgeInsetsAll(value), ChildWidget: child}
+	return Padding{Padding: layout.EdgeInsetsAll(value), Child: child}
 }
 
 // PaddingSym wraps a child with symmetric horizontal and vertical padding.
 func PaddingSym(horizontal, vertical float64, child core.Widget) Padding {
-	return Padding{Padding: layout.EdgeInsetsSymmetric(horizontal, vertical), ChildWidget: child}
+	return Padding{Padding: layout.EdgeInsetsSymmetric(horizontal, vertical), Child: child}
 }
 
 // PaddingOnly wraps a child with specific padding on each side.
 func PaddingOnly(left, top, right, bottom float64, child core.Widget) Padding {
-	return Padding{Padding: layout.EdgeInsetsOnly(left, top, right, bottom), ChildWidget: child}
+	return Padding{Padding: layout.EdgeInsetsOnly(left, top, right, bottom), Child: child}
 }
 
 // Spacer creates a fixed-size spacer (alias for VSpace).
@@ -138,7 +138,7 @@ func Spacer(size float64) SizedBox {
 // Ptr returns a pointer to the given float64 value.
 // This is a convenience helper for Positioned widget fields:
 //
-//	Positioned{Left: widgets.Ptr(8), Top: widgets.Ptr(16), ChildWidget: child}
+//	Positioned{Left: widgets.Ptr(8), Top: widgets.Ptr(16), Child: child}
 func Ptr(v float64) *float64 {
 	return &v
 }

@@ -177,7 +177,7 @@ func (a RunAlignment) String() string {
 //	    Direction:  WrapAxisHorizontal,
 //	    Spacing:    8,
 //	    RunSpacing: 8,
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        Chip{Label: "Go"},
 //	        Chip{Label: "Rust"},
 //	        Chip{Label: "TypeScript"},
@@ -188,7 +188,7 @@ func (a RunAlignment) String() string {
 // For non-wrapping horizontal layout, use [Row]. For non-wrapping vertical layout,
 // use [Column].
 type Wrap struct {
-	ChildrenWidgets    []core.Widget
+	Children           []core.Widget
 	Direction          WrapAxis           // WrapAxisHorizontal (zero value); set WrapAxisVertical for column-style wrapping
 	Alignment          WrapAlignment      // Main axis alignment within runs
 	CrossAxisAlignment WrapCrossAlignment // Cross axis alignment within runs
@@ -201,10 +201,10 @@ type Wrap struct {
 // This is a convenience helper for the common horizontal wrap case.
 func WrapOf(spacing, runSpacing float64, children ...core.Widget) Wrap {
 	return Wrap{
-		ChildrenWidgets: children,
-		Direction:       WrapAxisHorizontal,
-		Spacing:         spacing,
-		RunSpacing:      runSpacing,
+		Children:   children,
+		Direction:  WrapAxisHorizontal,
+		Spacing:    spacing,
+		RunSpacing: runSpacing,
 	}
 }
 
@@ -216,8 +216,8 @@ func (w Wrap) Key() any {
 	return nil
 }
 
-func (w Wrap) Children() []core.Widget {
-	return w.ChildrenWidgets
+func (w Wrap) ChildrenWidgets() []core.Widget {
+	return w.Children
 }
 
 func (w Wrap) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

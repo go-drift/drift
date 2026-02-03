@@ -99,10 +99,10 @@ func (t TabBar) Build(ctx core.BuildContext) core.Widget {
 
 	return SizedBox{
 		Height: height,
-		ChildWidget: Container{
+		Child: Container{
 			Color: background,
-			ChildWidget: Row{
-				ChildrenWidgets:    children,
+			Child: Row{
+				Children:           children,
 				MainAxisAlignment:  MainAxisAlignmentStart,
 				CrossAxisAlignment: CrossAxisAlignmentStretch,
 				MainAxisSize:       MainAxisSizeMax,
@@ -136,7 +136,7 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicato
 
 	// Build tab content column
 	tabContent := Column{
-		ChildrenWidgets:    content,
+		Children:           content,
 		MainAxisAlignment:  MainAxisAlignmentCenter,
 		CrossAxisAlignment: CrossAxisAlignmentCenter,
 		MainAxisSize:       MainAxisSizeMin,
@@ -157,7 +157,7 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicato
 	// Wrap in Expanded to fill available space in the Row
 	tabItem := Expanded{
 		Flex: 1,
-		ChildWidget: Semantics{
+		Child: Semantics{
 			// Note: Don't set Label here - it comes from merged descendant Text widgets
 			Hint:             fmt.Sprintf("Tab %d of %d", index+1, len(t.Items)),
 			Role:             semantics.SemanticsRoleTab,
@@ -165,19 +165,19 @@ func (t TabBar) buildTabItem(index int, item TabItem, active, inactive, indicato
 			Container:        true,
 			MergeDescendants: true, // Merge children so TalkBack highlights the tab, not individual text/icons
 			OnTap:            onTap,
-			ChildWidget: GestureDetector{
+			Child: GestureDetector{
 				OnTap: onTap,
-				ChildWidget: Column{
+				Child: Column{
 					MainAxisAlignment:  MainAxisAlignmentEnd,
 					CrossAxisAlignment: CrossAxisAlignmentStretch,
 					MainAxisSize:       MainAxisSizeMax,
-					ChildrenWidgets: []core.Widget{
+					Children: []core.Widget{
 						Expanded{
 							Flex: 1,
-							ChildWidget: Container{
-								Padding:     padding,
-								Alignment:   layout.AlignmentCenter,
-								ChildWidget: tabContent,
+							Child: Container{
+								Padding:   padding,
+								Alignment: layout.AlignmentCenter,
+								Child:     tabContent,
 							},
 						},
 						// Indicator at the bottom

@@ -87,8 +87,8 @@ type DatePicker struct {
 	// TextStyle for the value text.
 	TextStyle graphics.TextStyle
 
-	// ChildWidget overrides the default rendering for full customization.
-	ChildWidget core.Widget
+	// Child overrides the default rendering for full customization.
+	Child core.Widget
 }
 
 func (d DatePicker) CreateElement() core.Element {
@@ -131,14 +131,14 @@ func (s *datePickerState) Build(ctx core.BuildContext) core.Widget {
 	w := s.element.Widget().(DatePicker)
 
 	// If custom child provided, wrap it with gesture detector
-	if w.ChildWidget != nil {
+	if w.Child != nil {
 		return GestureDetector{
 			OnTap: func() {
 				if !w.Disabled {
 					s.showPicker()
 				}
 			},
-			ChildWidget: w.ChildWidget,
+			Child: w.Child,
 		}
 	}
 
@@ -229,17 +229,17 @@ func (s *datePickerState) buildDefaultField(ctx core.BuildContext, w DatePicker)
 	// Main input container
 	inputContainer := Opacity{
 		Opacity: opacity,
-		ChildWidget: DecoratedBox{
+		Child: DecoratedBox{
 			Color:        bgColor,
 			BorderColor:  borderColor,
 			BorderWidth:  1,
 			BorderRadius: borderRadius,
-			ChildWidget: Padding{
+			Child: Padding{
 				Padding: contentPadding,
-				ChildWidget: Row{
+				Child: Row{
 					CrossAxisAlignment: CrossAxisAlignmentCenter,
 					MainAxisSize:       MainAxisSizeMin,
-					ChildrenWidgets:    contentChildren,
+					Children:           contentChildren,
 				},
 			},
 		},
@@ -265,15 +265,15 @@ func (s *datePickerState) buildDefaultField(ctx core.BuildContext, w DatePicker)
 				s.showPicker()
 			}
 		},
-		ChildWidget: Semantics{
+		Child: Semantics{
 			Hint:  "Double tap to open date picker",
 			Role:  semantics.SemanticsRoleButton,
 			Flags: semantics.SemanticsHasEnabledState | boolToFlag(!w.Disabled, semantics.SemanticsIsEnabled),
 			OnTap: func() { s.showPicker() },
-			ChildWidget: Column{
+			Child: Column{
 				MainAxisSize:       MainAxisSizeMin,
 				CrossAxisAlignment: CrossAxisAlignmentStart,
-				ChildrenWidgets:    children,
+				Children:           children,
 			},
 		},
 	}

@@ -175,7 +175,7 @@ Wrap expensive-to-paint but rarely-changing content in `RepaintBoundary`:
 
 ```go
 RepaintBoundary{
-    ChildWidget: ExpensiveChart{Data: staticData},
+    Child: ExpensiveChart{Data: staticData},
 }
 ```
 

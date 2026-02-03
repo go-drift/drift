@@ -155,8 +155,8 @@ type State interface {
 //
 //	// Provide data
 //	core.InheritedProvider[*UserState]{
-//	    Value:       userState,
-//	    ChildWidget: MyApp{},
+//	    Value: userState,
+//	    Child: MyApp{},
 //	}
 //
 //	// Access data (in a descendant's Build method)
@@ -172,7 +172,7 @@ type State interface {
 //	type MyTheme struct {
 //	    Colors     ColorScheme
 //	    Typography TextTheme
-//	    ChildWidget core.Widget
+//	    Child      core.Widget
 //	}
 //
 //	func (t MyTheme) UpdateShouldNotify(old core.InheritedWidget) bool {
@@ -193,8 +193,8 @@ type State interface {
 // Dependents register aspects via [BuildContext.DependOnInherited] with a non-nil aspect.
 type InheritedWidget interface {
 	Widget
-	// Child returns the child widget tree.
-	Child() Widget
+	// ChildWidget returns the child widget tree.
+	ChildWidget() Widget
 	// UpdateShouldNotify returns true if dependents should potentially rebuild
 	// when this widget is updated. This is a coarse-grained gate - if it returns
 	// false, no dependents are notified. Return true when any aspect might have

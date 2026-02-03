@@ -17,7 +17,7 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
     _, colors, textTheme := theme.UseTheme(ctx)
 
     return widgets.SafeArea{
-        ChildWidget: widgets.PaddingAll(20,
+        Child: widgets.PaddingAll(20,
             widgets.ColumnOf(
                 widgets.MainAxisAlignmentStart,
                 widgets.CrossAxisAlignmentStart,
@@ -61,9 +61,9 @@ widgets.Row{
     MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
     CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
     MainAxisSize:       widgets.MainAxisSizeMax,
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         avatar,
-        widgets.Expanded{ChildWidget: title},
+        widgets.Expanded{Child: title},
         menuButton,
     },
 }
@@ -78,7 +78,7 @@ widgets.Column{
     MainAxisAlignment:  widgets.MainAxisAlignmentStart,
     CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
     MainAxisSize:       widgets.MainAxisSizeMin,
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         header,
         content,
         footer,
@@ -203,7 +203,7 @@ widgets.Wrap{
     Direction:  widgets.WrapAxisHorizontal,
     Spacing:    8,
     RunSpacing: 8,
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         chip("Go"),
         chip("Rust"),
         chip("TypeScript"),
@@ -226,7 +226,7 @@ widgets.Wrap{
     Direction:  widgets.WrapAxisVertical,
     Spacing:    8,
     RunSpacing: 12,
-    ChildrenWidgets: tags,
+    Children: tags,
 }
 ```
 
@@ -247,7 +247,7 @@ widgets.Wrap{
     RunAlignment:       widgets.RunAlignmentSpaceEvenly,
     Spacing:            8,
     RunSpacing:         8,
-    ChildrenWidgets:    chips,
+    Children:    chips,
 }
 ```
 
@@ -280,14 +280,14 @@ widgets.WrapOf(8, 12, // spacing, runSpacing
 widgets.Stack{
     Alignment: layout.AlignmentCenter,
     Fit:       widgets.StackFitLoose,
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         backgroundImage,
         gradientOverlay,
         widgets.Positioned{
             Bottom: widgets.Ptr(16),
             Left:   widgets.Ptr(16),
             Right:  widgets.Ptr(16),
-            ChildWidget: titleText,
+            Child: titleText,
         },
     },
 }
@@ -299,13 +299,13 @@ Use `Positioned` within a Stack for absolute positioning:
 
 ```go
 widgets.Stack{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         mainContent,
         // Badge in top-right corner
         widgets.Positioned{
             Top:   widgets.Ptr(8),
             Right: widgets.Ptr(8),
-            ChildWidget: badge,
+            Child: badge,
         },
     },
 }
@@ -323,12 +323,12 @@ When `Alignment` is set, `Left`/`Top`/`Right`/`Bottom` become pixel offsets from
 
 ```go
 widgets.Stack{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         background,
         // Centered dialog (no offsets needed)
         widgets.Positioned{
             Alignment: &graphics.AlignCenter,
-            ChildWidget: dialog,
+            Child: dialog,
         },
         // Floating action button: starts at bottom-right corner,
         // then shifts 16px left and 16px up (inward from corner)
@@ -336,7 +336,7 @@ widgets.Stack{
             Alignment: &graphics.AlignBottomRight,
             Right:     widgets.Ptr(16),
             Bottom:    widgets.Ptr(16),
-            ChildWidget: fab,
+            Child: fab,
         },
     },
 }
@@ -360,13 +360,13 @@ Give a widget fixed dimensions:
 widgets.SizedBox{
     Width:       100,
     Height:      50,
-    ChildWidget: content,
+    Child: content,
 }
 
 // Width only
 widgets.SizedBox{
     Width:       200,
-    ChildWidget: content,
+    Child: content,
 }
 
 // Spacer (no child)
@@ -384,7 +384,7 @@ widgets.RowOf(
     widgets.MainAxisSizeMax,
     avatar,
     widgets.HSpace(12),
-    widgets.Expanded{ChildWidget: nameAndStatus},  // Takes remaining width
+    widgets.Expanded{Child: nameAndStatus},  // Takes remaining width
     menuButton,
 )
 ```
@@ -398,8 +398,8 @@ widgets.RowOf(
     widgets.MainAxisAlignmentStart,
     widgets.CrossAxisAlignmentCenter,
     widgets.MainAxisSizeMax,
-    widgets.Expanded{Flex: 2, ChildWidget: leftPanel},  // 2/3 of space
-    widgets.Expanded{Flex: 1, ChildWidget: rightPanel}, // 1/3 of space
+    widgets.Expanded{Flex: 2, Child: leftPanel},  // 2/3 of space
+    widgets.Expanded{Flex: 1, Child: rightPanel}, // 1/3 of space
 )
 ```
 
@@ -414,7 +414,7 @@ widgets.PaddingAll(16, child)
 // Symmetric
 widgets.Padding{
     EdgeInsets:  layout.EdgeInsetsSymmetric(16, 8), // horizontal, vertical
-    ChildWidget: child,
+    Child: child,
 }
 
 // Individual sides
@@ -425,13 +425,13 @@ widgets.Padding{
         Right:  16,
         Bottom: 8,
     },
-    ChildWidget: child,
+    Child: child,
 }
 
 // Only specific sides
 widgets.Padding{
     EdgeInsets:  layout.EdgeInsetsOnly(16, 0, 16, 0), // left, top, right, bottom
-    ChildWidget: child,
+    Child: child,
 }
 ```
 
@@ -445,7 +445,7 @@ widgets.Container{
     Color:        colors.Surface,
     BorderRadius: 12,
     Padding:      layout.EdgeInsetsAll(20),
-    ChildWidget:  content,
+    Child:  content,
 }
 
 // Bordered box
@@ -454,7 +454,7 @@ widgets.Container{
     BorderWidth:  1,
     BorderRadius: 8,
     Padding:      layout.EdgeInsetsAll(12),
-    ChildWidget:  child,
+    Child:  child,
 }
 
 // Fixed-size with centered child
@@ -463,7 +463,7 @@ widgets.Container{
     Width:       200,
     Height:      100,
     Alignment:   layout.AlignmentCenter,  // Centers child within 200x100
-    ChildWidget: child,
+    Child: child,
 }
 ```
 
@@ -475,7 +475,7 @@ Center a child within available space:
 
 ```go
 widgets.Center{
-    ChildWidget: widgets.Text{Content: "Centered"},
+    Child: widgets.Text{Content: "Centered"},
 }
 
 // Helper function
@@ -489,7 +489,7 @@ Position a child within available space using any alignment:
 ```go
 widgets.Align{
     Alignment:   layout.AlignmentBottomRight,
-    ChildWidget: widgets.Text{Content: "Bottom right"},
+    Child: widgets.Text{Content: "Bottom right"},
 }
 ```
 
@@ -501,7 +501,7 @@ Avoid system UI (notches, status bars, navigation bars):
 
 ```go
 widgets.SafeArea{
-    ChildWidget: content,
+    Child: content,
 }
 
 // Selective sides
@@ -510,7 +510,7 @@ widgets.SafeArea{
     Bottom:      true,
     Left:        false,
     Right:       false,
-    ChildWidget: content,
+    Child: content,
 }
 ```
 
@@ -539,12 +539,12 @@ Widgets must return a size that satisfies these constraints.
 
 ```go
 // Container with explicit size passes loose constraints to child
-Container{Width: 100, Height: 100, ChildWidget: child}
+Container{Width: 100, Height: 100, Child: child}
 // Child receives: MinWidth=0, MaxWidth=100, MinHeight=0, MaxHeight=100
 // Child can be smaller than container; Alignment positions it within
 
 // Column passes loose/unbounded constraints
-Column{ChildrenWidgets: []Widget{child}}
+Column{Children: []Widget{child}}
 // Child receives: MinWidth=0, MaxWidth=parentWidth, MinHeight=0, MaxHeight=infinity
 ```
 
@@ -569,7 +569,7 @@ widgets.DecoratedBox{
         BlurRadius: 8,
         Offset:     graphics.Offset{X: 0, Y: 2},
     },
-    ChildWidget: content,
+    Child: content,
 }
 ```
 
@@ -623,7 +623,7 @@ widgets.DecoratedBox{
             {Position: 1, Color: colors.Secondary},
         },
     ),
-    ChildWidget: content,
+    Child: content,
 }
 
 // Dashed gradient border
@@ -637,7 +637,7 @@ widgets.Container{
         stops,
     ),
     Padding:     layout.EdgeInsetsAll(16),
-    ChildWidget: child,
+    Child: child,
 }
 ```
 
@@ -673,8 +673,8 @@ The `Overflow` field controls whether children are clipped to the container boun
 widgets.Container{
     BorderRadius: 12,
     Overflow:     widgets.OverflowClip,  // default
-    ChildWidget: widgets.Column{
-        ChildrenWidgets: []core.Widget{
+    Child: widgets.Column{
+        Children: []core.Widget{
             // This gradient bar will have rounded top corners
             widgets.Container{
                 Height:   4,
@@ -704,7 +704,7 @@ Clip with rounded corners:
 ```go
 widgets.ClipRRect{
     BorderRadius: 16,
-    ChildWidget:  image,
+    Child:  image,
 }
 ```
 
@@ -714,7 +714,7 @@ For performance, use `RepaintBoundary` to prevent repaint propagation:
 
 ```go
 widgets.RepaintBoundary{
-    ChildWidget: expensiveContent,
+    Child: expensiveContent,
 }
 ```
 
@@ -733,11 +733,11 @@ widgets.DecoratedBox{
     Color:        colors.Surface,
     BorderRadius: 8,
     Overflow:     widgets.OverflowClip,  // default, clips children to rounded shape
-    ChildWidget: widgets.Column{
+    Child: widgets.Column{
         MainAxisAlignment:  widgets.MainAxisAlignmentStart,
         CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
         MainAxisSize:       widgets.MainAxisSizeMin,
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             image,  // clipped to parent's rounded corners
             widgets.PaddingAll(16,
                 widgets.ColumnOf(
@@ -765,7 +765,7 @@ widgets.PaddingAll(16,
         avatar,
         widgets.HSpace(16),
         widgets.Expanded{
-            ChildWidget: widgets.ColumnOf(
+            Child: widgets.ColumnOf(
                 widgets.MainAxisAlignmentCenter,
                 widgets.CrossAxisAlignmentStart,
                 widgets.MainAxisSizeMin,
@@ -784,7 +784,7 @@ widgets.PaddingAll(16,
 widgets.Container{
     Color:   colors.Surface,
     Padding: layout.EdgeInsetsSymmetric(16, 12),
-    ChildWidget: widgets.RowOf(
+    Child: widgets.RowOf(
         widgets.MainAxisAlignmentSpaceBetween,
         widgets.CrossAxisAlignmentCenter,
         widgets.MainAxisSizeMax,

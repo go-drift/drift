@@ -11,7 +11,7 @@ import (
 // which can significantly improve performance for static content next to
 // frequently animating content.
 type RepaintBoundary struct {
-	ChildWidget core.Widget
+	Child core.Widget
 }
 
 func (r RepaintBoundary) CreateElement() core.Element {
@@ -22,8 +22,8 @@ func (r RepaintBoundary) Key() any {
 	return nil
 }
 
-func (r RepaintBoundary) Child() core.Widget {
-	return r.ChildWidget
+func (r RepaintBoundary) ChildWidget() core.Widget {
+	return r.Child
 }
 
 func (r RepaintBoundary) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

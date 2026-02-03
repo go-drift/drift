@@ -94,8 +94,8 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 		Container{
 			Color:   headerColor,
 			Padding: layout.EdgeInsetsAll(16),
-			ChildWidget: Row{
-				ChildrenWidgets: []core.Widget{
+			Child: Row{
+				Children: []core.Widget{
 					Text{
 						Content: "!",
 						Style: graphics.TextStyle{
@@ -106,10 +106,10 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 					},
 					SizedBox{Width: 12},
 					Expanded{
-						ChildWidget: Column{
+						Child: Column{
 							CrossAxisAlignment: CrossAxisAlignmentStart,
 							MainAxisSize:       MainAxisSizeMin,
-							ChildrenWidgets: []core.Widget{
+							Children: []core.Widget{
 								Text{
 									Content: headerText,
 									Style: graphics.TextStyle{
@@ -139,10 +139,10 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 	children = append(children,
 		Container{
 			Padding: layout.EdgeInsetsAll(16),
-			ChildWidget: Container{
+			Child: Container{
 				Color:   errorBoxColor,
 				Padding: layout.EdgeInsetsAll(12),
-				ChildWidget: Text{
+				Child: Text{
 					Content: errorMessage,
 					Style: graphics.TextStyle{
 						Color:    textColor,
@@ -159,7 +159,7 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 		children = append(children,
 			Padding{
 				Padding: layout.EdgeInsetsSymmetric(16, 0),
-				ChildWidget: Text{
+				Child: Text{
 					Content: "Stack Trace",
 					Style: graphics.TextStyle{
 						Color:      dimTextColor,
@@ -170,13 +170,13 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 			},
 			SizedBox{Height: 8},
 			Expanded{
-				ChildWidget: Padding{
+				Child: Padding{
 					Padding: layout.EdgeInsetsSymmetric(16, 0),
-					ChildWidget: Container{
+					Child: Container{
 						Color: stackBgColor,
-						ChildWidget: ScrollView{
+						Child: ScrollView{
 							Padding: layout.EdgeInsetsAll(12),
-							ChildWidget: Text{
+							Child: Text{
 								Content: stackTrace,
 								Style: graphics.TextStyle{
 									Color:    dimTextColor,
@@ -196,10 +196,10 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 	children = append(children,
 		Padding{
 			Padding: layout.EdgeInsetsAll(16),
-			ChildWidget: Row{
+			Child: Row{
 				MainAxisAlignment: MainAxisAlignmentCenter,
 				MainAxisSize:      MainAxisSizeMax,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					errorRestartButton{},
 				},
 			},
@@ -209,11 +209,11 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 	// SafeArea wrapper to handle notches/status bars
 	return Container{
 		Color: bgColor,
-		ChildWidget: SafeArea{
-			ChildWidget: Column{
+		Child: SafeArea{
+			Child: Column{
 				MainAxisSize:       MainAxisSizeMax, // Required for Expanded children
 				CrossAxisAlignment: CrossAxisAlignmentStretch,
-				ChildrenWidgets:    children,
+				Children:           children,
 			},
 		},
 	}

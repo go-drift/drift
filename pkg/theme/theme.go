@@ -10,8 +10,8 @@ import (
 type Theme struct {
 	// Data is the theme configuration.
 	Data *ThemeData
-	// ChildWidget is the child widget tree.
-	ChildWidget core.Widget
+	// Child is the child widget tree.
+	Child core.Widget
 }
 
 // CreateElement returns an InheritedElement for this Theme.
@@ -24,9 +24,9 @@ func (t Theme) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (t Theme) Child() core.Widget {
-	return t.ChildWidget
+// ChildWidget returns the child widget.
+func (t Theme) ChildWidget() core.Widget {
+	return t.Child
 }
 
 // UpdateShouldNotify returns true if the theme data has changed.

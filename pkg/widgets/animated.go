@@ -25,7 +25,7 @@ import (
 //	    Color:    s.isActive ? colors.Primary : colors.Surface,
 //	    Width:    100,
 //	    Height:   100,
-//	    ChildWidget: child,
+//	    Child: child,
 //	}
 type AnimatedContainer struct {
 	// Duration is the length of the animation.
@@ -36,13 +36,13 @@ type AnimatedContainer struct {
 	OnEnd func()
 
 	// Container properties that will be animated when they change.
-	Padding     layout.EdgeInsets
-	Width       float64
-	Height      float64
-	Color       graphics.Color
-	Gradient    *graphics.Gradient
-	Alignment   layout.Alignment
-	ChildWidget core.Widget
+	Padding   layout.EdgeInsets
+	Width     float64
+	Height    float64
+	Color     graphics.Color
+	Gradient  *graphics.Gradient
+	Alignment layout.Alignment
+	Child     core.Widget
 }
 
 func (a AnimatedContainer) CreateElement() core.Element {
@@ -175,13 +175,13 @@ func (s *animatedContainerState) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	return Container{
-		Padding:     s.currentPadding,
-		Width:       s.currentWidth,
-		Height:      s.currentHeight,
-		Color:       s.currentColor,
-		Gradient:    w.Gradient,
-		Alignment:   s.currentAlignment,
-		ChildWidget: w.ChildWidget,
+		Padding:   s.currentPadding,
+		Width:     s.currentWidth,
+		Height:    s.currentHeight,
+		Color:     s.currentColor,
+		Gradient:  w.Gradient,
+		Alignment: s.currentAlignment,
+		Child:     w.Child,
 	}
 }
 
@@ -196,7 +196,7 @@ func (s *animatedContainerState) Build(ctx core.BuildContext) core.Widget {
 //	    Duration: 200 * time.Millisecond,
 //	    Curve:    animation.EaseOut,
 //	    Opacity:  s.isVisible ? 1.0 : 0.0,
-//	    ChildWidget: child,
+//	    Child: child,
 //	}
 type AnimatedOpacity struct {
 	// Duration is the length of the animation.
@@ -208,8 +208,8 @@ type AnimatedOpacity struct {
 
 	// Opacity is the target opacity (0.0 to 1.0).
 	Opacity float64
-	// ChildWidget is the widget to which opacity is applied.
-	ChildWidget core.Widget
+	// Child is the widget to which opacity is applied.
+	Child core.Widget
 }
 
 func (a AnimatedOpacity) CreateElement() core.Element {
@@ -287,7 +287,7 @@ func (s *animatedOpacityState) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	return Opacity{
-		Opacity:     s.currentOpacity,
-		ChildWidget: w.ChildWidget,
+		Opacity: s.currentOpacity,
+		Child:   w.Child,
 	}
 }

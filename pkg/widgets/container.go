@@ -33,7 +33,7 @@ import (
 //	    Color:        colors.Surface,
 //	    BorderRadius: 12,
 //	    Padding:      layout.EdgeInsetsAll(16),
-//	    ChildWidget:  content,
+//	    Child:        content,
 //	}
 //
 //	// Bordered box
@@ -42,28 +42,28 @@ import (
 //	    BorderWidth:  1,
 //	    BorderRadius: 8,
 //	    Padding:      layout.EdgeInsetsAll(12),
-//	    ChildWidget:  Text{Content: "Hello"},
+//	    Child:        Text{Content: "Hello"},
 //	}
 //
 //	// Fixed-size centered child
 //	Container{
-//	    Width:       200,
-//	    Height:      100,
-//	    Alignment:   layout.AlignmentCenter,
-//	    ChildWidget: icon,
+//	    Width:     200,
+//	    Height:    100,
+//	    Alignment: layout.AlignmentCenter,
+//	    Child:     icon,
 //	}
 //
 // Container supports all [DecoratedBox] features. For decoration without layout
 // behavior (no padding, sizing, or alignment), use DecoratedBox directly.
 type Container struct {
-	ChildWidget core.Widget
-	Padding     layout.EdgeInsets
-	Width       float64
-	Height      float64
-	Color       graphics.Color
-	Gradient    *graphics.Gradient
-	Alignment   layout.Alignment
-	Shadow      *graphics.BoxShadow
+	Child     core.Widget
+	Padding   layout.EdgeInsets
+	Width     float64
+	Height    float64
+	Color     graphics.Color
+	Gradient  *graphics.Gradient
+	Alignment layout.Alignment
+	Shadow    *graphics.BoxShadow
 
 	// Border
 	BorderColor  graphics.Color        // Border stroke color; transparent = no border
@@ -143,8 +143,8 @@ func (c Container) Key() any {
 	return nil
 }
 
-func (c Container) Child() core.Widget {
-	return c.ChildWidget
+func (c Container) ChildWidget() core.Widget {
+	return c.Child
 }
 
 func (c Container) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

@@ -106,7 +106,7 @@ func TestContainer_PaintOrder(t *testing.T) {
 			Color:      graphics.RGBA(0, 0, 0, 0.25),
 			BlurRadius: 4,
 		},
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:  50,
 			Height: 50,
 			Color:  graphics.RGB(200, 0, 0),
@@ -155,7 +155,7 @@ func TestContainer_FixedSize(t *testing.T) {
 
 	// Wrap in Center to give the Container loose constraints.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:  120,
 			Height: 80,
 		},
@@ -176,10 +176,10 @@ func TestContainer_Padding(t *testing.T) {
 	tester.SetSize(graphics.Size{Width: 200, Height: 200})
 
 	tester.PumpWidget(widgets.Container{
-		Padding:     layout.EdgeInsetsAll(16),
-		Width:       200,
-		Height:      100,
-		ChildWidget: widgets.Text{Content: "inside"},
+		Padding: layout.EdgeInsetsAll(16),
+		Width:   200,
+		Height:  100,
+		Child:   widgets.Text{Content: "inside"},
 	})
 
 	result := tester.Find(drifttest.ByType[widgets.Text]())
@@ -248,11 +248,11 @@ func TestContainer_AlignmentWithSmallerChild(t *testing.T) {
 	// Container with explicit size and a smaller child should center the child.
 	// Wrap in Center to give the outer Container loose constraints.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:     100,
 			Height:    100,
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  40,
 				Height: 40,
 				Color:  graphics.RGB(255, 0, 0),
@@ -298,7 +298,7 @@ func TestContainer_AlignmentWithTightConstraints(t *testing.T) {
 		Width:     100,
 		Height:    100,
 		Alignment: layout.AlignmentCenter,
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:  40,
 			Height: 40,
 			Color:  graphics.RGB(255, 0, 0),
@@ -341,10 +341,10 @@ func TestContainer_LooseWidthOnly(t *testing.T) {
 	// but height remains unconstrained.
 	// Wrap in Center to give the outer Container loose constraints.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:     100,
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  40,
 				Height: 60,
 				Color:  graphics.RGB(0, 255, 0),
@@ -384,10 +384,10 @@ func TestContainer_LooseWidthOnly_MaxConstraint(t *testing.T) {
 	// Child wants 150 width but container only allows 100.
 	// Child should be clamped to 100.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:     100,
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  150, // Wants more than available
 				Height: 40,
 				Color:  graphics.RGB(0, 255, 0),
@@ -417,10 +417,10 @@ func TestContainer_LooseHeightOnly(t *testing.T) {
 	// but width remains unconstrained.
 	// Wrap in Center to give the outer Container loose constraints.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Height:    100,
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  60,
 				Height: 40,
 				Color:  graphics.RGB(0, 0, 255),
@@ -460,10 +460,10 @@ func TestContainer_LooseHeightOnly_MaxConstraint(t *testing.T) {
 	// Child wants 150 height but container only allows 100.
 	// Child should be clamped to 100.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Height:    100,
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  40,
 				Height: 150, // Wants more than available
 				Color:  graphics.RGB(0, 0, 255),
@@ -494,12 +494,12 @@ func TestContainer_AlignmentWithPadding(t *testing.T) {
 	// Plus padding offset of 10 -> final offset (40, 40) relative to container origin.
 	// Wrap in Center to give the outer Container loose constraints.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:     100,
 			Height:    100,
 			Padding:   layout.EdgeInsetsAll(10),
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  20,
 				Height: 20,
 				Color:  graphics.RGB(255, 255, 0),
@@ -538,12 +538,12 @@ func TestContainer_PaddingReducesMaxConstraint(t *testing.T) {
 	// Container 100x100 with padding 20 on all sides.
 	// Content box is 60x60. Child wants 80x80 but should be clamped to 60x60.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:     100,
 			Height:    100,
 			Padding:   layout.EdgeInsetsAll(20),
 			Alignment: layout.AlignmentCenter,
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Width:  80, // Wants more than content box allows
 				Height: 80,
 				Color:  graphics.RGB(255, 0, 255),

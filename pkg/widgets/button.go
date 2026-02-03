@@ -198,7 +198,7 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 
 	content := Padding{
 		Padding: padding,
-		ChildWidget: Text{
+		Child: Text{
 			Content: b.Label,
 			Style:   graphics.TextStyle{Color: textColor, FontSize: fontSize},
 		},
@@ -212,21 +212,21 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 			Gradient:     b.Gradient,
 			BorderRadius: borderRadius,
 			Overflow:     OverflowClip,
-			ChildWidget:  content,
+			Child:        content,
 		}
 	} else {
 		box = DecoratedBox{
 			Color:        color,
 			BorderRadius: borderRadius,
-			ChildWidget:  content,
+			Child:        content,
 		}
 	}
 
 	// Fall back to opacity if no disabled colors provided
 	if useOpacityFallback {
 		box = Opacity{
-			Opacity:     0.5,
-			ChildWidget: box,
+			Opacity: 0.5,
+			Child:   box,
 		}
 	}
 
@@ -249,9 +249,9 @@ func (b Button) Build(ctx core.BuildContext) core.Widget {
 		Container:        true,
 		MergeDescendants: true, // Merge text into button node so TalkBack highlights the button, not the text
 		OnTap:            onTap,
-		ChildWidget: GestureDetector{
-			OnTap:       onTap,
-			ChildWidget: box,
+		Child: GestureDetector{
+			OnTap: onTap,
+			Child: box,
 		},
 	}
 }

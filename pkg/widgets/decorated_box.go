@@ -29,7 +29,7 @@ import (
 // which composes DecoratedBox internally. Use DecoratedBox directly when you need
 // decoration without any layout behavior.
 type DecoratedBox struct {
-	ChildWidget core.Widget // Child widget to display inside the decoration
+	Child core.Widget // Child widget to display inside the decoration
 
 	// Background
 	Color    graphics.Color     // Background fill color
@@ -65,8 +65,8 @@ func (d DecoratedBox) Key() any {
 	return nil
 }
 
-func (d DecoratedBox) Child() core.Widget {
-	return d.ChildWidget
+func (d DecoratedBox) ChildWidget() core.Widget {
+	return d.Child
 }
 
 func (d DecoratedBox) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

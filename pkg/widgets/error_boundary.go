@@ -35,10 +35,10 @@ import (
 //
 //	// Scoped: only RiskyWidget failures show fallback
 //	Column{
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        HeaderWidget{},
 //	        ErrorBoundary{
-//	            ChildWidget: RiskyWidget{},
+//	            Child: RiskyWidget{},
 //	            FallbackBuilder: func(err *errors.BoundaryError) core.Widget {
 //	                return Text{Content: "Failed to load"}
 //	            },
@@ -49,7 +49,7 @@ import (
 //
 //	// Global: custom error UI for entire app in production
 //	drift.NewApp(ErrorBoundary{
-//	    ChildWidget: MyApp{},
+//	    Child: MyApp{},
 //	    FallbackBuilder: func(err *errors.BoundaryError) core.Widget {
 //	        return MyCustomErrorScreen{Error: err}
 //	    },
@@ -64,8 +64,8 @@ import (
 //	    state.Reset() // Clear error and retry
 //	}
 type ErrorBoundary struct {
-	// ChildWidget is the widget tree to wrap with error handling.
-	ChildWidget core.Widget
+	// Child is the widget tree to wrap with error handling.
+	Child core.Widget
 	// FallbackBuilder creates a widget to show when an error is caught.
 	// If nil, uses the default ErrorWidget.
 	FallbackBuilder func(*errors.BoundaryError) core.Widget
@@ -108,9 +108,9 @@ func (s *errorBoundaryState) Build(ctx core.BuildContext) core.Widget {
 	// and use a render widget to catch layout/paint/hittest panics
 	return errorBoundaryScope{
 		state: s,
-		childWidget: errorBoundaryRenderWidget{
-			state:       s,
-			childWidget: widget.ChildWidget,
+		child: errorBoundaryRenderWidget{
+			state: s,
+			child: widget.Child,
 		},
 	}
 }
@@ -151,8 +151,8 @@ func (s *errorBoundaryState) captureBoundaryError(err *errors.BoundaryError) {
 // errorBoundaryScope is an InheritedWidget that marks the boundary in the tree.
 // Child elements can find this to report errors to the boundary.
 type errorBoundaryScope struct {
-	state       *errorBoundaryState
-	childWidget core.Widget
+	state *errorBoundaryState
+	child core.Widget
 }
 
 func (e errorBoundaryScope) CreateElement() core.Element {
@@ -163,8 +163,8 @@ func (e errorBoundaryScope) Key() any {
 	return nil
 }
 
-func (e errorBoundaryScope) Child() core.Widget {
-	return e.childWidget
+func (e errorBoundaryScope) ChildWidget() core.Widget {
+	return e.child
 }
 
 func (e errorBoundaryScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
@@ -236,8 +236,8 @@ func ErrorBoundaryOf(ctx core.BuildContext) *errorBoundaryState {
 
 // errorBoundaryRenderWidget creates a render object that catches layout/paint/hittest panics.
 type errorBoundaryRenderWidget struct {
-	state       *errorBoundaryState
-	childWidget core.Widget
+	state *errorBoundaryState
+	child core.Widget
 }
 
 func (e errorBoundaryRenderWidget) CreateElement() core.Element {
@@ -248,8 +248,8 @@ func (e errorBoundaryRenderWidget) Key() any {
 	return nil
 }
 
-func (e errorBoundaryRenderWidget) Child() core.Widget {
-	return e.childWidget
+func (e errorBoundaryRenderWidget) ChildWidget() core.Widget {
+	return e.child
 }
 
 func (e errorBoundaryRenderWidget) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

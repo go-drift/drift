@@ -154,16 +154,16 @@ type FlexFactor interface {
 //
 //	Row{
 //	    MainAxisSize: MainAxisSizeMax,
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        Text{Content: "Label"},
-//	        Expanded{ChildWidget: TextField{...}}, // Takes remaining space
+//	        Expanded{Child: TextField{...}}, // Takes remaining space
 //	        Button{...},
 //	    },
 //	}
 //
 // For vertical layout, use [Column].
 type Row struct {
-	ChildrenWidgets    []core.Widget
+	Children           []core.Widget
 	MainAxisAlignment  MainAxisAlignment
 	CrossAxisAlignment CrossAxisAlignment
 	MainAxisSize       MainAxisSize
@@ -173,7 +173,7 @@ type Row struct {
 // This is a convenience helper for the common case of creating a Row with children.
 func RowOf(alignment MainAxisAlignment, crossAlignment CrossAxisAlignment, size MainAxisSize, children ...core.Widget) Row {
 	return Row{
-		ChildrenWidgets:    children,
+		Children:           children,
 		MainAxisAlignment:  alignment,
 		CrossAxisAlignment: crossAlignment,
 		MainAxisSize:       size,
@@ -188,8 +188,8 @@ func (r Row) Key() any {
 	return nil
 }
 
-func (r Row) Children() []core.Widget {
-	return r.ChildrenWidgets
+func (r Row) ChildrenWidgets() []core.Widget {
+	return r.Children
 }
 
 func (r Row) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
@@ -237,16 +237,16 @@ func (r Row) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Rende
 //
 //	Column{
 //	    MainAxisSize: MainAxisSizeMax,
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        Text{Content: "Header"},
-//	        Expanded{ChildWidget: ListView{...}}, // Takes remaining space
+//	        Expanded{Child: ListView{...}}, // Takes remaining space
 //	        Text{Content: "Footer"},
 //	    },
 //	}
 //
 // For horizontal layout, use [Row].
 type Column struct {
-	ChildrenWidgets    []core.Widget
+	Children           []core.Widget
 	MainAxisAlignment  MainAxisAlignment
 	CrossAxisAlignment CrossAxisAlignment
 	MainAxisSize       MainAxisSize
@@ -256,7 +256,7 @@ type Column struct {
 // This is a convenience helper for the common case of creating a Column with children.
 func ColumnOf(alignment MainAxisAlignment, crossAlignment CrossAxisAlignment, size MainAxisSize, children ...core.Widget) Column {
 	return Column{
-		ChildrenWidgets:    children,
+		Children:           children,
 		MainAxisAlignment:  alignment,
 		CrossAxisAlignment: crossAlignment,
 		MainAxisSize:       size,
@@ -271,8 +271,8 @@ func (c Column) Key() any {
 	return nil
 }
 
-func (c Column) Children() []core.Widget {
-	return c.ChildrenWidgets
+func (c Column) ChildrenWidgets() []core.Widget {
+	return c.Children
 }
 
 func (c Column) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

@@ -18,7 +18,7 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 
     return widgets.Container{
         Color:       colors.Surface,
-        ChildWidget: widgets.Text{Content: "Hello", Style: textTheme.HeadlineLarge},
+        Child: widgets.Text{Content: "Hello", Style: textTheme.HeadlineLarge},
     }
 }
 ```
@@ -40,7 +40,7 @@ Wrap your app with a Theme widget:
 ```go
 theme.Theme{
     Data: theme.DefaultDarkTheme(),  // or DefaultLightTheme()
-    ChildWidget: myApp,
+    Child: myApp,
 }
 ```
 
@@ -80,7 +80,7 @@ colors := theme.ColorsOf(ctx)
 
 widgets.Container{
     Color:       colors.Surface,
-    ChildWidget: child,
+    Child: child,
 }
 
 widgets.Text{Content: "Error!", Style: graphics.TextStyle{
@@ -142,7 +142,7 @@ myTheme := theme.ThemeData{
 
 theme.Theme{
     Data:        myTheme,
-    ChildWidget: myApp,
+    Child: myApp,
 }
 ```
 
@@ -166,8 +166,8 @@ func (s *appState) Build(ctx core.BuildContext) core.Widget {
 
     return theme.Theme{
         Data: themeData,
-        ChildWidget: widgets.Column{
-            ChildrenWidgets: []core.Widget{
+        Child: widgets.Column{
+            Children: []core.Widget{
                 widgets.Switch{
                     Value: s.isDark,
                     OnChanged: func(value bool) {
@@ -190,13 +190,13 @@ Override theme for a subtree:
 ```go
 theme.Theme{
     Data: theme.DefaultLightTheme(),
-    ChildWidget: widgets.Column{
-        ChildrenWidgets: []core.Widget{
+    Child: widgets.Column{
+        Children: []core.Widget{
             lightContent,
             // Dark section within light app
             theme.Theme{
                 Data: theme.DefaultDarkTheme(),
-                ChildWidget: darkSection,
+                Child: darkSection,
             },
         },
     },
@@ -237,7 +237,7 @@ require you to set their colors, sizes, and text styles.
 ```go
 func (s *myState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Column{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             // Themed button - reads colors, padding, etc. from theme
             theme.ButtonOf(ctx, "Save", s.onSave),
 
@@ -276,7 +276,7 @@ _, colors, textTheme := theme.UseTheme(ctx)
 widgets.Container{
     Color:   colors.Surface,
     Padding: layout.EdgeInsetsAll(16),
-    ChildWidget: widgets.Text{
+    Child: widgets.Text{
         Content: "Hello",
         Style:   textTheme.BodyLarge,
     },
@@ -285,7 +285,7 @@ widgets.Container{
 widgets.DecoratedBox{
     Color:        colors.SurfaceVariant,
     BorderRadius: 8,
-    ChildWidget:  content,
+    Child:  content,
 }
 ```
 

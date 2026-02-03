@@ -16,8 +16,8 @@ type DropdownItem[T any] struct {
 	Value T
 	// Label is the text shown for the item.
 	Label string
-	// ChildWidget overrides the label when provided.
-	ChildWidget core.Widget
+	// Child overrides the label when provided.
+	Child core.Widget
 	// Disabled disables selection when true.
 	Disabled bool
 }
@@ -58,7 +58,7 @@ type DropdownItem[T any] struct {
 // Dropdown is a generic widget where T is the type of the selection value.
 // When an item is selected, OnChanged is called with the selected item's Value.
 //
-// Each [DropdownItem] can have a custom ChildWidget instead of a text Label.
+// Each [DropdownItem] can have a custom Child instead of a text Label.
 // Items can be individually disabled by setting Disabled: true.
 type Dropdown[T any] struct {
 	// Value is the current selected value.
@@ -280,7 +280,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 	for _, item := range w.Items {
 		if reflect.DeepEqual(item.Value, w.Value) {
 			selectedLabel = item.Label
-			selectedChild = item.ChildWidget
+			selectedChild = item.Child
 			break
 		}
 	}
@@ -315,17 +315,17 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		MainAxisAlignmentSpaceBetween,
 		CrossAxisAlignmentCenter,
 		MainAxisSizeMax,
-		Padding{Padding: layout.EdgeInsetsOnly(0, 0, 8, 0), ChildWidget: displayChild},
-		SizedBox{Width: iconSize + 8, ChildWidget: dropdownChevron{size: iconSize * 0.6, color: textStyle.Color}},
+		Padding{Padding: layout.EdgeInsetsOnly(0, 0, 8, 0), Child: displayChild},
+		SizedBox{Width: iconSize + 8, Child: dropdownChevron{size: iconSize * 0.6, color: textStyle.Color}},
 	)
 
 	trigger := GestureDetector{
 		OnTap: toggle,
-		ChildWidget: Container{
-			Width:       width,
-			Height:      itemHeight,
-			Padding:     contentPadding,
-			ChildWidget: triggerContent,
+		Child: Container{
+			Width:   width,
+			Height:  itemHeight,
+			Padding: contentPadding,
+			Child:   triggerContent,
 		},
 	}
 
@@ -334,23 +334,23 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		BorderColor:  borderColor,
 		BorderWidth:  1,
 		BorderRadius: borderRadius,
-		ChildWidget:  trigger,
+		Child:        trigger,
 	}
 
 	// Fall back to opacity if no disabled text color provided
 	if useOpacityFallback {
-		triggerBox = Opacity{Opacity: 0.5, ChildWidget: triggerBox}
+		triggerBox = Opacity{Opacity: 0.5, Child: triggerBox}
 	}
 
 	if !s.expanded {
-		return dropdownScope{owner: s, childWidget: triggerBox}
+		return dropdownScope{owner: s, child: triggerBox}
 	}
 
 	menuItems := make([]core.Widget, 0, len(w.Items))
 	for _, item := range w.Items {
 		itemEnabled := enabled && !item.Disabled
 		itemLabel := item.Label
-		itemChild := item.ChildWidget
+		itemChild := item.Child
 		if itemChild == nil {
 			itemChild = Text{Content: itemLabel, Style: textStyle}
 		}
@@ -373,16 +373,16 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 					}
 				}
 			}(item.Value, itemEnabled),
-			ChildWidget: Container{
+			Child: Container{
 				Color: itemBackground,
-				ChildWidget: SizedBox{
+				Child: SizedBox{
 					Width:  width,
 					Height: itemHeight,
-					ChildWidget: RowOf(
+					Child: RowOf(
 						MainAxisAlignmentStart,
 						CrossAxisAlignmentCenter,
 						MainAxisSizeMax,
-						Padding{Padding: contentPadding, ChildWidget: itemChild},
+						Padding{Padding: contentPadding, Child: itemChild},
 					),
 				},
 			},
@@ -394,7 +394,7 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		BorderColor:  menuBorderColor,
 		BorderWidth:  1,
 		BorderRadius: borderRadius,
-		ChildWidget:  ColumnOf(MainAxisAlignmentStart, CrossAxisAlignmentStretch, MainAxisSizeMin, menuItems...),
+		Child:        ColumnOf(MainAxisAlignmentStart, CrossAxisAlignmentStretch, MainAxisSizeMin, menuItems...),
 	}
 
 	content := ColumnOf(
@@ -403,15 +403,15 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		MainAxisSizeMin,
 		triggerBox,
 		VSpace(6),
-		SizedBox{Width: width, ChildWidget: menu},
+		SizedBox{Width: width, Child: menu},
 	)
 
-	return dropdownScope{owner: s, childWidget: content}
+	return dropdownScope{owner: s, child: content}
 }
 
 type dropdownScope struct {
-	childWidget core.Widget
-	owner       dropdownCloser
+	child core.Widget
+	owner dropdownCloser
 }
 
 func (d dropdownScope) CreateElement() core.Element {
@@ -422,8 +422,8 @@ func (d dropdownScope) Key() any {
 	return nil
 }
 
-func (d dropdownScope) Child() core.Widget {
-	return d.childWidget
+func (d dropdownScope) ChildWidget() core.Widget {
+	return d.child
 }
 
 func (d dropdownScope) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

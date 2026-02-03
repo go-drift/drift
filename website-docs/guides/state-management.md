@@ -37,7 +37,7 @@ func (s *counterState) InitState() {
 
 func (s *counterState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Column{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Text{Content: fmt.Sprintf("Count: %d", s.count)},
             theme.ButtonOf(ctx, "Increment", func() {
                 s.SetState(func() {
@@ -124,7 +124,7 @@ func (s *myState) InitState() {
 
 func (s *myState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Column{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Text{Content: fmt.Sprintf("Count: %d", s.count.Get())},
             theme.ButtonOf(ctx, "Increment", func() {
                 s.count.Set(s.count.Get() + 1) // Automatically triggers rebuild
@@ -230,7 +230,7 @@ For most cases, use `InheritedProvider[T]` to eliminate boilerplate:
 func App() core.Widget {
     return core.InheritedProvider[*User]{
         Value:       currentUser,
-        ChildWidget: MainContent{},
+        Child: MainContent{},
     }
 }
 
@@ -259,7 +259,7 @@ Use `ShouldNotify` when you need custom comparison logic:
 ```go
 core.InheritedProvider[*User]{
     Value:       currentUser,
-    ChildWidget: MainContent{},
+    Child: MainContent{},
     ShouldNotify: func(old, new *User) bool {
         // Only rebuild when ID changes, ignore name updates
         return old.ID != new.ID
@@ -275,7 +275,7 @@ For advanced use cases like aspect-based dependency tracking, implement a custom
 // Define the inherited widget
 type UserProvider struct {
     User        *User
-    ChildWidget core.Widget
+    Child       core.Widget
 }
 
 func (u UserProvider) CreateElement() core.Element {
@@ -284,7 +284,7 @@ func (u UserProvider) CreateElement() core.Element {
 
 func (u UserProvider) Key() any { return nil }
 
-func (u UserProvider) Child() core.Widget { return u.ChildWidget }
+func (u UserProvider) ChildWidget() core.Widget { return u.Child }
 
 // UpdateShouldNotify is called when this widget updates. Return true to
 // rebuild all dependents, false to skip rebuilding entirely.

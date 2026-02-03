@@ -47,16 +47,16 @@ import (
 //
 //	var selected string = "small"
 //
-//	Column{ChildrenWidgets: []core.Widget{
-//	    Row{ChildrenWidgets: []core.Widget{
+//	Column{Children: []core.Widget{
+//	    Row{Children: []core.Widget{
 //	        Radio[string]{Value: "small", GroupValue: selected, OnChanged: onSelect},
 //	        Text{Content: "Small"},
 //	    }},
-//	    Row{ChildrenWidgets: []core.Widget{
+//	    Row{Children: []core.Widget{
 //	        Radio[string]{Value: "medium", GroupValue: selected, OnChanged: onSelect},
 //	        Text{Content: "Medium"},
 //	    }},
-//	    Row{ChildrenWidgets: []core.Widget{
+//	    Row{Children: []core.Widget{
 //	        Radio[string]{Value: "large", GroupValue: selected, OnChanged: onSelect},
 //	        Text{Content: "Large"},
 //	    }},
@@ -142,7 +142,7 @@ func (r Radio[T]) Build(ctx core.BuildContext) core.Widget {
 
 	// Fall back to opacity if no disabled colors provided
 	if useOpacityFallback {
-		result = Opacity{Opacity: 0.5, ChildWidget: result}
+		result = Opacity{Opacity: 0.5, Child: result}
 	}
 
 	return result

@@ -14,8 +14,8 @@ func TestPadding_ChildOffset(t *testing.T) {
 	tester.SetSize(graphics.Size{Width: 200, Height: 200})
 
 	tester.PumpWidget(widgets.Padding{
-		Padding:     layout.EdgeInsetsAll(16),
-		ChildWidget: widgets.Text{Content: "padded"},
+		Padding: layout.EdgeInsetsAll(16),
+		Child:   widgets.Text{Content: "padded"},
 	})
 
 	result := tester.Find(drifttest.ByType[widgets.Text]())
@@ -39,9 +39,9 @@ func TestPadding_Size(t *testing.T) {
 	// Wrap in Center to give the Padding loose constraints, so it can
 	// size to its content rather than being forced to the tester surface size.
 	tester.PumpWidget(widgets.Center{
-		ChildWidget: widgets.Padding{
-			Padding:     layout.EdgeInsetsOnly(10, 20, 30, 40),
-			ChildWidget: widgets.SizedBox{Width: 50, Height: 50},
+		Child: widgets.Padding{
+			Padding: layout.EdgeInsetsOnly(10, 20, 30, 40),
+			Child:   widgets.SizedBox{Width: 50, Height: 50},
 		},
 	})
 
@@ -61,8 +61,8 @@ func TestPadding_ConstraintDeflation(t *testing.T) {
 	tester.SetSize(graphics.Size{Width: 200, Height: 200})
 
 	tester.PumpWidget(widgets.Padding{
-		Padding:     layout.EdgeInsetsAll(20),
-		ChildWidget: widgets.SizedBox{Width: 500, Height: 500},
+		Padding: layout.EdgeInsetsAll(20),
+		Child:   widgets.SizedBox{Width: 500, Height: 500},
 	})
 
 	result := tester.Find(drifttest.ByType[widgets.Padding]())
@@ -81,8 +81,8 @@ func TestPadding_DisplayOps_Translate(t *testing.T) {
 	tester := drifttest.NewWidgetTesterWithT(t)
 
 	tester.PumpWidget(widgets.Padding{
-		Padding:     layout.EdgeInsetsAll(8),
-		ChildWidget: widgets.Text{Content: "offset"},
+		Padding: layout.EdgeInsetsAll(8),
+		Child:   widgets.Text{Content: "offset"},
 	})
 
 	snap := tester.CaptureSnapshot()

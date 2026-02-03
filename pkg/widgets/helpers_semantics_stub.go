@@ -9,12 +9,12 @@ import "github.com/go-drift/drift/pkg/core"
 
 // Tappable creates a tappable widget.
 func Tappable(label string, onTap func(), child core.Widget) GestureDetector {
-	return GestureDetector{OnTap: onTap, ChildWidget: child}
+	return GestureDetector{OnTap: onTap, Child: child}
 }
 
 // TappableWithHint creates a tappable widget with hint.
 func TappableWithHint(label, hint string, onTap func(), child core.Widget) GestureDetector {
-	return GestureDetector{OnTap: onTap, ChildWidget: child}
+	return GestureDetector{OnTap: onTap, Child: child}
 }
 
 // SemanticLabel wraps a child with an accessibility label (no-op on desktop).
@@ -34,7 +34,7 @@ func SemanticHeading(level int, child core.Widget) core.Widget {
 
 // SemanticLink marks a widget as a link.
 func SemanticLink(label string, onTap func(), child core.Widget) GestureDetector {
-	return GestureDetector{OnTap: onTap, ChildWidget: child}
+	return GestureDetector{OnTap: onTap, Child: child}
 }
 
 // SemanticGroup groups widgets into a single accessibility unit (no-op on desktop).

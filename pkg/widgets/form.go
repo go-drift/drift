@@ -34,7 +34,7 @@ import (
 //	    OnChanged: func() {
 //	        // Called when any field changes
 //	    },
-//	    ChildWidget: Column{
+//	    Child: Column{
 //	        Children: []core.Widget{
 //	            TextFormField{Label: "Email", Validator: validateEmail},
 //	            TextFormField{Label: "Password", Obscure: true},
@@ -50,8 +50,8 @@ import (
 //	    },
 //	}
 type Form struct {
-	// ChildWidget is the form content.
-	ChildWidget core.Widget
+	// Child is the form content.
+	Child core.Widget
 	// Autovalidate runs validators when fields change.
 	Autovalidate bool
 	// OnChanged is called when any field changes.
@@ -110,7 +110,7 @@ func (s *FormState) Build(ctx core.BuildContext) core.Widget {
 	s.autovalidate = w.Autovalidate
 	s.onChanged = w.OnChanged
 	s.isInitialized = true
-	return formScope{state: s, generation: s.generation, childWidget: w.ChildWidget}
+	return formScope{state: s, generation: s.generation, child: w.Child}
 }
 
 // SetState executes fn and schedules rebuild.
@@ -318,9 +318,9 @@ func (s *formFieldStateBase) resetState() {
 }
 
 type formScope struct {
-	state       *FormState
-	generation  int
-	childWidget core.Widget
+	state      *FormState
+	generation int
+	child      core.Widget
 }
 
 func (f formScope) CreateElement() core.Element {
@@ -331,8 +331,8 @@ func (f formScope) Key() any {
 	return nil
 }
 
-func (f formScope) Child() core.Widget {
-	return f.childWidget
+func (f formScope) ChildWidget() core.Widget {
+	return f.child
 }
 
 func (f formScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {

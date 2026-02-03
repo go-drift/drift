@@ -19,7 +19,7 @@ import (
 //
 //	GestureDetector{
 //	    OnTap: func() { handleTap() },
-//	    ChildWidget: Container{Color: colors.Blue, ChildWidget: icon},
+//	    Child: Container{Color: colors.Blue, Child: icon},
 //	}
 //
 // Example (draggable widget):
@@ -28,13 +28,13 @@ import (
 //	    OnPanStart:  func(d DragStartDetails) { ... },
 //	    OnPanUpdate: func(d DragUpdateDetails) { ... },
 //	    OnPanEnd:    func(d DragEndDetails) { ... },
-//	    ChildWidget: draggableItem,
+//	    Child:       draggableItem,
 //	}
 //
 // For simple tap handling on buttons, prefer [Button] or [InkWell] which
 // provide visual feedback. GestureDetector is best for custom gestures.
 type GestureDetector struct {
-	ChildWidget core.Widget
+	Child       core.Widget
 	OnTap       func()
 	OnPanStart  func(DragStartDetails)
 	OnPanUpdate func(DragUpdateDetails)
@@ -60,8 +60,8 @@ func (g GestureDetector) Key() any {
 	return nil
 }
 
-func (g GestureDetector) Child() core.Widget {
-	return g.ChildWidget
+func (g GestureDetector) ChildWidget() core.Widget {
+	return g.Child
 }
 
 func (g GestureDetector) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

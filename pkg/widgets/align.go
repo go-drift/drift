@@ -17,16 +17,16 @@ import (
 // Example:
 //
 //	Align{
-//	    Alignment:   layout.AlignmentBottomRight,
-//	    ChildWidget: Text{Content: "Bottom right"},
+//	    Alignment: layout.AlignmentBottomRight,
+//	    Child:     Text{Content: "Bottom right"},
 //	}
 //
 // See also:
 //   - [Center] for centering (equivalent to Align with AlignmentCenter)
 //   - [Container] for combined alignment, padding, and decoration
 type Align struct {
-	ChildWidget core.Widget
-	Alignment   layout.Alignment
+	Child     core.Widget
+	Alignment layout.Alignment
 }
 
 func (a Align) CreateElement() core.Element {
@@ -37,8 +37,8 @@ func (a Align) Key() any {
 	return nil
 }
 
-func (a Align) Child() core.Widget {
-	return a.ChildWidget
+func (a Align) ChildWidget() core.Widget {
+	return a.Child
 }
 
 func (a Align) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

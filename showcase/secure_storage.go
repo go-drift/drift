@@ -103,7 +103,7 @@ func (s *secureStorageState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Row{
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Save", func() {
 					s.saveValue()
 				}),
@@ -199,7 +199,7 @@ func retrievedValueCard(value string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		ChildWidget: widgets.PaddingAll(12,
+		Child: widgets.PaddingAll(12,
 			widgets.ColumnOf(
 				widgets.MainAxisAlignmentStart,
 				widgets.CrossAxisAlignmentStart,

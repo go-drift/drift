@@ -12,7 +12,7 @@ import (
 // Semantics is a no-op widget on non-mobile platforms.
 // It just passes through to its child.
 type Semantics struct {
-	ChildWidget          core.Widget
+	Child                core.Widget
 	Label                string
 	Value                string
 	Hint                 string
@@ -56,8 +56,8 @@ func (s Semantics) CreateRenderObject(ctx core.BuildContext) layout.RenderObject
 func (s Semantics) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 }
 
-func (s Semantics) Child() core.Widget {
-	return s.ChildWidget
+func (s Semantics) ChildWidget() core.Widget {
+	return s.Child
 }
 
 type renderSemanticsStub struct {
@@ -102,7 +102,7 @@ func (r *renderSemanticsStub) HitTest(position graphics.Offset, result *layout.H
 
 // MergeSemantics is a no-op widget on non-mobile platforms.
 type MergeSemantics struct {
-	ChildWidget core.Widget
+	Child core.Widget
 }
 
 func (m MergeSemantics) CreateElement() core.Element {
@@ -122,8 +122,8 @@ func (m MergeSemantics) CreateRenderObject(ctx core.BuildContext) layout.RenderO
 func (m MergeSemantics) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 }
 
-func (m MergeSemantics) Child() core.Widget {
-	return m.ChildWidget
+func (m MergeSemantics) ChildWidget() core.Widget {
+	return m.Child
 }
 
 type renderMergeSemanticsStub struct {
@@ -168,13 +168,13 @@ func (r *renderMergeSemanticsStub) HitTest(position graphics.Offset, result *lay
 
 // ExcludeSemantics is a no-op on non-mobile platforms.
 type ExcludeSemantics struct {
-	ChildWidget core.Widget
-	Excluding   bool
+	Child     core.Widget
+	Excluding bool
 }
 
 // NewExcludeSemantics creates an ExcludeSemantics widget (no-op on non-mobile platforms).
 func NewExcludeSemantics(child core.Widget) ExcludeSemantics {
-	return ExcludeSemantics{Excluding: true, ChildWidget: child}
+	return ExcludeSemantics{Excluding: true, Child: child}
 }
 
 func (e ExcludeSemantics) CreateElement() core.Element {
@@ -194,8 +194,8 @@ func (e ExcludeSemantics) CreateRenderObject(ctx core.BuildContext) layout.Rende
 func (e ExcludeSemantics) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 }
 
-func (e ExcludeSemantics) Child() core.Widget {
-	return e.ChildWidget
+func (e ExcludeSemantics) ChildWidget() core.Widget {
+	return e.Child
 }
 
 type renderExcludeSemanticsStub struct {

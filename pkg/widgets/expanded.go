@@ -20,10 +20,10 @@ import (
 //
 //	Row{
 //	    MainAxisSize: MainAxisSizeMax,
-//	    ChildrenWidgets: []core.Widget{
-//	        Icon{...},                                    // Fixed size
-//	        Expanded{ChildWidget: Text{Content: "..."}},  // Fills remaining space
-//	        Button{...},                                   // Fixed size
+//	    Children: []core.Widget{
+//	        Icon{...},                                // Fixed size
+//	        Expanded{Child: Text{Content: "..."}},   // Fills remaining space
+//	        Button{...},                              // Fixed size
 //	    },
 //	}
 //
@@ -31,14 +31,14 @@ import (
 //
 //	Row{
 //	    MainAxisSize: MainAxisSizeMax,
-//	    ChildrenWidgets: []core.Widget{
-//	        Expanded{Flex: 1, ChildWidget: panelA}, // Gets 1/3 of space
-//	        Expanded{Flex: 2, ChildWidget: panelB}, // Gets 2/3 of space
+//	    Children: []core.Widget{
+//	        Expanded{Flex: 1, Child: panelA}, // Gets 1/3 of space
+//	        Expanded{Flex: 2, Child: panelB}, // Gets 2/3 of space
 //	    },
 //	}
 type Expanded struct {
-	ChildWidget core.Widget
-	Flex        int
+	Child core.Widget
+	Flex  int
 }
 
 // CreateElement returns a RenderObjectElement for this Expanded.
@@ -51,9 +51,9 @@ func (e Expanded) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (e Expanded) Child() core.Widget {
-	return e.ChildWidget
+// ChildWidget returns the child widget.
+func (e Expanded) ChildWidget() core.Widget {
+	return e.Child
 }
 
 // CreateRenderObject creates the renderExpanded.

@@ -42,7 +42,7 @@ func ExampleButton_withStyles() {
 // This example shows how to create a horizontal layout with Row.
 func ExampleRow() {
 	row := widgets.Row{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: "Left"},
 			widgets.Text{Content: "Center"},
 			widgets.Text{Content: "Right"},
@@ -56,7 +56,7 @@ func ExampleRow() {
 // This example shows how to create a vertical layout with Column.
 func ExampleColumn() {
 	column := widgets.Column{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: "First"},
 			widgets.Text{Content: "Second"},
 			widgets.Text{Content: "Third"},
@@ -87,7 +87,7 @@ func ExampleContainer() {
 		Color:   graphics.RGB(245, 245, 245),
 		Width:   200,
 		Height:  100,
-		ChildWidget: widgets.Text{
+		Child: widgets.Text{
 			Content: "Centered content",
 		},
 		Alignment: layout.AlignmentCenter,
@@ -118,8 +118,8 @@ func ExampleListViewBuilder() {
 		ItemExtent: 48,
 		ItemBuilder: func(ctx core.BuildContext, index int) core.Widget {
 			return widgets.Container{
-				Padding:     layout.EdgeInsetsSymmetric(16, 12),
-				ChildWidget: widgets.Text{Content: items[index]},
+				Padding: layout.EdgeInsetsSymmetric(16, 12),
+				Child:   widgets.Text{Content: items[index]},
 			}
 		},
 		Padding: layout.EdgeInsetsAll(8),
@@ -130,9 +130,9 @@ func ExampleListViewBuilder() {
 // This example shows how to create scrollable content.
 func ExampleScrollView() {
 	scrollView := widgets.ScrollView{
-		ChildWidget: widgets.Column{
-			ChildrenWidgets: []core.Widget{
-				widgets.SizedBox{Height: 1000, ChildWidget: widgets.Text{Content: "Tall content"}},
+		Child: widgets.Column{
+			Children: []core.Widget{
+				widgets.SizedBox{Height: 1000, Child: widgets.Text{Content: "Tall content"}},
 			},
 		},
 		ScrollDirection: widgets.AxisVertical,
@@ -148,10 +148,10 @@ func ExampleGestureDetector() {
 		OnTap: func() {
 			fmt.Println("Tapped!")
 		},
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color:   graphics.RGB(200, 200, 200),
 			Padding: layout.EdgeInsetsAll(20),
-			ChildWidget: widgets.Text{
+			Child: widgets.Text{
 				Content: "Tap me",
 			},
 		},
@@ -178,7 +178,7 @@ func ExampleCheckbox() {
 // This example shows how to create a stack with overlapping children.
 func ExampleStack() {
 	stack := widgets.Stack{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			// Background
 			widgets.Container{
 				Color:  graphics.RGB(200, 200, 200),
@@ -200,7 +200,7 @@ func ExampleStack() {
 // This example shows a Stack with Positioned children for absolute positioning.
 func ExampleStack_withPositioned() {
 	stack := widgets.Stack{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			// Background fills the stack
 			widgets.Container{
 				Color:  graphics.RGB(240, 240, 240),
@@ -211,7 +211,7 @@ func ExampleStack_withPositioned() {
 			widgets.Positioned{
 				Top:   widgets.Ptr(8),
 				Right: widgets.Ptr(8),
-				ChildWidget: widgets.Container{
+				Child: widgets.Container{
 					Color:   graphics.RGB(255, 0, 0),
 					Width:   20,
 					Height:  20,
@@ -223,7 +223,7 @@ func ExampleStack_withPositioned() {
 				Left:   widgets.Ptr(0),
 				Right:  widgets.Ptr(0),
 				Bottom: widgets.Ptr(0),
-				ChildWidget: widgets.Container{
+				Child: widgets.Container{
 					Color:  graphics.RGB(33, 33, 33),
 					Height: 48,
 				},
@@ -239,7 +239,7 @@ func ExamplePositioned() {
 	topLeft := widgets.Positioned{
 		Left: widgets.Ptr(8),
 		Top:  widgets.Ptr(8),
-		ChildWidget: widgets.Text{
+		Child: widgets.Text{
 			Content: "Top Left",
 		},
 	}
@@ -248,7 +248,7 @@ func ExamplePositioned() {
 	bottomRight := widgets.Positioned{
 		Right:  widgets.Ptr(16),
 		Bottom: widgets.Ptr(16),
-		ChildWidget: widgets.Text{
+		Child: widgets.Text{
 			Content: "Bottom Right",
 		},
 	}
@@ -259,7 +259,7 @@ func ExamplePositioned() {
 		Top:    widgets.Ptr(50),
 		Width:  widgets.Ptr(100),
 		Height: widgets.Ptr(60),
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color: graphics.RGB(100, 149, 237),
 		},
 	}
@@ -276,7 +276,7 @@ func ExamplePositioned_stretch() {
 		Left:  widgets.Ptr(16),
 		Right: widgets.Ptr(16),
 		Top:   widgets.Ptr(100),
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color:  graphics.RGB(200, 200, 200),
 			Height: 2, // Divider line
 		},
@@ -287,7 +287,7 @@ func ExamplePositioned_stretch() {
 		Top:    widgets.Ptr(50),
 		Bottom: widgets.Ptr(50),
 		Left:   widgets.Ptr(0),
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color: graphics.RGB(100, 100, 100),
 			Width: 4, // Vertical bar
 		},
@@ -299,7 +299,7 @@ func ExamplePositioned_stretch() {
 		Top:    widgets.Ptr(20),
 		Right:  widgets.Ptr(20),
 		Bottom: widgets.Ptr(20),
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color: graphics.RGBA(0, 0, 0, 0.5), // Semi-transparent overlay
 		},
 	}
@@ -315,19 +315,19 @@ func ExamplePositioned_partialAlignment() {
 	// With AlignmentCenter, this centers the header horizontally.
 	stack := widgets.Stack{
 		Alignment: layout.AlignmentCenter,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Container{Width: 300, Height: 200},
 			// Only Top is set, so X position comes from Stack.Alignment (centered)
 			widgets.Positioned{
 				Top: widgets.Ptr(16),
-				ChildWidget: widgets.Text{
+				Child: widgets.Text{
 					Content: "Centered Header",
 				},
 			},
 			// Only Left is set, so Y position comes from Stack.Alignment (centered)
 			widgets.Positioned{
 				Left: widgets.Ptr(8),
-				ChildWidget: widgets.Text{
+				Child: widgets.Text{
 					Content: "Left Sidebar",
 				},
 			},
@@ -339,12 +339,12 @@ func ExamplePositioned_partialAlignment() {
 // This example shows how to use Expanded for flexible sizing in Row/Column.
 func ExampleRow_withExpanded() {
 	row := widgets.Row{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			// Fixed width
 			widgets.Container{Width: 80, Color: graphics.RGB(200, 200, 200)},
 			// Flexible - takes remaining space
 			widgets.Expanded{
-				ChildWidget: widgets.Container{Color: graphics.RGB(100, 149, 237)},
+				Child: widgets.Container{Color: graphics.RGB(100, 149, 237)},
 			},
 			// Fixed width
 			widgets.Container{Width: 80, Color: graphics.RGB(200, 200, 200)},
@@ -356,13 +356,13 @@ func ExampleRow_withExpanded() {
 // This example shows flexible children in a vertical layout.
 func ExampleColumn_withExpanded() {
 	column := widgets.Column{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			// Fixed header
 			widgets.Container{Height: 60, Color: graphics.RGB(33, 33, 33)},
 			// Content takes remaining space
 			widgets.Expanded{
-				ChildWidget: widgets.ScrollView{
-					ChildWidget: widgets.Text{Content: "Scrollable content..."},
+				Child: widgets.ScrollView{
+					Child: widgets.Text{Content: "Scrollable content..."},
 				},
 			},
 			// Fixed footer
@@ -378,14 +378,14 @@ func ExampleListView() {
 	children := make([]core.Widget, len(items))
 	for i, item := range items {
 		children[i] = widgets.Container{
-			Padding:     layout.EdgeInsetsSymmetric(16, 12),
-			ChildWidget: widgets.Text{Content: item},
+			Padding: layout.EdgeInsetsSymmetric(16, 12),
+			Child:   widgets.Text{Content: item},
 		}
 	}
 
 	listView := widgets.ListView{
-		ChildrenWidgets: children,
-		Padding:         layout.EdgeInsetsAll(8),
+		Children: children,
+		Padding:  layout.EdgeInsetsAll(8),
 	}
 	_ = listView
 }
@@ -397,9 +397,9 @@ func ExampleScrollView_withController() {
 
 	scrollView := widgets.ScrollView{
 		Controller: controller,
-		ChildWidget: widgets.Column{
-			ChildrenWidgets: []core.Widget{
-				widgets.SizedBox{Height: 2000, ChildWidget: widgets.Text{Content: "Long content"}},
+		Child: widgets.Column{
+			Children: []core.Widget{
+				widgets.SizedBox{Height: 2000, Child: widgets.Text{Content: "Long content"}},
 			},
 		},
 	}
@@ -431,7 +431,7 @@ func ExampleContainer_withGradient() {
 			BlurRadius: 8,
 			Offset:     graphics.Offset{X: 0, Y: 4},
 		},
-		ChildWidget: widgets.Center{ChildWidget: widgets.Text{Content: "Gradient Card"}},
+		Child: widgets.Center{Child: widgets.Text{Content: "Gradient Card"}},
 	}
 	_ = container
 }
@@ -439,14 +439,14 @@ func ExampleContainer_withGradient() {
 // This example shows how to use Expanded for flexible sizing.
 func ExampleExpanded() {
 	row := widgets.Row{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: "Label:"},
 			widgets.HSpace(8),
 			// Expanded takes all remaining horizontal space
 			widgets.Expanded{
-				ChildWidget: widgets.Container{
-					Color:       graphics.RGB(240, 240, 240),
-					ChildWidget: widgets.Text{Content: "Flexible content"},
+				Child: widgets.Container{
+					Color: graphics.RGB(240, 240, 240),
+					Child: widgets.Text{Content: "Flexible content"},
 				},
 			},
 		},
@@ -457,16 +457,16 @@ func ExampleExpanded() {
 // This example shows proportional sizing with flex factors.
 func ExampleExpanded_flexFactors() {
 	row := widgets.Row{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			// Takes 1/3 of available space
 			widgets.Expanded{
-				Flex:        1,
-				ChildWidget: widgets.Container{Color: graphics.RGB(255, 0, 0)},
+				Flex:  1,
+				Child: widgets.Container{Color: graphics.RGB(255, 0, 0)},
 			},
 			// Takes 2/3 of available space
 			widgets.Expanded{
-				Flex:        2,
-				ChildWidget: widgets.Container{Color: graphics.RGB(0, 0, 255)},
+				Flex:  2,
+				Child: widgets.Container{Color: graphics.RGB(0, 0, 255)},
 			},
 		},
 	}
@@ -477,20 +477,20 @@ func ExampleExpanded_flexFactors() {
 func ExamplePadding() {
 	// Uniform padding on all sides
 	all := widgets.Padding{
-		Padding:     layout.EdgeInsetsAll(16),
-		ChildWidget: widgets.Text{Content: "All sides"},
+		Padding: layout.EdgeInsetsAll(16),
+		Child:   widgets.Text{Content: "All sides"},
 	}
 
 	// Symmetric horizontal/vertical padding
 	symmetric := widgets.Padding{
-		Padding:     layout.EdgeInsetsSymmetric(24, 12), // horizontal, vertical
-		ChildWidget: widgets.Text{Content: "Symmetric"},
+		Padding: layout.EdgeInsetsSymmetric(24, 12), // horizontal, vertical
+		Child:   widgets.Text{Content: "Symmetric"},
 	}
 
 	// Different padding per side
 	custom := widgets.Padding{
-		Padding:     layout.EdgeInsetsOnly(8, 16, 8, 0), // left, top, right, bottom
-		ChildWidget: widgets.Text{Content: "Custom"},
+		Padding: layout.EdgeInsetsOnly(8, 16, 8, 0), // left, top, right, bottom
+		Child:   widgets.Text{Content: "Custom"},
 	}
 
 	_ = all
@@ -501,7 +501,7 @@ func ExamplePadding() {
 // This example shows how to center a widget.
 func ExampleCenter() {
 	center := widgets.Center{
-		ChildWidget: widgets.Text{Content: "Centered!"},
+		Child: widgets.Text{Content: "Centered!"},
 	}
 	_ = center
 }
@@ -510,9 +510,9 @@ func ExampleCenter() {
 func ExampleSizedBox() {
 	// Fixed dimensions
 	box := widgets.SizedBox{
-		Width:       100,
-		Height:      50,
-		ChildWidget: widgets.Container{Color: graphics.RGB(200, 200, 200)},
+		Width:  100,
+		Height: 50,
+		Child:  widgets.Container{Color: graphics.RGB(200, 200, 200)},
 	}
 	_ = box
 }
@@ -520,7 +520,7 @@ func ExampleSizedBox() {
 // This example shows SizedBox as a spacer.
 func ExampleSizedBox_spacer() {
 	column := widgets.Column{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: "Top"},
 			widgets.SizedBox{Height: 16}, // Vertical spacer
 			widgets.Text{Content: "Bottom"},
@@ -528,7 +528,7 @@ func ExampleSizedBox_spacer() {
 	}
 
 	row := widgets.Row{
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: "Left"},
 			widgets.SizedBox{Width: 24}, // Horizontal spacer
 			widgets.Text{Content: "Right"},
@@ -556,7 +556,7 @@ func ExampleGestureDetector_drag() {
 			fmt.Printf("Drag ended with velocity: (%.0f, %.0f)\n",
 				details.Velocity.X, details.Velocity.Y)
 		},
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:  100,
 			Height: 100,
 			Color:  graphics.RGB(100, 149, 237),
@@ -619,7 +619,7 @@ func ExampleRadio() {
 	for i, option := range options {
 		opt := option // capture for closure
 		radios[i] = widgets.Row{
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Radio[string]{
 					Value:      opt,
 					GroupValue: selectedOption,
@@ -713,8 +713,8 @@ func ExampleForm() {
 		OnChanged: func() {
 			fmt.Println("Form changed")
 		},
-		ChildWidget: widgets.Column{
-			ChildrenWidgets: []core.Widget{
+		Child: widgets.Column{
+			Children: []core.Widget{
 				widgets.TextFormField{
 					Label: "Email",
 					Validator: func(value string) string {
@@ -752,7 +752,7 @@ func ExampleFormField() {
 		},
 		Builder: func(state *widgets.FormFieldState[bool]) core.Widget {
 			return widgets.Row{
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					widgets.Checkbox{
 						Value:     state.Value(),
 						OnChanged: func(v bool) { state.DidChange(v) },
@@ -792,7 +792,7 @@ func ExampleIndexedStack() {
 
 	indexedStack := widgets.IndexedStack{
 		Index: currentTab,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: "Home Tab Content"},
 			widgets.Text{Content: "Search Tab Content"},
 			widgets.Text{Content: "Profile Tab Content"},
@@ -830,7 +830,7 @@ func ExampleAnimatedContainer() {
 				return graphics.RGB(200, 200, 200)
 			}
 		}(),
-		ChildWidget: widgets.Center{ChildWidget: widgets.Text{Content: "Tap to toggle"}},
+		Child: widgets.Center{Child: widgets.Text{Content: "Tap to toggle"}},
 	}
 	_ = container
 }
@@ -849,7 +849,7 @@ func ExampleAnimatedOpacity() {
 				return 0.0
 			}
 		}(),
-		ChildWidget: widgets.Text{Content: "Fading content"},
+		Child: widgets.Text{Content: "Fading content"},
 	}
 	_ = opacity
 }
@@ -862,12 +862,12 @@ func ExampleErrorBoundary() {
 		},
 		FallbackBuilder: func(err *drifterrors.BoundaryError) core.Widget {
 			return widgets.Container{
-				Padding:     layout.EdgeInsetsAll(16),
-				Color:       graphics.RGBA(255, 0, 0, 0.13),
-				ChildWidget: widgets.Text{Content: "Something went wrong"},
+				Padding: layout.EdgeInsetsAll(16),
+				Color:   graphics.RGBA(255, 0, 0, 0.13),
+				Child:   widgets.Text{Content: "Something went wrong"},
 			}
 		},
-		ChildWidget: widgets.Text{Content: "Protected content"},
+		Child: widgets.Text{Content: "Protected content"},
 	}
 	_ = boundary
 }
@@ -879,9 +879,9 @@ func ExampleTappable() {
 		"Submit form", // accessibility label
 		func() { fmt.Println("Submitted!") },
 		widgets.Container{
-			Padding:     layout.EdgeInsetsAll(16),
-			Color:       graphics.RGB(33, 150, 243),
-			ChildWidget: widgets.Text{Content: "Submit"},
+			Padding: layout.EdgeInsetsAll(16),
+			Color:   graphics.RGB(33, 150, 243),
+			Child:   widgets.Text{Content: "Submit"},
 		},
 	)
 	_ = tappable
@@ -938,7 +938,7 @@ func ExampleSemanticGroup() {
 	// Groups related widgets so screen reader announces them together
 	group := widgets.SemanticGroup(
 		widgets.Row{
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Text{Content: "$"},
 				widgets.Text{Content: "99"},
 				widgets.Text{Content: ".99"},

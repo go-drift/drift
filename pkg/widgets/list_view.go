@@ -20,15 +20,15 @@ import (
 //
 //	ListView{
 //	    Padding: layout.EdgeInsetsAll(16),
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        ListTile{Title: "Item 1"},
 //	        ListTile{Title: "Item 2"},
 //	        ListTile{Title: "Item 3"},
 //	    },
 //	}
 type ListView struct {
-	// ChildrenWidgets are the widgets to display in the list.
-	ChildrenWidgets []core.Widget
+	// Children are the widgets to display in the list.
+	Children []core.Widget
 	// ScrollDirection is the axis along which the list scrolls. Defaults to vertical.
 	ScrollDirection Axis
 	// Controller manages scroll position and provides scroll notifications.
@@ -102,11 +102,11 @@ func (l ListView) Key() any {
 func (l ListView) Build(ctx core.BuildContext) core.Widget {
 	content := l.buildContent()
 	if l.Padding != (layout.EdgeInsets{}) {
-		content = Padding{Padding: l.Padding, ChildWidget: content}
+		content = Padding{Padding: l.Padding, Child: content}
 	}
 
 	return ScrollView{
-		ChildWidget:     content,
+		Child:           content,
 		ScrollDirection: l.ScrollDirection,
 		Controller:      l.Controller,
 		Physics:         l.Physics,
@@ -128,13 +128,13 @@ func (l ListViewBuilder) CreateState() core.State {
 func (l ListView) buildContent() core.Widget {
 	if l.ScrollDirection == AxisHorizontal {
 		return Row{
-			ChildrenWidgets:   l.ChildrenWidgets,
+			Children:          l.Children,
 			MainAxisAlignment: l.MainAxisAlignment,
 			MainAxisSize:      l.MainAxisSize,
 		}
 	}
 	return Column{
-		ChildrenWidgets:   l.ChildrenWidgets,
+		Children:          l.Children,
 		MainAxisAlignment: l.MainAxisAlignment,
 		MainAxisSize:      l.MainAxisSize,
 	}
@@ -174,7 +174,7 @@ func (s *listViewBuilderState) Build(ctx core.BuildContext) core.Widget {
 	s.updateVisibleRange(widgetValue)
 	children := widgetValue.buildChildren(ctx, s.controller, s.visibleStart, s.visibleEnd)
 	return ListView{
-		ChildrenWidgets:   children,
+		Children:          children,
 		ScrollDirection:   widgetValue.ScrollDirection,
 		Controller:        s.controller,
 		Physics:           widgetValue.Physics,
@@ -309,9 +309,9 @@ func (l ListViewBuilder) wrapItem(child core.Widget) core.Widget {
 		return l.buildSpacer(l.ItemExtent)
 	}
 	if l.ScrollDirection == AxisHorizontal {
-		return SizedBox{Width: l.ItemExtent, ChildWidget: child}
+		return SizedBox{Width: l.ItemExtent, Child: child}
 	}
-	return SizedBox{Height: l.ItemExtent, ChildWidget: child}
+	return SizedBox{Height: l.ItemExtent, Child: child}
 }
 
 func (l ListViewBuilder) buildSpacer(extent float64) core.Widget {

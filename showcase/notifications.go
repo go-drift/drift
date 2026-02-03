@@ -99,7 +99,7 @@ func (s *notificationsState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Text{Content: "Notification access:", Style: labelStyle(colors)},
 				permissionBadge(s.permissionStatus.Get(), colors),
 			},
@@ -184,7 +184,7 @@ func statusCard(text string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		ChildWidget: widgets.PaddingAll(12,
+		Child: widgets.PaddingAll(12,
 			widgets.Text{Content: text, Style: graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,

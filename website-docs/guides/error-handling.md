@@ -32,7 +32,7 @@ Then wrap widgets with an error boundary:
 
 ```go
 widgets.ErrorBoundary{
-    ChildWidget: riskyWidget,
+    Child: riskyWidget,
     FallbackBuilder: func(err *drifterrors.BoundaryError) core.Widget {
         return widgets.Text{Content: "Something went wrong"}
     },
@@ -54,10 +54,10 @@ Wrap specific subtrees to isolate failures while keeping the rest of the app run
 
 ```go
 widgets.Column{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         HeaderWidget{},  // Keeps working
         widgets.ErrorBoundary{
-            ChildWidget: RiskyWidget{},  // Isolated failure
+            Child: RiskyWidget{},  // Isolated failure
             FallbackBuilder: func(err *drifterrors.BoundaryError) core.Widget {
                 return widgets.Text{Content: "Failed to load"}
             },
@@ -74,7 +74,7 @@ Wrap your entire app to provide custom error UI in production:
 ```go
 func main() {
     drift.NewApp(widgets.ErrorBoundary{
-        ChildWidget: MyApp{},
+        Child: MyApp{},
         FallbackBuilder: func(err *drifterrors.BoundaryError) core.Widget {
             return MyCustomErrorScreen{Error: err}
         },

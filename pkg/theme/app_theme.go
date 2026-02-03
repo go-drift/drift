@@ -86,8 +86,8 @@ func (a *AppThemeData) Copy() *AppThemeData {
 
 // AppTheme provides unified theme data via InheritedWidget.
 type AppTheme struct {
-	Data        *AppThemeData
-	ChildWidget core.Widget
+	Data  *AppThemeData
+	Child core.Widget
 }
 
 // CreateElement returns an InheritedElement for this AppTheme.
@@ -100,9 +100,9 @@ func (a AppTheme) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (a AppTheme) Child() core.Widget {
-	return a.ChildWidget
+// ChildWidget returns the child widget.
+func (a AppTheme) ChildWidget() core.Widget {
+	return a.Child
 }
 
 // UpdateShouldNotify returns true if the theme data has changed.

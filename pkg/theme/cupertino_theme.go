@@ -10,8 +10,8 @@ import (
 type CupertinoTheme struct {
 	// Data is the Cupertino theme configuration.
 	Data *CupertinoThemeData
-	// ChildWidget is the child widget tree.
-	ChildWidget core.Widget
+	// Child is the child widget tree.
+	Child core.Widget
 }
 
 // CreateElement returns an InheritedElement for this CupertinoTheme.
@@ -24,9 +24,9 @@ func (t CupertinoTheme) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (t CupertinoTheme) Child() core.Widget {
-	return t.ChildWidget
+// ChildWidget returns the child widget.
+func (t CupertinoTheme) ChildWidget() core.Widget {
+	return t.Child
 }
 
 // UpdateShouldNotify returns true if the theme data has changed.

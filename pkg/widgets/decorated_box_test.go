@@ -19,7 +19,7 @@ func TestDecoratedBox_ChildClipping_RoundedCorners(t *testing.T) {
 		Color:        graphics.RGB(200, 200, 200),
 		BorderRadius: 12,
 		Overflow:     widgets.OverflowClip,
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:    100,
 			Height:   100,
 			Color:    graphics.RGB(255, 0, 0),
@@ -76,7 +76,7 @@ func TestDecoratedBox_ChildClipping_RectangularBounds(t *testing.T) {
 	tester.PumpWidget(widgets.DecoratedBox{
 		Color:    graphics.RGB(200, 200, 200),
 		Overflow: widgets.OverflowClip,
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:    100,
 			Height:   100,
 			Color:    graphics.RGB(0, 255, 0),
@@ -141,7 +141,7 @@ func TestDecoratedBox_OverflowVisible_NoChildClipping(t *testing.T) {
 		Color:        graphics.RGB(200, 200, 200),
 		BorderRadius: 12,
 		Overflow:     widgets.OverflowVisible,
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:    100,
 			Height:   100,
 			Color:    graphics.RGB(0, 0, 255),

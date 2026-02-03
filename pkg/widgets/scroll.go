@@ -39,13 +39,13 @@ import (
 //
 //	ScrollView{
 //	    Padding: widgets.SafeAreaPadding(ctx).Add(24),
-//	    ChildWidget: content,
+//	    Child:   content,
 //	}
 //
 // For scrollable lists, consider [ListView] or [ListViewBuilder] which provide
 // additional features like item-based layout and virtualization.
 type ScrollView struct {
-	ChildWidget core.Widget
+	Child core.Widget
 	// ScrollDirection is the axis along which the view scrolls.
 	// Defaults to AxisVertical (the zero value).
 	ScrollDirection Axis
@@ -63,16 +63,16 @@ func (s ScrollView) Key() any {
 }
 
 func (s ScrollView) Build(ctx core.BuildContext) core.Widget {
-	child := s.ChildWidget
+	child := s.Child
 	if s.Padding != (layout.EdgeInsets{}) {
 		child = Padding{
-			Padding:     s.Padding,
-			ChildWidget: child,
+			Padding: s.Padding,
+			Child:   child,
 		}
 	}
 
 	return scrollViewCore{
-		ChildWidget:     child,
+		Child:           child,
 		ScrollDirection: s.ScrollDirection,
 		Controller:      s.Controller,
 		Physics:         s.Physics,
@@ -81,7 +81,7 @@ func (s ScrollView) Build(ctx core.BuildContext) core.Widget {
 
 // scrollViewCore is the internal render object widget for ScrollView.
 type scrollViewCore struct {
-	ChildWidget     core.Widget
+	Child           core.Widget
 	ScrollDirection Axis
 	Controller      *ScrollController
 	Physics         ScrollPhysics
@@ -95,8 +95,8 @@ func (s scrollViewCore) Key() any {
 	return nil
 }
 
-func (s scrollViewCore) Child() core.Widget {
-	return s.ChildWidget
+func (s scrollViewCore) ChildWidget() core.Widget {
+	return s.Child
 }
 
 func (s scrollViewCore) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

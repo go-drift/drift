@@ -46,7 +46,7 @@ func TestInheritedProvider_BasicProvideConsume(t *testing.T) {
 
 	widget := InheritedProvider[*testUser]{
 		Value: user,
-		ChildWidget: providerConsumerWidget[*testUser]{
+		Child: providerConsumerWidget[*testUser]{
 			onBuild: func(value *testUser, ok bool) {
 				capturedUser = value
 				capturedOK = ok
@@ -100,9 +100,9 @@ func TestInheritedProvider_NestedOverride(t *testing.T) {
 
 	widget := InheritedProvider[*testUser]{
 		Value: outerUser,
-		ChildWidget: InheritedProvider[*testUser]{
+		Child: InheritedProvider[*testUser]{
 			Value: innerUser,
-			ChildWidget: providerConsumerWidget[*testUser]{
+			Child: providerConsumerWidget[*testUser]{
 				onBuild: func(value *testUser, ok bool) {
 					capturedUser = value
 				},
@@ -131,7 +131,7 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 	// Provide user, try to consume settings (should fail)
 	widget := InheritedProvider[*testUser]{
 		Value: user,
-		ChildWidget: testStatelessWidget{
+		Child: testStatelessWidget{
 			buildFn: func(ctx BuildContext) Widget {
 				capturedUser, userOK = ProviderOf[*testUser](ctx)
 				capturedSettings, settingsOK = ProviderOf[*testSettings](ctx)
@@ -157,9 +157,9 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 
 	widget2 := InheritedProvider[*testUser]{
 		Value: user,
-		ChildWidget: InheritedProvider[*testSettings]{
+		Child: InheritedProvider[*testSettings]{
 			Value: settings,
-			ChildWidget: testStatelessWidget{
+			Child: testStatelessWidget{
 				buildFn: func(ctx BuildContext) Widget {
 					capturedUser, userOK = ProviderOf[*testUser](ctx)
 					capturedSettings, settingsOK = ProviderOf[*testSettings](ctx)
@@ -279,7 +279,7 @@ func TestMustProviderOf_Found(t *testing.T) {
 
 	widget := InheritedProvider[*testUser]{
 		Value: user,
-		ChildWidget: testStatelessWidget{
+		Child: testStatelessWidget{
 			buildFn: func(ctx BuildContext) Widget {
 				capturedUser = MustProviderOf[*testUser](ctx)
 				return nil
@@ -347,16 +347,16 @@ func TestInheritedProvider_Key(t *testing.T) {
 	}
 }
 
-func TestInheritedProvider_Child(t *testing.T) {
+func TestInheritedProvider_ChildWidget(t *testing.T) {
 	child := testLeafWidget{id: "test-child"}
 	widget := InheritedProvider[int]{
-		Value:       42,
-		ChildWidget: child,
+		Value: 42,
+		Child: child,
 	}
 
-	returnedChild, ok := widget.Child().(testLeafWidget)
+	returnedChild, ok := widget.ChildWidget().(testLeafWidget)
 	if !ok {
-		t.Fatal("expected Child() to return testLeafWidget")
+		t.Fatal("expected ChildWidget() to return testLeafWidget")
 	}
 	if returnedChild.id != "test-child" {
 		t.Errorf("expected child id 'test-child', got %q", returnedChild.id)

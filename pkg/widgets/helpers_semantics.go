@@ -23,7 +23,7 @@ func Tappable(label string, onTap func(), child core.Widget) Semantics {
 		Container:        true,
 		MergeDescendants: true,
 		OnTap:            onTap,
-		ChildWidget:      GestureDetector{OnTap: onTap, ChildWidget: child},
+		Child:            GestureDetector{OnTap: onTap, Child: child},
 	}
 }
 
@@ -37,7 +37,7 @@ func TappableWithHint(label, hint string, onTap func(), child core.Widget) Seman
 		Container:        true,
 		MergeDescendants: true,
 		OnTap:            onTap,
-		ChildWidget:      GestureDetector{OnTap: onTap, ChildWidget: child},
+		Child:            GestureDetector{OnTap: onTap, Child: child},
 	}
 }
 
@@ -49,9 +49,9 @@ func TappableWithHint(label, hint string, onTap func(), child core.Widget) Seman
 //	SemanticLabel("Company logo", logoImage)
 func SemanticLabel(label string, child core.Widget) Semantics {
 	return Semantics{
-		Label:       label,
-		Container:   true,
-		ChildWidget: child,
+		Label:     label,
+		Container: true,
+		Child:     child,
 	}
 }
 
@@ -63,11 +63,11 @@ func SemanticLabel(label string, child core.Widget) Semantics {
 //	SemanticImage("Chart showing sales growth", chartWidget)
 func SemanticImage(description string, child core.Widget) Semantics {
 	return Semantics{
-		Label:       description,
-		Role:        semantics.SemanticsRoleImage,
-		Flags:       semantics.SemanticsIsImage,
-		Container:   true,
-		ChildWidget: child,
+		Label:     description,
+		Role:      semantics.SemanticsRoleImage,
+		Flags:     semantics.SemanticsIsImage,
+		Container: true,
+		Child:     child,
 	}
 }
 
@@ -83,7 +83,7 @@ func SemanticHeading(level int, child core.Widget) Semantics {
 		Flags:        semantics.SemanticsIsHeader,
 		HeadingLevel: level,
 		Container:    true,
-		ChildWidget:  child,
+		Child:        child,
 	}
 }
 
@@ -100,7 +100,7 @@ func SemanticLink(label string, onTap func(), child core.Widget) Semantics {
 		Container:        true,
 		MergeDescendants: true,
 		OnTap:            onTap,
-		ChildWidget:      GestureDetector{OnTap: onTap, ChildWidget: child},
+		Child:            GestureDetector{OnTap: onTap, Child: child},
 	}
 }
 
@@ -114,7 +114,7 @@ func SemanticGroup(child core.Widget) Semantics {
 	return Semantics{
 		Container:        true,
 		MergeDescendants: true,
-		ChildWidget:      child,
+		Child:            child,
 	}
 }
 
@@ -126,9 +126,9 @@ func SemanticGroup(child core.Widget) Semantics {
 //	SemanticLiveRegion(statusText)
 func SemanticLiveRegion(child core.Widget) Semantics {
 	return Semantics{
-		Flags:       semantics.SemanticsIsLiveRegion,
-		Container:   true,
-		ChildWidget: child,
+		Flags:     semantics.SemanticsIsLiveRegion,
+		Container: true,
+		Child:     child,
 	}
 }
 
@@ -140,7 +140,7 @@ func SemanticLiveRegion(child core.Widget) Semantics {
 //	Decorative(dividerLine)
 func Decorative(child core.Widget) ExcludeSemantics {
 	return ExcludeSemantics{
-		Excluding:   true,
-		ChildWidget: child,
+		Excluding: true,
+		Child:     child,
 	}
 }

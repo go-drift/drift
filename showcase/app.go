@@ -126,8 +126,8 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 
 	// Single AppTheme - no tree structure change when platform toggles
 	return theme.AppTheme{
-		Data:        appThemeData,
-		ChildWidget: navigator,
+		Data:  appThemeData,
+		Child: navigator,
 	}
 }
 
@@ -265,18 +265,18 @@ func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core
 	headerPadding := widgets.SafeAreaPadding(ctx).OnlyTop().Add(16)
 
 	return widgets.Expanded{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color: colors.Background,
-			ChildWidget: widgets.ColumnOf(
+			Child: widgets.ColumnOf(
 				widgets.MainAxisAlignmentStart,
 				widgets.CrossAxisAlignmentStart,
 				widgets.MainAxisSizeMax,
 				// Header
 				widgets.Container{
 					Color: colors.Surface,
-					ChildWidget: widgets.Padding{
+					Child: widgets.Padding{
 						Padding: headerPadding,
-						ChildWidget: widgets.RowOf(
+						Child: widgets.RowOf(
 							widgets.MainAxisAlignmentStart,
 							widgets.CrossAxisAlignmentCenter,
 							widgets.MainAxisSizeMax,
@@ -301,7 +301,7 @@ func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core
 					},
 				},
 				// Content
-				widgets.Expanded{ChildWidget: content},
+				widgets.Expanded{Child: content},
 			),
 		},
 	}

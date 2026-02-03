@@ -13,8 +13,8 @@ import (
 // Use struct literal:
 //
 //	widgets.Opacity{
-//	    Opacity:     0.5,
-//	    ChildWidget: content,
+//	    Opacity: 0.5,
+//	    Child:   content,
 //	}
 //
 // The Opacity value should be between 0.0 (fully transparent) and 1.0 (fully opaque).
@@ -27,8 +27,8 @@ import (
 type Opacity struct {
 	// Opacity is the transparency value (0.0 to 1.0).
 	Opacity float64
-	// ChildWidget is the widget to which opacity is applied.
-	ChildWidget core.Widget
+	// Child is the widget to which opacity is applied.
+	Child core.Widget
 }
 
 func (o Opacity) CreateElement() core.Element {
@@ -39,8 +39,8 @@ func (o Opacity) Key() any {
 	return nil
 }
 
-func (o Opacity) Child() core.Widget {
-	return o.ChildWidget
+func (o Opacity) ChildWidget() core.Widget {
+	return o.Child
 }
 
 func (o Opacity) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

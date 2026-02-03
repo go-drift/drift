@@ -77,7 +77,7 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 		// Form wraps the fields and provides validation/save/reset
 		widgets.Form{
 			Autovalidate: true,
-			ChildWidget:  formContent{parent: s},
+			Child:        formContent{parent: s},
 		},
 
 		widgets.VSpace(24),
@@ -299,7 +299,7 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 		// Status display
 		widgets.Container{
 			Color: colors.SurfaceVariant,
-			ChildWidget: widgets.PaddingAll(12,
+			Child: widgets.PaddingAll(12,
 				widgets.Text{
 					Content: f.parent.statusText.Get(),
 					Style: graphics.TextStyle{

@@ -80,11 +80,11 @@ func demoPage(ctx core.BuildContext, title string, items ...core.Widget) core.Wi
 		ScrollDirection: widgets.AxisVertical,
 		Physics:         widgets.BouncingScrollPhysics{},
 		Padding:         layout.EdgeInsetsAll(20),
-		ChildWidget: widgets.Column{
+		Child: widgets.Column{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 			MainAxisSize:       widgets.MainAxisSizeMin,
-			ChildrenWidgets:    items,
+			Children:           items,
 		},
 	}
 	return pageScaffold(ctx, title, content)
@@ -119,7 +119,7 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 				nav.PushNamed(route, nil)
 			}
 		},
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			BorderGradient: borderGradient,
 			BorderWidth:    1,
 			BorderRadius:   12,
@@ -133,7 +133,7 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 				BlurRadius: 18,
 			},
 			// Second shadow for cyan glow (using overlay effect)
-			ChildWidget: widgets.Container{
+			Child: widgets.Container{
 				Overflow: widgets.OverflowVisible,
 				Shadow: &graphics.BoxShadow{
 					Color:      CyanSeed.WithAlpha(cyanAlpha),
@@ -142,11 +142,11 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 					BlurRadius: 14,
 				},
 				Padding: layout.EdgeInsetsAll(18),
-				ChildWidget: widgets.Column{
+				Child: widgets.Column{
 					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 					CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 					MainAxisSize:       widgets.MainAxisSizeMax,
-					ChildrenWidgets: []core.Widget{
+					Children: []core.Widget{
 						widgets.Text{
 							Content: title,
 							Style: graphics.TextStyle{
@@ -185,16 +185,16 @@ func themeToggleButton(ctx core.BuildContext, isDark bool, onToggle func()) core
 
 	return widgets.GestureDetector{
 		OnTap: onToggle,
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Color:        colors.SurfaceContainer,
 			BorderRadius: 20,
 			BorderWidth:  1,
 			BorderColor:  colors.OutlineVariant,
 			Padding:      layout.EdgeInsetsSymmetric(14, 8),
-			ChildWidget: widgets.Row{
+			Child: widgets.Row{
 				MainAxisSize:       widgets.MainAxisSizeMin,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					widgets.Text{
 						Content: icon,
 						Style: graphics.TextStyle{
@@ -233,7 +233,7 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 			BlurStyle:  graphics.BlurStyleOuter,
 		},
 		Alignment: layout.AlignmentCenter,
-		ChildWidget: widgets.SvgImage{
+		Child: widgets.SvgImage{
 			Source:    loadSVGAsset(demo.Icon),
 			Width:     20,
 			Height:    20,
@@ -248,15 +248,15 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 				nav.PushNamed(demo.Route, nil)
 			}
 		},
-		ChildWidget: widgets.DecoratedBox{
+		Child: widgets.DecoratedBox{
 			BorderColor:  colors.OutlineVariant, // Border stroke color; transparent = no border
 			BorderWidth:  1,                     // Border stroke width in pixels; 0 = no border
 			BorderRadius: 12,
 			Overflow:     widgets.OverflowClip,
-			ChildWidget: widgets.Column{
+			Child: widgets.Column{
 				MainAxisSize:       widgets.MainAxisSizeMin,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					// Thin gradient bar at top
 					widgets.Container{
 						Height: 4,
@@ -272,19 +272,19 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 					// Content with padding
 					widgets.Padding{
 						Padding: layout.EdgeInsetsOnly(16, 14, 16, 16),
-						ChildWidget: widgets.Row{
+						Child: widgets.Row{
 							MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 							CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 							MainAxisSize:       widgets.MainAxisSizeMax,
-							ChildrenWidgets: []core.Widget{
+							Children: []core.Widget{
 								iconWidget,
 								widgets.HSpace(14),
 								widgets.Expanded{
-									ChildWidget: widgets.Column{
+									Child: widgets.Column{
 										MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
 										CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 										MainAxisSize:       widgets.MainAxisSizeMin,
-										ChildrenWidgets: []core.Widget{
+										Children: []core.Widget{
 											widgets.Text{
 												Content: demo.Title,
 												Style: graphics.TextStyle{
@@ -346,9 +346,9 @@ func permissionBadge(status platform.PermissionStatus, colors theme.ColorScheme)
 	return widgets.DecoratedBox{
 		Color:        bgColor,
 		BorderRadius: 4,
-		ChildWidget: widgets.Padding{
+		Child: widgets.Padding{
 			Padding: layout.EdgeInsetsSymmetric(8, 4),
-			ChildWidget: widgets.Text{Content: label, Style: graphics.TextStyle{
+			Child: widgets.Text{Content: label, Style: graphics.TextStyle{
 				Color:    textColor,
 				FontSize: 12,
 			}},

@@ -139,7 +139,7 @@ Isolate expensive subtrees from repainting:
 
 ```go
 widgets.RepaintBoundary{
-    ChildWidget: expensiveWidget,
+    Child: expensiveWidget,
 }
 ```
 
@@ -167,7 +167,7 @@ func (s *appState) Build(ctx core.BuildContext) core.Widget {
     themeData := s.cachedTheme
     return theme.Theme{
         Data:        themeData,
-        ChildWidget: content,
+        Child: content,
     }
 }
 ```

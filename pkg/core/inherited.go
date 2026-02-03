@@ -119,7 +119,7 @@ func (e *InheritedElement) rebuildWithSelf(self Element) {
 	}
 	e.dirty = false
 	inherited := e.widget.(InheritedWidget)
-	childWidget := inherited.Child()
+	childWidget := inherited.ChildWidget()
 	e.child = updateChild(e.child, childWidget, self, e.buildOwner, nil)
 }
 

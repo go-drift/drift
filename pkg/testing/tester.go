@@ -110,9 +110,9 @@ func (t *WidgetTester) PumpWidget(widget core.Widget) error {
 	// Wrap in test scaffold: DeviceScale → AppTheme → user widget
 	wrapped := widgets.DeviceScale{
 		Scale: t.scale,
-		ChildWidget: theme.AppTheme{
-			Data:        t.theme,
-			ChildWidget: widget,
+		Child: theme.AppTheme{
+			Data:  t.theme,
+			Child: widget,
 		},
 	}
 

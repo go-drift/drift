@@ -20,7 +20,7 @@ func buildWrapPage(ctx core.BuildContext) core.Widget {
 		widgets.Container{
 			Color:   colors.SurfaceVariant,
 			Padding: layout.EdgeInsetsAll(8),
-			ChildWidget: widgets.WrapOf(8, 8,
+			Child: widgets.WrapOf(8, 8,
 				chip("Go", colors),
 				chip("Rust", colors),
 				chip("TypeScript", colors),
@@ -98,7 +98,7 @@ func chip(label string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.PrimaryContainer,
 		BorderRadius: 16,
-		ChildWidget: widgets.PaddingSym(12, 8,
+		Child: widgets.PaddingSym(12, 8,
 			widgets.Text{Content: label, Style: graphics.TextStyle{
 				Color:    colors.OnPrimaryContainer,
 				FontSize: 14,
@@ -113,12 +113,12 @@ func wrapAlignmentDemo(alignment widgets.WrapAlignment, colors theme.ColorScheme
 		Color:   colors.SurfaceVariant,
 		Height:  80,
 		Padding: layout.EdgeInsetsAll(8),
-		ChildWidget: widgets.Wrap{
-			Direction:       widgets.WrapAxisHorizontal,
-			Alignment:       alignment,
-			Spacing:         8,
-			RunSpacing:      8,
-			ChildrenWidgets: []core.Widget{chip("One", colors), chip("Two", colors), chip("Three", colors)},
+		Child: widgets.Wrap{
+			Direction:  widgets.WrapAxisHorizontal,
+			Alignment:  alignment,
+			Spacing:    8,
+			RunSpacing: 8,
+			Children:   []core.Widget{chip("One", colors), chip("Two", colors), chip("Three", colors)},
 		},
 	}
 }
@@ -128,7 +128,7 @@ func wrapSpacingDemo(spacing, runSpacing float64, colors theme.ColorScheme) core
 	return widgets.Container{
 		Color:   colors.SurfaceVariant,
 		Padding: layout.EdgeInsetsAll(8),
-		ChildWidget: widgets.WrapOf(spacing, runSpacing,
+		Child: widgets.WrapOf(spacing, runSpacing,
 			chip("Alpha", colors),
 			chip("Beta", colors),
 			chip("Gamma", colors),
@@ -143,13 +143,13 @@ func wrapCrossDemo(cross widgets.WrapCrossAlignment, colors theme.ColorScheme) c
 	return widgets.Container{
 		Color:  colors.SurfaceVariant,
 		Height: 64,
-		ChildWidget: widgets.PaddingAll(8,
+		Child: widgets.PaddingAll(8,
 			widgets.Wrap{
 				Direction:          widgets.WrapAxisHorizontal,
 				CrossAxisAlignment: cross,
 				Spacing:            8,
 				RunSpacing:         8,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					tallChip("Short", 32, colors),
 					tallChip("Tall", 48, colors),
 					tallChip("Medium", 40, colors),
@@ -165,7 +165,7 @@ func tallChip(label string, height float64, colors theme.ColorScheme) core.Widge
 		Color:        colors.PrimaryContainer,
 		BorderRadius: 16,
 		Height:       height,
-		ChildWidget: widgets.PaddingSym(12, 8,
+		Child: widgets.PaddingSym(12, 8,
 			widgets.Text{Content: label, Style: graphics.TextStyle{
 				Color:    colors.OnPrimaryContainer,
 				FontSize: 14,

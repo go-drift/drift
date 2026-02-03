@@ -28,7 +28,7 @@ import (
 // Example:
 //
 //	Form{
-//	    ChildWidget: Column{
+//	    Child: Column{
 //	        Children: []core.Widget{
 //	            TextFormField{
 //	                Label:       "Username",

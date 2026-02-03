@@ -9,8 +9,8 @@ import "reflect"
 //
 //	// Provide a value
 //	core.InheritedProvider[*User]{
-//	    Value:       currentUser,
-//	    ChildWidget: MainContent{},
+//	    Value: currentUser,
+//	    Child: MainContent{},
 //	}
 //
 //	// Consume from anywhere in the subtree
@@ -21,8 +21,8 @@ import "reflect"
 // For custom comparison logic, set ShouldNotify:
 //
 //	core.InheritedProvider[*User]{
-//	    Value:       currentUser,
-//	    ChildWidget: MainContent{},
+//	    Value: currentUser,
+//	    Child: MainContent{},
 //	    ShouldNotify: func(old, new *User) bool {
 //	        return old.ID != new.ID  // Only notify on ID change
 //	    },
@@ -37,8 +37,8 @@ type InheritedProvider[T any] struct {
 	// Value is the data to provide to descendants.
 	Value T
 
-	// ChildWidget is the child widget tree.
-	ChildWidget Widget
+	// Child is the child widget tree.
+	Child Widget
 
 	// WidgetKey is an optional key for widget identity.
 	WidgetKey any
@@ -59,9 +59,9 @@ func (p InheritedProvider[T]) Key() any {
 	return p.WidgetKey
 }
 
-// Child implements InheritedWidget.
-func (p InheritedProvider[T]) Child() Widget {
-	return p.ChildWidget
+// ChildWidget implements InheritedWidget.
+func (p InheritedProvider[T]) ChildWidget() Widget {
+	return p.Child
 }
 
 // UpdateShouldNotify implements InheritedWidget.

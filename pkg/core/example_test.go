@@ -100,7 +100,7 @@ func ExampleStateBase() {
 	//                 s.count++
 	//             })
 	//         },
-	//         ChildWidget: widgets.Text{
+	//         Child: widgets.Text{
 	//             Content: fmt.Sprintf("Count: %d", s.count),
 	//         },
 	//     }
@@ -128,7 +128,7 @@ func ExampleManagedState() {
 	//             // Set automatically triggers a rebuild
 	//             s.count.Set(s.count.Get() + 1)
 	//         },
-	//         ChildWidget: widgets.Text{
+	//         Child: widgets.Text{
 	//             Content: fmt.Sprintf("Count: %d", s.count.Get()),
 	//         },
 	//     }
@@ -233,8 +233,8 @@ func ExampleInheritedWidget() {
 	//
 	//     // Provide data to descendants
 	//     core.InheritedProvider[*UserState]{
-	//         Value:       &UserState{Name: "Alice", Email: "alice@example.com"},
-	//         ChildWidget: MyApp{},
+	//         Value: &UserState{Name: "Alice", Email: "alice@example.com"},
+	//         Child: MyApp{},
 	//     }
 	//
 	//     // Access data in a descendant's Build method
@@ -346,7 +346,7 @@ func ExampleStatefulBuilder() {
 	//             OnTap: func() {
 	//                 setState(func(c int) int { return c + 1 })
 	//             },
-	//             ChildWidget: widgets.Text{Content: fmt.Sprintf("Count: %d", count)},
+	//             Child: widgets.Text{Content: fmt.Sprintf("Count: %d", count)},
 	//         }
 	//     },
 	//     Dispose: func(count int) {

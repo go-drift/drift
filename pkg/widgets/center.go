@@ -16,12 +16,12 @@ import (
 //
 // Example:
 //
-//	Center{ChildWidget: Text{Content: "Hello, World!"}}
+//	Center{Child: Text{Content: "Hello, World!"}}
 //
 // For more control over alignment, use [Container] with an Alignment field,
 // or wrap the child in an [Align] widget.
 type Center struct {
-	ChildWidget core.Widget
+	Child core.Widget
 }
 
 func (c Center) CreateElement() core.Element {
@@ -32,8 +32,8 @@ func (c Center) Key() any {
 	return nil
 }
 
-func (c Center) Child() core.Widget {
-	return c.ChildWidget
+func (c Center) ChildWidget() core.Widget {
+	return c.Child
 }
 
 func (c Center) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {

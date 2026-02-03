@@ -686,7 +686,7 @@ func (e engineApp) Build(ctx core.BuildContext) core.Widget {
 		}
 
 		child = widgets.Stack{
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				child,
 				hudPositioner,
 			},
@@ -695,8 +695,8 @@ func (e engineApp) Build(ctx core.BuildContext) core.Widget {
 
 	return widgets.DeviceScale{
 		Scale: scale,
-		ChildWidget: widgets.SafeAreaProvider{
-			ChildWidget: child,
+		Child: widgets.SafeAreaProvider{
+			Child: child,
 		},
 	}
 }
@@ -726,27 +726,27 @@ func (d diagnosticsHUDPositioner) Build(ctx core.BuildContext) core.Widget {
 	switch d.position {
 	case DiagnosticsTopRight:
 		return widgets.Positioned{
-			Right:       ptrFloat64(insets.Right + padding),
-			Top:         ptrFloat64(insets.Top + padding),
-			ChildWidget: d.hud,
+			Right: ptrFloat64(insets.Right + padding),
+			Top:   ptrFloat64(insets.Top + padding),
+			Child: d.hud,
 		}
 	case DiagnosticsBottomLeft:
 		return widgets.Positioned{
-			Left:        ptrFloat64(insets.Left + padding),
-			Bottom:      ptrFloat64(insets.Bottom + padding),
-			ChildWidget: d.hud,
+			Left:   ptrFloat64(insets.Left + padding),
+			Bottom: ptrFloat64(insets.Bottom + padding),
+			Child:  d.hud,
 		}
 	case DiagnosticsBottomRight:
 		return widgets.Positioned{
-			Right:       ptrFloat64(insets.Right + padding),
-			Bottom:      ptrFloat64(insets.Bottom + padding),
-			ChildWidget: d.hud,
+			Right:  ptrFloat64(insets.Right + padding),
+			Bottom: ptrFloat64(insets.Bottom + padding),
+			Child:  d.hud,
 		}
 	default: // DiagnosticsTopLeft or invalid
 		return widgets.Positioned{
-			Left:        ptrFloat64(insets.Left + padding),
-			Top:         ptrFloat64(insets.Top + padding),
-			ChildWidget: d.hud,
+			Left:  ptrFloat64(insets.Left + padding),
+			Top:   ptrFloat64(insets.Top + padding),
+			Child: d.hud,
 		}
 	}
 }
@@ -766,10 +766,10 @@ func (d defaultPlaceholder) Build(ctx core.BuildContext) core.Widget {
 	_, colors, textTheme := theme.UseTheme(ctx)
 	return theme.Theme{
 		Data: theme.DefaultDarkTheme(),
-		ChildWidget: widgets.Expanded{
-			ChildWidget: widgets.Container{
+		Child: widgets.Expanded{
+			Child: widgets.Container{
 				Color: colors.Background,
-				ChildWidget: widgets.Centered(
+				Child: widgets.Centered(
 					widgets.ColumnOf(
 						widgets.MainAxisAlignmentCenter,
 						widgets.CrossAxisAlignmentStart,

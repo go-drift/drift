@@ -13,8 +13,8 @@ import (
 // Semantics is a widget that annotates the widget tree with semantics information
 // for accessibility services.
 type Semantics struct {
-	// ChildWidget is the child widget to annotate.
-	ChildWidget core.Widget
+	// Child is the child widget to annotate.
+	Child core.Widget
 
 	// Label is the primary accessibility label for this node.
 	Label string
@@ -113,9 +113,9 @@ func (s Semantics) UpdateRenderObject(ctx core.BuildContext, renderObject layout
 	}
 }
 
-// Child returns the child widget.
-func (s Semantics) Child() core.Widget {
-	return s.ChildWidget
+// ChildWidget returns the child widget.
+func (s Semantics) ChildWidget() core.Widget {
+	return s.Child
 }
 
 type renderSemantics struct {
@@ -259,18 +259,18 @@ func (r *renderSemantics) DescribeSemanticsConfiguration(config *semantics.Seman
 // ExcludeSemantics is a widget that excludes its child from the semantics tree.
 // Use this to hide decorative elements from accessibility services.
 type ExcludeSemantics struct {
-	// ChildWidget is the child widget to exclude.
-	ChildWidget core.Widget
+	// Child is the child widget to exclude.
+	Child core.Widget
 
 	// Excluding controls whether to exclude the child from semantics.
 	// Set to true to exclude, false to include. Defaults to false (Go zero value).
-	// For the common case of excluding, use: ExcludeSemantics{Excluding: true, ChildWidget: child}
+	// For the common case of excluding, use: ExcludeSemantics{Excluding: true, Child: child}
 	Excluding bool
 }
 
 // NewExcludeSemantics creates an ExcludeSemantics widget that excludes the child from accessibility.
 func NewExcludeSemantics(child core.Widget) ExcludeSemantics {
-	return ExcludeSemantics{Excluding: true, ChildWidget: child}
+	return ExcludeSemantics{Excluding: true, Child: child}
 }
 
 func (e ExcludeSemantics) CreateElement() core.Element {
@@ -294,9 +294,9 @@ func (e ExcludeSemantics) UpdateRenderObject(ctx core.BuildContext, renderObject
 	}
 }
 
-// Child returns the child widget.
-func (e ExcludeSemantics) Child() core.Widget {
-	return e.ChildWidget
+// ChildWidget returns the child widget.
+func (e ExcludeSemantics) ChildWidget() core.Widget {
+	return e.Child
 }
 
 type renderExcludeSemantics struct {
@@ -350,8 +350,8 @@ func (r *renderExcludeSemantics) DescribeSemanticsConfiguration(config *semantic
 
 // MergeSemantics is a widget that merges the semantics of its descendants.
 type MergeSemantics struct {
-	// ChildWidget is the child widget whose semantics will be merged.
-	ChildWidget core.Widget
+	// Child is the child widget whose semantics will be merged.
+	Child core.Widget
 }
 
 func (m MergeSemantics) CreateElement() core.Element {
@@ -374,9 +374,9 @@ func (m MergeSemantics) UpdateRenderObject(ctx core.BuildContext, renderObject l
 	}
 }
 
-// Child returns the child widget.
-func (m MergeSemantics) Child() core.Widget {
-	return m.ChildWidget
+// ChildWidget returns the child widget.
+func (m MergeSemantics) ChildWidget() core.Widget {
+	return m.Child
 }
 
 type renderMergeSemantics struct {

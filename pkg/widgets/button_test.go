@@ -16,7 +16,7 @@ func TestGestureDetector_TapCallback(t *testing.T) {
 	tapped := false
 	tester.PumpWidget(widgets.GestureDetector{
 		OnTap: func() { tapped = true },
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:  100,
 			Height: 50,
 			Color:  graphics.RGB(200, 200, 200),
@@ -37,7 +37,7 @@ func TestGestureDetector_TapNoCallback(t *testing.T) {
 	tester := drifttest.NewWidgetTesterWithT(t)
 
 	tester.PumpWidget(widgets.GestureDetector{
-		ChildWidget: widgets.Container{
+		Child: widgets.Container{
 			Width:  100,
 			Height: 50,
 			Color:  graphics.RGB(200, 200, 200),

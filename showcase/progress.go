@@ -46,7 +46,7 @@ func (s *progressState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.ActivityIndicator{
 					Animating: true,
 					Size:      widgets.ActivityIndicatorSizeSmall,
@@ -74,7 +74,7 @@ func (s *progressState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.CircularProgressIndicator{
 					Value: nil,
 					Size:  24,
@@ -109,7 +109,7 @@ func (s *progressState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				s.buildDeterminateCircular(ctx),
 				widgets.HSpace(16),
 				theme.ButtonOf(ctx, "-10%", func() {

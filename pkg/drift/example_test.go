@@ -10,7 +10,7 @@ import (
 func ExampleNewApp() {
 	// Create the root widget for the application
 	root := widgets.Center{
-		ChildWidget: widgets.Text{Content: "Hello, Drift!"},
+		Child: widgets.Text{Content: "Hello, Drift!"},
 	}
 
 	// Create an app with default settings
@@ -21,7 +21,7 @@ func ExampleNewApp() {
 // This example shows how to create an app with a custom theme.
 func ExampleApp_withTheme() {
 	root := widgets.Center{
-		ChildWidget: widgets.Text{Content: "Dark Mode App"},
+		Child: widgets.Text{Content: "Dark Mode App"},
 	}
 
 	app := drift.App{

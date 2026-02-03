@@ -116,7 +116,7 @@ func (s *permissionsState) Build(ctx core.BuildContext) core.Widget {
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
 			MainAxisSize:       widgets.MainAxisSizeMin,
-			ChildrenWidgets:    rows,
+			Children:           rows,
 		},
 		widgets.VSpace(12),
 
@@ -138,16 +138,16 @@ func (s *permissionsState) permissionRow(name string, status platform.Permission
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		ChildWidget: widgets.PaddingAll(12,
+		Child: widgets.PaddingAll(12,
 			widgets.Row{
 				MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					widgets.Column{
 						MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
 						CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 						MainAxisSize:       widgets.MainAxisSizeMin,
-						ChildrenWidgets: []core.Widget{
+						Children: []core.Widget{
 							widgets.Text{Content: name, Style: graphics.TextStyle{
 								Color:      colors.OnSurface,
 								FontSize:   16,

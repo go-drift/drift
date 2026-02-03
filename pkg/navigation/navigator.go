@@ -146,9 +146,9 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 		// Always wrap in ExcludeSemantics to maintain element tree identity.
 		// Non-top routes are excluded from accessibility (hidden behind the top route).
 		children = append(children, widgets.ExcludeSemantics{
-			ChildWidget: widgets.Offstage{
-				Offstage:    !isTop,
-				ChildWidget: rb,
+			Child: widgets.Offstage{
+				Offstage: !isTop,
+				Child:    rb,
 			},
 			Excluding: !isTop,
 		})
@@ -157,7 +157,7 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 	// Add exiting route on top (it's animating out)
 	if s.exitingRoute != nil {
 		children = append(children, widgets.ExcludeSemantics{
-			ChildWidget: routeBuilder{
+			Child: routeBuilder{
 				route: s.exitingRoute,
 				isTop: false, // No longer visually on top
 			},
@@ -168,9 +168,9 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 	// Wrap in inherited widget so descendants can access NavigatorState
 	return navigatorInherited{
 		state: s,
-		childWidget: widgets.Stack{
-			ChildrenWidgets: children,
-			Fit:             widgets.StackFitExpand,
+		child: widgets.Stack{
+			Children: children,
+			Fit:      widgets.StackFitExpand,
 		},
 	}
 }
@@ -369,8 +369,8 @@ func (r routeBuilder) Build(ctx core.BuildContext) core.Widget {
 
 // navigatorInherited provides NavigatorState to descendants.
 type navigatorInherited struct {
-	state       *navigatorState
-	childWidget core.Widget
+	state *navigatorState
+	child core.Widget
 }
 
 func (n navigatorInherited) CreateElement() core.Element {
@@ -381,8 +381,8 @@ func (n navigatorInherited) Key() any {
 	return nil
 }
 
-func (n navigatorInherited) Child() core.Widget {
-	return n.childWidget
+func (n navigatorInherited) ChildWidget() core.Widget {
+	return n.child
 }
 
 func (n navigatorInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {

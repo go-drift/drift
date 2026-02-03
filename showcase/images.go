@@ -58,7 +58,7 @@ func buildImagesPage(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				fitPreview("Fill", widgets.ImageFitFill, logo, colors),
 				widgets.HSpace(12),
 				fitPreview("Contain", widgets.ImageFitContain, logo, colors),
@@ -68,7 +68,7 @@ func buildImagesPage(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				fitPreview("Cover", widgets.ImageFitCover, logo, colors),
 				widgets.HSpace(12),
 				fitPreview("None", widgets.ImageFitNone, logo, colors),
@@ -84,7 +84,7 @@ func fitPreview(label string, fit widgets.ImageFit, logo image.Image, colors the
 	return widgets.Column{
 		MainAxisSize:       widgets.MainAxisSizeMin,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: label, Style: labelStyle(colors)},
 			widgets.VSpace(4),
 			widgets.Container{
@@ -92,7 +92,7 @@ func fitPreview(label string, fit widgets.ImageFit, logo image.Image, colors the
 				Width:     100,
 				Height:    100,
 				Alignment: layout.AlignmentCenter,
-				ChildWidget: widgets.Image{
+				Child: widgets.Image{
 					Source:    logo,
 					Width:     100,
 					Height:    100,

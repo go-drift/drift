@@ -21,8 +21,8 @@ const (
 
 // SafeAreaData provides safe area insets to descendants via InheritedWidget.
 type SafeAreaData struct {
-	Insets      layout.EdgeInsets
-	ChildWidget core.Widget
+	Insets layout.EdgeInsets
+	Child  core.Widget
 }
 
 func (s SafeAreaData) CreateElement() core.Element {
@@ -33,8 +33,8 @@ func (s SafeAreaData) Key() any {
 	return nil
 }
 
-func (s SafeAreaData) Child() core.Widget {
-	return s.ChildWidget
+func (s SafeAreaData) ChildWidget() core.Widget {
+	return s.Child
 }
 
 func (s SafeAreaData) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
@@ -76,7 +76,7 @@ func (s SafeAreaData) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget
 // and provides SafeAreaData to descendants. This scopes rebuilds to only the provider
 // and widgets that depend on safe area data, instead of rebuilding the entire tree.
 type SafeAreaProvider struct {
-	ChildWidget core.Widget
+	Child core.Widget
 }
 
 func (s SafeAreaProvider) CreateElement() core.Element {
@@ -159,8 +159,8 @@ func (s *safeAreaProviderState) applyPendingInsets() {
 func (s *safeAreaProviderState) Build(ctx core.BuildContext) core.Widget {
 	w := s.Element().Widget().(SafeAreaProvider)
 	return SafeAreaData{
-		Insets:      s.insets,
-		ChildWidget: w.ChildWidget,
+		Insets: s.insets,
+		Child:  w.Child,
 	}
 }
 
@@ -224,15 +224,15 @@ func SafeAreaRightOf(ctx core.BuildContext) float64 {
 //
 //	ScrollView{
 //	    Padding: widgets.SafeAreaPadding(ctx),              // just safe area
-//	    ChildWidget: ...,
+//	    Child: ...,
 //	}
 //	ScrollView{
 //	    Padding: widgets.SafeAreaPadding(ctx).Add(24),      // safe area + 24px all sides
-//	    ChildWidget: ...,
+//	    Child: ...,
 //	}
 //	ScrollView{
 //	    Padding: widgets.SafeAreaPadding(ctx).OnlyTop().Add(24), // only top safe area + 24px
-//	    ChildWidget: ...,
+//	    Child: ...,
 //	}
 func SafeAreaPadding(ctx core.BuildContext) layout.EdgeInsets {
 	return SafeAreaOf(ctx)
@@ -240,11 +240,11 @@ func SafeAreaPadding(ctx core.BuildContext) layout.EdgeInsets {
 
 // SafeArea is a convenience widget that applies safe area insets as padding.
 type SafeArea struct {
-	Top         bool
-	Bottom      bool
-	Left        bool
-	Right       bool
-	ChildWidget core.Widget
+	Top    bool
+	Bottom bool
+	Left   bool
+	Right  bool
+	Child  core.Widget
 }
 
 func (s SafeArea) CreateElement() core.Element {
@@ -278,7 +278,7 @@ func (s SafeArea) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	return Padding{
-		Padding:     padding,
-		ChildWidget: s.ChildWidget,
+		Padding: padding,
+		Child:   s.Child,
 	}
 }

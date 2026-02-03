@@ -46,7 +46,7 @@ func (s *counterState) Build(ctx core.BuildContext) core.Widget {
 				s.onTap(s.count)
 			}
 		},
-		ChildWidget: widgets.Text{Content: fmt.Sprintf("%d", s.count)},
+		Child: widgets.Text{Content: fmt.Sprintf("%d", s.count)},
 	}
 }
 

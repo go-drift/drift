@@ -23,7 +23,7 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.ClipRRect{
 			Radius: 16,
-			ChildWidget: widgets.Image{
+			Child: widgets.Image{
 				Source: logo,
 				Width:  240,
 				Height: 140,
@@ -40,7 +40,7 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			BorderColor:  colors.Outline,
 			BorderWidth:  1,
 			BorderRadius: 16,
-			ChildWidget: widgets.PaddingAll(16,
+			Child: widgets.PaddingAll(16,
 				widgets.ColumnOf(
 					widgets.MainAxisAlignmentStart,
 					widgets.CrossAxisAlignmentStart,
@@ -70,11 +70,11 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 				},
 			),
 			BorderRadius: 16,
-			ChildWidget: widgets.SizedBox{
+			Child: widgets.SizedBox{
 				Width:  240,
 				Height: 52,
-				ChildWidget: widgets.Center{
-					ChildWidget: widgets.Text{Content: "Gradient surface", Style: graphics.TextStyle{
+				Child: widgets.Center{
+					Child: widgets.Text{Content: "Gradient surface", Style: graphics.TextStyle{
 						Color:      colors.OnPrimary,
 						FontSize:   14,
 						FontWeight: graphics.FontWeightBold,
@@ -107,11 +107,11 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		widgets.SizedBox{
 			Width:  280,
 			Height: 160,
-			ChildWidget: widgets.Stack{
-				ChildrenWidgets: []core.Widget{
+			Child: widgets.Stack{
+				Children: []core.Widget{
 					widgets.ClipRRect{
 						Radius: 16,
-						ChildWidget: widgets.Image{
+						Child: widgets.Image{
 							Source: logo,
 							Width:  280,
 							Height: 160,
@@ -123,13 +123,13 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 						Top:    widgets.Ptr(40),
 						Right:  widgets.Ptr(40),
 						Bottom: widgets.Ptr(40),
-						ChildWidget: widgets.ClipRRect{
+						Child: widgets.ClipRRect{
 							Radius: 12,
-							ChildWidget: widgets.NewBackdropFilter(10,
+							Child: widgets.NewBackdropFilter(10,
 								widgets.DecoratedBox{
 									Color: graphics.RGBA(255, 255, 255, 0.3),
-									ChildWidget: widgets.Center{
-										ChildWidget: widgets.Text{Content: "Frosted Glass", Style: graphics.TextStyle{
+									Child: widgets.Center{
+										Child: widgets.Text{Content: "Frosted Glass", Style: graphics.TextStyle{
 											Color:      graphics.RGBA(10, 10, 10, 0.4),
 											FontSize:   14,
 											FontWeight: graphics.FontWeightBold,
@@ -196,11 +196,11 @@ func elevationBox(label string, level int, colors theme.ColorScheme) core.Widget
 		BorderRadius: 12,
 		Color:        colors.SurfaceVariant,
 		Shadow:       graphics.BoxShadowElevation(level, colors.SurfaceTint.WithAlpha(0.31)),
-		ChildWidget: widgets.SizedBox{
+		Child: widgets.SizedBox{
 			Width:  72,
 			Height: 72,
-			ChildWidget: widgets.Center{
-				ChildWidget: widgets.Text{Content: label, Style: graphics.TextStyle{
+			Child: widgets.Center{
+				Child: widgets.Text{Content: label, Style: graphics.TextStyle{
 					Color:    colors.OnSurface,
 					FontSize: 14,
 				}},

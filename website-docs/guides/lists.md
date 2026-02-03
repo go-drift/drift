@@ -14,7 +14,7 @@ For small lists with all items in memory:
 
 ```go
 widgets.ListView{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         item1,
         item2,
         item3,
@@ -36,7 +36,7 @@ widgets.ListViewBuilder{
         item := items[index]
         return widgets.Container{
             Padding:     layout.EdgeInsetsAll(16),
-            ChildWidget: widgets.Text{Content: item.Title},
+            Child: widgets.Text{Content: item.Title},
         },
     },
 }
@@ -76,8 +76,8 @@ For scrollable content that isn't a list:
 
 ```go
 widgets.ScrollView{
-    ChildWidget: widgets.Column{
-        ChildrenWidgets: []core.Widget{
+    Child: widgets.Column{
+        Children: []core.Widget{
             header,
             content,
             footer,
@@ -95,7 +95,7 @@ widgets.ScrollView{
     Physics: widgets.BouncingScrollPhysics{}, // iOS-style bounce
     // or
     Physics: widgets.ClampingScrollPhysics{}, // Android-style clamp
-    ChildWidget: content,
+    Child: content,
 }
 ```
 
@@ -109,7 +109,7 @@ widgets.ScrollView{
 ```go
 widgets.ListView{
     ScrollDirection: widgets.AxisHorizontal, // Defaults to vertical
-    ChildrenWidgets: items,
+    Children: items,
 }
 ```
 

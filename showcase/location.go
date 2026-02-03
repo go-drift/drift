@@ -118,7 +118,7 @@ func (s *locationState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Text{Content: "When In Use:", Style: labelStyle(colors)},
 				permissionBadge(s.whenInUseStatus.Get(), colors),
 			},
@@ -127,7 +127,7 @@ func (s *locationState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Text{Content: "Always:", Style: labelStyle(colors)},
 				permissionBadge(s.alwaysStatus.Get(), colors),
 			},
@@ -135,7 +135,7 @@ func (s *locationState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Row{
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Request When In Use", func() {
 					go func() {
 						ctx := context.Background()
@@ -165,7 +165,7 @@ func (s *locationState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Row{
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Get Location", func() {
 					s.getCurrentLocation()
 				}),
@@ -194,7 +194,7 @@ func (s *locationState) locationCard(colors theme.ColorScheme) core.Widget {
 		return widgets.Container{
 			Color:        colors.SurfaceVariant,
 			BorderRadius: 8,
-			ChildWidget: widgets.PaddingAll(16,
+			Child: widgets.PaddingAll(16,
 				widgets.Text{Content: "No location data yet", Style: graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
 					FontSize: 14,
@@ -206,12 +206,12 @@ func (s *locationState) locationCard(colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		ChildWidget: widgets.PaddingAll(16,
+		Child: widgets.PaddingAll(16,
 			widgets.Column{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 				MainAxisSize:       widgets.MainAxisSizeMin,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					s.locationRow("Latitude", fmt.Sprintf("%.6f", loc.Latitude), colors),
 					widgets.VSpace(8),
 					s.locationRow("Longitude", fmt.Sprintf("%.6f", loc.Longitude), colors),
@@ -231,7 +231,7 @@ func (s *locationState) locationRow(label, value string, colors theme.ColorSchem
 	return widgets.Row{
 		MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: label, Style: graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,

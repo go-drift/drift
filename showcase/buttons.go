@@ -40,7 +40,7 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Primary", func() {}),
 				widgets.HSpace(8),
 				theme.ButtonOf(ctx, "Secondary", func() {}).
@@ -51,7 +51,7 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Error", func() {}).
 					WithColor(colors.Error, colors.OnError),
 				widgets.HSpace(8),
@@ -78,7 +78,7 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Small", func() {}).
 					WithPadding(layout.EdgeInsetsSymmetric(12, 8)).
 					WithFontSize(12),
@@ -115,7 +115,7 @@ func buildButtonsPage(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "With Haptics", func() {
 					platform.Haptics.LightImpact()
 				}),

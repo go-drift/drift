@@ -43,9 +43,9 @@ func (m *MaterialPageRoute) Build(ctx core.BuildContext) core.Widget {
 	// Wrap in slide transition if we have an animation
 	if m.controller != nil {
 		return SlideTransition{
-			Animation:   m.controller,
-			Direction:   SlideFromRight,
-			ChildWidget: content,
+			Animation: m.controller,
+			Direction: SlideFromRight,
+			Child:     content,
 		}
 	}
 

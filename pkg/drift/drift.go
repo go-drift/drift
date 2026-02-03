@@ -44,8 +44,8 @@ func Run(app App) {
 	if app.Root != nil {
 		// Wrap the root widget with the theme
 		themedRoot := theme.Theme{
-			Data:        app.Theme,
-			ChildWidget: app.Root,
+			Data:  app.Theme,
+			Child: app.Root,
 		}
 		engine.SetApp(themedRoot)
 	}

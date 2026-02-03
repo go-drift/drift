@@ -22,7 +22,7 @@ type loginState struct {
 func (s *loginState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Form{
         Autovalidate: true,
-        ChildWidget:  loginForm{parent: s},
+        Child:  loginForm{parent: s},
     }
 }
 

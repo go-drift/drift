@@ -46,17 +46,17 @@ func (f StackFit) String() string {
 // For absolute positioning, wrap children in [Positioned]:
 //
 //	Stack{
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        // Background fills the stack
 //	        Container{Color: bgColor},
 //	        // Badge in top-right corner
-//	        Positioned{Top: Ptr(8), Right: Ptr(8), ChildWidget: badge},
+//	        Positioned{Top: Ptr(8), Right: Ptr(8), Child: badge},
 //	    },
 //	}
 type Stack struct {
-	// ChildrenWidgets are the widgets to overlay. First child is at the bottom,
+	// Children are the widgets to overlay. First child is at the bottom,
 	// last child is on top.
-	ChildrenWidgets []core.Widget
+	Children []core.Widget
 	// Alignment positions non-Positioned children within the stack.
 	// Defaults to top-left (AlignmentTopLeft).
 	Alignment layout.Alignment
@@ -68,7 +68,7 @@ type Stack struct {
 // This is a convenience helper for the common case of creating a Stack with children.
 // Children are layered with the first child at the bottom and last child on top.
 func StackOf(children ...core.Widget) Stack {
-	return Stack{ChildrenWidgets: children}
+	return Stack{Children: children}
 }
 
 // CreateElement returns a RenderObjectElement for this Stack.
@@ -81,9 +81,9 @@ func (s Stack) Key() any {
 	return nil
 }
 
-// Children returns the child widgets.
-func (s Stack) Children() []core.Widget {
-	return s.ChildrenWidgets
+// ChildrenWidgets returns the child widgets.
+func (s Stack) ChildrenWidgets() []core.Widget {
+	return s.Children
 }
 
 // CreateRenderObject creates the RenderStack.
@@ -452,7 +452,7 @@ func hitTestChildrenReverse(children []layout.RenderBox, position graphics.Offse
 //
 //	IndexedStack{
 //	    Index: currentTab,
-//	    ChildrenWidgets: []core.Widget{
+//	    Children: []core.Widget{
 //	        HomeTab{},
 //	        SearchTab{},
 //	        ProfileTab{},
@@ -461,10 +461,10 @@ func hitTestChildrenReverse(children []layout.RenderBox, position graphics.Offse
 //
 // If Index is out of bounds, nothing is painted.
 type IndexedStack struct {
-	ChildrenWidgets []core.Widget
-	Alignment       layout.Alignment
-	Fit             StackFit
-	Index           int
+	Children  []core.Widget
+	Alignment layout.Alignment
+	Fit       StackFit
+	Index     int
 }
 
 func (s IndexedStack) CreateElement() core.Element {
@@ -475,8 +475,8 @@ func (s IndexedStack) Key() any {
 	return nil
 }
 
-func (s IndexedStack) Children() []core.Widget {
-	return s.ChildrenWidgets
+func (s IndexedStack) ChildrenWidgets() []core.Widget {
+	return s.Children
 }
 
 func (s IndexedStack) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
@@ -608,7 +608,7 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 //	// Center of stack
 //	Positioned{
 //	    Alignment: &graphics.AlignCenter,
-//	    ChildWidget: dialog,
+//	    Child: dialog,
 //	}
 //
 //	// Bottom-right corner, 16px inset
@@ -616,7 +616,7 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 //	    Alignment: &graphics.AlignBottomRight,
 //	    Right: Ptr(16),
 //	    Bottom: Ptr(16),
-//	    ChildWidget: fab,
+//	    Child: fab,
 //	}
 //
 // # Absolute Positioning
@@ -625,19 +625,19 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 // creates float64 pointers conveniently:
 //
 //	// Pin to top-left corner with 8pt margins
-//	Positioned{Left: Ptr(8), Top: Ptr(8), ChildWidget: icon}
+//	Positioned{Left: Ptr(8), Top: Ptr(8), Child: icon}
 //
 //	// Pin to bottom-right corner
-//	Positioned{Right: Ptr(16), Bottom: Ptr(16), ChildWidget: fab}
+//	Positioned{Right: Ptr(16), Bottom: Ptr(16), Child: fab}
 //
 //	// Stretch horizontally with fixed vertical position
-//	Positioned{Left: Ptr(0), Right: Ptr(0), Top: Ptr(100), ChildWidget: divider}
+//	Positioned{Left: Ptr(0), Right: Ptr(0), Top: Ptr(100), Child: divider}
 //
 //	// Fixed size at specific position
-//	Positioned{Left: Ptr(20), Top: Ptr(20), Width: Ptr(100), Height: Ptr(50), ChildWidget: box}
+//	Positioned{Left: Ptr(20), Top: Ptr(20), Width: Ptr(100), Height: Ptr(50), Child: box}
 //
 //	// Position only vertically - horizontal uses Stack.Alignment
-//	Positioned{Top: Ptr(20), ChildWidget: header}
+//	Positioned{Top: Ptr(20), Child: header}
 //
 // When both Left and Right are set (or Top and Bottom), the child stretches
 // to fill that dimension. Width/Height override the stretching behavior.
@@ -645,8 +645,8 @@ func (r *renderIndexedStack) HitTest(position graphics.Offset, result *layout.Hi
 // For axes where no position is set (neither Left nor Right, or neither Top
 // nor Bottom), the child uses the Stack's Alignment for that axis.
 type Positioned struct {
-	// ChildWidget is the widget to position.
-	ChildWidget core.Widget
+	// Child is the widget to position.
+	Child core.Widget
 
 	// Alignment positions the child relative to the Stack bounds using the
 	// graphics.Alignment coordinate system where (-1, -1) is top-left,
@@ -687,9 +687,9 @@ func (p Positioned) Key() any {
 	return nil
 }
 
-// Child returns the child widget.
-func (p Positioned) Child() core.Widget {
-	return p.ChildWidget
+// ChildWidget returns the child widget.
+func (p Positioned) ChildWidget() core.Widget {
+	return p.Child
 }
 
 // CreateRenderObject creates the RenderPositioned.

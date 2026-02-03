@@ -46,7 +46,7 @@ func (s *appState) Build(ctx core.BuildContext) core.Widget {
 
 	return widgets.Container{
 		Color: colors.Background,
-		ChildWidget: widgets.Centered(
+		Child: widgets.Centered(
 			widgets.ColumnOf(
 				widgets.MainAxisAlignmentCenter,
 				widgets.CrossAxisAlignmentCenter,

@@ -20,7 +20,7 @@ import "github.com/go-drift/drift/pkg/widgets"
 // Make a custom card tappable and accessible
 card := widgets.Tappable("Open settings", openSettings,
     widgets.Container{
-        ChildWidget: widgets.Text{Content: "Settings"},
+        Child: widgets.Text{Content: "Settings"},
     },
 )
 
@@ -109,7 +109,7 @@ Groups related widgets into a single accessibility unit. The screen reader annou
 // Price with currency - announced as "Price: $99.99" instead of "Price:" then "$99.99"
 widgets.SemanticGroup(
     widgets.Row{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Text{Content: "Price: "},
             widgets.Text{Content: "$99.99"},
         },
@@ -119,7 +119,7 @@ widgets.SemanticGroup(
 // Card with multiple text elements
 widgets.SemanticGroup(
     widgets.Column{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Text{Content: "John Smith"},
             widgets.Text{Content: "Software Engineer"},
             widgets.Text{Content: "San Francisco, CA"},
@@ -157,7 +157,7 @@ widgets.Decorative(backgroundImage)
 
 // Decorative icon next to text (text already conveys meaning)
 widgets.Row{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         widgets.Decorative(checkmarkIcon),
         widgets.Text{Content: "Task completed"},
     },
@@ -190,7 +190,7 @@ widgets.Semantics{
     OnIncrease:  func() { /* increase value */ },
     OnDecrease:  func() { /* decrease value */ },
 
-    ChildWidget: myWidget,
+    Child: myWidget,
 }
 ```
 
@@ -256,8 +256,8 @@ Use `MergeSemantics` to combine multiple elements into one accessibility node:
 ```go
 // Card with icon and label read as one unit
 card := widgets.MergeSemantics{
-    ChildWidget: widgets.Row{
-        ChildrenWidgets: []core.Widget{
+    Child: widgets.Row{
+        Children: []core.Widget{
             widgets.Icon{Icon: icons.Star},
             widgets.Text{Content: "Favorites"},
         },
@@ -274,7 +274,7 @@ Use `ExcludeSemantics` to hide decorative elements:
 // Decorative separator
 separator := widgets.ExcludeSemantics{
     Excluding: true,
-    ChildWidget: widgets.Container{
+    Child: widgets.Container{
         Height: 1,
         Color:  colors.Divider,
     },
@@ -313,7 +313,7 @@ volume := widgets.Semantics{
     MaxValue:     float64Ptr(100),
     OnIncrease:   func() { setVolume(currentVolume + 10) },
     OnDecrease:   func() { setVolume(currentVolume - 10) },
-    ChildWidget:  slider,
+    Child:  slider,
 }
 
 func float64Ptr(v float64) *float64 { return &v }
@@ -342,7 +342,7 @@ For areas that update dynamically, mark them as live regions:
 statusArea := widgets.Semantics{
     Label:       status,
     Flags:       semantics.SemanticsIsLiveRegion,
-    ChildWidget: widgets.Text{Content: status},
+    Child: widgets.Text{Content: status},
 }
 ```
 
@@ -462,7 +462,7 @@ widgets.SemanticLabel("Close dialog",
 ```go
 // Bad - each item announced separately
 widgets.Row{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         widgets.Text{Content: "Price:"},
         widgets.Text{Content: "$99.99"},
     },
@@ -471,7 +471,7 @@ widgets.Row{
 // Good - grouped with SemanticGroup
 widgets.SemanticGroup(
     widgets.Row{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Text{Content: "Price:"},
             widgets.Text{Content: "$99.99"},
         },
@@ -498,7 +498,7 @@ widgets.Image{
 ```go
 // Good - headings help screen reader users navigate
 widgets.Column{
-    ChildrenWidgets: []core.Widget{
+    Children: []core.Widget{
         widgets.SemanticHeading(1, widgets.Text{Content: "Settings"}),
         widgets.SemanticHeading(2, widgets.Text{Content: "Account"}),
         // account settings...
@@ -519,7 +519,7 @@ widgets.Tappable("Add item", handleTap,
         Width:     48,
         Height:    48,
         Alignment: layout.AlignmentCenter,
-        ChildWidget: widgets.Icon{Icon: icons.Add, Size: 24},
+        Child: widgets.Icon{Icon: icons.Add, Size: 24},
     },
 )
 ```

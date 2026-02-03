@@ -22,7 +22,7 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		positioningContainer(
 			widgets.Center{
-				ChildWidget: colorBox(boxColor, "Centered"),
+				Child: colorBox(boxColor, "Centered"),
 			},
 			colors,
 		),
@@ -95,9 +95,9 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 				widgets.MainAxisSizeMax,
 				colorBox(boxColor, "Fixed"),
 				widgets.Expanded{
-					ChildWidget: widgets.Container{
+					Child: widgets.Container{
 						Color: PinkSeed,
-						ChildWidget: widgets.PaddingAll(12,
+						Child: widgets.PaddingAll(12,
 							widgets.Text{Content: "Expanded", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
 						),
 					},
@@ -116,9 +116,9 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 				widgets.MainAxisSizeMax,
 				widgets.Expanded{
 					Flex: 1,
-					ChildWidget: widgets.Container{
+					Child: widgets.Container{
 						Color: boxColor,
-						ChildWidget: widgets.PaddingAll(12,
+						Child: widgets.PaddingAll(12,
 							widgets.Text{Content: "Flex 1", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 14}},
 						),
 					},
@@ -126,9 +126,9 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 				widgets.HSpace(8),
 				widgets.Expanded{
 					Flex: 2,
-					ChildWidget: widgets.Container{
+					Child: widgets.Container{
 						Color: PinkSeed,
-						ChildWidget: widgets.PaddingAll(12,
+						Child: widgets.PaddingAll(12,
 							widgets.Text{Content: "Flex 2", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
 						),
 					},
@@ -143,10 +143,10 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 // positioningContainer creates a fixed-size container for positioning demos.
 func positioningContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color:       colors.SurfaceVariant,
-		Width:       200,
-		Height:      100,
-		ChildWidget: child,
+		Color:  colors.SurfaceVariant,
+		Width:  200,
+		Height: 100,
+		Child:  child,
 	}
 }
 
@@ -155,18 +155,18 @@ func alignDemo(label string, alignment layout.Alignment, boxColor graphics.Color
 	return widgets.Column{
 		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 		MainAxisSize:       widgets.MainAxisSizeMin,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.Text{Content: label, Style: labelStyle(colors)},
 			widgets.VSpace(4),
 			widgets.Container{
 				Color:  colors.SurfaceVariant,
 				Width:  120,
 				Height: 80,
-				ChildWidget: widgets.Align{
+				Child: widgets.Align{
 					Alignment: alignment,
-					ChildWidget: widgets.Container{
+					Child: widgets.Container{
 						Color: boxColor,
-						ChildWidget: widgets.PaddingAll(8,
+						Child: widgets.PaddingAll(8,
 							widgets.Text{Content: "X", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 12}},
 						),
 					},
@@ -181,14 +181,14 @@ func sizedBoxDemo(label string, width, height float64, boxColor graphics.Color, 
 	return widgets.Column{
 		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 		MainAxisSize:       widgets.MainAxisSizeMin,
-		ChildrenWidgets: []core.Widget{
+		Children: []core.Widget{
 			widgets.SizedBox{
 				Width:  width,
 				Height: height,
-				ChildWidget: widgets.Container{
+				Child: widgets.Container{
 					Color: boxColor,
-					ChildWidget: widgets.Center{
-						ChildWidget: widgets.Text{Content: label, Style: graphics.TextStyle{
+					Child: widgets.Center{
+						Child: widgets.Text{Content: label, Style: graphics.TextStyle{
 							Color:    textColorFor(boxColor),
 							FontSize: 11,
 						}},

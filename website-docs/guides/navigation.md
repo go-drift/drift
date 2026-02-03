@@ -150,7 +150,7 @@ type SelectionScreen struct {
 
 func (s SelectionScreen) Build(ctx core.BuildContext) core.Widget {
     return widgets.ListView{
-        ChildrenWidgets: []core.Widget{
+        Children: []core.Widget{
             widgets.Tap(func() {
                 s.OnSelect("item_1")
                 navigation.NavigatorOf(ctx).Pop(nil)
@@ -173,7 +173,7 @@ navigation.Navigator{
         return navigation.NewMaterialPageRoute(
             func(ctx core.BuildContext) core.Widget {
                 return widgets.Column{
-                    ChildrenWidgets: []core.Widget{
+                    Children: []core.Widget{
                         widgets.Text{Content: "Page not found"},
                         widgets.Text{Content: settings.Name},
                         theme.ButtonOf(ctx, "Go Home", func() {

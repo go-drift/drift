@@ -124,7 +124,7 @@ func (s *cameraState) Build(ctx core.BuildContext) core.Widget {
 		widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				widgets.Text{Content: "Camera access:", Style: labelStyle(colors)},
 				permissionBadge(s.permissionStatus.Get(), colors),
 			},
@@ -145,7 +145,7 @@ func (s *cameraState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Row{
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			ChildrenWidgets: []core.Widget{
+			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Take Photo", func() {
 					s.capturePhoto(false)
 				}),
@@ -184,7 +184,7 @@ func (s *cameraState) imagePreview(colors theme.ColorScheme) core.Widget {
 			Width:        280,
 			Height:       280,
 			Alignment:    layout.AlignmentCenter,
-			ChildWidget: widgets.Text{
+			Child: widgets.Text{
 				Content: "No image",
 				Style: graphics.TextStyle{
 					Color:    colors.OnSurfaceVariant,
@@ -198,7 +198,7 @@ func (s *cameraState) imagePreview(colors theme.ColorScheme) core.Widget {
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
 		Overflow:     widgets.OverflowClip,
-		ChildWidget: widgets.Image{
+		Child: widgets.Image{
 			Source:    img,
 			Width:     280,
 			Height:    280,

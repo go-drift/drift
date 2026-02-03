@@ -70,7 +70,7 @@ func buildTabRootPage(ctx core.BuildContext, label string) core.Widget {
 
 	return widgets.Container{
 		Color: colors.Background,
-		ChildWidget: widgets.Centered(
+		Child: widgets.Centered(
 			widgets.ColumnOf(
 				widgets.MainAxisAlignmentCenter,
 				widgets.CrossAxisAlignmentStart,
@@ -94,13 +94,13 @@ func buildTabDetailPage(ctx core.BuildContext, label string) core.Widget {
 
 	content := widgets.Container{
 		Color: colors.Background,
-		ChildWidget: widgets.Padding{
+		Child: widgets.Padding{
 			Padding: layout.EdgeInsetsAll(24),
-			ChildWidget: widgets.Column{
+			Child: widgets.Column{
 				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 				MainAxisSize:       widgets.MainAxisSizeMin,
-				ChildrenWidgets: []core.Widget{
+				Children: []core.Widget{
 					widgets.Text{Content: label + " Details", Style: textTheme.HeadlineSmall},
 					widgets.VSpace(12),
 					theme.ButtonOf(ctx, "Back", func() {
