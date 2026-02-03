@@ -63,3 +63,20 @@ dependencies {
 if (file("google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }
+
+// Compile Drift Go code before building (for ejected projects only, macOS/Linux)
+// This task runs driftw which locates the drift CLI and compiles Go code
+tasks.register("compileDrift", Exec) {
+    workingDir = rootProject.projectDir.parentFile.parentFile  // project root
+    commandLine "${rootProject.projectDir}/driftw", "compile", "android"
+    // Only run if driftw exists (ejected project) and not on Windows
+    onlyIf {
+        def driftw = file("${rootProject.projectDir}/driftw")
+        def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+        driftw.exists() && driftw.canExecute() && !isWindows
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn "compileDrift"
+}

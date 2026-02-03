@@ -15,6 +15,64 @@ import (
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 )
 
+// IsEjected returns true if platform has been ejected to ./platform/<platform>/.
+// Uses strict validation - checks for multiple expected files to avoid false
+// positives from stray or partial directories.
+func IsEjected(projectRoot, platform string) bool {
+	platformDir := filepath.Join(projectRoot, "platform", platform)
+
+	switch platform {
+	case "ios":
+		// Require Runner/ to be a directory and project.pbxproj to be a file
+		runner := filepath.Join(platformDir, "Runner")
+		pbxproj := filepath.Join(platformDir, "Runner.xcodeproj", "project.pbxproj")
+		runnerInfo, err1 := os.Stat(runner)
+		pbxprojInfo, err2 := os.Stat(pbxproj)
+		return err1 == nil && runnerInfo.IsDir() &&
+			err2 == nil && !pbxprojInfo.IsDir()
+	case "android":
+		// Require settings.gradle and app/build.gradle to be files
+		settings := filepath.Join(platformDir, "settings.gradle")
+		buildGradle := filepath.Join(platformDir, "app", "build.gradle")
+		settingsInfo, err1 := os.Stat(settings)
+		buildGradleInfo, err2 := os.Stat(buildGradle)
+		return err1 == nil && !settingsInfo.IsDir() &&
+			err2 == nil && !buildGradleInfo.IsDir()
+	case "xtool":
+		// Require Package.swift and Sources/Runner/ to exist
+		packageSwift := filepath.Join(platformDir, "Package.swift")
+		sourcesRunner := filepath.Join(platformDir, "Sources", "Runner")
+		packageInfo, err1 := os.Stat(packageSwift)
+		sourcesInfo, err2 := os.Stat(sourcesRunner)
+		return err1 == nil && !packageInfo.IsDir() &&
+			err2 == nil && sourcesInfo.IsDir()
+	default:
+		return false
+	}
+}
+
+// EjectedBuildDir returns the build directory for an ejected platform.
+func EjectedBuildDir(projectRoot, platform string) string {
+	return filepath.Join(projectRoot, "platform", platform)
+}
+
+// BridgeDir returns where bridge files should be written.
+func BridgeDir(buildDir string) string {
+	return filepath.Join(buildDir, "bridge")
+}
+
+// JniLibsDir returns where Android native libraries go.
+// For ejected builds: ./platform/android/app/src/main/jniLibs
+// For managed builds: buildDir/android/app/src/main/jniLibs (matches build.go)
+func JniLibsDir(buildDir string, isEjected bool) string {
+	if isEjected {
+		return filepath.Join(buildDir, "app", "src", "main", "jniLibs")
+	}
+	// For managed builds, the scaffold creates an "android" subdirectory
+	// where the full Android project lives
+	return filepath.Join(buildDir, "android", "app", "src", "main", "jniLibs")
+}
+
 // Workspace represents a generated build workspace.
 type Workspace struct {
 	Root       string
@@ -28,28 +86,51 @@ type Workspace struct {
 }
 
 // Prepare generates a workspace for the requested platform.
+// For ejected platforms, this only prepares bridge files and overlay.
+// For managed platforms, this clears and regenerates the full build directory.
 func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, error) {
-	buildDir, err := buildDir(root, cfg, platform)
-	if err != nil {
-		return nil, err
-	}
+	ejected := IsEjected(root, platform)
 
-	if err := os.RemoveAll(buildDir); err != nil {
-		return nil, fmt.Errorf("failed to clear build directory: %w", err)
-	}
-	if err := os.MkdirAll(buildDir, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create build directory: %w", err)
+	var buildDir string
+	if ejected {
+		buildDir = EjectedBuildDir(root, platform)
+	} else {
+		var err error
+		buildDir, err = managedBuildDir(root, cfg, platform)
+		if err != nil {
+			return nil, err
+		}
+
+		// Only clear and recreate for managed builds
+		if err := os.RemoveAll(buildDir); err != nil {
+			return nil, fmt.Errorf("failed to clear build directory: %w", err)
+		}
+		if err := os.MkdirAll(buildDir, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to create build directory: %w", err)
+		}
 	}
 
 	ws := &Workspace{
 		Root:       root,
 		BuildDir:   buildDir,
-		BridgeDir:  filepath.Join(buildDir, "bridge"),
+		BridgeDir:  BridgeDir(buildDir),
 		AndroidDir: filepath.Join(buildDir, "android"),
 		IOSDir:     filepath.Join(buildDir, "ios"),
 		XtoolDir:   filepath.Join(buildDir, "xtool"),
 		Config:     cfg,
 		Overlay:    filepath.Join(buildDir, "overlay.json"),
+	}
+
+	// For ejected builds, the platform dir IS the build dir
+	if ejected {
+		switch platform {
+		case "android":
+			ws.AndroidDir = buildDir
+		case "ios":
+			ws.IOSDir = buildDir
+		case "xtool":
+			ws.XtoolDir = buildDir
+		}
 	}
 
 	if err := os.MkdirAll(ws.BridgeDir, 0o755); err != nil {
@@ -62,6 +143,7 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 		Bundle:      cfg.AppID,
 		Orientation: cfg.Orientation,
 		AllowHTTP:   cfg.AllowHTTP,
+		Ejected:     ejected,
 	}
 
 	switch platform {
@@ -92,7 +174,7 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 	return ws, nil
 }
 
-func buildDir(root string, cfg *config.Resolved, platform string) (string, error) {
+func managedBuildDir(root string, cfg *config.Resolved, platform string) (string, error) {
 	moduleRoot, err := moduleBuildRoot(cfg)
 	if err != nil {
 		return "", err

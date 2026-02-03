@@ -10,7 +10,14 @@ import (
 )
 
 // WriteXtool writes the SwiftPM project files for xtool-based iOS builds.
+// If settings.Ejected is true, this returns early without writing anything.
+// For ejected builds, bridge files and libraries are handled separately by
+// workspace.Prepare and the compile command.
 func WriteXtool(root string, settings Settings) error {
+	if settings.Ejected {
+		return nil
+	}
+
 	xtoolDir := filepath.Join(root, "xtool")
 	sourcesDir := filepath.Join(xtoolDir, "Sources", "Runner")
 	resourcesDir := filepath.Join(sourcesDir, "Resources")

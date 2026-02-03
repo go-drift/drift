@@ -7,4 +7,5 @@ type Settings struct {
 	Bundle      string
 	Orientation string
 	AllowHTTP   bool
+	Ejected     bool // If true, skip user-owned files (Swift/Kotlin, project files)
 }

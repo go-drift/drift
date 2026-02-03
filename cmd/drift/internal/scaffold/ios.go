@@ -10,7 +10,14 @@ import (
 )
 
 // WriteIOS writes the iOS project files to root.
+// If settings.Ejected is true, this returns early without writing anything.
+// For ejected builds, bridge files and libraries are handled separately by
+// workspace.Prepare and the compile command.
 func WriteIOS(root string, settings Settings) error {
+	if settings.Ejected {
+		return nil
+	}
+
 	iosDir := filepath.Join(root, "ios", "Runner")
 
 	// Create template data

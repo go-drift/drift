@@ -26,6 +26,7 @@ const sidebars: SidebarsConfig = {
         'guides/accessibility',
         'guides/error-handling',
         'guides/debugging',
+        'guides/eject',
         'guides/testing',
         'guides/skia',
         'guides/xtool-setup',

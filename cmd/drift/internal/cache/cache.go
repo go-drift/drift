@@ -237,3 +237,12 @@ func intCompare(a, b int) int {
 	}
 	return 0
 }
+
+// DriftSkiaVersion returns the drift CLI version used as the Skia library version tag.
+// This is used to check if ejected projects have matching Skia libraries.
+func DriftSkiaVersion() string {
+	if global.version != "" {
+		return global.version
+	}
+	return global.rawVersion
+}

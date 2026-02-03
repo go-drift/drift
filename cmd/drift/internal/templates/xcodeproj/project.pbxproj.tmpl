@@ -142,6 +142,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = A11111111111111111111450 /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
+				A11111111111111111111502 /* Compile Drift */,
 				A11111111111111111111500 /* Sources */,
 				A11111111111111111111501 /* Resources */,
 				A11111111111111111111200 /* Frameworks */,
@@ -197,6 +198,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A11111111111111111111502 /* Compile Drift */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Drift";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "# Only run for ejected projects (driftw exists)\nif [ -x \"$PROJECT_DIR/driftw\" ]; then\n    \"$PROJECT_DIR/driftw\" compile ios\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A11111111111111111111500 /* Sources */ = {

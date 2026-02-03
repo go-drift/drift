@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-//go:embed android ios bridge/* xcodeproj/* xtool/* init/*
+//go:embed android ios bridge/* xcodeproj/* xtool/* init/* driftw
 var FS embed.FS
 
 // TemplateInput holds the caller-provided values for template rendering.
