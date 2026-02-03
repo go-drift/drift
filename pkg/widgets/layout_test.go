@@ -527,6 +527,40 @@ func TestPositioned_AlignmentMode_WidthHeightStillApply(t *testing.T) {
 	}
 }
 
+func TestStack_ExpandAlignmentPositionedUsesIntrinsicSize(t *testing.T) {
+	child := &mockFixedChild{width: 50, height: 20}
+	child.SetSelf(child)
+
+	pos := &renderPositioned{
+		alignment: &graphics.AlignBottomCenter,
+		bottom:    ptrFloat(100),
+	}
+	pos.SetSelf(pos)
+	pos.SetChild(child)
+
+	stack := &renderStack{
+		alignment: layout.AlignmentTopLeft,
+		fit:       StackFitExpand,
+	}
+	stack.SetSelf(stack)
+	stack.SetChildren([]layout.RenderObject{pos})
+
+	constraints := layout.Tight(graphics.Size{Width: 300, Height: 200})
+	stack.Layout(constraints, true)
+
+	size := pos.Size()
+	if size.Width != 50 || size.Height != 20 {
+		t.Fatalf("expected positioned size 50x20 from intrinsic layout, got %.1fx%.1f", size.Width, size.Height)
+	}
+
+	offset := getChildOffset(pos)
+	expectedX := 300.0/2 - 50.0/2
+	expectedY := 200.0 - 20.0/2 - 100.0
+	if offset.X != expectedX || offset.Y != expectedY {
+		t.Fatalf("expected positioned offset (%.1f,%.1f), got (%.1f,%.1f)", expectedX, expectedY, offset.X, offset.Y)
+	}
+}
+
 func ptrFloat(v float64) *float64 {
 	return &v
 }

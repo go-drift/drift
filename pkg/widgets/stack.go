@@ -199,7 +199,7 @@ func layoutStackChildren(children []layout.RenderBox, fit StackFit, alignment la
 	// Re-layout those that stretch (both edges set), and calculate offsets for all.
 	for _, child := range children {
 		if pos, ok := child.(*renderPositioned); ok {
-			layoutPositionedChild(pos, size, alignment)
+			layoutPositionedChild(pos, size, alignment, fit == StackFitExpand)
 		}
 	}
 
@@ -310,12 +310,39 @@ func positionedFirstPassConstraints(pos *renderPositioned, constraints layout.Co
 // and uses alignment for axes where no position is specified.
 //
 // Note: The first pass already applied explicit Width/Height and single-edge constraints.
-// This function only re-layouts when edge-based stretching is needed (both edges set
-// without explicit dimension), since stretching depends on final stack size.
-func layoutPositionedChild(pos *renderPositioned, stackSize graphics.Size, stackAlignment layout.Alignment) {
+// This function re-layouts when:
+// - Alignment mode is used and relayoutAlignment is true (child should size naturally, not fill stack)
+// - Edge-based stretching is needed (both edges set without explicit dimension)
+func layoutPositionedChild(pos *renderPositioned, stackSize graphics.Size, stackAlignment layout.Alignment, relayoutAlignment bool) {
 	if pos.child == nil {
 		pos.SetSize(graphics.Size{})
 		return
+	}
+
+	// For alignment mode, re-layout with loose constraints so child sizes naturally.
+	// The first pass may have applied tight constraints (when StackFitExpand),
+	// but alignment mode expects the child to use its intrinsic size.
+	if relayoutAlignment && pos.alignment != nil {
+		var minWidth, maxWidth, minHeight, maxHeight float64
+		if pos.width != nil {
+			minWidth = *pos.width
+			maxWidth = *pos.width
+		} else {
+			maxWidth = stackSize.Width
+		}
+		if pos.height != nil {
+			minHeight = *pos.height
+			maxHeight = *pos.height
+		} else {
+			maxHeight = stackSize.Height
+		}
+		childConstraints := layout.Constraints{
+			MinWidth:  minWidth,
+			MaxWidth:  maxWidth,
+			MinHeight: minHeight,
+			MaxHeight: maxHeight,
+		}
+		pos.child.Layout(childConstraints, true)
 	}
 
 	// Only re-layout if stretching on either axis (both edges set without explicit dimension)
@@ -544,7 +571,7 @@ func (r *renderIndexedStack) PerformLayout() {
 			if pos, ok := child.(*renderPositioned); ok {
 				// Mirror Stack behavior for positioned children.
 				pos.Layout(layout.Tight(size), true) // true: we read child.Size()
-				layoutPositionedChild(pos, size, r.alignment)
+				layoutPositionedChild(pos, size, r.alignment, true)
 			} else {
 				child.Layout(layout.Tight(size), true) // true: we read child.Size()
 				offset := r.alignment.WithinRect(
