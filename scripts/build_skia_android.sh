@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKIA_DIR="$ROOT_DIR/third_party/skia"
 DRIFT_SKIA_OUT="$ROOT_DIR/third_party/drift_skia"
+SKIA_REV_FILE="$ROOT_DIR/SKIA_REV"
 
 if [[ ! -d "$SKIA_DIR" ]]; then
   echo "Skia not found at $SKIA_DIR. Run scripts/fetch_skia.sh first."
@@ -13,6 +14,22 @@ fi
 if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
   echo "ANDROID_NDK_HOME is not set."
   exit 1
+fi
+
+# Checkout pinned Skia revision if SKIA_REV exists
+# Set SKIP_SKIA_REV=1 to use your current Skia checkout (for local patching/testing)
+if [[ -z "${SKIP_SKIA_REV:-}" ]] && [[ -f "$SKIA_REV_FILE" ]]; then
+  skia_rev="$(tr -d '[:space:]' < "$SKIA_REV_FILE")"
+  if [[ -n "$skia_rev" ]]; then
+    echo "Checking out pinned Skia revision: $skia_rev"
+    cd "$SKIA_DIR"
+    # Only fetch if commit is not already present locally
+    if ! git cat-file -e "$skia_rev^{commit}" 2>/dev/null; then
+      git fetch origin
+    fi
+    git checkout "$skia_rev"
+    cd "$ROOT_DIR"
+  fi
 fi
 
 # Detect NDK major version from source.properties

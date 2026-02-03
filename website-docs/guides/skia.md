@@ -78,13 +78,36 @@ Building from source requires:
 - Ninja build system
 - For Android: `ANDROID_NDK_HOME` environment variable set
 
+### Pinned Skia Version
+
+The `SKIA_REV` file in the repository root pins the exact Skia commit used for builds. This ensures all contributors and CI workflows build against the same Skia version.
+
+To update to a newer Skia version:
+
+```bash
+# Update to latest Skia main
+$DRIFT_SRC/scripts/update_skia_rev.sh
+
+# Or pin a specific commit
+$DRIFT_SRC/scripts/update_skia_rev.sh --rev <commit-hash>
+
+# Update and fetch in one step
+$DRIFT_SRC/scripts/update_skia_rev.sh --sync
+```
+
+To build with a custom Skia checkout (e.g., for testing local patches), set `SKIP_SKIA_REV=1`:
+
+```bash
+SKIP_SKIA_REV=1 $DRIFT_SRC/scripts/build_skia_android.sh
+```
+
 ### Fetch Skia Source
 
 ```bash
 $DRIFT_SRC/scripts/fetch_skia.sh
 ```
 
-This clones Skia from `https://skia.googlesource.com/skia`, checks out the latest `main`, and runs `git-sync-deps` to fetch dependencies.
+This clones Skia from `https://skia.googlesource.com/skia`, checks out the revision specified in `SKIA_REV`, and runs `git-sync-deps` to fetch dependencies.
 
 ### Build for Android
 

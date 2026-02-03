@@ -63,6 +63,7 @@ drift run android
 | `scripts/` | Skia build helpers |
 | `third_party/skia` | Skia source checkout |
 | `third_party/drift_skia` | Skia bridge outputs |
+| `SKIA_REV` | Pinned Skia commit hash |
 
 ## API Stability
 
