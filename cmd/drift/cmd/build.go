@@ -51,6 +51,7 @@ Or check Xcode -> Settings -> Accounts -> select team -> View Details`,
 
 type buildOptions struct {
 	noFetch bool
+	ejected bool
 }
 
 type iosBuildOptions struct {
@@ -112,6 +113,9 @@ func runBuild(args []string) error {
 		return err
 	}
 
+	// Check if platform is ejected
+	ejected := workspace.IsEjected(root, platform)
+
 	ws, err := workspace.Prepare(root, cfg, platform)
 	if err != nil {
 		return err
@@ -119,10 +123,13 @@ func runBuild(args []string) error {
 
 	switch platform {
 	case "android":
+		androidOpts.ejected = ejected
 		return buildAndroid(ws, androidOpts)
 	case "ios":
+		iosOpts.ejected = ejected
 		return buildIOS(ws, iosOpts)
 	case "xtool":
+		xtoolOpts.ejected = ejected
 		return buildXtool(ws, xtoolOpts)
 	default:
 		return fmt.Errorf("unknown platform %q (use android, ios, or xtool)", platform)

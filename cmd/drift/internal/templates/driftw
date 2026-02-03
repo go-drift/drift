@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# driftw - Drift wrapper for IDE builds (macOS/Linux only)
+# Locates drift CLI and runs it with provided arguments
+
+set -e
+
+# Build candidate list (only include GOBIN if set)
+candidates=("drift")
+[[ -n "$GOBIN" ]] && candidates+=("$GOBIN/drift")
+candidates+=(
+    "$HOME/go/bin/drift"
+    "$HOME/.local/bin/drift"
+    "/usr/local/bin/drift"
+    "/opt/homebrew/bin/drift"
+)
+
+# Try each candidate
+for candidate in "${candidates[@]}"; do
+    # For bare "drift", use command -v to search PATH
+    # For absolute paths, check existence and executable bit explicitly
+    if [[ "$candidate" == /* ]]; then
+        [[ -x "$candidate" ]] && exec "$candidate" "$@"
+    else
+        resolved=$(command -v "$candidate" 2>/dev/null) && [[ -x "$resolved" ]] && exec "$resolved" "$@"
+    fi
+done
+
+echo "Error: drift not found in PATH or common locations." >&2
+echo "Install with: go install github.com/go-drift/drift/cmd/drift@latest" >&2
+echo "Or ensure drift is in one of: PATH, \$GOBIN, ~/go/bin, ~/.local/bin, /usr/local/bin" >&2
+exit 1
