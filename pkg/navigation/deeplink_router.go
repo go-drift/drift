@@ -15,6 +15,18 @@ type DeepLinkRoute struct {
 }
 
 // DeepLinkController listens for deep links and navigates to matching routes.
+//
+// Deep links are dispatched via [RootNavigator], which requires a [Router] or
+// [Navigator] with IsRoot=true to be present in the widget tree. If your app
+// uses [TabScaffold] at the top level, wrap it in a Router or Navigator:
+//
+//	navigation.Router{
+//	    Routes: []navigation.RouteConfigurer{
+//	        navigation.RouteConfig{Path: "/", Builder: buildTabScaffold},
+//	    },
+//	}
+//
+// Without a root navigator, deep links will remain pending indefinitely.
 type DeepLinkController struct {
 	RouteForLink func(link platform.DeepLink) (DeepLinkRoute, bool)
 	OnError      func(err error)
@@ -103,7 +115,7 @@ func (c *DeepLinkController) handleError(err error) {
 }
 
 func (c *DeepLinkController) navigate(route DeepLinkRoute) {
-	if nav := GlobalNavigator(); nav != nil {
+	if nav := RootNavigator(); nav != nil {
 		nav.PushNamed(route.Name, route.Args)
 		return
 	}
@@ -127,7 +139,7 @@ func (c *DeepLinkController) flushPending() {
 	if pending == nil {
 		return
 	}
-	if nav := GlobalNavigator(); nav != nil {
+	if nav := RootNavigator(); nav != nil {
 		nav.PushNamed(pending.Name, pending.Args)
 		c.mu.Lock()
 		c.pendingRoute = nil

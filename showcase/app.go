@@ -60,75 +60,125 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 	// Get memoized theme data (only recreated when values change)
 	appThemeData := s.getAppThemeData()
 
-	navigator := navigation.Navigator{
-		InitialRoute: "/",
-		OnGenerateRoute: func(settings navigation.RouteSettings) navigation.Route {
-			// Home page
-			if settings.Name == "/" {
-				return navigation.NewMaterialPageRoute(
-					func(ctx core.BuildContext) core.Widget {
-						return buildHomePage(ctx, s.isDark, s.toggleTheme)
-					},
-					settings,
-				)
-			}
+	// Build routes for the declarative Router
+	routes := s.buildRoutes()
 
-			// Theming page (special case needing theme state)
-			if settings.Name == "/theming" {
-				return navigation.NewMaterialPageRoute(
-					func(ctx core.BuildContext) core.Widget {
-						return buildThemingPage(ctx, s.isDark, s.isCupertino)
-					},
-					settings,
-				)
-			}
-
-			// Category hub pages (new 6-category layout)
-			switch settings.Name {
-			case "/theming-hub":
-				return navigation.NewMaterialPageRoute(buildThemingHubPage, settings)
-			case "/layout-hub":
-				return navigation.NewMaterialPageRoute(buildLayoutHubPage, settings)
-			case "/widgets-hub":
-				return navigation.NewMaterialPageRoute(buildWidgetsHubPage, settings)
-			case "/motion-hub":
-				return navigation.NewMaterialPageRoute(buildMotionHubPage, settings)
-			case "/media-hub":
-				return navigation.NewMaterialPageRoute(buildMediaHubPage, settings)
-			case "/system-hub":
-				return navigation.NewMaterialPageRoute(buildSystemHubPage, settings)
-			// Legacy routes (redirect to new)
-			case "/foundations":
-				return navigation.NewMaterialPageRoute(buildLayoutHubPage, settings)
-			case "/components":
-				return navigation.NewMaterialPageRoute(buildWidgetsHubPage, settings)
-			case "/interactions":
-				return navigation.NewMaterialPageRoute(buildMotionHubPage, settings)
-			case "/platform":
-				return navigation.NewMaterialPageRoute(buildSystemHubPage, settings)
-			}
-
-			// All other demos from registry
-			for _, demo := range demos {
-				if settings.Name == demo.Route {
-					builder := demo.Builder
-					return navigation.NewMaterialPageRoute(
-						func(ctx core.BuildContext) core.Widget {
-							return builder(ctx)
-						},
-						settings,
-					)
-				}
-			}
-			return nil
-		},
+	router := navigation.Router{
+		InitialPath:  "/",
+		Routes:       routes,
+		ErrorBuilder: buildNotFoundPage,
 	}
 
 	// Single AppTheme - no tree structure change when platform toggles
 	return theme.AppTheme{
 		Data:  appThemeData,
-		Child: navigator,
+		Child: router,
 	}
+}
+
+// buildRoutes constructs the declarative route configuration.
+func (s *showcaseState) buildRoutes() []navigation.RouteConfigurer {
+	routes := []navigation.RouteConfigurer{
+		// Home page
+		navigation.RouteConfig{
+			Path: "/",
+			Builder: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+				return buildHomePage(ctx, s.isDark, s.toggleTheme)
+			},
+		},
+
+		// Theming page (special case needing theme state)
+		navigation.RouteConfig{
+			Path: "/theming",
+			Builder: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+				return buildThemingPage(ctx, s.isDark, s.isCupertino)
+			},
+		},
+
+		// Category hub pages
+		navigation.RouteConfig{
+			Path:    "/theming-hub",
+			Builder: wrapBuilder(buildThemingHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/layout-hub",
+			Builder: wrapBuilder(buildLayoutHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/widgets-hub",
+			Builder: wrapBuilder(buildWidgetsHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/motion-hub",
+			Builder: wrapBuilder(buildMotionHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/media-hub",
+			Builder: wrapBuilder(buildMediaHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/system-hub",
+			Builder: wrapBuilder(buildSystemHubPage),
+		},
+
+		// Legacy routes (redirect to new hubs)
+		navigation.RouteConfig{
+			Path:    "/foundations",
+			Builder: wrapBuilder(buildLayoutHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/components",
+			Builder: wrapBuilder(buildWidgetsHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/interactions",
+			Builder: wrapBuilder(buildMotionHubPage),
+		},
+		navigation.RouteConfig{
+			Path:    "/platform",
+			Builder: wrapBuilder(buildSystemHubPage),
+		},
+	}
+
+	// Add all demos from registry
+	for _, demo := range demos {
+		if demo.Builder != nil {
+			builder := demo.Builder
+			routes = append(routes, navigation.RouteConfig{
+				Path: demo.Route,
+				Builder: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+					return builder(ctx)
+				},
+			})
+		}
+	}
+
+	return routes
+}
+
+// wrapBuilder adapts a simple builder to the Router's builder signature.
+func wrapBuilder(fn func(ctx core.BuildContext) core.Widget) func(core.BuildContext, navigation.RouteSettings) core.Widget {
+	return func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+		return fn(ctx)
+	}
+}
+
+// buildNotFoundPage shows a 404 error page.
+func buildNotFoundPage(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+	_, colors, textTheme := theme.UseTheme(ctx)
+	return pageScaffold(ctx, "Not Found", widgets.Container{
+		Color: colors.Background,
+		Child: widgets.Center{
+			Child: widgets.ColumnOf(
+				widgets.MainAxisAlignmentCenter,
+				widgets.CrossAxisAlignmentCenter,
+				widgets.MainAxisSizeMin,
+				widgets.Text{Content: "404", Style: textTheme.DisplayLarge},
+				widgets.VSpace(16),
+				widgets.Text{Content: "Page not found: " + settings.Name, Style: textTheme.BodyLarge},
+			),
+		},
+	})
 }
 
 // getAppThemeData returns memoized theme data, recreating only when state changes.
