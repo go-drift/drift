@@ -57,16 +57,16 @@ type RenderBoxBase struct {
 	parentData           any
 	owner                *PipelineOwner
 	self                 RenderObject
-	parent               RenderObject          // parent reference for tree walking
-	depth                int                   // tree depth (root = 0)
-	relayoutBoundary     RenderObject          // cached nearest relayout boundary
-	needsLayout          bool                  // local dirty flag
-	constraints          Constraints           // last received constraints
-	repaintBoundary      RenderObject          // cached nearest repaint boundary
-	needsPaint           bool                  // local dirty flag for paint
-	layer                *graphics.DisplayList // cached paint output for boundaries
-	semanticsBoundary    RenderObject          // cached nearest semantics boundary
-	needsSemanticsUpdate bool                  // local dirty flag for semantics
+	parent               RenderObject    // parent reference for tree walking
+	depth                int             // tree depth (root = 0)
+	relayoutBoundary     RenderObject    // cached nearest relayout boundary
+	needsLayout          bool            // local dirty flag
+	constraints          Constraints     // last received constraints
+	repaintBoundary      RenderObject    // cached nearest repaint boundary
+	needsPaint           bool            // local dirty flag for paint
+	layer                *graphics.Layer // stable layer for boundaries (never nil after creation)
+	semanticsBoundary    RenderObject    // cached nearest semantics boundary
+	needsSemanticsUpdate bool            // local dirty flag for semantics
 }
 
 // Size returns the current size of the render box.
@@ -138,7 +138,10 @@ func (r *RenderBoxBase) MarkNeedsLayout() {
 // This is because SetSelf() pre-sets needsPaint=true without scheduling, and
 // SchedulePaint() already handles deduplication internally.
 func (r *RenderBoxBase) MarkNeedsPaint() {
-	r.layer = nil // Always invalidate cached layer
+	// Mark layer dirty (preserves stable identity - parent references remain valid)
+	if r.layer != nil {
+		r.layer.MarkDirty()
+	}
 
 	if r.owner == nil || r.self == nil {
 		r.needsPaint = true
@@ -149,7 +152,7 @@ func (r *RenderBoxBase) MarkNeedsPaint() {
 	if r.repaintBoundary == r.self {
 		r.needsPaint = true
 		r.owner.SchedulePaint(r.self) // SchedulePaint handles deduplication
-		return
+		return                        // STOP: parent references us, doesn't embed content
 	}
 
 	// Walk up to parent. This continues until hitting a boundary.
@@ -203,7 +206,10 @@ func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	r.needsLayout = true
 	r.repaintBoundary = nil
 	r.needsPaint = true
-	r.layer = nil
+	// Mark layer dirty but don't nil it (preserves stable identity)
+	if r.layer != nil {
+		r.layer.MarkDirty()
+	}
 	r.semanticsBoundary = nil
 	r.needsSemanticsUpdate = true
 }
@@ -244,14 +250,28 @@ func (r *RenderBoxBase) NeedsPaint() bool {
 	return r.needsPaint
 }
 
-// Layer returns the cached display list for repaint boundaries.
-func (r *RenderBoxBase) Layer() *graphics.DisplayList {
+// Layer returns the cached layer for repaint boundaries.
+func (r *RenderBoxBase) Layer() *graphics.Layer {
 	return r.layer
 }
 
-// SetLayer stores the cached display list.
-func (r *RenderBoxBase) SetLayer(list *graphics.DisplayList) {
-	r.layer = list
+// EnsureLayer returns the existing layer or creates one if needed.
+// The layer has stable identity - never replace it, only mark dirty.
+func (r *RenderBoxBase) EnsureLayer() *graphics.Layer {
+	if r.layer == nil {
+		r.layer = &graphics.Layer{Dirty: true, Size: r.size}
+	}
+	return r.layer
+}
+
+// SetLayerContent updates the layer's content (called after recording).
+func (r *RenderBoxBase) SetLayerContent(content *graphics.DisplayList) {
+	if r.layer == nil {
+		r.layer = &graphics.Layer{}
+	}
+	r.layer.Content = content
+	r.layer.Size = r.size
+	r.layer.Dirty = false
 }
 
 // ClearNeedsPaint marks this render object as painted.

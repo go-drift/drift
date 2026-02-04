@@ -39,6 +39,12 @@ type renderView struct {
 	child layout.RenderBox
 }
 
+// IsRepaintBoundary returns true - the root view is always a repaint boundary.
+// This is required for the layer tree compositing system.
+func (r *renderView) IsRepaintBoundary() bool {
+	return true
+}
+
 func (r *renderView) SetChild(child layout.RenderObject) {
 	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)

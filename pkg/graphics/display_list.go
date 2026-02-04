@@ -75,6 +75,11 @@ func (r *PictureRecorder) append(op displayOp) {
 	r.ops = append(r.ops, op)
 }
 
+// DrawChildLayer records a child layer reference at current canvas state.
+func (r *PictureRecorder) DrawChildLayer(layer *Layer) {
+	r.append(opDrawChildLayer{layer: layer})
+}
+
 type displayOp interface {
 	execute(canvas Canvas)
 }
@@ -196,6 +201,22 @@ func (c *recordingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tint
 
 func (c *recordingCanvas) Size() Size {
 	return c.size
+}
+
+// DrawChildLayer records a child layer reference at current canvas state.
+func (c *recordingCanvas) DrawChildLayer(layer *Layer) {
+	c.recorder.DrawChildLayer(layer)
+}
+
+// opDrawChildLayer references a child layer to composite at current canvas state.
+type opDrawChildLayer struct {
+	layer *Layer
+}
+
+func (op opDrawChildLayer) execute(canvas Canvas) {
+	if op.layer != nil {
+		op.layer.Composite(canvas)
+	}
 }
 
 type opSave struct{}
