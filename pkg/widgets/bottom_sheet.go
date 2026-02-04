@@ -502,7 +502,7 @@ func (s *bottomSheetState) Build(ctx core.BuildContext) core.Widget {
 	}
 
 	dragMode := s.resolveDragMode()
-	if s.enableDrag && dragMode == DragModeHandleOnly && s.showHandle {
+	if s.enableDrag && s.showHandle {
 		handleWidget = sheetDragRegion{
 			Child:       handleWidget,
 			ShouldStart: s.shouldStartHandleDrag,
