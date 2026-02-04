@@ -324,6 +324,14 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 	// Register with TabScaffold if we're inside one (for active navigator tracking)
 	tryRegisterTabNavigator(ctx, s)
 
+	// Check if top route is transparent (needs previous routes visible)
+	topIsTransparent := false
+	if len(s.routes) > 0 {
+		if tr, ok := s.routes[len(s.routes)-1].(TransparentRoute); ok {
+			topIsTransparent = tr.IsTransparent()
+		}
+	}
+
 	// Build all routes in a Stack
 	children := make([]core.Widget, 0, len(s.routes)+1)
 	for i, route := range s.routes {
@@ -332,11 +340,17 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 			route: route,
 			isTop: isTop,
 		}
+
+		// Route is visible if:
+		// - It's the top route, OR
+		// - Top route is transparent and this is the route directly below it
+		isVisible := isTop || (topIsTransparent && i == len(s.routes)-2)
+
 		// Always wrap in ExcludeSemantics to maintain element tree identity.
 		// Non-top routes are excluded from accessibility (hidden behind the top route).
 		children = append(children, widgets.ExcludeSemantics{
 			Child: widgets.Offstage{
-				Offstage: !isTop,
+				Offstage: !isVisible,
 				Child:    rb,
 			},
 			Excluding: !isTop,

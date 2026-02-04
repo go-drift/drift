@@ -189,6 +189,73 @@ func showDialog(ctx core.BuildContext) {
 - Removes both entries when the route is popped
 - Handles the case where overlay isn't ready yet (defers insertion)
 
+## Bottom Sheets
+
+Bottom sheets are built on overlays and modal routes, and can be presented using
+the navigation helper `ShowModalBottomSheet`.
+
+```go
+result := <-navigation.ShowModalBottomSheet(ctx, func(ctx core.BuildContext) core.Widget {
+    return widgets.Padding{
+        Padding: layout.EdgeInsetsAll(24),
+        Child: widgets.Text{Content: "Bottom sheet content"},
+    }
+})
+```
+
+### Snap Points and Available Height
+
+Snap points are defined as fractions of **available height** (screen height minus
+safe area insets).
+
+```go
+navigation.ShowModalBottomSheet(
+    ctx,
+    func(ctx core.BuildContext) core.Widget { return sheetContent() },
+    navigation.WithSnapPoints(widgets.SnapHalf, widgets.SnapFull),
+    navigation.WithInitialSnapPoint(0),
+)
+```
+
+### Content-Aware Dragging
+
+Use `BottomSheetScrollable` to coordinate scrollables with sheet dragging.
+This allows the sheet to drag when the scroll view is at the top, and otherwise
+lets the list consume the gesture.
+
+```go
+navigation.ShowModalBottomSheet(ctx, func(ctx core.BuildContext) core.Widget {
+    return widgets.BottomSheetScrollable{
+        Builder: func(controller *widgets.ScrollController) core.Widget {
+            return widgets.ListView{
+                Controller: controller,
+                Children:   items,
+            }
+        },
+    }
+},
+    navigation.WithSnapPoints(widgets.SnapHalf, widgets.SnapFull),
+    navigation.WithDragMode(widgets.DragModeContentAware),
+)
+```
+
+### Programmatic Control
+
+Use `BottomSheetScope` from inside the sheet content:
+
+```go
+navigation.ShowModalBottomSheet(ctx, func(ctx core.BuildContext) core.Widget {
+    return widgets.Column{
+        Children: []core.Widget{
+            widgets.Text{Content: "Sheet"},
+            theme.ButtonOf(ctx, "Close", func() {
+                widgets.BottomSheetScope{}.Of(ctx).Close(nil)
+            }),
+        },
+    }
+})
+```
+
 ## Navigator Integration
 
 The `Navigator` widget automatically wraps its content in an `Overlay`. This means:

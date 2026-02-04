@@ -66,6 +66,7 @@ var demos = []Demo{
 	{"/scroll", "Scrolling", "Scrollable lists with physics", CategoryLayout, "icon-scroll.svg", buildScrollPage},
 	{"/tabs", "Tabs", "Bottom tab navigation", CategoryWidgets, "icon-navigation.svg", buildTabsPage},
 	{"/overlays", "Overlays", "Modals, dialogs, and toasts", CategoryWidgets, "icon-navigation.svg", buildOverlaysPage},
+	{"/bottom-sheets", "Bottom Sheets", "Drag-to-dismiss sheets", CategoryWidgets, "icon-navigation.svg", buildBottomSheetsPage},
 
 	// Media demos
 	{"/camera", "Camera", "Photo capture and gallery access", CategoryMedia, "icon-camera.svg", buildCameraPage},

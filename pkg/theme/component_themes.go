@@ -248,3 +248,37 @@ func DefaultDropdownTheme(colors ColorScheme) DropdownThemeData {
 		FontSize:            16,
 	}
 }
+
+// BottomSheetThemeData defines default styling for BottomSheet widgets.
+type BottomSheetThemeData struct {
+	// BackgroundColor is the sheet's background color.
+	BackgroundColor graphics.Color
+	// HandleColor is the drag handle indicator color.
+	HandleColor graphics.Color
+	// BarrierColor is the color of the semi-transparent barrier behind the sheet.
+	BarrierColor graphics.Color
+	// BorderRadius is the corner radius for the top corners of the sheet.
+	BorderRadius float64
+	// HandleWidth is the width of the drag handle indicator.
+	HandleWidth float64
+	// HandleHeight is the height of the drag handle indicator.
+	HandleHeight float64
+	// HandleTopPadding is the padding above the drag handle.
+	HandleTopPadding float64
+	// HandleBottomPadding is the padding below the drag handle.
+	HandleBottomPadding float64
+}
+
+// DefaultBottomSheetTheme returns BottomSheetThemeData derived from a ColorScheme.
+func DefaultBottomSheetTheme(colors ColorScheme) BottomSheetThemeData {
+	return BottomSheetThemeData{
+		BackgroundColor:     colors.Surface,
+		HandleColor:         colors.OnSurfaceVariant,
+		BarrierColor:        graphics.RGBA(0, 0, 0, 0.5),
+		BorderRadius:        16,
+		HandleWidth:         32,
+		HandleHeight:        4,
+		HandleTopPadding:    8,
+		HandleBottomPadding: 8,
+	}
+}

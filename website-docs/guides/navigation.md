@@ -145,6 +145,57 @@ Return data when popping a route:
 nav.Pop("selected_item_id")
 ```
 
+## Modal Bottom Sheets
+
+Use `ShowModalBottomSheet` to present a bottom sheet and await a result.
+
+```go
+result := <-navigation.ShowModalBottomSheet(ctx, func(ctx core.BuildContext) core.Widget {
+    return widgets.Padding{
+        Padding: layout.EdgeInsetsAll(24),
+        Child: widgets.Column{
+            MainAxisSize: widgets.MainAxisSizeMin,
+            Children: []core.Widget{
+                widgets.Text{Content: "Select an option"},
+                theme.ButtonOf(ctx, "Option A", func() {
+                    widgets.BottomSheetScope{}.Of(ctx).Close("A")
+                }),
+            },
+        },
+    }
+})
+```
+
+### Snap Points and Drag Modes
+
+```go
+navigation.ShowModalBottomSheet(
+    ctx,
+    func(ctx core.BuildContext) core.Widget { return sheetContent() },
+    navigation.WithSnapPoints(widgets.SnapHalf, widgets.SnapFull),
+    navigation.WithInitialSnapPoint(0),
+    navigation.WithDragMode(widgets.DragModeContentAware),
+)
+```
+
+### Scrollable Content
+
+For scrollable content, wrap the list in `BottomSheetScrollable` so dragging and
+scrolling are coordinated:
+
+```go
+navigation.ShowModalBottomSheet(ctx, func(ctx core.BuildContext) core.Widget {
+    return widgets.BottomSheetScrollable{
+        Builder: func(controller *widgets.ScrollController) core.Widget {
+            return widgets.ListView{
+                Controller: controller,
+                Children:   items,
+            }
+        },
+    }
+})
+```
+
 Handle results by using a callback pattern:
 
 ```go

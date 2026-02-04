@@ -12,13 +12,14 @@ type ThemeData struct {
 	Brightness Brightness
 
 	// Component themes - optional, derived from ColorScheme if nil.
-	ButtonTheme    *ButtonThemeData
-	CheckboxTheme  *CheckboxThemeData
-	SwitchTheme    *SwitchThemeData
-	TextFieldTheme *TextFieldThemeData
-	TabBarTheme    *TabBarThemeData
-	RadioTheme     *RadioThemeData
-	DropdownTheme  *DropdownThemeData
+	ButtonTheme      *ButtonThemeData
+	CheckboxTheme    *CheckboxThemeData
+	SwitchTheme      *SwitchThemeData
+	TextFieldTheme   *TextFieldThemeData
+	TabBarTheme      *TabBarThemeData
+	RadioTheme       *RadioThemeData
+	DropdownTheme    *DropdownThemeData
+	BottomSheetTheme *BottomSheetThemeData
 }
 
 // DefaultLightTheme returns the default light theme.
@@ -44,16 +45,17 @@ func DefaultDarkTheme() *ThemeData {
 // CopyWith returns a new ThemeData with the specified fields overridden.
 func (t *ThemeData) CopyWith(colorScheme *ColorScheme, textTheme *TextTheme, brightness *Brightness) *ThemeData {
 	result := &ThemeData{
-		ColorScheme:    t.ColorScheme,
-		TextTheme:      t.TextTheme,
-		Brightness:     t.Brightness,
-		ButtonTheme:    t.ButtonTheme,
-		CheckboxTheme:  t.CheckboxTheme,
-		SwitchTheme:    t.SwitchTheme,
-		TextFieldTheme: t.TextFieldTheme,
-		TabBarTheme:    t.TabBarTheme,
-		RadioTheme:     t.RadioTheme,
-		DropdownTheme:  t.DropdownTheme,
+		ColorScheme:      t.ColorScheme,
+		TextTheme:        t.TextTheme,
+		Brightness:       t.Brightness,
+		ButtonTheme:      t.ButtonTheme,
+		CheckboxTheme:    t.CheckboxTheme,
+		SwitchTheme:      t.SwitchTheme,
+		TextFieldTheme:   t.TextFieldTheme,
+		TabBarTheme:      t.TabBarTheme,
+		RadioTheme:       t.RadioTheme,
+		DropdownTheme:    t.DropdownTheme,
+		BottomSheetTheme: t.BottomSheetTheme,
 	}
 	if colorScheme != nil {
 		result.ColorScheme = *colorScheme
@@ -121,4 +123,12 @@ func (t *ThemeData) DropdownThemeOf() DropdownThemeData {
 		return *t.DropdownTheme
 	}
 	return DefaultDropdownTheme(t.ColorScheme)
+}
+
+// BottomSheetThemeOf returns the bottom sheet theme, deriving from ColorScheme if not set.
+func (t *ThemeData) BottomSheetThemeOf() BottomSheetThemeData {
+	if t.BottomSheetTheme != nil {
+		return *t.BottomSheetTheme
+	}
+	return DefaultBottomSheetTheme(t.ColorScheme)
 }

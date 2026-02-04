@@ -829,8 +829,8 @@ func TestRenderOverlay_HitTest_NoOpaquePassesToChild(t *testing.T) {
 // are hit tested even when an opaque entry exists (allows barriers to receive hits).
 func TestRenderOverlay_HitTest_AllEntriesTested(t *testing.T) {
 	child := newTestHitRenderBox(400, 400, true)
-	barrier := newTestHitRenderBox(400, 400, true)  // Full-screen barrier below dialog
-	dialog := newTestHitRenderBox(200, 200, false)  // Dialog doesn't accept hit at test position
+	barrier := newTestHitRenderBox(400, 400, true) // Full-screen barrier below dialog
+	dialog := newTestHitRenderBox(200, 200, false) // Dialog doesn't accept hit at test position
 
 	r := &renderOverlay{
 		opaqueIndex: 1, // Dialog is opaque (second entry)

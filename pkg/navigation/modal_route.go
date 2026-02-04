@@ -109,6 +109,11 @@ func (r *ModalRoute) DidPop(result any) {
 	}
 }
 
+// IsTransparent returns true - modals show content behind the barrier.
+func (r *ModalRoute) IsTransparent() bool {
+	return true
+}
+
 // Build returns the widget for this route.
 // When overlay is available and entries inserted, returns a placeholder.
 // Falls back to direct rendering if no overlay is available.

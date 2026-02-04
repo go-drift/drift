@@ -154,6 +154,15 @@ type Route interface {
 	SetOverlay(overlay OverlayState)
 }
 
+// TransparentRoute is implemented by routes that should keep previous routes visible.
+// Routes like bottom sheets and dialogs that have semi-transparent barriers
+// should implement this and return true from IsTransparent.
+type TransparentRoute interface {
+	Route
+	// IsTransparent returns true if previous routes should remain visible.
+	IsTransparent() bool
+}
+
 // BaseRoute provides a default implementation of Route lifecycle methods.
 type BaseRoute struct {
 	settings RouteSettings
