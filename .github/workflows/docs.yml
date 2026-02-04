@@ -11,6 +11,8 @@ on:
       - 'website-docs/**'
       - 'cmd/docgen/**'
       - '.github/workflows/docs.yml'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
