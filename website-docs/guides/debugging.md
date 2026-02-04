@@ -33,6 +33,11 @@ func main() {
 | `GraphSamples` | Number of frames to show in graph (default: 60) |
 | `TargetFrameTime` | Expected frame duration (default: 16.67ms for 60fps) |
 | `DebugServerPort` | HTTP debug server port (0 = disabled) |
+| `RuntimeSampleInterval` | Runtime sample interval (default: 5s) |
+| `RuntimeSampleWindow` | Runtime sample history window (default: 60s) |
+
+Note: when `DebugServerPort` is enabled, runtime sampling is enabled by default
+using the interval/window settings above.
 
 ## Debug Server
 
@@ -60,6 +65,8 @@ func main() {
 | `/render-tree` | Render tree as JSON (layout and painting) |
 | `/widget-tree` | Widget/element tree as JSON (configuration and state) |
 | `/frames` | Recent frame timings, counts, and flags |
+| `/runtime` | Recent runtime/GC samples |
+| `/jank` | Combined frames/runtime snapshot |
 | `/debug` | Basic root render object info |
 
 ### Accessing the Server
@@ -108,6 +115,36 @@ Examples:
 curl "http://localhost:9999/frames?limit=120" | jq .
 curl "http://localhost:9999/frames?min_ms=16.7" | jq .
 curl "http://localhost:9999/frames?layout_ms=6&resumed=1" | jq .
+
+### Runtime Samples
+
+`/runtime` returns a ring buffer of runtime/GC snapshots.
+
+Optional query params:
+
+- `window` (seconds): return samples from the last N seconds
+- `limit` (int): return only the last N samples
+
+Examples:
+
+```bash
+curl "http://localhost:9999/runtime" | jq .
+curl "http://localhost:9999/runtime?window=30" | jq .
+curl "http://localhost:9999/runtime?limit=3" | jq .
+```
+
+Note: sampling starts when diagnostics are enabled (debug server on), so the
+buffer fills over time.
+
+### Combined Snapshot
+
+`/jank` returns both frame samples and runtime samples in one response.
+
+Note: `limit` applies to both frame samples and runtime samples when used with
+`/jank`.
+
+```bash
+curl "http://localhost:9999/jank?min_ms=8&window=30" | jq .
 ```
 
 ## Tree Inspection

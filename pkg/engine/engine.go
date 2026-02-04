@@ -130,6 +130,9 @@ func SetDiagnostics(config *DiagnosticsConfig) {
 		newPort = config.DebugServerPort
 	}
 
+	interval, window := runtimeSampleConfig(config)
+	enableRuntimeSampling := config != nil && config.DebugServerPort > 0 && interval > 0 && window > 0
+
 	// Start/stop debug server outside frameLock (shutdown can block up to 2s)
 	if oldPort != newPort {
 		stopDebugServer()
@@ -142,7 +145,6 @@ func SetDiagnostics(config *DiagnosticsConfig) {
 
 	// Now update diagnostics state under lock
 	frameLock.Lock()
-	defer frameLock.Unlock()
 
 	app.diagnosticsConfig = config
 	if config != nil {
@@ -169,18 +171,34 @@ func SetDiagnostics(config *DiagnosticsConfig) {
 		} else {
 			app.frameTrace = nil
 		}
+
+		if enableRuntimeSampling {
+			app.runtimeSamples = NewRuntimeSampleBuffer(window, interval)
+		} else {
+			app.runtimeSamples = nil
+		}
 	} else {
 		// Clear state when diagnostics disabled
 		app.showLayoutBounds = false
 		app.hudRenderObject = nil
 		app.frameTraceEnabled = false
 		app.frameTrace = nil
+		app.runtimeSamples = nil
 	}
 	if app.root != nil {
 		app.root.MarkNeedsBuild()
 	}
 	if app.rootRender != nil {
 		app.rootRender.MarkNeedsPaint()
+	}
+	runtimeSamples := app.runtimeSamples
+	frameLock.Unlock()
+
+	// Start/stop runtime sampler outside frameLock to avoid contention.
+	if enableRuntimeSampling {
+		startRuntimeSampler(runtimeSamples, interval)
+	} else {
+		stopRuntimeSampler()
 	}
 }
 
@@ -265,6 +283,7 @@ type appRunner struct {
 	frameTrace         *FrameTraceBuffer
 	frameTraceEnabled  bool
 	lastLifecycleState platform.LifecycleState
+	runtimeSamples     *RuntimeSampleBuffer
 }
 
 func init() {

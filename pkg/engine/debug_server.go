@@ -114,6 +114,8 @@ func startDebugServer(port int) (int, error) {
 	mux.HandleFunc("/widget-tree", handleWidgetTree)
 	mux.HandleFunc("/frames", handleFrameTimeline)
 	mux.HandleFunc("/frame-timeline", handleFrameTimeline)
+	mux.HandleFunc("/runtime", handleRuntime)
+	mux.HandleFunc("/jank", handleJankSnapshot)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/debug", handleDebug)
 
@@ -279,6 +281,52 @@ func handleFrameTimeline(w http.ResponseWriter, r *http.Request) {
 
 	resp := trace.Snapshot()
 
+	applyFrameFilters(r, &resp)
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// handleRuntime returns recent runtime/GC samples as JSON.
+func handleRuntime(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	frameLock.Lock()
+	buffer := app.runtimeSamples
+	frameLock.Unlock()
+	if buffer == nil {
+		http.Error(w, "runtime sampling disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	samples := applyRuntimeFilters(r, buffer.Snapshot())
+
+	resp := struct {
+		Samples []RuntimeSample `json:"samples"`
+	}{
+		Samples: samples,
+	}
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 	limit := 0
 	if value := r.URL.Query().Get("limit"); value != "" {
 		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
@@ -337,6 +385,67 @@ func handleFrameTimeline(w http.ResponseWriter, r *http.Request) {
 
 	if limit > 0 && len(resp.Samples) > limit {
 		resp.Samples = resp.Samples[len(resp.Samples)-limit:]
+	}
+}
+
+func applyRuntimeFilters(r *http.Request, samples []RuntimeSample) []RuntimeSample {
+	windowSeconds := parseFloatQuery(r, "window")
+	if windowSeconds > 0 {
+		cutoff := time.Now().Add(-time.Duration(windowSeconds * float64(time.Second))).UnixMilli()
+		filtered := make([]RuntimeSample, 0, len(samples))
+		for _, sample := range samples {
+			if sample.Timestamp >= cutoff {
+				filtered = append(filtered, sample)
+			}
+		}
+		samples = filtered
+	}
+
+	limit := 0
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 0 && len(samples) > limit {
+		samples = samples[len(samples)-limit:]
+	}
+	return samples
+}
+
+// handleJankSnapshot returns a combined frames/runtime snapshot.
+func handleJankSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	frameLock.Lock()
+	trace := app.frameTrace
+	runtimeBuffer := app.runtimeSamples
+	frameLock.Unlock()
+
+	if trace == nil {
+		http.Error(w, "frame tracing disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if runtimeBuffer == nil {
+		http.Error(w, "runtime sampling disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	frames := trace.Snapshot()
+	applyFrameFilters(r, &frames)
+
+	runtimeSamples := runtimeBuffer.Snapshot()
+	runtimeSamples = applyRuntimeFilters(r, runtimeSamples)
+
+	resp := struct {
+		Frames  FrameTimeline   `json:"frames"`
+		Runtime []RuntimeSample `json:"runtime"`
+	}{
+		Frames:  frames,
+		Runtime: runtimeSamples,
 	}
 
 	data, err := json.MarshalIndent(resp, "", "  ")

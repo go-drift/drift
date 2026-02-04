@@ -39,16 +39,24 @@ type DiagnosticsConfig struct {
 	// 0 = disabled, >0 = port number (e.g., 9999).
 	// The server exposes /tree (render tree JSON) and /health endpoints.
 	DebugServerPort int
+	// RuntimeSampleInterval controls how often runtime samples are collected.
+	// Defaults to 5s if zero.
+	RuntimeSampleInterval time.Duration
+	// RuntimeSampleWindow controls how much runtime history is kept.
+	// Defaults to 60s if zero.
+	RuntimeSampleWindow time.Duration
 }
 
 // DefaultDiagnosticsConfig returns a DiagnosticsConfig with sensible defaults.
 func DefaultDiagnosticsConfig() *DiagnosticsConfig {
 	return &DiagnosticsConfig{
-		ShowFPS:         true,
-		ShowFrameGraph:  true,
-		Position:        DiagnosticsTopRight,
-		GraphSamples:    60,
-		TargetFrameTime: 16667 * time.Microsecond, // ~16.67ms for 60fps
+		ShowFPS:               true,
+		ShowFrameGraph:        true,
+		Position:              DiagnosticsTopRight,
+		GraphSamples:          60,
+		TargetFrameTime:       16667 * time.Microsecond, // ~16.67ms for 60fps
+		RuntimeSampleInterval: 5 * time.Second,
+		RuntimeSampleWindow:   60 * time.Second,
 	}
 }
 
