@@ -2,9 +2,11 @@ name: Drift skia Release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
 
 env:
   GO_VERSION: "1.25.5"
@@ -34,6 +36,8 @@ jobs:
         run: ./scripts/build_skia_android.sh
       - name: Package Android artifacts
         run: ./scripts/build_skia_release.sh --android --skip-build
+        env:
+          DRIFT_VERSION: ${{ inputs.version }}
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -56,6 +60,8 @@ jobs:
         run: ./scripts/build_skia_ios.sh
       - name: Package iOS artifacts
         run: ./scripts/build_skia_release.sh --ios --skip-build
+        env:
+          DRIFT_VERSION: ${{ inputs.version }}
       - name: Upload iOS artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -82,18 +88,13 @@ jobs:
         id: manifest
         run: |
           set -euo pipefail
-          ref_name="${GITHUB_REF_NAME:-}"
-          if [[ -z "$ref_name" || "$ref_name" != v* ]]; then
-            echo "Expected v* tag" >&2
-            exit 1
-          fi
-          drift_version="$ref_name"
-          if [[ -z "$drift_version" ]]; then
-            echo "Drift version not set" >&2
+          drift_version="${{ inputs.version }}"
+          if [[ ! "$drift_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "Invalid version: $drift_version" >&2
+            echo "Expected format: vX.Y.Z or vX.Y.Z-suffix" >&2
             exit 1
           fi
           echo "drift_version=$drift_version" >> "$GITHUB_OUTPUT"
-          echo "release_tag=$ref_name" >> "$GITHUB_OUTPUT"
           dist_dir="dist/drift_skia"
           android_tar="$dist_dir/drift-$drift_version-android.tar.gz"
           ios_tar="$dist_dir/drift-$drift_version-ios.tar.gz"
@@ -125,10 +126,20 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.manifest.outputs.release_tag }}
-          name: ${{ steps.manifest.outputs.release_tag }}
+          tag_name: ${{ inputs.version }}
+          name: ${{ inputs.version }}
           files: |
             dist/drift_skia/*.tar.gz
             dist/drift_skia/*/manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push Git tag
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/${{ inputs.version }}$"; then
+            echo "Tag ${{ inputs.version }} already exists on remote (rebuild). Skipping tag creation."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "${{ inputs.version }}" -m "Release ${{ inputs.version }}"
+            git push origin "${{ inputs.version }}"
+          fi
