@@ -51,13 +51,13 @@ var demos = []Demo{
 
 	// Layout demos
 	{"/layouts", "Layouts", "Row/Column/Stack composition", CategoryLayout, "icon-grid.svg", buildLayoutsPage},
-	{"/wrap", "Wrap", "Flowing layouts that wrap", CategoryLayout, "icon-grid.svg", buildWrapPage},
-	{"/positioning", "Positioning", "Center, Align, Expanded, SizedBox", CategoryLayout, "icon-grid.svg", buildPositioningPage},
+	{"/wrap", "Wrap", "Flowing layouts that wrap", CategoryLayout, "icon-wrap.svg", buildWrapPage},
+	{"/positioning", "Positioning", "Center, Align, Expanded, SizedBox", CategoryLayout, "icon-position.svg", buildPositioningPage},
 
 	// Widgets demos
 	{"/buttons", "Buttons", "Tappable buttons with haptics", CategoryWidgets, "icon-button.svg", buildButtonsPage},
 	{"/forms", "Forms", "Text input and selection controls", CategoryWidgets, "icon-form.svg", buildFormsPage},
-	{"/progress", "Progress", "Loading and progress indicators", CategoryWidgets, "icon-form.svg", buildProgressPage},
+	{"/progress", "Progress", "Loading and progress indicators", CategoryWidgets, "icon-progress.svg", buildProgressPage},
 	{"/images", "Images", "PNG, JPG, and SVG rendering", CategoryWidgets, "icon-image.svg", buildImagesPage},
 
 	// Motion demos
@@ -65,8 +65,8 @@ var demos = []Demo{
 	{"/animations", "Animations", "Implicit animations for smooth UI", CategoryMotion, "icon-motion.svg", buildAnimationsPage},
 	{"/scroll", "Scrolling", "Scrollable lists with physics", CategoryLayout, "icon-scroll.svg", buildScrollPage},
 	{"/tabs", "Tabs", "Bottom tab navigation", CategoryWidgets, "icon-navigation.svg", buildTabsPage},
-	{"/overlays", "Overlays", "Modals, dialogs, and toasts", CategoryWidgets, "icon-navigation.svg", buildOverlaysPage},
-	{"/bottom-sheets", "Bottom Sheets", "Drag-to-dismiss sheets", CategoryWidgets, "icon-navigation.svg", buildBottomSheetsPage},
+	{"/overlays", "Overlays", "Modals, dialogs, and toasts", CategoryWidgets, "icon-overlay.svg", buildOverlaysPage},
+	{"/bottom-sheets", "Bottom Sheets", "Drag-to-dismiss sheets", CategoryWidgets, "icon-sheet.svg", buildBottomSheetsPage},
 
 	// Media demos
 	{"/camera", "Camera", "Photo capture and gallery access", CategoryMedia, "icon-camera.svg", buildCameraPage},
