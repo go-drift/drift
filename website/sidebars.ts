@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
         'guides/forms',
         'guides/gestures',
         'guides/navigation',
+        'guides/overlay',
         'guides/animation',
         'guides/platform',
         'guides/accessibility',
