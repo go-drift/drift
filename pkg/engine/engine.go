@@ -455,11 +455,11 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		}
 
 		// Flush paint to get list of dirty boundaries (clears scheduling state)
-		pipeline.FlushPaint()
+		dirtyBoundaries := pipeline.FlushPaint()
 
-		// Phase 1: Record dirty layers via DFS (children recorded before parents)
-		// This ensures child layers have content when parent records DrawChildLayer ops
-		recordDirtyLayersDFS(a.rootRender, showLayoutBounds, debugStrokeWidth)
+		// Phase 1: Record dirty layers
+		// Only traverse subtrees containing dirty boundaries to avoid full-tree walks
+		recordDirtyLayers(dirtyBoundaries, showLayoutBounds, debugStrokeWidth)
 
 		// Phase 2: Composite layer tree (recursive via DrawChildLayer ops)
 		canvas.Clear(graphics.Color(backgroundColor.Load()))
@@ -852,7 +852,24 @@ func recordLayerContent(boundary layout.RenderObject, showLayoutBounds bool, str
 	}
 }
 
-// recordDirtyLayersDFS traverses tree depth-first, recording dirty layers.
+// recordDirtyLayers records content for dirty boundaries.
+// Uses the pre-computed dirty list to avoid full-tree traversal every frame.
+// For each dirty boundary, we ensure all descendant boundaries are recorded first
+// (children before parents) so DrawChildLayer ops reference valid content.
+func recordDirtyLayers(dirtyBoundaries []layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
+	if len(dirtyBoundaries) == 0 {
+		return
+	}
+
+	// dirtyBoundaries is sorted by depth (parents first from FlushPaint).
+	// We need children recorded before parents, so process in reverse order.
+	// For each boundary, do a local DFS to handle any nested dirty descendants.
+	for i := len(dirtyBoundaries) - 1; i >= 0; i-- {
+		recordDirtyLayersDFS(dirtyBoundaries[i], showLayoutBounds, strokeWidth)
+	}
+}
+
+// recordDirtyLayersDFS traverses a subtree depth-first, recording dirty layers.
 // Children are visited before their parent's layer is recorded, ensuring
 // child layers have content when parent records DrawChildLayer ops.
 func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
@@ -877,6 +894,12 @@ func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strok
 func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject) {
 	if layerGetter, ok := root.(interface{ EnsureLayer() *graphics.Layer }); ok {
 		layer := layerGetter.EnsureLayer()
+		if layer.Content == nil {
+			// Layer has no recorded content yet (first frame or recording failed).
+			// Paint directly to canvas as fallback.
+			root.Paint(&layout.PaintContext{Canvas: canvas})
+			return
+		}
 		layer.Composite(canvas)
 	} else {
 		// Fallback for non-boundary root (shouldn't happen with proper setup)

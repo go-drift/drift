@@ -213,3 +213,86 @@ func TestNestedBoundariesDrawChildLayerOps(t *testing.T) {
 		t.Fatal("parent layer should remain clean when child content changes")
 	}
 }
+
+// TestRecordDirtyLayersOptimization verifies that recordDirtyLayers processes
+// only the provided dirty boundaries (not the full tree)
+func TestRecordDirtyLayersOptimization(t *testing.T) {
+	var recordingOrder []string
+
+	// Build tree:
+	//       root
+	//      /    \
+	//   child1  child2
+	root := newMockBoundary("root", &recordingOrder)
+	child1 := newMockBoundary("child1", &recordingOrder)
+	child2 := newMockBoundary("child2", &recordingOrder)
+
+	root.AddChild(child1)
+	root.AddChild(child2)
+
+	// Only mark child1 as needing paint
+	child1.MarkNeedsPaint()
+
+	// Simulate what FlushPaint would return - only child1 is dirty
+	dirtyBoundaries := []layout.RenderObject{child1}
+
+	// Record using the optimized function
+	recordDirtyLayers(dirtyBoundaries, false, 1.0)
+
+	// Only child1 should have been recorded
+	if len(recordingOrder) != 1 {
+		t.Fatalf("expected 1 recording, got %d: %v", len(recordingOrder), recordingOrder)
+	}
+	if recordingOrder[0] != "child1" {
+		t.Errorf("expected 'child1' to be recorded, got %q", recordingOrder[0])
+	}
+
+	// child1's layer should now have content
+	child1Layer := child1.EnsureLayer()
+	if child1Layer.Content == nil {
+		t.Fatal("child1 layer should have content after recording")
+	}
+}
+
+// TestRecordDirtyLayersReverseDepthOrder verifies that recordDirtyLayers
+// processes boundaries in reverse depth order (children before parents)
+func TestRecordDirtyLayersReverseDepthOrder(t *testing.T) {
+	var recordingOrder []string
+
+	// Build tree:
+	//       root
+	//         \
+	//        child
+	root := newMockBoundary("root", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+	root.AddChild(child)
+
+	// Mark both as needing paint
+	root.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+
+	// Simulate FlushPaint return (sorted by depth - parents first)
+	// root has depth 0, child has depth 1 (but depth isn't set without owner)
+	// The function should process in reverse, so child is recorded before root
+	dirtyBoundaries := []layout.RenderObject{root, child}
+
+	recordDirtyLayers(dirtyBoundaries, false, 1.0)
+
+	// Child should be recorded before root (reverse order processing)
+	// Note: The DFS within each boundary still applies, so the order is:
+	// - Process child (from reverse iteration): records "child"
+	// - Process root (from reverse iteration): DFS finds child first, but child
+	//   is already clean so skipped, then records "root"
+	expected := []string{"child", "root"}
+
+	if len(recordingOrder) != len(expected) {
+		t.Fatalf("expected %d recordings, got %d: %v", len(expected), len(recordingOrder), recordingOrder)
+	}
+
+	for i, name := range expected {
+		if recordingOrder[i] != name {
+			t.Errorf("recording order[%d]: expected %q, got %q (full order: %v)",
+				i, name, recordingOrder[i], recordingOrder)
+		}
+	}
+}
