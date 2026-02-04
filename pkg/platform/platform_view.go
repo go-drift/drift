@@ -242,6 +242,14 @@ func (r *PlatformViewRegistry) HasViews() bool {
 	return hasViews
 }
 
+// ViewCount returns the number of active platform views.
+func (r *PlatformViewRegistry) ViewCount() int {
+	r.mu.RLock()
+	count := len(r.views)
+	r.mu.RUnlock()
+	return count
+}
+
 // UpdateViewGeometry notifies native of a view's position, size, and clip bounds.
 // If batching is active, the update is queued; otherwise sent immediately.
 // Gracefully ignores disposed or unknown viewIDs.

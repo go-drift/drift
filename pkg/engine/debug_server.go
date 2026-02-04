@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -111,6 +112,8 @@ func startDebugServer(port int) (int, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/render-tree", handleRenderTree)
 	mux.HandleFunc("/widget-tree", handleWidgetTree)
+	mux.HandleFunc("/frames", handleFrameTimeline)
+	mux.HandleFunc("/frame-timeline", handleFrameTimeline)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/debug", handleDebug)
 
@@ -257,6 +260,105 @@ func handleWidgetTree(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
+}
+
+// handleFrameTimeline returns recent frame timing samples as JSON.
+func handleFrameTimeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	frameLock.Lock()
+	trace := app.frameTrace
+	frameLock.Unlock()
+	if trace == nil {
+		http.Error(w, "frame tracing disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	resp := trace.Snapshot()
+
+	limit := 0
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	minFrameMs := 0.0
+	if value := r.URL.Query().Get("min_ms"); value != "" {
+		if parsed, err := strconv.ParseFloat(value, 64); err == nil && parsed > 0 {
+			minFrameMs = parsed
+		}
+	}
+
+	minBuildMs := parseFloatQuery(r, "build_ms")
+	minLayoutMs := parseFloatQuery(r, "layout_ms")
+	minPaintMs := parseFloatQuery(r, "paint_ms")
+	minSemanticsMs := parseFloatQuery(r, "semantics_ms")
+	minFlushMs := parseFloatQuery(r, "flush_ms")
+
+	resumeOnly := false
+	if value := r.URL.Query().Get("resumed"); value != "" {
+		if parsed, err := strconv.ParseBool(value); err == nil {
+			resumeOnly = parsed
+		}
+	}
+
+	if minFrameMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minPaintMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || resumeOnly {
+		filtered := make([]FrameSample, 0, len(resp.Samples))
+		for _, sample := range resp.Samples {
+			if minFrameMs > 0 && sample.FrameMs < minFrameMs {
+				continue
+			}
+			if minBuildMs > 0 && sample.Phases.BuildMs < minBuildMs {
+				continue
+			}
+			if minLayoutMs > 0 && sample.Phases.LayoutMs < minLayoutMs {
+				continue
+			}
+			if minPaintMs > 0 && sample.Phases.PaintMs < minPaintMs {
+				continue
+			}
+			if minSemanticsMs > 0 && sample.Phases.SemanticsMs < minSemanticsMs {
+				continue
+			}
+			if minFlushMs > 0 && sample.Phases.PlatformFlushMs < minFlushMs {
+				continue
+			}
+			if resumeOnly && !sample.Flags.ResumedThisFrame {
+				continue
+			}
+			filtered = append(filtered, sample)
+		}
+		resp.Samples = filtered
+	}
+
+	if limit > 0 && len(resp.Samples) > limit {
+		resp.Samples = resp.Samples[len(resp.Samples)-limit:]
+	}
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func parseFloatQuery(r *http.Request, key string) float64 {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
 }
 
 // serializeWidgetTree recursively converts an element tree to JSON-serializable form.
