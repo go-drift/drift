@@ -33,8 +33,11 @@ type PaintContext struct {
 	transform        graphics.Offset   // Current accumulated translation
 	ShowLayoutBounds bool              // Debug flag to draw bounds around widgets
 	debugDepth       int               // For color cycling in debug bounds
-	DebugStrokeWidth float64           // Scaled stroke width (0 = use default 1.0)
-	RecordingLayer   *graphics.Layer   // Non-nil when recording a boundary layer
+	DebugStrokeWidth float64         // Scaled stroke width (0 = use default 1.0)
+	RecordingLayer   *graphics.Layer // Non-nil during layer recording phase. When set,
+	// PaintChildWithLayer records DrawChildLayer ops for child boundaries instead of
+	// embedding their content. This enables incremental repainting - child content
+	// changes don't require parent re-recording.
 }
 
 // PushTranslation adds a translation delta to the stack.
