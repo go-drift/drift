@@ -76,7 +76,8 @@ func (r *PictureRecorder) append(op displayOp) {
 }
 
 // DrawChildLayer records a child layer reference at current canvas state.
-// The bounds are used for potential cull optimization during playback.
+// The bounds parameter is recorded but not used for culling (layer.Size is used
+// instead to handle dynamic size changes). Kept for potential future use.
 func (r *PictureRecorder) DrawChildLayer(layer *Layer, bounds Rect) {
 	r.append(opDrawChildLayer{layer: layer, bounds: bounds})
 }
@@ -205,7 +206,8 @@ func (c *recordingCanvas) Size() Size {
 }
 
 // DrawChildLayer records a child layer reference at current canvas state.
-// The bounds are used for potential cull optimization during playback.
+// The bounds parameter is recorded but not used for culling (layer.Size is used
+// instead to handle dynamic size changes). Kept for potential future use.
 func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
 	c.recorder.DrawChildLayer(layer, bounds)
 }
@@ -215,13 +217,15 @@ func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
 //
 // TODO: Enable cull optimization by implementing ClipBounds on SkiaCanvas.
 // Required steps:
-//   1. Add to pkg/skia/skia_bridge.h:
-//      int drift_skia_canvas_get_local_clip_bounds(
-//          DriftSkiaCanvas canvas, float* l, float* t, float* r, float* b);
-//   2. Implement in C++ bridge (wraps SkCanvas::getLocalClipBounds())
-//   3. Rebuild libdrift_skia.a for all platforms
-//   4. Add Go wrapper in pkg/skia/skia.go and stub in skia_stub.go
-//   5. Implement ClipBounds() on SkiaCanvas in pkg/graphics/skia_canvas.go
+//  1. Add to pkg/skia/skia_bridge.h:
+//     int drift_skia_canvas_get_local_clip_bounds(
+//     DriftSkiaCanvas canvas, float* l, float* t, float* r, float* b);
+//  2. Implement in C++ bridge (wrap SkCanvas::getLocalClipBounds(SkRect*))
+//     and return its bool (false means the clip is empty).
+//  3. Rebuild libdrift_skia.a for all platforms
+//  4. Add Go wrapper in pkg/skia/skia.go and stub in skia_stub.go
+//  5. Implement ClipBounds() on SkiaCanvas in pkg/graphics/skia_canvas.go,
+//     returning an empty Rect when the clip is empty and a large Rect when un-clipped.
 //
 // Until implemented, opDrawChildLayer skips culling (still correct, just slower).
 type ClipBoundsProvider interface {
@@ -237,7 +241,7 @@ type ClipBoundsProvider interface {
 // the layer content includes the overflow and clips are applied at the canvas level.
 type opDrawChildLayer struct {
 	layer  *Layer
-	bounds Rect // Layer bounds for cull optimization
+	bounds Rect // Recorded bounds (unused - layer.Size used for culling to handle size changes)
 }
 
 func (op opDrawChildLayer) execute(canvas Canvas) {
@@ -247,9 +251,14 @@ func (op opDrawChildLayer) execute(canvas Canvas) {
 
 	// Cull optimization: skip compositing if layer is entirely outside the clip.
 	// This avoids GPU work for off-screen layers.
+	//
+	// Derive bounds from layer.Size rather than op.bounds to handle child size changes.
+	// The layer.Size is updated during recording, so it always reflects the current size.
+	// Using stale recorded bounds could cause incorrect culling if a child resizes.
 	if provider, ok := canvas.(ClipBoundsProvider); ok {
 		clipBounds := provider.ClipBounds()
-		if !op.bounds.Intersects(clipBounds) {
+		bounds := RectFromLTWH(0, 0, op.layer.Size.Width, op.layer.Size.Height)
+		if !bounds.Intersects(clipBounds) {
 			return // Layer is culled - entirely outside visible area
 		}
 	}
