@@ -226,7 +226,7 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 
 	gradlew := "./gradlew"
 	if runtime.GOOS == "windows" {
-		gradlew = "gradlew.bat"
+		gradlew = "./gradlew.bat"
 	}
 
 	androidDir := ws.AndroidDir
