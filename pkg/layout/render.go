@@ -192,6 +192,14 @@ func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	if r.parent == parent {
 		return
 	}
+
+	// If being removed from tree (parent becoming nil), dispose the layer
+	// to release resources. The layer will be recreated if re-attached.
+	if parent == nil && r.layer != nil {
+		r.layer.Dispose()
+		r.layer = nil
+	}
+
 	r.parent = parent
 	if parent == nil {
 		r.depth = 0
@@ -206,7 +214,7 @@ func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	r.needsLayout = true
 	r.repaintBoundary = nil
 	r.needsPaint = true
-	// Mark layer dirty but don't nil it (preserves stable identity)
+	// Mark layer dirty if it exists (preserves stable identity when reparenting)
 	if r.layer != nil {
 		r.layer.MarkDirty()
 	}
@@ -265,13 +273,13 @@ func (r *RenderBoxBase) EnsureLayer() *graphics.Layer {
 }
 
 // SetLayerContent updates the layer's content (called after recording).
+// Disposes old content before setting new content.
 func (r *RenderBoxBase) SetLayerContent(content *graphics.DisplayList) {
 	if r.layer == nil {
 		r.layer = &graphics.Layer{}
 	}
-	r.layer.Content = content
+	r.layer.SetContent(content)
 	r.layer.Size = r.size
-	r.layer.Dirty = false
 }
 
 // ClearNeedsPaint marks this render object as painted.

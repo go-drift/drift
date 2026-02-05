@@ -138,12 +138,18 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 
 		// During layer recording: record DrawChildLayer at current canvas state
 		if p.RecordingLayer != nil {
+			childSize := child.Size()
+			childBounds := graphics.RectFromLTWH(0, 0, childSize.Width, childSize.Height)
+
 			// Apply child offset via canvas (captured in recording)
 			p.Canvas.Save()
 			p.Canvas.Translate(offset.X, offset.Y)
-			p.drawChildLayer(childLayer)
+			if !p.drawChildLayer(childLayer, childBounds) {
+				// Fallback: canvas doesn't support DrawChildLayer, paint child directly
+				child.Paint(p)
+			}
 			if p.ShowLayoutBounds {
-				p.drawDebugBounds(child.Size())
+				p.drawDebugBounds(childSize)
 			}
 			p.Canvas.Restore()
 			return // Child content will be composited when this layer plays back
@@ -190,14 +196,19 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 }
 
 // drawChildLayer records a child layer reference (during layer recording only).
-func (p *PaintContext) drawChildLayer(childLayer *graphics.Layer) {
+// Returns true if the layer was recorded, false if canvas doesn't support it.
+func (p *PaintContext) drawChildLayer(childLayer *graphics.Layer, bounds graphics.Rect) bool {
 	if p.RecordingLayer == nil || childLayer == nil {
-		return
+		return false
 	}
 	// Canvas is a recordingCanvas during layer recording
-	if rc, ok := p.Canvas.(interface{ DrawChildLayer(*graphics.Layer) }); ok {
-		rc.DrawChildLayer(childLayer)
+	if rc, ok := p.Canvas.(interface {
+		DrawChildLayer(*graphics.Layer, graphics.Rect)
+	}); ok {
+		rc.DrawChildLayer(childLayer, bounds)
+		return true
 	}
+	return false
 }
 
 type paintBoundsProvider interface {

@@ -358,8 +358,11 @@ func TestLayerCompositeWithTransform(t *testing.T) {
 	parentCanvas := parentRecorder.BeginRecording(graphics.Size{Width: 100, Height: 100})
 	parentCanvas.Save()
 	parentCanvas.Translate(25, 25)
-	if rc, ok := parentCanvas.(interface{ DrawChildLayer(*graphics.Layer) }); ok {
-		rc.DrawChildLayer(childLayer)
+	childBounds := graphics.RectFromLTWH(0, 0, 50, 50)
+	if rc, ok := parentCanvas.(interface {
+		DrawChildLayer(*graphics.Layer, graphics.Rect)
+	}); ok {
+		rc.DrawChildLayer(childLayer, childBounds)
 	}
 	parentCanvas.Restore()
 	parentDisplayList := parentRecorder.EndRecording()

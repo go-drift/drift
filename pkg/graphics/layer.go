@@ -28,3 +28,22 @@ func (l *Layer) Composite(canvas Canvas) {
 func (l *Layer) MarkDirty() {
 	l.Dirty = true
 }
+
+// SetContent replaces the layer's content, disposing the old content first.
+// This should be called when re-recording a layer.
+func (l *Layer) SetContent(content *DisplayList) {
+	if l.Content != nil {
+		l.Content.Dispose()
+	}
+	l.Content = content
+	l.Dirty = false
+}
+
+// Dispose releases resources held by this layer.
+// Call this when the layer is no longer needed (e.g., boundary removed from tree).
+func (l *Layer) Dispose() {
+	if l.Content != nil {
+		l.Content.Dispose()
+		l.Content = nil
+	}
+}

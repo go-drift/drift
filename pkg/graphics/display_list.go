@@ -76,8 +76,9 @@ func (r *PictureRecorder) append(op displayOp) {
 }
 
 // DrawChildLayer records a child layer reference at current canvas state.
-func (r *PictureRecorder) DrawChildLayer(layer *Layer) {
-	r.append(opDrawChildLayer{layer: layer})
+// The bounds are used for potential cull optimization during playback.
+func (r *PictureRecorder) DrawChildLayer(layer *Layer, bounds Rect) {
+	r.append(opDrawChildLayer{layer: layer, bounds: bounds})
 }
 
 type displayOp interface {
@@ -204,19 +205,27 @@ func (c *recordingCanvas) Size() Size {
 }
 
 // DrawChildLayer records a child layer reference at current canvas state.
-func (c *recordingCanvas) DrawChildLayer(layer *Layer) {
-	c.recorder.DrawChildLayer(layer)
+// The bounds are used for potential cull optimization during playback.
+func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
+	c.recorder.DrawChildLayer(layer, bounds)
 }
 
 // opDrawChildLayer references a child layer to composite at current canvas state.
+// Clipping is handled by the canvas state (clips recorded before this op execute first).
+// Effects that overflow bounds (shadows, gradients) are composited correctly because
+// the layer content includes the overflow and clips are applied at the canvas level.
 type opDrawChildLayer struct {
-	layer *Layer
+	layer  *Layer
+	bounds Rect // Layer bounds for potential cull optimization
 }
 
 func (op opDrawChildLayer) execute(canvas Canvas) {
-	if op.layer != nil {
-		op.layer.Composite(canvas)
+	if op.layer == nil {
+		return
 	}
+	// Note: Cull optimization could be added here by checking if bounds
+	// intersects the canvas clip. For now, always composite.
+	op.layer.Composite(canvas)
 }
 
 type opSave struct{}

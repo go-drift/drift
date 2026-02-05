@@ -81,7 +81,7 @@ func (r *mockBoundaryRenderBox) AddChild(child layout.RenderBox) {
 }
 
 // TestDFSRecordingOrder verifies that children are recorded before parents
-// in the layer tree recording phase
+// in the layer tree recording phase when using recordDirtyLayers
 func TestDFSRecordingOrder(t *testing.T) {
 	// Build tree:
 	//       root
@@ -107,13 +107,15 @@ func TestDFSRecordingOrder(t *testing.T) {
 	child2.MarkNeedsPaint()
 	grandchild.MarkNeedsPaint()
 
-	// Run DFS recording
-	recordDirtyLayersDFS(root, false, 1.0)
+	// Use recordDirtyLayers which processes all dirty boundaries
+	// Simulating FlushPaint output: sorted by depth (parents first)
+	dirtyBoundaries := []layout.RenderObject{root, child1, child2, grandchild}
+	recordDirtyLayers(dirtyBoundaries, false, 1.0)
 
-	// Verify children recorded before parents (DFS post-order)
-	// Expected order: grandchild, child1, child2, root
-	// (children before their parents, left-to-right among siblings)
-	expected := []string{"grandchild", "child1", "child2", "root"}
+	// Verify children recorded before parents (reverse depth order)
+	// Expected order: grandchild, child2, child1, root
+	// (deepest first due to reverse iteration, siblings in reverse order)
+	expected := []string{"grandchild", "child2", "child1", "root"}
 
 	if len(recordingOrder) != len(expected) {
 		t.Fatalf("expected %d recordings, got %d: %v", len(expected), len(recordingOrder), recordingOrder)
@@ -142,9 +144,11 @@ func TestDFSSkipsCleanLayers(t *testing.T) {
 	childLayer.Dirty = false
 	child.ClearNeedsPaint()
 
-	recordDirtyLayersDFS(root, false, 1.0)
+	// With optimization, recordDirtyLayersDFS stops at child boundaries anyway,
+	// but the key test is that clean boundaries don't get re-recorded
+	recordDirtyLayersDFS(root, false, 1.0, true)
 
-	// Only root should be recorded (child was clean)
+	// Only root should be recorded (child is a boundary so DFS stops there)
 	if len(recordingOrder) != 1 {
 		t.Fatalf("expected 1 recording, got %d: %v", len(recordingOrder), recordingOrder)
 	}
@@ -168,7 +172,7 @@ func TestLayerContentPreservedAfterRecording(t *testing.T) {
 		t.Fatal("layer content should be nil before recording")
 	}
 
-	recordDirtyLayersDFS(box, false, 1.0)
+	recordDirtyLayersDFS(box, false, 1.0, true)
 
 	if layer.Dirty {
 		t.Fatal("layer should be clean after recording")
@@ -191,8 +195,9 @@ func TestNestedBoundariesDrawChildLayerOps(t *testing.T) {
 	parent.MarkNeedsPaint()
 	child.MarkNeedsPaint()
 
-	// Record layers
-	recordDirtyLayersDFS(parent, false, 1.0)
+	// Record layers using recordDirtyLayers (processes both boundaries)
+	dirtyBoundaries := []layout.RenderObject{parent, child}
+	recordDirtyLayers(dirtyBoundaries, false, 1.0)
 
 	// Both should have content
 	parentLayer := parent.EnsureLayer()
@@ -279,10 +284,10 @@ func TestRecordDirtyLayersReverseDepthOrder(t *testing.T) {
 	recordDirtyLayers(dirtyBoundaries, false, 1.0)
 
 	// Child should be recorded before root (reverse order processing)
-	// Note: The DFS within each boundary still applies, so the order is:
+	// With the optimization, DFS stops at child boundaries, so:
 	// - Process child (from reverse iteration): records "child"
-	// - Process root (from reverse iteration): DFS finds child first, but child
-	//   is already clean so skipped, then records "root"
+	// - Process root (from reverse iteration): DFS stops at child boundary,
+	//   then records "root"
 	expected := []string{"child", "root"}
 
 	if len(recordingOrder) != len(expected) {
@@ -294,5 +299,40 @@ func TestRecordDirtyLayersReverseDepthOrder(t *testing.T) {
 			t.Errorf("recording order[%d]: expected %q, got %q (full order: %v)",
 				i, name, recordingOrder[i], recordingOrder)
 		}
+	}
+}
+
+// TestDFSStopsAtChildBoundaries verifies that recordDirtyLayersDFS stops at
+// child boundaries and doesn't traverse their subtrees
+func TestDFSStopsAtChildBoundaries(t *testing.T) {
+	var recordingOrder []string
+
+	// Build tree:
+	//       root
+	//         \
+	//        child (boundary)
+	//           \
+	//          grandchild (boundary)
+	root := newMockBoundary("root", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+	grandchild := newMockBoundary("grandchild", &recordingOrder)
+
+	root.AddChild(child)
+	child.AddChild(grandchild)
+
+	// Mark all as needing paint
+	root.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	grandchild.MarkNeedsPaint()
+
+	// Call DFS on root only - should only record root, not descend into child/grandchild
+	recordDirtyLayersDFS(root, false, 1.0, true)
+
+	// Only root should be recorded (DFS stops at child boundary)
+	if len(recordingOrder) != 1 {
+		t.Fatalf("expected 1 recording (DFS stops at boundaries), got %d: %v", len(recordingOrder), recordingOrder)
+	}
+	if recordingOrder[0] != "root" {
+		t.Errorf("expected 'root' to be recorded, got %q", recordingOrder[0])
 	}
 }
