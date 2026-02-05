@@ -818,23 +818,15 @@ func itoa(value int) string {
 // This is called during the recording phase (children first, then parents).
 //
 // Precondition: boundary.NeedsPaint() returned true (checked by caller).
-// We ensure layer.Dirty is in sync with NeedsPaint to handle edge cases where
-// MarkNeedsPaint was called before the layer existed.
+// The layer.Dirty flag is kept in sync with NeedsPaint by MarkNeedsPaint(),
+// which ensures the layer exists for boundaries before marking dirty.
 func recordLayerContent(boundary layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
-	// Get the layer (must exist - ensured by DFS traversal)
+	// Get the layer (must exist - MarkNeedsPaint ensures layer exists for boundaries)
 	layerGetter, ok := boundary.(interface{ EnsureLayer() *graphics.Layer })
 	if !ok {
 		return
 	}
 	layer := layerGetter.EnsureLayer()
-
-	// Ensure layer.Dirty is in sync with NeedsPaint.
-	// This handles the edge case where MarkNeedsPaint was called before the layer
-	// existed (needsPaint=true but layer was nil, so layer.Dirty wasn't set).
-	// EnsureLayer creates new layers with Dirty=true, but this is defensive.
-	if checker, ok := boundary.(interface{ NeedsPaint() bool }); ok && checker.NeedsPaint() {
-		layer.Dirty = true
-	}
 
 	if !layer.Dirty {
 		return // Clean - skip re-recording
@@ -900,10 +892,7 @@ func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strok
 	// Check if this node is a repaint boundary
 	isBoundary := false
 	needsPaint := false
-	if boundary, ok := node.(interface {
-		IsRepaintBoundary() bool
-		NeedsPaint() bool
-	}); ok && boundary.IsRepaintBoundary() {
+	if boundary, ok := node.(layout.RepaintBoundaryNode); ok && boundary.IsRepaintBoundary() {
 		isBoundary = true
 		needsPaint = boundary.NeedsPaint()
 	}

@@ -2,6 +2,29 @@ package graphics
 
 import "fmt"
 
+// Layer Tree Invariants
+//
+// The layer tree system provides efficient incremental repainting by caching
+// rendered content at repaint boundaries. The following invariants must be maintained:
+//
+// 1. ROOT BOUNDARY: The root render object must be a repaint boundary.
+//    compositeLayerTree starts from root and expects it to have a layer.
+//    All paint scheduling walks up to a repaint boundary - root must be one.
+//
+// 2. STABLE IDENTITY: Layers have stable pointer identity. Never replace a layer
+//    object, only mark it dirty. Parent layers hold DrawChildLayer ops that reference
+//    child layers by pointer - replacing the object would break these references.
+//
+// 3. CHILDREN BEFORE PARENTS: During recording, child layers must be recorded before
+//    their parent layers. This ensures DrawChildLayer ops reference valid content.
+//    recordDirtyLayers processes boundaries in reverse depth order to achieve this.
+//
+// 4. DIRTY FLAG SYNC: layer.Dirty must stay in sync with RenderBoxBase.needsPaint.
+//    MarkNeedsPaint ensures the layer exists for boundaries before marking dirty.
+//
+// 5. DISPOSAL: When a render object is removed from the tree, its layer must be
+//    disposed to release GPU resources. RenderBoxBase.Dispose handles this.
+
 // Layer represents a cached drawing surface for a repaint boundary.
 // Layers have stable identity - never replace the object, only mark dirty.
 // Parent layers contain references to child layers via DrawChildLayer ops,

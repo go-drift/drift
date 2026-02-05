@@ -38,6 +38,13 @@ type ChildVisitor interface {
 	VisitChildren(visitor func(RenderObject))
 }
 
+// RepaintBoundaryNode is implemented by render objects that are repaint boundaries.
+// This interface groups the methods needed for layer tree recording.
+type RepaintBoundaryNode interface {
+	IsRepaintBoundary() bool
+	NeedsPaint() bool
+}
+
 // ScrollOffsetProvider is implemented by scrollable render objects.
 // The accessibility system uses this to adjust child positions for scroll offset.
 type ScrollOffsetProvider interface {
@@ -144,23 +151,29 @@ func (r *RenderBoxBase) MarkNeedsLayout() {
 // This is because SetSelf() pre-sets needsPaint=true without scheduling, and
 // SchedulePaint() already handles deduplication internally.
 func (r *RenderBoxBase) MarkNeedsPaint() {
-	// Mark layer dirty (preserves stable identity - parent references remain valid)
-	if r.layer != nil {
-		r.layer.MarkDirty()
-	}
-
 	if r.owner == nil || r.self == nil {
 		r.needsPaint = true
+		// Mark layer dirty if it exists (can't ensure layer without owner)
+		if r.layer != nil {
+			r.layer.MarkDirty()
+		}
 		return
 	}
 
-	// If we are a repaint boundary, schedule ourselves and STOP.
+	// If we are a repaint boundary, ensure layer exists and mark dirty, then schedule.
 	// Parent boundaries reference us via DrawChildLayer, so they don't need
-	// to re-record when our content changes.
+	// to re-record when our content changes - we STOP here.
 	if r.repaintBoundary == r.self {
 		r.needsPaint = true
+		// Ensure layer exists so it can be marked dirty (keeps needsPaint and layer.Dirty in sync)
+		r.EnsureLayer().MarkDirty()
 		r.owner.SchedulePaint(r.self)
 		return
+	}
+
+	// Not a boundary - mark layer dirty if it exists, then walk up
+	if r.layer != nil {
+		r.layer.MarkDirty()
 	}
 
 	// Walk up to parent. This continues until hitting a boundary.
@@ -200,7 +213,6 @@ func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	if r.parent == parent {
 		return
 	}
-
 	r.parent = parent
 	if parent == nil {
 		r.depth = 0

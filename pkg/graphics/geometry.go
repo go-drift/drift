@@ -130,7 +130,11 @@ func (r Rect) IsEmpty() bool {
 // Intersects returns true if this rectangle overlaps with other.
 // Two rectangles intersect if they share any interior points.
 // Adjacent rectangles (sharing only an edge) do not intersect.
+// Empty rectangles (zero or negative area) never intersect anything.
 func (r Rect) Intersects(other Rect) bool {
+	if r.IsEmpty() || other.IsEmpty() {
+		return false
+	}
 	return r.Left < other.Right && r.Right > other.Left &&
 		r.Top < other.Bottom && r.Bottom > other.Top
 }
