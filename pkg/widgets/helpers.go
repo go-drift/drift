@@ -30,6 +30,8 @@ func setChildFromRenderObject(child layout.RenderObject) layout.RenderBox {
 }
 
 // setParentOnChild sets the parent reference on a child render object.
+// SetParent handles marking old/new parents for paint (DrawChildLayer ops change).
+// This helper also marks parents for layout since child lists changed.
 func setParentOnChild(child, parent layout.RenderObject) {
 	if child == nil {
 		return
@@ -46,7 +48,9 @@ func setParentOnChild(child, parent layout.RenderObject) {
 	if currentParent == parent {
 		return
 	}
+	// SetParent marks old/new parents for paint automatically
 	setter.SetParent(parent)
+	// Also mark for layout since child lists changed
 	if currentParent != nil {
 		if marker, ok := currentParent.(interface{ MarkNeedsLayout() }); ok {
 			marker.MarkNeedsLayout()

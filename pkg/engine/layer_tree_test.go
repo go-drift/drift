@@ -543,3 +543,233 @@ func TestSameOffsetNoRepaint(t *testing.T) {
 		t.Error("parent should NOT need paint after setting same offset")
 	}
 }
+
+// TestFirstParentDataAssignmentInvalidatesParent verifies that the first SetParentData
+// call marks the parent dirty, even when the offset is zero. This ensures newly added
+// children appear in the parent's layer (parent needs to record a DrawChildLayer op).
+func TestFirstParentDataAssignmentInvalidatesParent(t *testing.T) {
+	var recordingOrder []string
+
+	parent := newMockBoundary("parent", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+	parent.AddChild(child)
+
+	// Initial recording (child has no parent data yet)
+	parent.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent, child}, false, 1.0)
+
+	parentLayer := parent.EnsureLayer()
+	recordingOrder = nil
+
+	// Clear dirty flags
+	parentLayer.Dirty = false
+	parent.ClearNeedsPaint()
+
+	// First SetParentData with zero offset - should still mark parent dirty
+	// because parent's DrawChildLayer ops change (child is now positioned)
+	child.SetParentData(&layout.BoxParentData{
+		Offset: graphics.Offset{X: 0, Y: 0}, // Zero offset
+	})
+
+	if !parentLayer.Dirty {
+		t.Error("parent layer should be dirty after first SetParentData (even with zero offset)")
+	}
+	if !parent.NeedsPaint() {
+		t.Error("parent should need paint after first SetParentData")
+	}
+}
+
+// mockBoundaryWithRemovableChild is a boundary that supports add/remove of children
+type mockBoundaryWithRemovableChild struct {
+	layout.RenderBoxBase
+	name           string
+	recordingOrder *[]string
+	children       []layout.RenderBox
+}
+
+func newMockBoundaryRemovable(name string, recordingOrder *[]string) *mockBoundaryWithRemovableChild {
+	m := &mockBoundaryWithRemovableChild{
+		name:           name,
+		recordingOrder: recordingOrder,
+	}
+	m.SetSelf(m)
+	m.SetSize(graphics.Size{Width: 100, Height: 100})
+	return m
+}
+
+func (r *mockBoundaryWithRemovableChild) PerformLayout() {
+	r.SetSize(graphics.Size{Width: 100, Height: 100})
+}
+
+func (r *mockBoundaryWithRemovableChild) Paint(ctx *layout.PaintContext) {
+	if r.recordingOrder != nil {
+		*r.recordingOrder = append(*r.recordingOrder, r.name)
+	}
+	for _, child := range r.children {
+		if child != nil {
+			ctx.PaintChildWithLayer(child, graphics.Offset{}) // Zero offset
+		}
+	}
+}
+
+func (r *mockBoundaryWithRemovableChild) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
+	return false
+}
+
+func (r *mockBoundaryWithRemovableChild) IsRepaintBoundary() bool {
+	return true
+}
+
+func (r *mockBoundaryWithRemovableChild) EnsureLayer() *graphics.Layer {
+	return r.RenderBoxBase.EnsureLayer()
+}
+
+func (r *mockBoundaryWithRemovableChild) VisitChildren(visitor func(layout.RenderObject)) {
+	for _, child := range r.children {
+		if child != nil {
+			visitor(child)
+		}
+	}
+}
+
+func (r *mockBoundaryWithRemovableChild) AddChild(child layout.RenderBox) {
+	r.children = append(r.children, child)
+	if setter, ok := child.(interface{ SetParent(layout.RenderObject) }); ok {
+		setter.SetParent(r)
+	}
+}
+
+func (r *mockBoundaryWithRemovableChild) RemoveChild(child layout.RenderBox) {
+	for i, c := range r.children {
+		if c == child {
+			r.children = append(r.children[:i], r.children[i+1:]...)
+			if setter, ok := child.(interface{ SetParent(layout.RenderObject) }); ok {
+				setter.SetParent(nil)
+			}
+			return
+		}
+	}
+}
+
+// TestReparentingInvalidatesParentLayers verifies that when a child is reparented,
+// both the old and new parent are marked dirty. This is critical for the layer tree:
+// - Old parent's DrawChildLayer ops are stale (child no longer exists there)
+// - New parent needs new DrawChildLayer ops for the added child
+func TestReparentingInvalidatesParentLayers(t *testing.T) {
+	var recordingOrder []string
+
+	parent1 := newMockBoundaryRemovable("parent1", &recordingOrder)
+	parent2 := newMockBoundaryRemovable("parent2", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+
+	// Add child to parent1
+	parent1.AddChild(child)
+
+	// Initial recording
+	parent1.MarkNeedsPaint()
+	parent2.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent1, parent2, child}, false, 1.0)
+
+	parent1Layer := parent1.EnsureLayer()
+	parent2Layer := parent2.EnsureLayer()
+	recordingOrder = nil
+
+	// Clear dirty flags
+	parent1Layer.Dirty = false
+	parent2Layer.Dirty = false
+	parent1.ClearNeedsPaint()
+	parent2.ClearNeedsPaint()
+
+	// Move child from parent1 to parent2
+	parent1.RemoveChild(child)
+	parent2.AddChild(child)
+
+	// Both parents should be marked dirty
+	if !parent1Layer.Dirty {
+		t.Error("parent1 layer should be dirty after losing child")
+	}
+	if !parent1.NeedsPaint() {
+		t.Error("parent1 should need paint after losing child")
+	}
+	if !parent2Layer.Dirty {
+		t.Error("parent2 layer should be dirty after gaining child")
+	}
+	if !parent2.NeedsPaint() {
+		t.Error("parent2 should need paint after gaining child")
+	}
+}
+
+// TestAddChildWithZeroOffsetInvalidatesParent verifies that adding a new boundary
+// child at zero offset still invalidates the parent. Regression test for the case
+// where first SetParentData with {0,0} offset wasn't detected as a change.
+func TestAddChildWithZeroOffsetInvalidatesParent(t *testing.T) {
+	var recordingOrder []string
+
+	parent := newMockBoundaryRemovable("parent", &recordingOrder)
+
+	// Initial recording (no children)
+	parent.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent}, false, 1.0)
+
+	parentLayer := parent.EnsureLayer()
+	recordingOrder = nil
+
+	// Clear dirty flags
+	parentLayer.Dirty = false
+	parent.ClearNeedsPaint()
+
+	// Add a new child at zero offset
+	child := newMockBoundary("child", &recordingOrder)
+	parent.AddChild(child)
+
+	// Parent should be marked dirty (gains DrawChildLayer op for new child)
+	if !parentLayer.Dirty {
+		t.Error("parent layer should be dirty after adding child")
+	}
+	if !parent.NeedsPaint() {
+		t.Error("parent should need paint after adding child")
+	}
+
+	// Record and verify child appears
+	recordDirtyLayers([]layout.RenderObject{parent, child}, false, 1.0)
+
+	// Both should have been recorded
+	if len(recordingOrder) < 2 {
+		t.Errorf("expected both parent and child to be recorded, got: %v", recordingOrder)
+	}
+}
+
+// TestRemoveChildInvalidatesParent verifies that removing a boundary child
+// invalidates the parent layer.
+func TestRemoveChildInvalidatesParent(t *testing.T) {
+	var recordingOrder []string
+
+	parent := newMockBoundaryRemovable("parent", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+	parent.AddChild(child)
+
+	// Initial recording
+	parent.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent, child}, false, 1.0)
+
+	parentLayer := parent.EnsureLayer()
+	recordingOrder = nil
+
+	// Clear dirty flags
+	parentLayer.Dirty = false
+	parent.ClearNeedsPaint()
+
+	// Remove child
+	parent.RemoveChild(child)
+
+	// Parent should be marked dirty (loses DrawChildLayer op)
+	if !parentLayer.Dirty {
+		t.Error("parent layer should be dirty after removing child")
+	}
+	if !parent.NeedsPaint() {
+		t.Error("parent should need paint after removing child")
+	}
+}

@@ -114,21 +114,16 @@ func (r *RenderBoxBase) ParentData() any {
 func (r *RenderBoxBase) SetParentData(data any) {
 	// Check if offset changed - parent needs repaint if so
 	if newData, ok := data.(*BoxParentData); ok {
-		oldOffset := r.parentDataOffset()
-		if oldOffset != newData.Offset && r.parent != nil {
-			// Parent's layer records DrawChildLayer with our offset, so it's stale
+		oldData, hadOldData := r.parentData.(*BoxParentData)
+		// Mark parent dirty if:
+		// 1. First assignment (hadOldData=false) - parent needs to record DrawChildLayer for new child
+		// 2. Offset changed - parent's DrawChildLayer op has stale offset
+		needsParentRepaint := !hadOldData || oldData.Offset != newData.Offset
+		if needsParentRepaint && r.parent != nil {
 			r.parent.MarkNeedsPaint()
 		}
 	}
 	r.parentData = data
-}
-
-// parentDataOffset extracts the offset from current parentData, or zero if not set.
-func (r *RenderBoxBase) parentDataOffset() graphics.Offset {
-	if data, ok := r.parentData.(*BoxParentData); ok {
-		return data.Offset
-	}
-	return graphics.Offset{}
 }
 
 // MarkNeedsLayout marks this render box as needing layout.
@@ -244,10 +239,12 @@ func (r *RenderBoxBase) Parent() RenderObject {
 // SetParent sets the parent render object and computes depth.
 // Clears relayoutBoundary and constraints to prevent stale references
 // when the object is reparented to a different subtree.
+// Also marks old and new parent for repaint since their DrawChildLayer ops change.
 func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	if r.parent == parent {
 		return
 	}
+	oldParent := r.parent
 	r.parent = parent
 	if parent == nil {
 		r.depth = 0
@@ -268,6 +265,15 @@ func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	}
 	r.semanticsBoundary = nil
 	r.needsSemanticsUpdate = true
+
+	// Mark old parent dirty - it loses a child, so its DrawChildLayer ops are stale
+	if oldParent != nil {
+		oldParent.MarkNeedsPaint()
+	}
+	// Mark new parent dirty - it gains a child, so it needs new DrawChildLayer ops
+	if parent != nil {
+		parent.MarkNeedsPaint()
+	}
 }
 
 // Depth returns the tree depth (root = 0).
