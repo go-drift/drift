@@ -137,7 +137,7 @@ func TestCompositingCanvas_NestedDisplayLists(t *testing.T) {
 	parentCanvas := parentRec.BeginRecording(graphics.Size{Width: 800, Height: 600})
 	parentCanvas.Save()
 	parentCanvas.Translate(100, 50)
-	parentRec.DrawChildLayer(childLayer, graphics.RectFromLTWH(0, 0, 200, 100))
+	parentRec.DrawChildLayer(childLayer)
 	parentCanvas.Restore()
 	parentDL := parentRec.EndRecording()
 

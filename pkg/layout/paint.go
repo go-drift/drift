@@ -147,11 +147,10 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 		// During layer recording: record DrawChildLayer at current canvas state
 		if p.RecordingLayer != nil {
 			childSize := child.Size()
-			childBounds := graphics.RectFromLTWH(0, 0, childSize.Width, childSize.Height)
 
 			p.Canvas.Save()
 			p.Canvas.Translate(offset.X, offset.Y)
-			if !p.drawChildLayer(childLayer, childBounds) {
+			if !p.drawChildLayer(childLayer) {
 				// Fallback: canvas doesn't support DrawChildLayer, paint child directly.
 				p.PushTranslation(offset.X, offset.Y)
 				child.Paint(p)
@@ -206,14 +205,14 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 
 // drawChildLayer records a child layer reference (during layer recording only).
 // Returns true if the layer was recorded, false if canvas doesn't support it.
-func (p *PaintContext) drawChildLayer(childLayer *graphics.Layer, bounds graphics.Rect) bool {
+func (p *PaintContext) drawChildLayer(childLayer *graphics.Layer) bool {
 	if p.RecordingLayer == nil || childLayer == nil {
 		return false
 	}
 	if rc, ok := p.Canvas.(interface {
-		DrawChildLayer(*graphics.Layer, graphics.Rect)
+		DrawChildLayer(*graphics.Layer)
 	}); ok {
-		rc.DrawChildLayer(childLayer, bounds)
+		rc.DrawChildLayer(childLayer)
 		return true
 	}
 	return false

@@ -76,8 +76,8 @@ func (r *PictureRecorder) append(op displayOp) {
 }
 
 // DrawChildLayer records a child layer reference at current canvas state.
-func (r *PictureRecorder) DrawChildLayer(layer *Layer, bounds Rect) {
-	r.append(opDrawChildLayer{layer: layer, bounds: bounds})
+func (r *PictureRecorder) DrawChildLayer(layer *Layer) {
+	r.append(opDrawChildLayer{layer: layer})
 }
 
 type displayOp interface {
@@ -204,18 +204,12 @@ func (c *recordingCanvas) EmbedPlatformView(viewID int64, size Size) {
 }
 
 // DrawChildLayer records a child layer reference at current canvas state.
-func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
-	c.recorder.DrawChildLayer(layer, bounds)
+func (c *recordingCanvas) DrawChildLayer(layer *Layer) {
+	c.recorder.DrawChildLayer(layer)
 }
 
 func (c *recordingCanvas) Size() Size {
 	return c.size
-}
-
-// ClipBoundsProvider is optionally implemented by canvases that can report
-// their current clip bounds. Used for cull optimization in layer compositing.
-type ClipBoundsProvider interface {
-	ClipBounds() Rect
 }
 
 // opEmbedPlatformView records a platform view embedding.
@@ -231,25 +225,19 @@ func (op opEmbedPlatformView) execute(canvas Canvas) {
 }
 
 // opDrawChildLayer references a child layer to composite at current canvas state.
+//
+// Future optimization: CompositingCanvas could expose its clip bounds, allowing
+// this op to skip compositing layers entirely outside the visible region. If
+// added, ensure platform views in culled layers are still hidden (the
+// viewsSeenThisFrame tracking in PlatformViewRegistry handles this).
 type opDrawChildLayer struct {
-	layer  *Layer
-	bounds Rect
+	layer *Layer
 }
 
 func (op opDrawChildLayer) execute(canvas Canvas) {
 	if op.layer == nil {
 		return
 	}
-
-	// Cull optimization: skip compositing if layer is entirely outside the clip.
-	if provider, ok := canvas.(ClipBoundsProvider); ok {
-		clipBounds := provider.ClipBounds()
-		bounds := RectFromLTWH(0, 0, op.layer.Size.Width, op.layer.Size.Height)
-		if !bounds.Intersects(clipBounds) {
-			return
-		}
-	}
-
 	op.layer.Composite(canvas)
 }
 

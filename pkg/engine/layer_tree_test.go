@@ -361,7 +361,7 @@ func TestOpDrawChildLayer_NilLayerIsNoOp(t *testing.T) {
 	// A DrawChildLayer with nil layer should not panic
 	rec := &graphics.PictureRecorder{}
 	rec.BeginRecording(graphics.Size{Width: 100, Height: 100})
-	rec.DrawChildLayer(nil, graphics.RectFromLTWH(0, 0, 50, 50))
+	rec.DrawChildLayer(nil)
 	dl := rec.EndRecording()
 
 	// Replay — should not panic
@@ -375,9 +375,9 @@ func TestOpDrawChildLayer_NilLayerIsNoOp(t *testing.T) {
 	}
 }
 
-func TestOpDrawChildLayer_CullOptimization(t *testing.T) {
-	// When a ClipBoundsProvider is present and the child layer is entirely
-	// outside the clip, the child's Composite should be skipped.
+func TestOpDrawChildLayer_CompositesWithClip(t *testing.T) {
+	// Child layers are always composited — clipping of their content is handled
+	// by the CompositingCanvas clip stack, not by culling at the op level.
 	childLayer := &graphics.Layer{Size: graphics.Size{Width: 50, Height: 50}}
 	childRec := &graphics.PictureRecorder{}
 	childCanvas := childRec.BeginRecording(graphics.Size{Width: 50, Height: 50})
@@ -387,27 +387,23 @@ func TestOpDrawChildLayer_CullOptimization(t *testing.T) {
 	// Build parent that draws child at (0,0)
 	parentRec := &graphics.PictureRecorder{}
 	parentRec.BeginRecording(graphics.Size{Width: 200, Height: 200})
-	parentRec.DrawChildLayer(childLayer, graphics.RectFromLTWH(0, 0, 50, 50))
+	parentRec.DrawChildLayer(childLayer)
 	parentDL := parentRec.EndRecording()
 
-	// Clip that does NOT overlap with child at (0,0)-(50,50)
+	// Apply a clip far away from the child
 	sink := &mockSink{}
 	inner := &nullCanvas{size: graphics.Size{Width: 200, Height: 200}}
 	cc := NewCompositingCanvas(inner, sink)
 
-	// Apply a clip far away from the child
 	cc.Save()
 	cc.ClipRect(graphics.RectFromLTWH(100, 100, 50, 50))
 	parentDL.Paint(cc)
 	cc.Restore()
 
-	// Child layer's EmbedPlatformView should NOT have fired because
-	// CompositingCanvas doesn't implement ClipBoundsProvider, so
-	// the cull optimization doesn't apply at the opDrawChildLayer level.
-	// The child layer IS composited (cull only works if canvas implements ClipBoundsProvider).
-	// This verifies the non-cull path works correctly.
+	// Child layer IS composited (platform view geometry is still reported,
+	// with clip bounds from the CompositingCanvas clip stack).
 	if len(sink.updates) != 1 {
-		t.Fatalf("expected 1 update (no ClipBoundsProvider on CompositingCanvas), got %d", len(sink.updates))
+		t.Fatalf("expected 1 update (child always composited), got %d", len(sink.updates))
 	}
 }
 
