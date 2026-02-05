@@ -531,6 +531,8 @@ func detectNDKHostTag(ndkHome string) (string, error) {
 		} else {
 			candidates = []string{"darwin-x86_64"}
 		}
+	case "windows":
+		candidates = []string{"windows-x86_64"}
 	default: // linux
 		// Note: Linux arm64 has no Rosetta equivalent, so no fallback to x86_64
 		if runtime.GOARCH == "arm64" {
