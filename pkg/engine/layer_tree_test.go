@@ -773,3 +773,166 @@ func TestRemoveChildInvalidatesParent(t *testing.T) {
 		t.Error("parent should need paint after removing child")
 	}
 }
+
+// mockDynamicBoundary is a render object that can toggle its boundary status
+type mockDynamicBoundary struct {
+	layout.RenderBoxBase
+	name           string
+	recordingOrder *[]string
+	isBoundary     bool
+	child          layout.RenderBox
+}
+
+func newMockDynamicBoundary(name string, isBoundary bool, recordingOrder *[]string) *mockDynamicBoundary {
+	m := &mockDynamicBoundary{
+		name:           name,
+		isBoundary:     isBoundary,
+		recordingOrder: recordingOrder,
+	}
+	m.SetSelf(m)
+	m.SetSize(graphics.Size{Width: 100, Height: 100})
+	return m
+}
+
+func (r *mockDynamicBoundary) PerformLayout() {
+	r.SetSize(graphics.Size{Width: 100, Height: 100})
+}
+
+func (r *mockDynamicBoundary) Paint(ctx *layout.PaintContext) {
+	if r.recordingOrder != nil {
+		*r.recordingOrder = append(*r.recordingOrder, r.name)
+	}
+	if r.child != nil {
+		ctx.PaintChildWithLayer(r.child, graphics.Offset{})
+	}
+}
+
+func (r *mockDynamicBoundary) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
+	return false
+}
+
+func (r *mockDynamicBoundary) IsRepaintBoundary() bool {
+	return r.isBoundary
+}
+
+func (r *mockDynamicBoundary) EnsureLayer() *graphics.Layer {
+	return r.RenderBoxBase.EnsureLayer()
+}
+
+func (r *mockDynamicBoundary) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
+}
+
+func (r *mockDynamicBoundary) AddChild(child layout.RenderBox) {
+	r.child = child
+	if setter, ok := child.(interface{ SetParent(layout.RenderObject) }); ok {
+		setter.SetParent(r)
+	}
+}
+
+// SetBoundary changes the boundary status and marks paint dirty (simulates opacity change)
+func (r *mockDynamicBoundary) SetBoundary(isBoundary bool) {
+	r.isBoundary = isBoundary
+	r.MarkNeedsPaint()
+}
+
+// TestDynamicBoundaryTransitionToNonBoundary verifies that when a render object
+// transitions from boundary to non-boundary (e.g., opacity 0.5 -> 1.0), the parent
+// is invalidated so it re-records without the DrawChildLayer op.
+func TestDynamicBoundaryTransitionToNonBoundary(t *testing.T) {
+	var recordingOrder []string
+
+	parent := newMockBoundary("parent", &recordingOrder)
+	// Start as a boundary (like opacity=0.5)
+	child := newMockDynamicBoundary("child", true, &recordingOrder)
+	parent.AddChild(child)
+
+	// Initial recording - both are boundaries
+	parent.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent, child}, false, 1.0)
+
+	parentLayer := parent.EnsureLayer()
+	childLayer := child.EnsureLayer()
+	if parentLayer.Content == nil || childLayer.Content == nil {
+		t.Fatal("both layers should have content after initial recording")
+	}
+
+	recordingOrder = nil
+
+	// Clear dirty flags
+	parentLayer.Dirty = false
+	childLayer.Dirty = false
+	parent.ClearNeedsPaint()
+	child.ClearNeedsPaint()
+
+	// Transition child from boundary to non-boundary (like opacity 0.5 -> 1.0)
+	child.SetBoundary(false)
+
+	// Parent should be marked dirty (needs to re-record without DrawChildLayer)
+	if !parentLayer.Dirty {
+		t.Error("parent layer should be dirty after child becomes non-boundary")
+	}
+	if !parent.NeedsPaint() {
+		t.Error("parent should need paint after child becomes non-boundary")
+	}
+
+	// Child's layer should have been disposed
+	if child.Layer() != nil {
+		t.Error("child layer should be disposed after becoming non-boundary")
+	}
+}
+
+// TestDynamicBoundaryTransitionToBoundary verifies that when a render object
+// transitions from non-boundary to boundary (e.g., opacity 1.0 -> 0.5), the parent
+// is invalidated so it re-records with a DrawChildLayer op.
+func TestDynamicBoundaryTransitionToBoundary(t *testing.T) {
+	var recordingOrder []string
+
+	parent := newMockBoundary("parent", &recordingOrder)
+	// Start as non-boundary (like opacity=1.0)
+	child := newMockDynamicBoundary("child", false, &recordingOrder)
+	parent.AddChild(child)
+
+	// Initial recording - only parent is a boundary
+	parent.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent}, false, 1.0)
+
+	parentLayer := parent.EnsureLayer()
+	if parentLayer.Content == nil {
+		t.Fatal("parent layer should have content after initial recording")
+	}
+	// Child should have no layer (not a boundary)
+	if child.Layer() != nil {
+		t.Fatal("child should have no layer initially (not a boundary)")
+	}
+
+	recordingOrder = nil
+
+	// Clear dirty flags
+	parentLayer.Dirty = false
+	parent.ClearNeedsPaint()
+
+	// Transition child from non-boundary to boundary (like opacity 1.0 -> 0.5)
+	child.SetBoundary(true)
+
+	// Parent should be marked dirty (needs to re-record WITH DrawChildLayer)
+	if !parentLayer.Dirty {
+		t.Error("parent layer should be dirty after child becomes boundary")
+	}
+	if !parent.NeedsPaint() {
+		t.Error("parent should need paint after child becomes boundary")
+	}
+
+	// Child should need paint (it's now a boundary that needs recording)
+	if !child.NeedsPaint() {
+		t.Error("child should need paint after becoming boundary")
+	}
+
+	// Note: Child won't have a layer yet because there's no owner to call EnsureLayer.
+	// In real usage with an owner, EnsureLayer would be called and the layer created.
+	// The important assertion is that parent is invalidated so it will re-record
+	// with a DrawChildLayer op for the child.
+}

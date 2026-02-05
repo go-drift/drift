@@ -180,41 +180,60 @@ func (r *RenderBoxBase) MarkNeedsLayout() {
 // Note: Unlike MarkNeedsLayout, we don't early-return when needsPaint is true.
 // This is because SetSelf() pre-sets needsPaint=true without scheduling, and
 // SchedulePaint() already handles deduplication internally.
+//
+// Dynamic boundary status: We check self.IsRepaintBoundary() rather than the
+// cached repaintBoundary to handle widgets that change boundary status without
+// layout (e.g., renderOpacity when opacity crosses 0<opacity<1). If the node
+// was a boundary (had layer) but is no longer, we invalidate the parent.
 func (r *RenderBoxBase) MarkNeedsPaint() {
+	r.needsPaint = true
+
+	// Check current boundary status (not cached) to handle dynamic changes.
+	// Must check this even without owner, since boundary transitions need parent invalidation.
+	var isCurrentlyBoundary bool
+	if r.self != nil {
+		isCurrentlyBoundary = r.self.IsRepaintBoundary()
+	}
+	wasBoundary := r.layer != nil
+
+	// Handle boundary status transitions - parent needs re-recording in both cases:
+	// - Was boundary, now not: parent had DrawChildLayer, now needs to embed content
+	// - Was not boundary, now is: parent embedded content, now needs DrawChildLayer
+	if isCurrentlyBoundary != wasBoundary && r.parent != nil {
+		r.parent.MarkNeedsPaint()
+	}
+
+	// Not currently a boundary but was - dispose the layer
+	if !isCurrentlyBoundary && r.layer != nil {
+		r.layer.MarkDirty()
+		r.layer.Dispose()
+		r.layer = nil
+	}
+
+	// Early return if no owner - can't schedule or ensure layers
 	if r.owner == nil || r.self == nil {
-		r.needsPaint = true
-		// Mark layer dirty if it exists (can't ensure layer without owner)
 		if r.layer != nil {
 			r.layer.MarkDirty()
 		}
 		return
 	}
 
-	// If we are a repaint boundary, ensure layer exists and mark dirty, then schedule.
+	// If we are currently a repaint boundary, ensure layer exists and mark dirty, then schedule.
 	// Parent boundaries reference us via DrawChildLayer, so they don't need
 	// to re-record when our content changes - we STOP here.
-	if r.repaintBoundary == r.self {
-		r.needsPaint = true
-		// Ensure layer exists so it can be marked dirty (keeps needsPaint and layer.Dirty in sync)
+	if isCurrentlyBoundary {
 		r.EnsureLayer().MarkDirty()
 		r.owner.SchedulePaint(r.self)
 		return
 	}
 
-	// Not a boundary - mark layer dirty if it exists, then walk up
-	if r.layer != nil {
-		r.layer.MarkDirty()
-	}
-
 	// Walk up to parent. This continues until hitting a boundary.
 	if r.parent != nil {
-		r.needsPaint = true
 		r.parent.MarkNeedsPaint()
 		return
 	}
 
 	// No parent and not a boundary - schedule self
-	r.needsPaint = true
 	r.owner.SchedulePaint(r.self)
 }
 
