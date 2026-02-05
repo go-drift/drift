@@ -224,13 +224,14 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 
 	fmt.Println("  Building APK...")
 
-	gradlew := "./gradlew"
+	gradlewName := "gradlew"
 	if runtime.GOOS == "windows" {
-		gradlew = "./gradlew.bat"
+		gradlewName = "gradlew.bat"
 	}
 
 	androidDir := ws.AndroidDir
-	if _, err := os.Stat(filepath.Join(androidDir, gradlew)); err != nil {
+	gradlew := filepath.Join(androidDir, gradlewName)
+	if _, err := os.Stat(gradlew); err != nil {
 		fmt.Println("  Note: Gradle wrapper not found, falling back to 'gradle' from PATH")
 		gradlew = "gradle"
 		if _, lookErr := exec.LookPath(gradlew); lookErr != nil {
