@@ -527,6 +527,10 @@ func (e *RenderObjectElement) detachRenderObject() {
 		e.renderParent.removeRenderObjectChild(e.renderObject, e.slot)
 		e.renderParent = nil
 	}
+	// Dispose render object resources (e.g., layers) after removal from tree.
+	if disposable, ok := e.renderObject.(interface{ Dispose() }); ok {
+		disposable.Dispose()
+	}
 }
 
 // insertRenderObjectChild adds a child render object at the given slot.

@@ -344,3 +344,38 @@ func TestDFSStopsAtChildBoundaries(t *testing.T) {
 		t.Errorf("expected 'root' to be recorded, got %q", recordingOrder[0])
 	}
 }
+
+// TestLayerDisposedOnBoundaryRemoval verifies that when a repaint boundary
+// render object is disposed, its layer and display list content are released.
+func TestLayerDisposedOnBoundaryRemoval(t *testing.T) {
+	var recordingOrder []string
+
+	// Create a boundary render object
+	box := newMockBoundary("box", &recordingOrder)
+	box.MarkNeedsPaint()
+
+	// Record to create layer with content
+	recordDirtyLayersDFS(box, false, 1.0, true)
+
+	// Verify layer exists with content
+	layer := box.Layer()
+	if layer == nil {
+		t.Fatal("layer should exist after recording")
+	}
+	if layer.Content == nil {
+		t.Fatal("layer content should exist after recording")
+	}
+
+	// Dispose the render object (simulates what happens during Unmount)
+	box.Dispose()
+
+	// Verify layer is nil after disposal
+	if box.Layer() != nil {
+		t.Error("layer should be nil after Dispose()")
+	}
+
+	// Verify the layer's content was disposed (Content set to nil by Dispose)
+	if layer.Content != nil {
+		t.Error("layer content should be nil after Dispose()")
+	}
+}

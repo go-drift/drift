@@ -303,6 +303,15 @@ func (r *RenderBoxBase) ClearNeedsSemanticsUpdate() {
 	r.needsSemanticsUpdate = false
 }
 
+// Dispose releases resources held by this render box.
+// Call this when the render object is permanently removed from the tree.
+func (r *RenderBoxBase) Dispose() {
+	if r.layer != nil {
+		r.layer.Dispose()
+		r.layer = nil
+	}
+}
+
 // Layout handles boundary determination and delegates to PerformLayout.
 //
 // This implements Flutter's relayout boundary optimization. A node becomes a
