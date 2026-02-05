@@ -25,7 +25,9 @@ type PointerHandler interface {
 	HandlePointer(event gestures.PointerEvent)
 }
 
-// PaintContext provides the canvas for painting render objects.
+// PaintContext provides the canvas and state tracking for painting render objects.
+// It maintains transform and clip stacks for culling and platform view geometry,
+// and supports layer-based recording when RecordingLayer is set.
 type PaintContext struct {
 	Canvas           graphics.Canvas
 	clipStack        []graphics.Rect   // Each entry is already-intersected global clip
@@ -34,6 +36,15 @@ type PaintContext struct {
 	ShowLayoutBounds bool              // Debug flag to draw bounds around widgets
 	debugDepth       int               // For color cycling in debug bounds
 	DebugStrokeWidth float64           // Scaled stroke width (0 = use default 1.0)
+	RecordingLayer   *graphics.Layer   // Non-nil during layer recording phase.
+	// When set, PaintChildWithLayer records DrawChildLayer ops for child boundaries
+	// instead of embedding their content. This enables incremental repainting.
+}
+
+// EmbedPlatformView records a platform view at the current position.
+// During compositing, the CompositingCanvas resolves transform+clip and updates native geometry.
+func (p *PaintContext) EmbedPlatformView(viewID int64, size graphics.Size) {
+	p.Canvas.EmbedPlatformView(viewID, size)
 }
 
 // PushTranslation adds a translation delta to the stack.
@@ -118,6 +129,8 @@ func (p *PaintContext) PaintChild(child RenderBox, offset graphics.Offset) {
 }
 
 // PaintChildWithLayer paints a child, using its cached layer if available.
+// During layer recording (RecordingLayer != nil), child boundaries are recorded
+// as DrawChildLayer ops rather than having their content embedded.
 func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offset) {
 	if child == nil {
 		return
@@ -126,23 +139,41 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 		return
 	}
 
-	p.Canvas.Save()
-	p.Canvas.Translate(offset.X, offset.Y)
-	p.PushTranslation(offset.X, offset.Y)
-
-	if p.ShowLayoutBounds {
-		p.debugDepth++
-	}
-
-	// Use cached layer if child is a repaint boundary with valid cache
+	// Check if child is a repaint boundary
 	if boundary, ok := child.(interface {
 		IsRepaintBoundary() bool
-		Layer() *graphics.DisplayList
-		NeedsPaint() bool
+		EnsureLayer() *graphics.Layer
 	}); ok && boundary.IsRepaintBoundary() {
-		if layer := boundary.Layer(); layer != nil && !boundary.NeedsPaint() {
-			layer.Paint(p.Canvas)
-			// Draw bounds after layer paints so overlay is visible on top
+		childLayer := boundary.EnsureLayer()
+
+		// During layer recording: record DrawChildLayer at current canvas state
+		if p.RecordingLayer != nil {
+			childSize := child.Size()
+
+			p.Canvas.Save()
+			p.Canvas.Translate(offset.X, offset.Y)
+			if !p.drawChildLayer(childLayer) {
+				// Fallback: canvas doesn't support DrawChildLayer, paint child directly.
+				p.PushTranslation(offset.X, offset.Y)
+				child.Paint(p)
+				p.PopTranslation()
+			}
+			if p.ShowLayoutBounds {
+				p.drawDebugBounds(childSize)
+			}
+			p.Canvas.Restore()
+			return
+		}
+
+		// Direct compositing path: use cached layer if clean
+		if childLayer.Content != nil && !childLayer.Dirty {
+			p.Canvas.Save()
+			p.Canvas.Translate(offset.X, offset.Y)
+			p.PushTranslation(offset.X, offset.Y)
+			if p.ShowLayoutBounds {
+				p.debugDepth++
+			}
+			childLayer.Composite(p.Canvas)
 			if p.ShowLayoutBounds {
 				p.drawDebugBounds(child.Size())
 				p.debugDepth--
@@ -151,6 +182,15 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 			p.Canvas.Restore()
 			return
 		}
+	}
+
+	// Non-boundary or dirty boundary: paint normally
+	p.Canvas.Save()
+	p.Canvas.Translate(offset.X, offset.Y)
+	p.PushTranslation(offset.X, offset.Y)
+
+	if p.ShowLayoutBounds {
+		p.debugDepth++
 	}
 
 	child.Paint(p)
@@ -163,6 +203,21 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 
 	p.PopTranslation()
 	p.Canvas.Restore()
+}
+
+// drawChildLayer records a child layer reference (during layer recording only).
+// Returns true if the layer was recorded, false if canvas doesn't support it.
+func (p *PaintContext) drawChildLayer(childLayer *graphics.Layer) bool {
+	if p.RecordingLayer == nil || childLayer == nil {
+		return false
+	}
+	if rc, ok := p.Canvas.(interface {
+		DrawChildLayer(*graphics.Layer)
+	}); ok {
+		rc.DrawChildLayer(childLayer)
+		return true
+	}
+	return false
 }
 
 type paintBoundsProvider interface {

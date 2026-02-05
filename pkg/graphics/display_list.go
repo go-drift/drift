@@ -75,6 +75,13 @@ func (r *PictureRecorder) append(op displayOp) {
 	r.ops = append(r.ops, op)
 }
 
+// DrawChildLayer records a reference to a child repaint boundary's layer.
+// When the display list is replayed during compositing, the child layer's
+// content is composited at the current canvas transform and clip state.
+func (r *PictureRecorder) DrawChildLayer(layer *Layer) {
+	r.append(opDrawChildLayer{layer: layer})
+}
+
 type displayOp interface {
 	execute(canvas Canvas)
 }
@@ -194,8 +201,46 @@ func (c *recordingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tint
 	c.recorder.append(opSVGTinted{svgPtr: svgPtr, bounds: bounds, tintColor: tintColor})
 }
 
+func (c *recordingCanvas) EmbedPlatformView(viewID int64, size Size) {
+	c.recorder.append(opEmbedPlatformView{viewID: viewID, size: size})
+}
+
+// DrawChildLayer records a child layer reference at current canvas state.
+func (c *recordingCanvas) DrawChildLayer(layer *Layer) {
+	c.recorder.DrawChildLayer(layer)
+}
+
 func (c *recordingCanvas) Size() Size {
 	return c.size
+}
+
+// opEmbedPlatformView records a platform view embedding.
+// On execute, calls canvas.EmbedPlatformView() which, for CompositingCanvas,
+// resolves the current transform+clip and updates native view geometry.
+type opEmbedPlatformView struct {
+	viewID int64
+	size   Size
+}
+
+func (op opEmbedPlatformView) execute(canvas Canvas) {
+	canvas.EmbedPlatformView(op.viewID, op.size)
+}
+
+// opDrawChildLayer references a child layer to composite at current canvas state.
+//
+// Future optimization: CompositingCanvas could expose its clip bounds, allowing
+// this op to skip compositing layers entirely outside the visible region. If
+// added, ensure platform views in culled layers are still hidden (the
+// viewsSeenThisFrame tracking in PlatformViewRegistry handles this).
+type opDrawChildLayer struct {
+	layer *Layer
+}
+
+func (op opDrawChildLayer) execute(canvas Canvas) {
+	if op.layer == nil {
+		return
+	}
+	op.layer.Composite(canvas)
 }
 
 type opSave struct{}

@@ -227,41 +227,14 @@ func (r *renderNativeWebView) PerformLayout() {
 	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
-func (r *renderNativeWebView) ensurePlatformView() {
-	if r.state == nil {
-		return
-	}
-	r.state.ensurePlatformView(r.initialURL, r.controller)
-}
-
-func (r *renderNativeWebView) updatePlatformView(clipBounds *graphics.Rect) {
-	if r.state == nil || r.state.viewID == 0 {
-		return
-	}
-
-	offset := graphics.Offset{}
-	if r.state.element != nil {
-		offset = core.GlobalOffsetOf(r.state.element)
-	} else if parentData, ok := r.ParentData().(*layout.BoxParentData); ok && parentData != nil {
-		offset = parentData.Offset
-	}
-
-	// Update geometry with clip bounds via registry
-	// Note: applyClipBounds on native side controls visibility based on clip state
-	platform.GetPlatformViewRegistry().UpdateViewGeometry(r.state.viewID, offset, r.Size(), clipBounds)
-}
-
 func (r *renderNativeWebView) Paint(ctx *layout.PaintContext) {
-	r.ensurePlatformView()
-
-	// Get clip bounds for platform view
-	clip, hasClip := ctx.CurrentClipBounds()
-	var clipPtr *graphics.Rect
-	if hasClip {
-		clipPtr = &clip
+	// Ensure platform view exists and record its embedding
+	if r.state != nil {
+		r.state.ensurePlatformView(r.initialURL, r.controller)
+		if r.state.viewID != 0 {
+			ctx.EmbedPlatformView(r.state.viewID, r.Size())
+		}
 	}
-
-	r.updatePlatformView(clipPtr)
 
 	size := r.Size()
 

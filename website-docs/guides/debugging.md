@@ -135,13 +135,15 @@ The `hasState` field is `true` for elements backed by a `StatefulWidget`, indica
 
 ### RepaintBoundary
 
-Isolate expensive subtrees from repainting:
+Isolate expensive subtrees from repainting. Each boundary gets its own cached layer -- when the subtree repaints, only that layer is re-recorded. See the [Layout guide](layout.md#repaint-boundaries-and-the-layer-tree) for details.
 
 ```go
 widgets.RepaintBoundary{
     Child: expensiveWidget,
 }
 ```
+
+In the render tree output, `"isRepaintBoundary": true` indicates nodes with their own layer. `"needsPaint": true` means the layer will be re-recorded on the next frame.
 
 ### ListViewBuilder for Large Lists
 

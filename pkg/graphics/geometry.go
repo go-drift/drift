@@ -137,6 +137,13 @@ func (r Rect) Translate(dx, dy float64) Rect {
 	}
 }
 
+// Intersects returns true if the two rectangles overlap.
+// Returns false if either rectangle is empty.
+func (r Rect) Intersects(other Rect) bool {
+	return r.Left < other.Right && other.Left < r.Right &&
+		r.Top < other.Bottom && other.Top < r.Bottom
+}
+
 // Union returns the smallest rect containing both r and other.
 func (r Rect) Union(other Rect) Rect {
 	return Rect{

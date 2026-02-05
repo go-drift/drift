@@ -602,6 +602,10 @@ func (c *SkiaCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor
 	skia.CanvasRestore(c.canvas)
 }
 
+func (c *SkiaCanvas) EmbedPlatformView(viewID int64, size Size) {
+	// No-op: platform view geometry is resolved by CompositingCanvas wrapper
+}
+
 func (c *SkiaCanvas) Size() Size {
 	return c.size
 }
