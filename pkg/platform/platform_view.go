@@ -81,11 +81,12 @@ type PlatformViewRegistry struct {
 	channel   *MethodChannel
 
 	// Geometry batching for synchronized updates
-	batchMu       sync.Mutex
-	batchMode     bool
-	batchUpdates  []geometryUpdate
-	frameSeq      uint64
-	geometryCache map[int64]viewGeometryCache
+	batchMu            sync.Mutex
+	batchMode          bool
+	batchUpdates       []geometryUpdate
+	frameSeq           uint64
+	geometryCache      map[int64]viewGeometryCache
+	viewsSeenThisFrame map[int64]struct{}
 
 	// Stats for monitoring
 	BatchTimeouts atomic.Uint64
@@ -103,10 +104,11 @@ func GetPlatformViewRegistry() *PlatformViewRegistry {
 
 func newPlatformViewRegistry() *PlatformViewRegistry {
 	r := &PlatformViewRegistry{
-		factories:     make(map[string]PlatformViewFactory),
-		views:         make(map[int64]PlatformView),
-		channel:       NewMethodChannel("drift/platform_views"),
-		geometryCache: make(map[int64]viewGeometryCache),
+		factories:          make(map[string]PlatformViewFactory),
+		views:              make(map[int64]PlatformView),
+		channel:            NewMethodChannel("drift/platform_views"),
+		geometryCache:      make(map[int64]viewGeometryCache),
+		viewsSeenThisFrame: make(map[int64]struct{}),
 	}
 
 	// Handle incoming calls from native
@@ -248,6 +250,10 @@ func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.
 
 	r.batchMu.Lock()
 
+	// Mark as seen this frame (before dedup check, so culled-then-visible
+	// views don't get hidden even if geometry hasn't changed)
+	r.viewsSeenThisFrame[viewID] = struct{}{}
+
 	// Check if geometry has actually changed (deduplication)
 	if cached, ok := r.geometryCache[viewID]; ok {
 		if cached.offset == offset && cached.size == size && rectsEqual(cached.clipBounds, clipBounds) {
@@ -297,6 +303,10 @@ func (r *PlatformViewRegistry) BeginGeometryBatch() {
 	r.batchMode = true
 	r.batchUpdates = r.batchUpdates[:0] // Reset slice, keep capacity
 	r.frameSeq++
+	// Clear seen set (reuse map to avoid allocation)
+	for k := range r.viewsSeenThisFrame {
+		delete(r.viewsSeenThisFrame, k)
+	}
 	r.batchMu.Unlock()
 }
 
@@ -309,6 +319,37 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	frameSeq := r.frameSeq
 	r.batchMode = false
 	r.batchUpdates = nil
+
+	// Snapshot the seen set under batchMu
+	viewsSeen := r.viewsSeenThisFrame
+	r.batchMu.Unlock()
+
+	// Hide unseen views by sending empty clip bounds.
+	// This ensures culled platform views (scrolled off-screen) don't remain
+	// visible at their last-known position.
+	r.mu.RLock()
+	for viewID := range r.views {
+		if _, seen := viewsSeen[viewID]; !seen {
+			emptyClip := graphics.Rect{} // 0,0,0,0 → empty → native hides the view
+			updates = append(updates, geometryUpdate{
+				viewID:     viewID,
+				clipBounds: &emptyClip,
+			})
+		}
+	}
+	r.mu.RUnlock()
+
+	// Update geometry cache for hidden views so that when the view scrolls
+	// back into view, the real geometry will differ from cached hidden state
+	// and the dedup check will allow the update through.
+	r.batchMu.Lock()
+	for _, u := range updates {
+		if _, seen := viewsSeen[u.viewID]; !seen {
+			r.geometryCache[u.viewID] = viewGeometryCache{
+				clipBounds: u.clipBounds,
+			}
+		}
+	}
 	r.batchMu.Unlock()
 
 	if len(updates) == 0 {
