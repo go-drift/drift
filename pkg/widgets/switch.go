@@ -214,10 +214,11 @@ func (r *renderSwitch) PerformLayout() {
 }
 
 func (r *renderSwitch) Paint(ctx *layout.PaintContext) {
-	// Ensure platform view exists and record its embedding
-	r.state.ensurePlatformView()
+	r.state.ensurePlatformView() // lazy init — only creates on first paint
 	if r.state.platformView != nil {
 		ctx.EmbedPlatformView(r.state.platformView.ViewID(), r.Size())
+		// Note: SetEnabled is a side effect, but UpdateRenderObject calls
+		// MarkNeedsPaint when disabled changes, so this always re-runs.
 		r.state.platformView.SetEnabled(!r.disabled)
 	}
 }

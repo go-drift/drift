@@ -44,12 +44,6 @@ type RepaintBoundaryNode interface {
 	NeedsPaint() bool
 }
 
-// LayerTreeNode combines the interfaces needed for layer tree traversal.
-type LayerTreeNode interface {
-	RepaintBoundaryNode
-	ChildVisitor
-}
-
 // ScrollOffsetProvider is implemented by scrollable render objects.
 // The accessibility system uses this to adjust child positions for scroll offset.
 type ScrollOffsetProvider interface {
@@ -186,7 +180,6 @@ func (r *RenderBoxBase) MarkNeedsPaint() {
 
 	// Not currently a boundary but was - dispose the layer
 	if !isCurrentlyBoundary && r.layer != nil {
-		r.layer.MarkDirty()
 		r.layer.Dispose()
 		r.layer = nil
 	}
