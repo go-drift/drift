@@ -365,6 +365,14 @@ func (r *RenderBoxBase) Layout(constraints Constraints, parentUsesSize bool) {
 	// Determine repaint boundary (inherited unless explicit)
 	if r.self != nil && r.self.IsRepaintBoundary() {
 		r.repaintBoundary = r.self
+		// Schedule paint if this boundary needs it. This ensures boundaries are scheduled
+		// on their first layout, since SetSelf() sets needsPaint=true but can't schedule
+		// (no owner yet). Without this, outer boundaries could be skipped if a child
+		// boundary schedules itself first (MarkNeedsPaint stops at the first boundary).
+		if r.needsPaint && r.owner != nil {
+			r.EnsureLayer().MarkDirty()
+			r.owner.SchedulePaint(r.self)
+		}
 	} else if r.parent != nil {
 		if getter, ok := r.parent.(interface{ RepaintBoundary() RenderObject }); ok {
 			r.repaintBoundary = getter.RepaintBoundary()

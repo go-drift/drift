@@ -145,8 +145,12 @@ func (p *PaintContext) PaintChildWithLayer(child RenderBox, offset graphics.Offs
 			p.Canvas.Save()
 			p.Canvas.Translate(offset.X, offset.Y)
 			if !p.drawChildLayer(childLayer, childBounds) {
-				// Fallback: canvas doesn't support DrawChildLayer, paint child directly
+				// Fallback: canvas doesn't support DrawChildLayer, paint child directly.
+				// Track translation so child paint can use PaintContext's transform for
+				// culling/clipping calculations.
+				p.PushTranslation(offset.X, offset.Y)
 				child.Paint(p)
+				p.PopTranslation()
 			}
 			if p.ShowLayoutBounds {
 				p.drawDebugBounds(childSize)

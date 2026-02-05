@@ -885,16 +885,15 @@ func recordDirtyLayers(dirtyBoundaries []layout.RenderObject, showLayoutBounds b
 // This prevents O(n*m) behavior when multiple nested boundaries are dirty -
 // we visit each node at most once across all DFS calls.
 func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strokeWidth float64, isRoot bool) {
-	// Single type assertion extracts both boundary and visitor capabilities.
-	// This is more efficient than separate assertions per interface.
-	treeNode, isTreeNode := node.(layout.LayerTreeNode)
-
-	// Check if this node is a repaint boundary
-	isBoundary := false
-	needsPaint := false
-	if isTreeNode && treeNode.IsRepaintBoundary() {
+	// Check if this node is a repaint boundary.
+	// We check RepaintBoundaryNode separately from ChildVisitor so that leaf
+	// boundaries (like renderImage/renderSvgImage) that don't have children
+	// are still detected and recorded properly.
+	var isBoundary bool
+	var needsPaint bool
+	if bn, ok := node.(layout.RepaintBoundaryNode); ok && bn.IsRepaintBoundary() {
 		isBoundary = true
-		needsPaint = treeNode.NeedsPaint()
+		needsPaint = bn.NeedsPaint()
 	}
 
 	// If this is a child boundary (not the root of this DFS), stop here.
@@ -903,13 +902,9 @@ func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strok
 		return
 	}
 
-	// Recurse into children first (DFS post-order)
-	if isTreeNode {
-		treeNode.VisitChildren(func(child layout.RenderObject) {
-			recordDirtyLayersDFS(child, showLayoutBounds, strokeWidth, false)
-		})
-	} else if visitor, ok := node.(layout.ChildVisitor); ok {
-		// Fallback for nodes that implement ChildVisitor but not full LayerTreeNode
+	// Recurse into children first (DFS post-order).
+	// This is separate from the boundary check since leaf boundaries don't have children.
+	if visitor, ok := node.(layout.ChildVisitor); ok {
 		visitor.VisitChildren(func(child layout.RenderObject) {
 			recordDirtyLayersDFS(child, showLayoutBounds, strokeWidth, false)
 		})
