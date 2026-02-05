@@ -327,6 +327,86 @@ func TestCompositingCanvas_NestedSaveRestore(t *testing.T) {
 	}
 }
 
+func TestCompositingCanvas_SaveLayerAlphaPreservesState(t *testing.T) {
+	sink := &mockSink{}
+	inner := &nullCanvas{size: graphics.Size{Width: 800, Height: 600}}
+	cc := NewCompositingCanvas(inner, sink)
+
+	cc.Translate(10, 20)
+	cc.ClipRect(graphics.RectFromLTWH(0, 0, 100, 100))
+
+	cc.SaveLayerAlpha(graphics.RectFromLTWH(0, 0, 100, 100), 0.5)
+	cc.Translate(30, 40)
+	cc.Restore() // Should restore transform and clip depth
+
+	cc.EmbedPlatformView(1, graphics.Size{Width: 50, Height: 50})
+
+	if len(sink.updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(sink.updates))
+	}
+	// Transform should be restored to (10, 20) not (40, 60)
+	if sink.updates[0].offset.X != 10 || sink.updates[0].offset.Y != 20 {
+		t.Errorf("offset = (%v, %v), want (10, 20) after SaveLayerAlpha/Restore",
+			sink.updates[0].offset.X, sink.updates[0].offset.Y)
+	}
+}
+
+func TestCompositingCanvas_SaveLayerPreservesState(t *testing.T) {
+	sink := &mockSink{}
+	inner := &nullCanvas{size: graphics.Size{Width: 800, Height: 600}}
+	cc := NewCompositingCanvas(inner, sink)
+
+	cc.Translate(5, 10)
+	cc.SaveLayer(graphics.RectFromLTWH(0, 0, 100, 100), nil)
+	cc.Translate(15, 25)
+	cc.Restore()
+
+	cc.EmbedPlatformView(1, graphics.Size{Width: 50, Height: 50})
+
+	if sink.updates[0].offset.X != 5 || sink.updates[0].offset.Y != 10 {
+		t.Errorf("offset = (%v, %v), want (5, 10) after SaveLayer/Restore",
+			sink.updates[0].offset.X, sink.updates[0].offset.Y)
+	}
+}
+
+func TestCompositingCanvas_ScaleRotateForwardedButNotTracked(t *testing.T) {
+	sink := &mockSink{}
+	inner := &nullCanvas{size: graphics.Size{Width: 800, Height: 600}}
+	cc := NewCompositingCanvas(inner, sink)
+
+	cc.Translate(10, 20)
+	cc.Scale(2, 2)
+	cc.Rotate(1.5)
+	cc.EmbedPlatformView(1, graphics.Size{Width: 50, Height: 50})
+
+	if len(sink.updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(sink.updates))
+	}
+	// Scale/Rotate should NOT affect platform view transform tracking
+	if sink.updates[0].offset.X != 10 || sink.updates[0].offset.Y != 20 {
+		t.Errorf("offset = (%v, %v), want (10, 20) — Scale/Rotate should not affect tracking",
+			sink.updates[0].offset.X, sink.updates[0].offset.Y)
+	}
+}
+
+func TestCompositingCanvas_ClipPathDoesNotAffectTracking(t *testing.T) {
+	sink := &mockSink{}
+	inner := &nullCanvas{size: graphics.Size{Width: 800, Height: 600}}
+	cc := NewCompositingCanvas(inner, sink)
+
+	// ClipPath is forwarded but not tracked (too complex for rect approximation)
+	cc.ClipPath(nil, graphics.ClipOpIntersect, false)
+	cc.EmbedPlatformView(1, graphics.Size{Width: 50, Height: 50})
+
+	if len(sink.updates) != 1 {
+		t.Fatalf("expected 1 update, got %d", len(sink.updates))
+	}
+	// ClipPath should NOT add to clips stack
+	if sink.updates[0].clipBounds != nil {
+		t.Error("ClipPath should not affect platform view clip tracking")
+	}
+}
+
 func TestCompositingCanvas_ClipRRectTracked(t *testing.T) {
 	sink := &mockSink{}
 	inner := &nullCanvas{size: graphics.Size{Width: 800, Height: 600}}

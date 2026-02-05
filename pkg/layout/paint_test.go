@@ -1,7 +1,9 @@
 package layout
 
 import (
+	"image"
 	"testing"
+	"unsafe"
 
 	"github.com/go-drift/drift/pkg/graphics"
 )
@@ -180,6 +182,116 @@ func TestPaintChildWithLayer_RecordsDrawChildLayer(t *testing.T) {
 		t.Fatal("expected non-nil output display list")
 	}
 }
+
+func TestPaintChildWithLayer_FallsBackWhenCanvasLacksDrawChildLayer(t *testing.T) {
+	// When RecordingLayer is set but the canvas does NOT support DrawChildLayer,
+	// PaintChildWithLayer should fall back to painting the child directly.
+	child := &testRenderBox{}
+	child.SetSelf(child)
+	child.size = graphics.Size{Width: 50, Height: 30}
+
+	parentLayer := &graphics.Layer{Dirty: true, Size: graphics.Size{Width: 100, Height: 100}}
+
+	// Use a canvas that does NOT implement DrawChildLayer (nullPaintCanvas)
+	ctx := &PaintContext{
+		Canvas:         &nullPaintCanvas{size: graphics.Size{Width: 100, Height: 100}},
+		RecordingLayer: parentLayer,
+	}
+
+	ctx.PaintChildWithLayer(child, graphics.Offset{X: 10, Y: 20})
+
+	// Child SHOULD have been painted directly (fallback path)
+	if child.paintCalls != 1 {
+		t.Fatalf("expected fallback direct paint, got %d paint calls", child.paintCalls)
+	}
+}
+
+func TestPaintChildWithLayer_DirtyBoundaryPaintedDirectly(t *testing.T) {
+	// A boundary with a dirty layer and no RecordingLayer should paint directly
+	child := &testRenderBox{}
+	child.SetSelf(child)
+	child.size = graphics.Size{Width: 50, Height: 30}
+
+	// Create layer but mark dirty
+	child.EnsureLayer().MarkDirty()
+
+	outputRecorder := &graphics.PictureRecorder{}
+	ctx := &PaintContext{
+		Canvas: outputRecorder.BeginRecording(graphics.Size{Width: 100, Height: 100}),
+	}
+
+	ctx.PaintChildWithLayer(child, graphics.Offset{})
+
+	if child.paintCalls != 1 {
+		t.Fatalf("expected dirty boundary to be painted directly, got %d", child.paintCalls)
+	}
+}
+
+func TestPaintChildWithLayer_NilContentFallsThroughToPaint(t *testing.T) {
+	// Layer with nil Content (not yet recorded) should paint directly
+	child := &testRenderBox{}
+	child.SetSelf(child)
+	child.size = graphics.Size{Width: 50, Height: 30}
+
+	layer := child.EnsureLayer()
+	layer.Dirty = false // clean but no content
+
+	outputRecorder := &graphics.PictureRecorder{}
+	ctx := &PaintContext{
+		Canvas: outputRecorder.BeginRecording(graphics.Size{Width: 100, Height: 100}),
+	}
+
+	ctx.PaintChildWithLayer(child, graphics.Offset{})
+
+	if child.paintCalls != 1 {
+		t.Fatalf("expected paint when layer has nil content, got %d", child.paintCalls)
+	}
+}
+
+func TestPaintChild_NilChildIsNoOp(t *testing.T) {
+	outputRecorder := &graphics.PictureRecorder{}
+	ctx := &PaintContext{
+		Canvas: outputRecorder.BeginRecording(graphics.Size{Width: 10, Height: 10}),
+	}
+	// Should not panic
+	ctx.PaintChild(nil, graphics.Offset{})
+	ctx.PaintChildWithLayer(nil, graphics.Offset{})
+}
+
+// nullPaintCanvas is a canvas that does NOT implement DrawChildLayer.
+// Used to test the fallback path in PaintChildWithLayer.
+type nullPaintCanvas struct {
+	size graphics.Size
+}
+
+func (c *nullPaintCanvas) Save()                                            {}
+func (c *nullPaintCanvas) SaveLayerAlpha(bounds graphics.Rect, alpha float64) {}
+func (c *nullPaintCanvas) SaveLayer(bounds graphics.Rect, paint *graphics.Paint) {}
+func (c *nullPaintCanvas) Restore()                                         {}
+func (c *nullPaintCanvas) Translate(dx, dy float64)                         {}
+func (c *nullPaintCanvas) Scale(sx, sy float64)                             {}
+func (c *nullPaintCanvas) Rotate(radians float64)                           {}
+func (c *nullPaintCanvas) ClipRect(rect graphics.Rect)                      {}
+func (c *nullPaintCanvas) ClipRRect(rrect graphics.RRect)                   {}
+func (c *nullPaintCanvas) ClipPath(path *graphics.Path, op graphics.ClipOp, aa bool) {}
+func (c *nullPaintCanvas) Clear(color graphics.Color)                       {}
+func (c *nullPaintCanvas) DrawRect(rect graphics.Rect, paint graphics.Paint) {}
+func (c *nullPaintCanvas) DrawRRect(rrect graphics.RRect, paint graphics.Paint) {}
+func (c *nullPaintCanvas) DrawCircle(center graphics.Offset, radius float64, paint graphics.Paint) {}
+func (c *nullPaintCanvas) DrawLine(start, end graphics.Offset, paint graphics.Paint) {}
+func (c *nullPaintCanvas) DrawText(layout *graphics.TextLayout, position graphics.Offset) {}
+func (c *nullPaintCanvas) DrawImage(img image.Image, position graphics.Offset) {}
+func (c *nullPaintCanvas) DrawImageRect(img image.Image, srcRect, dstRect graphics.Rect, quality graphics.FilterQuality, cacheKey uintptr) {
+}
+func (c *nullPaintCanvas) DrawPath(path *graphics.Path, paint graphics.Paint) {}
+func (c *nullPaintCanvas) DrawRectShadow(rect graphics.Rect, shadow graphics.BoxShadow) {}
+func (c *nullPaintCanvas) DrawRRectShadow(rrect graphics.RRect, shadow graphics.BoxShadow) {}
+func (c *nullPaintCanvas) SaveLayerBlur(bounds graphics.Rect, sigmaX, sigmaY float64) {}
+func (c *nullPaintCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds graphics.Rect) {}
+func (c *nullPaintCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics.Rect, tintColor graphics.Color) {
+}
+func (c *nullPaintCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {}
+func (c *nullPaintCanvas) Size() graphics.Size                              { return c.size }
 
 func TestEmbedPlatformView_Recording(t *testing.T) {
 	recorder := &graphics.PictureRecorder{}
