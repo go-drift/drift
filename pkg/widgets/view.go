@@ -40,13 +40,18 @@ type renderView struct {
 }
 
 // IsRepaintBoundary returns true - the root view is always a repaint boundary.
-// This is required for the layer tree compositing system.
+//
+// This is essential for the layer tree compositing system to function:
+// 1. compositeLayerTree starts from the root and expects it to have a layer
+// 2. All paint scheduling walks up to a repaint boundary - root must be one
+// 3. Without this, dirty descendants would have nowhere to schedule paint to
 func (r *renderView) IsRepaintBoundary() bool {
 	return true
 }
 
 // EnsureLayer returns the layer for this boundary.
-// Required for layer tree compositing.
+// Required for layer tree compositing - the root layer is the entry point
+// for compositeLayerTree to begin drawing the scene.
 func (r *renderView) EnsureLayer() *graphics.Layer {
 	return r.RenderBoxBase.EnsureLayer()
 }

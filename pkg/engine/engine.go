@@ -465,7 +465,7 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		canvas.Clear(graphics.Color(backgroundColor.Load()))
 		canvas.Save()
 		canvas.Scale(scale, scale)
-		compositeLayerTree(canvas, a.rootRender, showLayoutBounds, debugStrokeWidth)
+		compositeLayerTree(canvas, a.rootRender)
 		canvas.Restore()
 
 		// Flush geometry batch - blocks until native applies all updates.
@@ -816,6 +816,10 @@ func itoa(value int) string {
 
 // recordLayerContent records a boundary's content into its layer.
 // This is called during the recording phase (children first, then parents).
+//
+// Precondition: boundary.NeedsPaint() returned true (checked by caller).
+// We ensure layer.Dirty is in sync with NeedsPaint to handle edge cases where
+// MarkNeedsPaint was called before the layer existed.
 func recordLayerContent(boundary layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
 	// Get the layer (must exist - ensured by DFS traversal)
 	layerGetter, ok := boundary.(interface{ EnsureLayer() *graphics.Layer })
@@ -823,6 +827,14 @@ func recordLayerContent(boundary layout.RenderObject, showLayoutBounds bool, str
 		return
 	}
 	layer := layerGetter.EnsureLayer()
+
+	// Ensure layer.Dirty is in sync with NeedsPaint.
+	// This handles the edge case where MarkNeedsPaint was called before the layer
+	// existed (needsPaint=true but layer was nil, so layer.Dirty wasn't set).
+	// EnsureLayer creates new layers with Dirty=true, but this is defensive.
+	if checker, ok := boundary.(interface{ NeedsPaint() bool }); ok && checker.NeedsPaint() {
+		layer.Dirty = true
+	}
 
 	if !layer.Dirty {
 		return // Clean - skip re-recording
@@ -918,29 +930,18 @@ func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strok
 // compositeLayerTree draws the layer tree starting from root.
 // Child layers are drawn via DrawChildLayer ops recorded in each layer.
 //
-// This function expects all dirty layers to have been recorded before it's called.
-// The fallback paths exist for robustness but indicate a bug in the recording phase
-// if they're hit during normal operation.
-func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
-	if layerGetter, ok := root.(interface{ EnsureLayer() *graphics.Layer }); ok {
-		layer := layerGetter.EnsureLayer()
-		if layer.Content != nil {
-			layer.Composite(canvas)
-			return
-		}
-		// Fallback: layer has no recorded content.
-		// This indicates a bug in the recording phase - all boundaries should
-		// have content recorded before compositing.
-		// Possible causes:
-		// 1. First frame before any recording (shouldn't happen - recording runs first)
-		// 2. Recording was skipped due to a bug in recordDirtyLayers
-		// 3. Layer was disposed unexpectedly
-		// TODO: Add debug logging when a debug mode is available
+// Precondition: All dirty layers must be recorded before calling this function.
+// The root must be a repaint boundary with valid layer content.
+func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject) {
+	layerGetter, ok := root.(interface{ EnsureLayer() *graphics.Layer })
+	if !ok {
+		panic("drift: root render object must implement EnsureLayer() - ensure root is a repaint boundary")
 	}
-	// Direct paint fallback - either no layer or no content
-	root.Paint(&layout.PaintContext{
-		Canvas:           canvas,
-		ShowLayoutBounds: showLayoutBounds,
-		DebugStrokeWidth: strokeWidth,
-	})
+
+	layer := layerGetter.EnsureLayer()
+	if layer.Content == nil {
+		panic("drift: root layer has no recorded content - recording phase failed to run or was skipped")
+	}
+
+	layer.Composite(canvas)
 }
