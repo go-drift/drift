@@ -45,6 +45,14 @@ type RepaintBoundaryNode interface {
 	NeedsPaint() bool
 }
 
+// LayerTreeNode combines the interfaces needed for layer tree traversal.
+// Using a combined interface avoids multiple type assertions per node in the
+// recording hot path - a single assertion extracts all needed capabilities.
+type LayerTreeNode interface {
+	RepaintBoundaryNode
+	ChildVisitor
+}
+
 // ScrollOffsetProvider is implemented by scrollable render objects.
 // The accessibility system uses this to adjust child positions for scroll offset.
 type ScrollOffsetProvider interface {

@@ -212,6 +212,18 @@ func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
 
 // ClipBoundsProvider is optionally implemented by canvases that can report
 // their current clip bounds. Used for cull optimization in layer compositing.
+//
+// TODO: Enable cull optimization by implementing ClipBounds on SkiaCanvas.
+// Required steps:
+//   1. Add to pkg/skia/skia_bridge.h:
+//      int drift_skia_canvas_get_local_clip_bounds(
+//          DriftSkiaCanvas canvas, float* l, float* t, float* r, float* b);
+//   2. Implement in C++ bridge (wraps SkCanvas::getLocalClipBounds())
+//   3. Rebuild libdrift_skia.a for all platforms
+//   4. Add Go wrapper in pkg/skia/skia.go and stub in skia_stub.go
+//   5. Implement ClipBounds() on SkiaCanvas in pkg/graphics/skia_canvas.go
+//
+// Until implemented, opDrawChildLayer skips culling (still correct, just slower).
 type ClipBoundsProvider interface {
 	// ClipBounds returns the current clip rectangle in local coordinates.
 	// Returns an empty rect if the clip is empty (nothing visible).

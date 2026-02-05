@@ -47,7 +47,7 @@ func (l *Layer) String() string {
 		return "Layer(nil)"
 	}
 	hasContent := l.Content != nil
-	return fmt.Sprintf("Layer{dirty=%v, size=%v, hasContent=%v}", l.Dirty, l.Size, hasContent)
+	return fmt.Sprintf("Layer{dirty=%v, size=%.0fx%.0f, hasContent=%v}", l.Dirty, l.Size.Width, l.Size.Height, hasContent)
 }
 
 // Composite draws this layer to the canvas.
