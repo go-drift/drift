@@ -75,7 +75,9 @@ func (r *PictureRecorder) append(op displayOp) {
 	r.ops = append(r.ops, op)
 }
 
-// DrawChildLayer records a child layer reference at current canvas state.
+// DrawChildLayer records a reference to a child repaint boundary's layer.
+// When the display list is replayed during compositing, the child layer's
+// content is composited at the current canvas transform and clip state.
 func (r *PictureRecorder) DrawChildLayer(layer *Layer) {
 	r.append(opDrawChildLayer{layer: layer})
 }

@@ -79,10 +79,15 @@ func (c *CompositingCanvas) Translate(dx, dy float64) {
 	c.inner.Translate(dx, dy)
 }
 
+// Scale forwards to inner canvas but is NOT tracked for platform view geometry.
+// Platform views operate in logical coordinates; device scale is applied on the
+// raw Skia canvas before wrapping with CompositingCanvas.
 func (c *CompositingCanvas) Scale(sx, sy float64) {
 	c.inner.Scale(sx, sy)
 }
 
+// Rotate forwards to inner canvas but is NOT tracked for platform view geometry.
+// Native views cannot be rotated — they are always axis-aligned rectangles.
 func (c *CompositingCanvas) Rotate(radians float64) {
 	c.inner.Rotate(radians)
 }
@@ -110,6 +115,8 @@ func (c *CompositingCanvas) ClipRRect(rrect graphics.RRect) {
 	c.inner.ClipRRect(rrect)
 }
 
+// ClipPath forwards to inner canvas but is NOT tracked for platform view geometry.
+// Native views only support rectangular clipping; path clips cannot be applied to them.
 func (c *CompositingCanvas) ClipPath(path *graphics.Path, op graphics.ClipOp, antialias bool) {
 	c.inner.ClipPath(path, op, antialias)
 }

@@ -25,7 +25,9 @@ type PointerHandler interface {
 	HandlePointer(event gestures.PointerEvent)
 }
 
-// PaintContext provides the canvas for painting render objects.
+// PaintContext provides the canvas and state tracking for painting render objects.
+// It maintains transform and clip stacks for culling and platform view geometry,
+// and supports layer-based recording when RecordingLayer is set.
 type PaintContext struct {
 	Canvas           graphics.Canvas
 	clipStack        []graphics.Rect   // Each entry is already-intersected global clip

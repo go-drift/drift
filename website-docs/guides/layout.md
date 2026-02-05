@@ -771,9 +771,23 @@ widgets.ClipRRect{
 }
 ```
 
-## Layout Boundaries
+## Repaint Boundaries and the Layer Tree
 
-For performance, use `RepaintBoundary` to prevent repaint propagation:
+Drift uses a **layer tree** for efficient incremental repainting. Each repaint boundary gets its own cached layer. When a widget marks itself as needing paint, only its boundary's layer is re-recorded -- parent layers reference children via stable pointers and don't need to re-record.
+
+### How It Works
+
+The rendering pipeline has three phases:
+
+1. **Build & Layout** -- widgets rebuild and render objects compute sizes/positions.
+2. **Record** -- dirty repaint boundaries re-record their content into display lists. Child boundaries are recorded as `DrawChildLayer` references, not embedded content.
+3. **Composite** -- the layer tree is walked top-down, replaying each layer's display list onto the canvas.
+
+This means changing a deeply nested widget only re-records the nearest boundary's layer, not the entire tree.
+
+### Using RepaintBoundary
+
+Wrap subtrees that repaint independently:
 
 ```go
 widgets.RepaintBoundary{
@@ -785,6 +799,14 @@ Use when:
 - A subtree repaints frequently but ancestors don't change
 - Animating a small part of a complex layout
 - Complex custom painting
+
+The root `View` widget is always a repaint boundary. You don't need to add one yourself unless you want to isolate a specific subtree.
+
+### Platform Views and Culling
+
+Platform views (native text fields, switches, etc.) call `ctx.EmbedPlatformView()` during paint. The compositing phase resolves each view's position and clip bounds in global coordinates and sends them to the native side.
+
+When a platform view is culled (scrolled off-screen), no `EmbedPlatformView` op is recorded. The framework detects unseen views after compositing and tells the native side to hide them. When the view scrolls back into view, it receives updated geometry and becomes visible again.
 
 ## Common Patterns
 

@@ -80,12 +80,18 @@ type PlatformViewRegistry struct {
 	mu        sync.RWMutex
 	channel   *MethodChannel
 
-	// Geometry batching for synchronized updates
-	batchMu            sync.Mutex
-	batchMode          bool
-	batchUpdates       []geometryUpdate
-	frameSeq           uint64
-	geometryCache      map[int64]viewGeometryCache
+	// Geometry batching for synchronized updates.
+	// BeginGeometryBatch/FlushGeometryBatch bracket each frame. Updates are
+	// queued during compositing and sent to native as a single batch.
+	batchMu       sync.Mutex
+	batchMode     bool
+	batchUpdates  []geometryUpdate
+	frameSeq      uint64
+	geometryCache map[int64]viewGeometryCache
+	// viewsSeenThisFrame tracks which views received geometry updates this frame.
+	// Views NOT seen are sent empty clip bounds in FlushGeometryBatch, causing the
+	// native side to hide them. This prevents culled (off-screen) platform views
+	// from staying visible at stale positions.
 	viewsSeenThisFrame map[int64]struct{}
 
 	// Stats for monitoring
