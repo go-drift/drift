@@ -90,8 +90,17 @@ func (r *RenderBoxBase) Size() graphics.Size {
 }
 
 // SetSize updates the render box size.
+// If the size changes, marks paint as dirty since the render object's content
+// needs to be re-recorded at the new size.
 func (r *RenderBoxBase) SetSize(size graphics.Size) {
+	if r.size == size {
+		return
+	}
 	r.size = size
+	// Size changed during layout - mark paint dirty.
+	// For repaint boundaries, this ensures the layer is re-recorded with the new size.
+	// For non-boundaries, this propagates up to the parent boundary.
+	r.MarkNeedsPaint()
 }
 
 // ParentData returns the parent-assigned data for this render box.
@@ -100,8 +109,26 @@ func (r *RenderBoxBase) ParentData() any {
 }
 
 // SetParentData assigns parent-controlled data to this render box.
+// If the offset in BoxParentData changes, marks the parent for repaint since the
+// parent's DrawChildLayer op embeds the child offset and becomes stale.
 func (r *RenderBoxBase) SetParentData(data any) {
+	// Check if offset changed - parent needs repaint if so
+	if newData, ok := data.(*BoxParentData); ok {
+		oldOffset := r.parentDataOffset()
+		if oldOffset != newData.Offset && r.parent != nil {
+			// Parent's layer records DrawChildLayer with our offset, so it's stale
+			r.parent.MarkNeedsPaint()
+		}
+	}
 	r.parentData = data
+}
+
+// parentDataOffset extracts the offset from current parentData, or zero if not set.
+func (r *RenderBoxBase) parentDataOffset() graphics.Offset {
+	if data, ok := r.parentData.(*BoxParentData); ok {
+		return data.Offset
+	}
+	return graphics.Offset{}
 }
 
 // MarkNeedsLayout marks this render box as needing layout.

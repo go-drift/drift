@@ -379,3 +379,167 @@ func TestLayerDisposedOnBoundaryRemoval(t *testing.T) {
 		t.Error("layer content should be nil after Dispose()")
 	}
 }
+
+// TestChildOffsetChangeInvalidatesParentLayer verifies that when a repaint-boundary
+// child's offset changes during layout, the parent boundary is marked dirty.
+// This is critical because the parent's DrawChildLayer op embeds the child offset,
+// so the parent layer must be re-recorded when the child moves.
+func TestChildOffsetChangeInvalidatesParentLayer(t *testing.T) {
+	var recordingOrder []string
+
+	// Create parent and child boundaries
+	parent := newMockBoundary("parent", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+	parent.AddChild(child)
+
+	// Initial recording - both boundaries recorded
+	parent.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	dirtyBoundaries := []layout.RenderObject{parent, child}
+	recordDirtyLayers(dirtyBoundaries, false, 1.0)
+
+	// Verify both were recorded
+	parentLayer := parent.EnsureLayer()
+	childLayer := child.EnsureLayer()
+	if parentLayer.Content == nil || childLayer.Content == nil {
+		t.Fatal("both layers should have content after initial recording")
+	}
+
+	// Clear recording order for next check
+	recordingOrder = nil
+
+	// Both layers should be clean now
+	if parentLayer.Dirty || childLayer.Dirty {
+		t.Fatal("layers should be clean after recording")
+	}
+
+	// Change child's offset via SetParentData (simulates layout change)
+	// This should mark the parent dirty because parent's DrawChildLayer op has the old offset
+	child.SetParentData(&layout.BoxParentData{
+		Offset: graphics.Offset{X: 50, Y: 50}, // Different from initial (0,0)
+	})
+
+	// Parent layer should now be dirty (child offset changed)
+	if !parentLayer.Dirty {
+		t.Error("parent layer should be dirty after child offset change")
+	}
+
+	// Child layer should still be clean (its content didn't change, only position)
+	if childLayer.Dirty {
+		t.Error("child layer should remain clean - only its position changed, not content")
+	}
+
+	// Verify parent needs paint flag was set
+	if !parent.NeedsPaint() {
+		t.Error("parent should need paint after child offset change")
+	}
+
+	// Record dirty layers - parent should be re-recorded
+	recordDirtyLayers([]layout.RenderObject{parent}, false, 1.0)
+
+	// Only parent should be recorded (child content unchanged)
+	if len(recordingOrder) != 1 || recordingOrder[0] != "parent" {
+		t.Errorf("expected only parent to be re-recorded, got: %v", recordingOrder)
+	}
+}
+
+// TestChildSizeChangeInvalidatesLayer verifies that when a render object's
+// size changes during layout, it is marked for repaint.
+func TestChildSizeChangeInvalidatesLayer(t *testing.T) {
+	var recordingOrder []string
+
+	// Create a boundary
+	box := newMockBoundary("box", &recordingOrder)
+	box.MarkNeedsPaint()
+
+	// Initial recording
+	recordDirtyLayersDFS(box, false, 1.0, true)
+
+	layer := box.EnsureLayer()
+	if layer.Content == nil {
+		t.Fatal("layer should have content after initial recording")
+	}
+
+	// Clear flags
+	recordingOrder = nil
+	if layer.Dirty || box.NeedsPaint() {
+		t.Fatal("layer and box should be clean after recording")
+	}
+
+	// Change size - this should mark paint dirty
+	box.SetSize(graphics.Size{Width: 200, Height: 200})
+
+	// Layer should now be dirty
+	if !layer.Dirty {
+		t.Error("layer should be dirty after size change")
+	}
+	if !box.NeedsPaint() {
+		t.Error("box should need paint after size change")
+	}
+
+	// Re-record
+	recordDirtyLayersDFS(box, false, 1.0, true)
+
+	// Box should be recorded
+	if len(recordingOrder) != 1 || recordingOrder[0] != "box" {
+		t.Errorf("expected box to be re-recorded, got: %v", recordingOrder)
+	}
+}
+
+// TestSameSizeNoRepaint verifies that setting the same size doesn't trigger repaint
+func TestSameSizeNoRepaint(t *testing.T) {
+	var recordingOrder []string
+
+	box := newMockBoundary("box", &recordingOrder)
+	box.MarkNeedsPaint()
+
+	// Initial recording
+	recordDirtyLayersDFS(box, false, 1.0, true)
+
+	layer := box.EnsureLayer()
+	recordingOrder = nil
+
+	// Set same size - should NOT trigger repaint
+	box.SetSize(graphics.Size{Width: 100, Height: 100}) // Same as initial size
+
+	if layer.Dirty {
+		t.Error("layer should NOT be dirty after setting same size")
+	}
+	if box.NeedsPaint() {
+		t.Error("box should NOT need paint after setting same size")
+	}
+}
+
+// TestSameOffsetNoRepaint verifies that setting the same offset doesn't trigger parent repaint
+func TestSameOffsetNoRepaint(t *testing.T) {
+	var recordingOrder []string
+
+	parent := newMockBoundary("parent", &recordingOrder)
+	child := newMockBoundary("child", &recordingOrder)
+	parent.AddChild(child)
+
+	// Set initial offset
+	child.SetParentData(&layout.BoxParentData{
+		Offset: graphics.Offset{X: 10, Y: 10},
+	})
+
+	// Initial recording
+	parent.MarkNeedsPaint()
+	child.MarkNeedsPaint()
+	recordDirtyLayers([]layout.RenderObject{parent, child}, false, 1.0)
+
+	parentLayer := parent.EnsureLayer()
+	recordingOrder = nil
+
+	// Set same offset - should NOT trigger parent repaint
+	child.SetParentData(&layout.BoxParentData{
+		Offset: graphics.Offset{X: 10, Y: 10}, // Same as before
+	})
+
+	if parentLayer.Dirty {
+		t.Error("parent layer should NOT be dirty after setting same offset")
+	}
+	if parent.NeedsPaint() {
+		t.Error("parent should NOT need paint after setting same offset")
+	}
+}
