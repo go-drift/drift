@@ -182,16 +182,12 @@ func (c *CompositingCanvas) EmbedPlatformView(viewID int64, size graphics.Size) 
 	// Compute global offset from accumulated transform
 	offset := c.transform
 
-	// Compute clip bounds if any clips are active
+	// Compute clip bounds if any clips are active.
+	// Even fully-clipped (empty) rects are sent so the sink can hide the view.
 	var clipBounds *graphics.Rect
 	if len(c.clips) > 0 {
 		clip := c.clips[len(c.clips)-1]
-		if clip.IsEmpty() {
-			// Fully clipped - still notify sink so it can hide the view
-			clipBounds = &clip
-		} else {
-			clipBounds = &clip
-		}
+		clipBounds = &clip
 	}
 
 	c.sink.UpdateViewGeometry(viewID, offset, size, clipBounds)
