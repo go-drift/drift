@@ -1,5 +1,7 @@
 package graphics
 
+import "fmt"
+
 // Layer represents a cached drawing surface for a repaint boundary.
 // Layers have stable identity - never replace the object, only mark dirty.
 // Parent layers contain references to child layers via DrawChildLayer ops,
@@ -14,6 +16,15 @@ type Layer struct {
 
 	// Size of this layer's bounds
 	Size Size
+}
+
+// String returns a debug representation of the layer.
+func (l *Layer) String() string {
+	if l == nil {
+		return "Layer(nil)"
+	}
+	hasContent := l.Content != nil
+	return fmt.Sprintf("Layer{dirty=%v, size=%v, hasContent=%v}", l.Dirty, l.Size, hasContent)
 }
 
 // Composite draws this layer to the canvas.

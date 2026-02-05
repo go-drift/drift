@@ -112,9 +112,16 @@ func TestDFSRecordingOrder(t *testing.T) {
 	dirtyBoundaries := []layout.RenderObject{root, child1, child2, grandchild}
 	recordDirtyLayers(dirtyBoundaries, false, 1.0)
 
-	// Verify children recorded before parents (reverse depth order)
-	// Expected order: grandchild, child2, child1, root
-	// (deepest first due to reverse iteration, siblings in reverse order)
+	// Verify children recorded before parents (reverse depth order).
+	// The recording order is determined by:
+	// 1. recordDirtyLayers iterates dirtyBoundaries in REVERSE (deepest first)
+	// 2. For each boundary, DFS stops at child boundaries (they're processed separately)
+	//
+	// With input [root, child1, child2, grandchild] (depth order from FlushPaint):
+	// - Process grandchild (idx 3): records "grandchild"
+	// - Process child2 (idx 2): records "child2" (no children that are boundaries)
+	// - Process child1 (idx 1): DFS stops at grandchild boundary, records "child1"
+	// - Process root (idx 0): DFS stops at child1/child2 boundaries, records "root"
 	expected := []string{"grandchild", "child2", "child1", "root"}
 
 	if len(recordingOrder) != len(expected) {
@@ -283,11 +290,12 @@ func TestRecordDirtyLayersReverseDepthOrder(t *testing.T) {
 
 	recordDirtyLayers(dirtyBoundaries, false, 1.0)
 
-	// Child should be recorded before root (reverse order processing)
-	// With the optimization, DFS stops at child boundaries, so:
-	// - Process child (from reverse iteration): records "child"
-	// - Process root (from reverse iteration): DFS stops at child boundary,
+	// Child should be recorded before root (reverse order processing).
+	// With input [root, child] (depth order from FlushPaint):
+	// - Process child (idx 1, reverse iteration): records "child"
+	// - Process root (idx 0, reverse iteration): DFS stops at child boundary,
 	//   then records "root"
+	// This ensures child layer has content when root records its DrawChildLayer op.
 	expected := []string{"child", "root"}
 
 	if len(recordingOrder) != len(expected) {

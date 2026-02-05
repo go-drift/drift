@@ -127,6 +127,14 @@ func (r Rect) IsEmpty() bool {
 	return r.Right <= r.Left || r.Bottom <= r.Top
 }
 
+// Intersects returns true if this rectangle overlaps with other.
+// Two rectangles intersect if they share any interior points.
+// Adjacent rectangles (sharing only an edge) do not intersect.
+func (r Rect) Intersects(other Rect) bool {
+	return r.Left < other.Right && r.Right > other.Left &&
+		r.Top < other.Bottom && r.Bottom > other.Top
+}
+
 // Translate returns a new rect offset by (dx, dy).
 func (r Rect) Translate(dx, dy float64) Rect {
 	return Rect{

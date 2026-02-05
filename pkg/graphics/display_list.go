@@ -210,21 +210,38 @@ func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
 	c.recorder.DrawChildLayer(layer, bounds)
 }
 
+// ClipBoundsProvider is optionally implemented by canvases that can report
+// their current clip bounds. Used for cull optimization in layer compositing.
+type ClipBoundsProvider interface {
+	// ClipBounds returns the current clip rectangle in local coordinates.
+	// Returns an empty rect if the clip is empty (nothing visible).
+	// Returns a very large rect if there's no clip applied.
+	ClipBounds() Rect
+}
+
 // opDrawChildLayer references a child layer to composite at current canvas state.
 // Clipping is handled by the canvas state (clips recorded before this op execute first).
 // Effects that overflow bounds (shadows, gradients) are composited correctly because
 // the layer content includes the overflow and clips are applied at the canvas level.
 type opDrawChildLayer struct {
 	layer  *Layer
-	bounds Rect // Layer bounds for potential cull optimization
+	bounds Rect // Layer bounds for cull optimization
 }
 
 func (op opDrawChildLayer) execute(canvas Canvas) {
 	if op.layer == nil {
 		return
 	}
-	// Note: Cull optimization could be added here by checking if bounds
-	// intersects the canvas clip. For now, always composite.
+
+	// Cull optimization: skip compositing if layer is entirely outside the clip.
+	// This avoids GPU work for off-screen layers.
+	if provider, ok := canvas.(ClipBoundsProvider); ok {
+		clipBounds := provider.ClipBounds()
+		if !op.bounds.Intersects(clipBounds) {
+			return // Layer is culled - entirely outside visible area
+		}
+	}
+
 	op.layer.Composite(canvas)
 }
 

@@ -131,8 +131,14 @@ func (r *RenderBoxBase) MarkNeedsLayout() {
 // MarkNeedsPaint marks this render box as needing paint.
 //
 // This follows Flutter's repaint boundary pattern: when a node needs paint,
-// we walk up the tree until we reach a repaint boundary.
-// The boundary then gets scheduled for paint.
+// we walk up the tree until we reach a repaint boundary. The boundary then
+// gets scheduled for paint.
+//
+// Key optimization: When we hit a repaint boundary, we STOP walking up.
+// Parent boundaries reference child boundaries via DrawChildLayer ops, not
+// embedded content. This means changing a child's content doesn't require
+// re-recording the parent - the parent's DrawChildLayer op will composite
+// the child's updated content automatically.
 //
 // Note: Unlike MarkNeedsLayout, we don't early-return when needsPaint is true.
 // This is because SetSelf() pre-sets needsPaint=true without scheduling, and
@@ -148,11 +154,13 @@ func (r *RenderBoxBase) MarkNeedsPaint() {
 		return
 	}
 
-	// If we are a repaint boundary, schedule ourselves
+	// If we are a repaint boundary, schedule ourselves and STOP.
+	// Parent boundaries reference us via DrawChildLayer, so they don't need
+	// to re-record when our content changes.
 	if r.repaintBoundary == r.self {
 		r.needsPaint = true
-		r.owner.SchedulePaint(r.self) // SchedulePaint handles deduplication
-		return                        // STOP: parent references us, doesn't embed content
+		r.owner.SchedulePaint(r.self)
+		return
 	}
 
 	// Walk up to parent. This continues until hitting a boundary.
@@ -191,13 +199,6 @@ func (r *RenderBoxBase) Parent() RenderObject {
 func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	if r.parent == parent {
 		return
-	}
-
-	// If being removed from tree (parent becoming nil), dispose the layer
-	// to release resources. The layer will be recreated if re-attached.
-	if parent == nil && r.layer != nil {
-		r.layer.Dispose()
-		r.layer = nil
 	}
 
 	r.parent = parent

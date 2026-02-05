@@ -873,9 +873,13 @@ func recordDirtyLayers(dirtyBoundaries []layout.RenderObject, showLayoutBounds b
 // child layers have content when parent records DrawChildLayer ops.
 //
 // Optimization: We stop at child boundaries rather than traversing their entire
-// subtrees. Child boundaries are recorded independently (they're in dirtyBoundaries
-// if dirty), and their subtrees are handled when they're processed. This prevents
-// O(n*m) behavior when multiple nested boundaries are dirty.
+// subtrees. This is safe because:
+//  1. Dirty child boundaries are guaranteed to be in dirtyBoundaries (from FlushPaint)
+//  2. They will be processed independently in the outer loop
+//  3. Their subtrees will be handled when they are the DFS root
+//
+// This prevents O(n*m) behavior when multiple nested boundaries are dirty -
+// we visit each node at most once across all DFS calls.
 //
 // Note: Type assertions (IsRepaintBoundary, ChildVisitor) are done per-node but
 // are fast O(1) operations. The boundary-stop optimization means we visit far
@@ -893,7 +897,7 @@ func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strok
 	}
 
 	// If this is a child boundary (not the root of this DFS), stop here.
-	// Child boundaries handle their own subtree recording.
+	// Child boundaries are in dirtyBoundaries and will be processed independently.
 	if isBoundary && !isRoot {
 		return
 	}
@@ -925,10 +929,13 @@ func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject, showLa
 			return
 		}
 		// Fallback: layer has no recorded content.
-		// This can happen if:
+		// This indicates a bug in the recording phase - all boundaries should
+		// have content recorded before compositing.
+		// Possible causes:
 		// 1. First frame before any recording (shouldn't happen - recording runs first)
-		// 2. Recording was skipped due to a bug
-		// Paint directly as a safety fallback.
+		// 2. Recording was skipped due to a bug in recordDirtyLayers
+		// 3. Layer was disposed unexpectedly
+		// TODO: Add debug logging when a debug mode is available
 	}
 	// Direct paint fallback - either no layer or no content
 	root.Paint(&layout.PaintContext{
