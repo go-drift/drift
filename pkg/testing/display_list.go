@@ -210,6 +210,17 @@ func (c *serializingCanvas) DrawSVGTinted(_ unsafe.Pointer, bounds graphics.Rect
 	})
 }
 
+func (c *serializingCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
+	c.ops = append(c.ops, DisplayOp{
+		Op: "embedPlatformView",
+		Params: sortedMap(
+			"viewId", float64(viewID),
+			"width", round2(size.Width),
+			"height", round2(size.Height),
+		),
+	})
+}
+
 func (c *serializingCanvas) Size() graphics.Size {
 	return c.size
 }

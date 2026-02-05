@@ -38,6 +38,18 @@ type ChildVisitor interface {
 	VisitChildren(visitor func(RenderObject))
 }
 
+// RepaintBoundaryNode is implemented by render objects that are repaint boundaries.
+type RepaintBoundaryNode interface {
+	IsRepaintBoundary() bool
+	NeedsPaint() bool
+}
+
+// LayerTreeNode combines the interfaces needed for layer tree traversal.
+type LayerTreeNode interface {
+	RepaintBoundaryNode
+	ChildVisitor
+}
+
 // ScrollOffsetProvider is implemented by scrollable render objects.
 // The accessibility system uses this to adjust child positions for scroll offset.
 type ScrollOffsetProvider interface {
@@ -62,11 +74,11 @@ type RenderBoxBase struct {
 	relayoutBoundary     RenderObject          // cached nearest relayout boundary
 	needsLayout          bool                  // local dirty flag
 	constraints          Constraints           // last received constraints
-	repaintBoundary      RenderObject          // cached nearest repaint boundary
-	needsPaint           bool                  // local dirty flag for paint
-	layer                *graphics.DisplayList // cached paint output for boundaries
-	semanticsBoundary    RenderObject          // cached nearest semantics boundary
-	needsSemanticsUpdate bool                  // local dirty flag for semantics
+	repaintBoundary      RenderObject    // cached nearest repaint boundary
+	needsPaint           bool            // local dirty flag for paint
+	layer                *graphics.Layer // stable layer for boundaries (never nil after creation)
+	semanticsBoundary    RenderObject    // cached nearest semantics boundary
+	needsSemanticsUpdate bool            // local dirty flag for semantics
 }
 
 // Size returns the current size of the render box.
@@ -75,8 +87,14 @@ func (r *RenderBoxBase) Size() graphics.Size {
 }
 
 // SetSize updates the render box size.
+// If the size changes, marks paint as dirty since the render object's content
+// needs to be re-recorded at the new size.
 func (r *RenderBoxBase) SetSize(size graphics.Size) {
+	if r.size == size {
+		return
+	}
 	r.size = size
+	r.MarkNeedsPaint()
 }
 
 // ParentData returns the parent-assigned data for this render box.
@@ -85,7 +103,16 @@ func (r *RenderBoxBase) ParentData() any {
 }
 
 // SetParentData assigns parent-controlled data to this render box.
+// If the offset in BoxParentData changes, marks the parent for repaint since the
+// parent's DrawChildLayer op embeds the child offset and becomes stale.
 func (r *RenderBoxBase) SetParentData(data any) {
+	if newData, ok := data.(*BoxParentData); ok {
+		oldData, hadOldData := r.parentData.(*BoxParentData)
+		needsParentRepaint := !hadOldData || oldData.Offset != newData.Offset
+		if needsParentRepaint && r.parent != nil {
+			r.parent.MarkNeedsPaint()
+		}
+	}
 	r.parentData = data
 }
 
@@ -131,36 +158,62 @@ func (r *RenderBoxBase) MarkNeedsLayout() {
 // MarkNeedsPaint marks this render box as needing paint.
 //
 // This follows Flutter's repaint boundary pattern: when a node needs paint,
-// we walk up the tree until we reach a repaint boundary.
-// The boundary then gets scheduled for paint.
+// we walk up the tree until we reach a repaint boundary. The boundary then
+// gets scheduled for paint.
+//
+// Key optimization: When we hit a repaint boundary, we STOP walking up.
+// Parent boundaries reference child boundaries via DrawChildLayer ops, not
+// embedded content. This means changing a child's content doesn't require
+// re-recording the parent.
 //
 // Note: Unlike MarkNeedsLayout, we don't early-return when needsPaint is true.
 // This is because SetSelf() pre-sets needsPaint=true without scheduling, and
 // SchedulePaint() already handles deduplication internally.
 func (r *RenderBoxBase) MarkNeedsPaint() {
-	r.layer = nil // Always invalidate cached layer
+	r.needsPaint = true
+
+	// Check current boundary status (not cached) to handle dynamic changes.
+	var isCurrentlyBoundary bool
+	if r.self != nil {
+		isCurrentlyBoundary = r.self.IsRepaintBoundary()
+	}
+	wasBoundary := r.layer != nil
+
+	// Handle boundary status transitions - parent needs re-recording
+	if isCurrentlyBoundary != wasBoundary && r.parent != nil {
+		r.parent.MarkNeedsPaint()
+	}
+
+	// Not currently a boundary but was - dispose the layer
+	if !isCurrentlyBoundary && r.layer != nil {
+		r.layer.MarkDirty()
+		r.layer.Dispose()
+		r.layer = nil
+	}
 
 	if r.owner == nil || r.self == nil {
-		r.needsPaint = true
+		if r.layer != nil {
+			r.layer.MarkDirty()
+		}
 		return
 	}
 
-	// If we are a repaint boundary, schedule ourselves
-	if r.repaintBoundary == r.self {
-		r.needsPaint = true
-		r.owner.SchedulePaint(r.self) // SchedulePaint handles deduplication
+	// If we are currently a repaint boundary, ensure layer exists and mark dirty, then schedule.
+	// Parent boundaries reference us via DrawChildLayer, so they don't need
+	// to re-record when our content changes - we STOP here.
+	if isCurrentlyBoundary {
+		r.EnsureLayer().MarkDirty()
+		r.owner.SchedulePaint(r.self)
 		return
 	}
 
 	// Walk up to parent. This continues until hitting a boundary.
 	if r.parent != nil {
-		r.needsPaint = true
 		r.parent.MarkNeedsPaint()
 		return
 	}
 
 	// No parent and not a boundary - schedule self
-	r.needsPaint = true
 	r.owner.SchedulePaint(r.self)
 }
 
@@ -185,10 +238,12 @@ func (r *RenderBoxBase) Parent() RenderObject {
 // SetParent sets the parent render object and computes depth.
 // Clears relayoutBoundary and constraints to prevent stale references
 // when the object is reparented to a different subtree.
+// Also marks old and new parent for repaint since their DrawChildLayer ops change.
 func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	if r.parent == parent {
 		return
 	}
+	oldParent := r.parent
 	r.parent = parent
 	if parent == nil {
 		r.depth = 0
@@ -203,9 +258,21 @@ func (r *RenderBoxBase) SetParent(parent RenderObject) {
 	r.needsLayout = true
 	r.repaintBoundary = nil
 	r.needsPaint = true
-	r.layer = nil
+	// Mark layer dirty if it exists (preserves stable identity when reparenting)
+	if r.layer != nil {
+		r.layer.MarkDirty()
+	}
 	r.semanticsBoundary = nil
 	r.needsSemanticsUpdate = true
+
+	// Mark old parent dirty - it loses a child, so its DrawChildLayer ops are stale
+	if oldParent != nil {
+		oldParent.MarkNeedsPaint()
+	}
+	// Mark new parent dirty - it gains a child, so it needs new DrawChildLayer ops
+	if parent != nil {
+		parent.MarkNeedsPaint()
+	}
 }
 
 // Depth returns the tree depth (root = 0).
@@ -244,14 +311,28 @@ func (r *RenderBoxBase) NeedsPaint() bool {
 	return r.needsPaint
 }
 
-// Layer returns the cached display list for repaint boundaries.
-func (r *RenderBoxBase) Layer() *graphics.DisplayList {
+// Layer returns the cached layer for repaint boundaries.
+func (r *RenderBoxBase) Layer() *graphics.Layer {
 	return r.layer
 }
 
-// SetLayer stores the cached display list.
-func (r *RenderBoxBase) SetLayer(list *graphics.DisplayList) {
-	r.layer = list
+// EnsureLayer returns the existing layer or creates one if needed.
+// The layer has stable identity - never replace it, only mark dirty.
+func (r *RenderBoxBase) EnsureLayer() *graphics.Layer {
+	if r.layer == nil {
+		r.layer = &graphics.Layer{Dirty: true, Size: r.size}
+	}
+	return r.layer
+}
+
+// SetLayerContent updates the layer's content (called after recording).
+// Disposes old content before setting new content.
+func (r *RenderBoxBase) SetLayerContent(content *graphics.DisplayList) {
+	if r.layer == nil {
+		r.layer = &graphics.Layer{}
+	}
+	r.layer.SetContent(content)
+	r.layer.Size = r.size
 }
 
 // ClearNeedsPaint marks this render object as painted.
@@ -272,6 +353,15 @@ func (r *RenderBoxBase) NeedsSemanticsUpdate() bool {
 // ClearNeedsSemanticsUpdate marks this render object's semantics as updated.
 func (r *RenderBoxBase) ClearNeedsSemanticsUpdate() {
 	r.needsSemanticsUpdate = false
+}
+
+// Dispose releases resources held by this render box.
+// Call this when the render object is permanently removed from the tree.
+func (r *RenderBoxBase) Dispose() {
+	if r.layer != nil {
+		r.layer.Dispose()
+		r.layer = nil
+	}
 }
 
 // Layout handles boundary determination and delegates to PerformLayout.
@@ -307,6 +397,14 @@ func (r *RenderBoxBase) Layout(constraints Constraints, parentUsesSize bool) {
 	// Determine repaint boundary (inherited unless explicit)
 	if r.self != nil && r.self.IsRepaintBoundary() {
 		r.repaintBoundary = r.self
+		// Schedule paint if this boundary needs it. This ensures boundaries are scheduled
+		// on their first layout, since SetSelf() sets needsPaint=true but can't schedule
+		// (no owner yet). Without this, outer boundaries could be skipped if a child
+		// boundary schedules itself first (MarkNeedsPaint stops at the first boundary).
+		if r.needsPaint && r.owner != nil {
+			r.EnsureLayer().MarkDirty()
+			r.owner.SchedulePaint(r.self)
+		}
 	} else if r.parent != nil {
 		if getter, ok := r.parent.(interface{ RepaintBoundary() RenderObject }); ok {
 			r.repaintBoundary = getter.RepaintBoundary()

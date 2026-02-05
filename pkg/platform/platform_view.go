@@ -87,10 +87,6 @@ type PlatformViewRegistry struct {
 	frameSeq      uint64
 	geometryCache map[int64]viewGeometryCache
 
-	// Track views for culling detection (views not painted should be hidden)
-	viewsAtFrameStart     map[int64]struct{}
-	viewsUpdatedThisFrame map[int64]struct{}
-
 	// Stats for monitoring
 	BatchTimeouts atomic.Uint64
 }
@@ -142,9 +138,9 @@ func (r *PlatformViewRegistry) handleEvent(data any) {
 	switch method {
 	case "onViewCreated":
 		// Native has finished creating the view.
-		// Clear geometry cache so next frame resends position.
+		// Resend geometry immediately so the view appears at the correct position.
 		if viewID, ok := toInt64(dataMap["viewId"]); ok {
-			r.ClearGeometryCache(viewID)
+			r.resendGeometry(viewID)
 		}
 	case "onTextChanged":
 		r.handleTextChanged(dataMap)
@@ -230,15 +226,27 @@ func (r *PlatformViewRegistry) GetView(viewID int64) PlatformView {
 	return view
 }
 
+// HasViews returns true if any platform views are registered.
+func (r *PlatformViewRegistry) HasViews() bool {
+	r.mu.RLock()
+	hasViews := len(r.views) > 0
+	r.mu.RUnlock()
+	return hasViews
+}
+
 // UpdateViewGeometry notifies native of a view's position, size, and clip bounds.
 // If batching is active, the update is queued; otherwise sent immediately.
+// Gracefully ignores disposed or unknown viewIDs.
 func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) error {
-	r.batchMu.Lock()
-
-	// Mark this view as updated this frame (for culling detection)
-	if r.viewsUpdatedThisFrame != nil {
-		r.viewsUpdatedThisFrame[viewID] = struct{}{}
+	// Guard: ignore disposed/unknown views
+	r.mu.RLock()
+	_, exists := r.views[viewID]
+	r.mu.RUnlock()
+	if !exists {
+		return nil
 	}
+
+	r.batchMu.Lock()
 
 	// Check if geometry has actually changed (deduplication)
 	if cached, ok := r.geometryCache[viewID]; ok {
@@ -289,47 +297,19 @@ func (r *PlatformViewRegistry) BeginGeometryBatch() {
 	r.batchMode = true
 	r.batchUpdates = r.batchUpdates[:0] // Reset slice, keep capacity
 	r.frameSeq++
-	// Track which views existed at frame start to detect culled views
-	r.viewsAtFrameStart = make(map[int64]struct{})
-	r.mu.RLock()
-	for id := range r.views {
-		r.viewsAtFrameStart[id] = struct{}{}
-	}
-	r.mu.RUnlock()
-	r.viewsUpdatedThisFrame = make(map[int64]struct{})
 	r.batchMu.Unlock()
 }
 
 // FlushGeometryBatch sends all queued geometry updates to native and waits
 // for them to be applied. This ensures native views are positioned correctly
-// before the frame is displayed. Also hides any views that were paint-culled
-// (existed at frame start but weren't updated during paint).
+// before the frame is displayed.
 func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	r.batchMu.Lock()
 	updates := r.batchUpdates
 	frameSeq := r.frameSeq
-	viewsAtStart := r.viewsAtFrameStart
-	viewsUpdated := r.viewsUpdatedThisFrame
 	r.batchMode = false
 	r.batchUpdates = nil
-	r.viewsAtFrameStart = nil
-	r.viewsUpdatedThisFrame = nil
 	r.batchMu.Unlock()
-
-	// Find views that were culled (existed at frame start but not painted)
-	var culledViews []int64
-	for viewID := range viewsAtStart {
-		if _, updated := viewsUpdated[viewID]; !updated {
-			culledViews = append(culledViews, viewID)
-		}
-	}
-
-	// Hide culled views - they're outside the visible viewport
-	for _, viewID := range culledViews {
-		r.SetViewVisible(viewID, false)
-		// Clear geometry cache so view repositions correctly when scrolled back
-		r.ClearGeometryCache(viewID)
-	}
 
 	if len(updates) == 0 {
 		return
@@ -364,6 +344,20 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 		// Timeout or error - increment stat counter
 		r.BatchTimeouts.Add(1)
 	}
+}
+
+// resendGeometry replays the cached geometry for a view.
+// Called when a native view finishes creation and needs its position.
+func (r *PlatformViewRegistry) resendGeometry(viewID int64) {
+	r.batchMu.Lock()
+	cached, ok := r.geometryCache[viewID]
+	r.batchMu.Unlock()
+	if !ok {
+		return
+	}
+	// Clear cache first so the next UpdateViewGeometry actually sends
+	r.ClearGeometryCache(viewID)
+	r.UpdateViewGeometry(viewID, cached.offset, cached.size, cached.clipBounds)
 }
 
 // ClearGeometryCache removes cached geometry for a view (call on dispose).
@@ -414,11 +408,9 @@ func (r *PlatformViewRegistry) handleMethodCall(method string, args any) (any, e
 	switch method {
 	case "onViewCreated":
 		// Native has finished creating the view.
-		// Clear geometry cache so next frame resends position.
-		// This handles the race where geometry was sent before the native
-		// view was added to the views map (Android's async host.post).
+		// Resend geometry immediately so the view appears at the correct position.
 		if viewID, ok := toInt64(argsMap["viewId"]); ok {
-			r.ClearGeometryCache(viewID)
+			r.resendGeometry(viewID)
 		}
 		return nil, nil
 

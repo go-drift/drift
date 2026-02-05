@@ -159,6 +159,10 @@ type Canvas interface {
 	// Note: Tinting affects ALL SVG content including gradients and embedded images.
 	DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor Color)
 
+	// EmbedPlatformView records a platform view at the current canvas position.
+	// During compositing, the canvas resolves transform+clip and updates native geometry.
+	EmbedPlatformView(viewID int64, size Size)
+
 	// Size returns the size of the canvas in pixels.
 	Size() Size
 }

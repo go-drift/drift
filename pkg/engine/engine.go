@@ -454,20 +454,16 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 			debugStrokeWidth = 1.0 / scale // Scale-independent 1px stroke
 		}
 
+		// Phase B: Record dirty layers
 		dirtyBoundaries := pipeline.FlushPaint()
-		for _, boundary := range dirtyBoundaries {
-			paintBoundaryToLayer(boundary, showLayoutBounds, debugStrokeWidth)
-		}
+		recordDirtyLayers(dirtyBoundaries, showLayoutBounds, debugStrokeWidth)
 
-		// Clear and composite tree using cached layers
+		// Phase C: Composite layer tree via CompositingCanvas
 		canvas.Clear(graphics.Color(backgroundColor.Load()))
 		canvas.Save()
 		canvas.Scale(scale, scale)
-		paintTreeWithLayers(&layout.PaintContext{
-			Canvas:           canvas,
-			ShowLayoutBounds: showLayoutBounds,
-			DebugStrokeWidth: debugStrokeWidth,
-		}, a.rootRender, graphics.Offset{})
+		compCanvas := NewCompositingCanvas(canvas, platform.GetPlatformViewRegistry())
+		compositeLayerTree(compCanvas, a.rootRender)
 		canvas.Restore()
 
 		// Flush geometry batch - blocks until native applies all updates.
@@ -816,47 +812,94 @@ func itoa(value int) string {
 	return string(buf[i:])
 }
 
-func paintBoundaryToLayer(boundary layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
+// recordLayerContent records a boundary's content into its layer.
+func recordLayerContent(boundary layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
+	layerGetter, ok := boundary.(interface{ EnsureLayer() *graphics.Layer })
+	if !ok {
+		return
+	}
+	layer := layerGetter.EnsureLayer()
+
+	if !layer.Dirty {
+		return
+	}
+
 	size := boundary.Size()
 	recorder := &graphics.PictureRecorder{}
 	recordCanvas := recorder.BeginRecording(size)
 
-	// Paint boundary's content to recorded canvas
-	paintTreeWithLayers(&layout.PaintContext{
+	ctx := &layout.PaintContext{
 		Canvas:           recordCanvas,
 		ShowLayoutBounds: showLayoutBounds,
 		DebugStrokeWidth: strokeWidth,
-	}, boundary, graphics.Offset{})
+		RecordingLayer:   layer,
+	}
+	boundary.Paint(ctx)
 
-	layer := recorder.EndRecording()
+	layer.SetContent(recorder.EndRecording())
+	layer.Size = size
 
-	if setter, ok := boundary.(interface {
-		SetLayer(*graphics.DisplayList)
-		ClearNeedsPaint()
-	}); ok {
-		setter.SetLayer(layer)
-		setter.ClearNeedsPaint()
+	if clearer, ok := boundary.(interface{ ClearNeedsPaint() }); ok {
+		clearer.ClearNeedsPaint()
 	}
 }
 
-func paintTreeWithLayers(ctx *layout.PaintContext, node layout.RenderObject, offset graphics.Offset) {
-	ctx.Canvas.Save()
-	ctx.Canvas.Translate(offset.X, offset.Y)
-
-	// If this is a boundary with valid layer, use it
-	if boundary, ok := node.(interface {
-		IsRepaintBoundary() bool
-		Layer() *graphics.DisplayList
-		NeedsPaint() bool
-	}); ok && boundary.IsRepaintBoundary() {
-		if layer := boundary.Layer(); layer != nil && !boundary.NeedsPaint() {
-			layer.Paint(ctx.Canvas)
-			ctx.Canvas.Restore()
-			return
-		}
+// recordDirtyLayers records content for dirty boundaries.
+// Processes boundaries in reverse depth order (children before parents)
+// so DrawChildLayer ops reference valid content.
+func recordDirtyLayers(dirtyBoundaries []layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
+	if len(dirtyBoundaries) == 0 {
+		return
 	}
 
-	// Otherwise paint normally
-	node.Paint(ctx)
-	ctx.Canvas.Restore()
+	// dirtyBoundaries is sorted by depth (parents first from FlushPaint).
+	// We need children recorded before parents, so process in reverse order.
+	for i := len(dirtyBoundaries) - 1; i >= 0; i-- {
+		recordDirtyLayersDFS(dirtyBoundaries[i], showLayoutBounds, strokeWidth, true)
+	}
+}
+
+// recordDirtyLayersDFS traverses a subtree depth-first, recording dirty layers.
+// Children are visited before their parent's layer is recorded.
+// Stops at child boundaries (they are in dirtyBoundaries and processed independently).
+func recordDirtyLayersDFS(node layout.RenderObject, showLayoutBounds bool, strokeWidth float64, isRoot bool) {
+	var isBoundary bool
+	var needsPaint bool
+	if bn, ok := node.(layout.RepaintBoundaryNode); ok && bn.IsRepaintBoundary() {
+		isBoundary = true
+		needsPaint = bn.NeedsPaint()
+	}
+
+	// Stop at child boundaries (not the root of this DFS)
+	if isBoundary && !isRoot {
+		return
+	}
+
+	// Recurse into children first (DFS post-order)
+	if visitor, ok := node.(layout.ChildVisitor); ok {
+		visitor.VisitChildren(func(child layout.RenderObject) {
+			recordDirtyLayersDFS(child, showLayoutBounds, strokeWidth, false)
+		})
+	}
+
+	// Then record this boundary if dirty
+	if isBoundary && needsPaint {
+		recordLayerContent(node, showLayoutBounds, strokeWidth)
+	}
+}
+
+// compositeLayerTree draws the layer tree starting from root.
+// Child layers are drawn via DrawChildLayer ops recorded in each layer.
+func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject) {
+	layerGetter, ok := root.(interface{ EnsureLayer() *graphics.Layer })
+	if !ok {
+		panic("drift: root render object must implement EnsureLayer() - ensure root is a repaint boundary")
+	}
+
+	layer := layerGetter.EnsureLayer()
+	if layer.Content == nil {
+		panic("drift: root layer has no recorded content - recording phase failed to run or was skipped")
+	}
+
+	layer.Composite(canvas)
 }

@@ -75,6 +75,11 @@ func (r *PictureRecorder) append(op displayOp) {
 	r.ops = append(r.ops, op)
 }
 
+// DrawChildLayer records a child layer reference at current canvas state.
+func (r *PictureRecorder) DrawChildLayer(layer *Layer, bounds Rect) {
+	r.append(opDrawChildLayer{layer: layer, bounds: bounds})
+}
+
 type displayOp interface {
 	execute(canvas Canvas)
 }
@@ -194,8 +199,58 @@ func (c *recordingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tint
 	c.recorder.append(opSVGTinted{svgPtr: svgPtr, bounds: bounds, tintColor: tintColor})
 }
 
+func (c *recordingCanvas) EmbedPlatformView(viewID int64, size Size) {
+	c.recorder.append(opEmbedPlatformView{viewID: viewID, size: size})
+}
+
+// DrawChildLayer records a child layer reference at current canvas state.
+func (c *recordingCanvas) DrawChildLayer(layer *Layer, bounds Rect) {
+	c.recorder.DrawChildLayer(layer, bounds)
+}
+
 func (c *recordingCanvas) Size() Size {
 	return c.size
+}
+
+// ClipBoundsProvider is optionally implemented by canvases that can report
+// their current clip bounds. Used for cull optimization in layer compositing.
+type ClipBoundsProvider interface {
+	ClipBounds() Rect
+}
+
+// opEmbedPlatformView records a platform view embedding.
+// On execute, calls canvas.EmbedPlatformView() which, for CompositingCanvas,
+// resolves the current transform+clip and updates native view geometry.
+type opEmbedPlatformView struct {
+	viewID int64
+	size   Size
+}
+
+func (op opEmbedPlatformView) execute(canvas Canvas) {
+	canvas.EmbedPlatformView(op.viewID, op.size)
+}
+
+// opDrawChildLayer references a child layer to composite at current canvas state.
+type opDrawChildLayer struct {
+	layer  *Layer
+	bounds Rect
+}
+
+func (op opDrawChildLayer) execute(canvas Canvas) {
+	if op.layer == nil {
+		return
+	}
+
+	// Cull optimization: skip compositing if layer is entirely outside the clip.
+	if provider, ok := canvas.(ClipBoundsProvider); ok {
+		clipBounds := provider.ClipBounds()
+		bounds := RectFromLTWH(0, 0, op.layer.Size.Width, op.layer.Size.Height)
+		if !bounds.Intersects(clipBounds) {
+			return
+		}
+	}
+
+	op.layer.Composite(canvas)
 }
 
 type opSave struct{}
