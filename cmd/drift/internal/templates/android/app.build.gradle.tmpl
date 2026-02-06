@@ -64,16 +64,24 @@ if (file("google-services.json").exists()) {
     apply plugin: "com.google.gms.google-services"
 }
 
-// Compile Drift Go code before building (for ejected projects only, macOS/Linux)
-// This task runs driftw which locates the drift CLI and compiles Go code
+// Compile Drift Go code before building (for ejected projects)
+// This task runs driftw (or driftw.bat on Windows) to locate the drift CLI and compile Go code
 tasks.register("compileDrift", Exec) {
     workingDir = rootProject.projectDir.parentFile.parentFile  // project root
-    commandLine "${rootProject.projectDir}/driftw", "compile", "android"
-    // Only run if driftw exists (ejected project) and not on Windows
+    def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+    if (isWindows) {
+        commandLine "cmd", "/c", "${rootProject.projectDir}\\driftw.bat", "compile", "android"
+    } else {
+        commandLine "${rootProject.projectDir}/driftw", "compile", "android"
+    }
     onlyIf {
-        def driftw = file("${rootProject.projectDir}/driftw")
-        def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-        driftw.exists() && driftw.canExecute() && !isWindows
+        def isWin = System.getProperty("os.name").toLowerCase().contains("windows")
+        if (isWin) {
+            file("${rootProject.projectDir}/driftw.bat").exists()
+        } else {
+            def driftw = file("${rootProject.projectDir}/driftw")
+            driftw.exists() && driftw.canExecute()
+        }
     }
 }
 

@@ -63,10 +63,10 @@ func BridgeDir(buildDir string) string {
 }
 
 // WriteDriftEnv writes a .drift.env file to the given directory containing
-// absolute paths to the drift and go binaries. This file is sourced by
-// driftw to find both tools without relying on PATH (which is minimal in
-// IDE build environments like Xcode). The file is machine-specific and
-// should be gitignored.
+// absolute paths to the drift and go binaries. This file is read by driftw
+// (bash, for Xcode and Android Studio on macOS/Linux) and driftw.bat
+// (Windows, for Android Studio) to find both tools without relying on PATH.
+// The file is machine-specific and should be gitignored.
 func WriteDriftEnv(dir string) error {
 	exe, err := os.Executable()
 	if err != nil {

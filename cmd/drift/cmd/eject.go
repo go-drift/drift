@@ -159,6 +159,16 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 		return fmt.Errorf("failed to write driftw: %w", err)
 	}
 
+	// Write driftw.bat wrapper for Windows (Android Studio builds)
+	driftwBatPath := filepath.Join(platformDir, "driftw.bat")
+	driftwBatContent, err := templates.ReadFile("driftw.bat")
+	if err != nil {
+		return fmt.Errorf("failed to read driftw.bat template: %w", err)
+	}
+	if err := os.WriteFile(driftwBatPath, driftwBatContent, 0o644); err != nil {
+		return fmt.Errorf("failed to write driftw.bat: %w", err)
+	}
+
 	// Write .drift.env with absolute path to drift binary (for IDE builds)
 	if err := workspace.WriteDriftEnv(platformDir); err != nil {
 		return fmt.Errorf("failed to write .drift.env: %w", err)
