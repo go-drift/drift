@@ -40,7 +40,9 @@ type DiagnosticsConfig struct {
 	// The server exposes /tree (render tree JSON) and /health endpoints.
 	DebugServerPort int
 	// RuntimeSampleInterval controls how often runtime samples are collected.
-	// Defaults to 5s if zero.
+	// Defaults to 5s if zero. Note: each sample calls runtime.ReadMemStats(),
+	// which performs a brief stop-the-world pause. Very short intervals (e.g. <1s)
+	// can add measurable overhead to the application.
 	RuntimeSampleInterval time.Duration
 	// RuntimeSampleWindow controls how much runtime history is kept.
 	// Defaults to 60s if zero.

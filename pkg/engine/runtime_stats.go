@@ -143,7 +143,7 @@ func readRuntimeSample() RuntimeSample {
 
 	lastPause := uint64(0)
 	if stats.NumGC > 0 {
-		index := (stats.NumGC + 255) % 256
+		index := (stats.NumGC - 1) % 256
 		lastPause = stats.PauseNs[index]
 	}
 

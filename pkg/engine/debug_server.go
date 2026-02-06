@@ -113,7 +113,6 @@ func startDebugServer(port int) (int, error) {
 	mux.HandleFunc("/render-tree", handleRenderTree)
 	mux.HandleFunc("/widget-tree", handleWidgetTree)
 	mux.HandleFunc("/frames", handleFrameTimeline)
-	mux.HandleFunc("/frame-timeline", handleFrameTimeline)
 	mux.HandleFunc("/runtime", handleRuntime)
 	mux.HandleFunc("/jank", handleJankSnapshot)
 	mux.HandleFunc("/health", handleHealth)
@@ -158,6 +157,12 @@ func stopDebugServer() {
 const maxTreeDepth = 500
 
 // handleRenderTree returns the render tree as JSON.
+//
+// Locking contract: frameLock is held briefly to read the rootRender pointer.
+// Tree serialization runs after releasing frameLock — the render tree data is
+// safe to read because the HTTP handler runs between frames (no concurrent
+// mutation). Frame-trace and runtime-sample buffers use their own sync.RWMutex
+// and never require frameLock for snapshot reads.
 func handleRenderTree(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -334,65 +339,52 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 		}
 	}
 
-	minFrameMs := 0.0
-	if value := r.URL.Query().Get("min_ms"); value != "" {
-		if parsed, err := strconv.ParseFloat(value, 64); err == nil && parsed > 0 {
-			minFrameMs = parsed
-		}
+	var filters []func(FrameSample) bool
+
+	if v := parseFloatQuery(r, "min_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.FrameMs >= v })
 	}
-
-	minDispatchMs := parseFloatQuery(r, "dispatch_ms")
-	minAnimateMs := parseFloatQuery(r, "animate_ms")
-	minBuildMs := parseFloatQuery(r, "build_ms")
-	minLayoutMs := parseFloatQuery(r, "layout_ms")
-	minRecordMs := parseFloatQuery(r, "record_ms")
-	minCompositeMs := parseFloatQuery(r, "composite_ms")
-	minSemanticsMs := parseFloatQuery(r, "semantics_ms")
-	minFlushMs := parseFloatQuery(r, "flush_ms")
-	minTraceOverheadMs := parseFloatQuery(r, "trace_overhead_ms")
-
-	resumeOnly := false
+	if v := parseFloatQuery(r, "dispatch_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.DispatchMs >= v })
+	}
+	if v := parseFloatQuery(r, "animate_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.AnimateMs >= v })
+	}
+	if v := parseFloatQuery(r, "build_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.BuildMs >= v })
+	}
+	if v := parseFloatQuery(r, "layout_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.LayoutMs >= v })
+	}
+	if v := parseFloatQuery(r, "record_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.RecordMs >= v })
+	}
+	if v := parseFloatQuery(r, "composite_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.CompositeMs >= v })
+	}
+	if v := parseFloatQuery(r, "semantics_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.SemanticsMs >= v })
+	}
+	if v := parseFloatQuery(r, "flush_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.PlatformFlushMs >= v })
+	}
+	if v := parseFloatQuery(r, "trace_overhead_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.TraceOverheadMs >= v })
+	}
 	if value := r.URL.Query().Get("resumed"); value != "" {
-		if parsed, err := strconv.ParseBool(value); err == nil {
-			resumeOnly = parsed
+		if parsed, err := strconv.ParseBool(value); err == nil && parsed {
+			filters = append(filters, func(s FrameSample) bool { return s.Flags.ResumedThisFrame })
 		}
 	}
 
-	if minFrameMs > 0 || minDispatchMs > 0 || minAnimateMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minRecordMs > 0 || minCompositeMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || minTraceOverheadMs > 0 || resumeOnly {
+	if len(filters) > 0 {
 		filtered := make([]FrameSample, 0, len(resp.Samples))
+	outer:
 		for _, sample := range resp.Samples {
-			if minFrameMs > 0 && sample.FrameMs < minFrameMs {
-				continue
-			}
-			if minDispatchMs > 0 && sample.Phases.DispatchMs < minDispatchMs {
-				continue
-			}
-			if minAnimateMs > 0 && sample.Phases.AnimateMs < minAnimateMs {
-				continue
-			}
-			if minBuildMs > 0 && sample.Phases.BuildMs < minBuildMs {
-				continue
-			}
-			if minLayoutMs > 0 && sample.Phases.LayoutMs < minLayoutMs {
-				continue
-			}
-			if minRecordMs > 0 && sample.Phases.RecordMs < minRecordMs {
-				continue
-			}
-			if minCompositeMs > 0 && sample.Phases.CompositeMs < minCompositeMs {
-				continue
-			}
-			if minSemanticsMs > 0 && sample.Phases.SemanticsMs < minSemanticsMs {
-				continue
-			}
-			if minFlushMs > 0 && sample.Phases.PlatformFlushMs < minFlushMs {
-				continue
-			}
-			if minTraceOverheadMs > 0 && sample.Phases.TraceOverheadMs < minTraceOverheadMs {
-				continue
-			}
-			if resumeOnly && !sample.Flags.ResumedThisFrame {
-				continue
+			for _, f := range filters {
+				if !f(sample) {
+					continue outer
+				}
 			}
 			filtered = append(filtered, sample)
 		}

@@ -119,6 +119,7 @@ Examples:
 curl "http://localhost:9999/frames?limit=120" | jq .
 curl "http://localhost:9999/frames?min_ms=16.7" | jq .
 curl "http://localhost:9999/frames?layout_ms=6&resumed=1" | jq .
+```
 
 ### Runtime Samples
 

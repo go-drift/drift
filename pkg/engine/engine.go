@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -280,10 +282,13 @@ type appRunner struct {
 	lastFrameStart     time.Time
 	hudRenderObject    layout.RenderObject // Reference to HUD for targeted repaints
 	showLayoutBounds   bool                // Debug overlay for widget bounds (independent of HUD)
-	frameTrace         *FrameTraceBuffer
-	frameTraceEnabled  bool
-	lastLifecycleState platform.LifecycleState
-	runtimeSamples     *RuntimeSampleBuffer
+	frameTrace             *FrameTraceBuffer
+	frameTraceEnabled      bool
+	lastLifecycleState     platform.LifecycleState
+	runtimeSamples         *RuntimeSampleBuffer
+	treeCountFrame         int
+	cachedRenderNodeCount  int
+	cachedWidgetNodeCount  int
 }
 
 func init() {
@@ -525,8 +530,13 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 			traceSample.Counts.DirtyLayout = pipeline.DirtyLayoutCount()
 			traceSample.Counts.DirtyPaintBoundaries = pipeline.DirtyPaintCount()
 			traceSample.Counts.DirtySemantics = pipeline.DirtySemanticsCount()
-			traceSample.Counts.RenderNodeCount = countRenderTree(a.rootRender)
-			traceSample.Counts.WidgetNodeCount = countWidgetTree(a.root)
+			if a.treeCountFrame%10 == 0 {
+				a.cachedRenderNodeCount = countRenderTree(a.rootRender)
+				a.cachedWidgetNodeCount = countWidgetTree(a.root)
+			}
+			a.treeCountFrame++
+			traceSample.Counts.RenderNodeCount = a.cachedRenderNodeCount
+			traceSample.Counts.WidgetNodeCount = a.cachedWidgetNodeCount
 			traceSample.Counts.PlatformViewCount = platform.GetPlatformViewRegistry().ViewCount()
 			traceSample.DirtyTypes.Layout = pipeline.DirtyLayoutTypes(5)
 			traceSample.DirtyTypes.Semantics = pipeline.DirtySemanticsTypes(5)
@@ -614,26 +624,9 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 
 		threshold := a.frameTrace.Threshold()
 		if frameWorkDuration > threshold {
-			fmt.Printf("jank frame %.2fms dispatch=%.2f animate=%.2f build=%.2f layout=%.2f semantics=%.2f record=%.2f composite=%.2f flush=%.2f traceOverhead=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
-				traceSample.FrameMs,
-				traceSample.Phases.DispatchMs,
-				traceSample.Phases.AnimateMs,
-				traceSample.Phases.BuildMs,
-				traceSample.Phases.LayoutMs,
-				traceSample.Phases.SemanticsMs,
-				traceSample.Phases.RecordMs,
-				traceSample.Phases.CompositeMs,
-				traceSample.Phases.PlatformFlushMs,
-				traceSample.Phases.TraceOverheadMs,
-				traceSample.Counts.DirtyLayout,
-				traceSample.Counts.DirtyPaintBoundaries,
-				traceSample.Counts.DirtySemantics,
-				traceSample.Counts.RenderNodeCount,
-				traceSample.Counts.WidgetNodeCount,
-				traceSample.Counts.PlatformViewCount,
-				traceSample.Flags.LifecycleState,
-				traceSample.Flags.ResumedThisFrame,
-			)
+			if jsonBytes, err := json.Marshal(traceSample); err == nil {
+				log.Printf("jank frame: %s", jsonBytes)
+			}
 		}
 	}
 	return nil
