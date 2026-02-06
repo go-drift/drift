@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
+	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
 
 func init() {
@@ -158,6 +159,11 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 		return fmt.Errorf("failed to write driftw: %w", err)
 	}
 
+	// Write .drift.env with absolute path to drift binary (for IDE builds)
+	if err := workspace.WriteDriftEnv(platformDir); err != nil {
+		return fmt.Errorf("failed to write .drift.env: %w", err)
+	}
+
 	// Print success message
 	fmt.Printf("\nEjected %s to %s\n\n", platform, platformDir)
 
@@ -174,11 +180,13 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 	fmt.Println("Suggested .gitignore additions:")
 	switch platform {
 	case "ios":
+		fmt.Println("  platform/ios/.drift.env")
 		fmt.Println("  platform/ios/Runner/libdrift.a")
 		fmt.Println("  platform/ios/Runner/libdrift_skia.a")
 		fmt.Println("  platform/ios/Runner/.drift-skia-version")
 		fmt.Println("  platform/ios/bridge/")
 	case "android":
+		fmt.Println("  platform/android/.drift.env")
 		fmt.Println("  platform/android/app/src/main/jniLibs/")
 		fmt.Println("  platform/android/bridge/")
 	}
