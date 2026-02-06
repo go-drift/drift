@@ -62,6 +62,11 @@ drift init hello-drift
 cd hello-drift
 ```
 
+The argument is the directory to create. The project name is derived from its
+basename, so `drift init ./projects/hello-drift` also works and produces a
+project named `hello-drift`. You can optionally pass a Go module path as a
+second argument (e.g. `drift init hello-drift github.com/username/hello-drift`).
+
 This creates:
 - `main.go` - Your app entry point
 - `go.mod` - Go module file
@@ -178,7 +183,7 @@ engine:
 
 | Command | Description |
 |---------|-------------|
-| `drift init <name>` | Create a new project |
+| `drift init <directory> [module-path]` | Create a new project |
 | `drift run android` | Run on Android device/emulator |
 | `drift run ios` | Run on iOS simulator (default: iPhone 15) |
 | `drift run ios --simulator "<name>"` | Run on specific iOS simulator |
