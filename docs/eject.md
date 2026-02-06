@@ -145,7 +145,7 @@ This colocation ensures version tracking is directly tied to the library it desc
 
 Both Xcode and Android Studio can automatically compile Go before building.
 
-**Platform support:** The `driftw` wrapper script and IDE build hooks are **macOS and Linux only**. Windows users can still use all Drift CLI commands (`drift build`, `drift run`, `drift compile`, etc.) from the command line—only the IDE integration (Xcode build phases, Gradle hooks) is unsupported. For ejected Android projects on Windows, run `drift compile android` manually before building in Android Studio, or use `drift build android` / `drift run android` directly from the terminal.
+**Platform support:** IDE build hooks work on all platforms. Xcode build phases use `driftw` (bash); Gradle hooks use `driftw` on macOS/Linux and `driftw.bat` on Windows. Both scripts locate the drift CLI and Go binary, then run `drift compile` before the native build.
 
 **Wrapper script (`driftw`):** To avoid PATH issues in IDE environments, ejected projects include a `driftw` bash wrapper script that locates and runs `drift`. Written with mode `0755` (executable).
 
@@ -203,12 +203,20 @@ The ejected `app/build.gradle` includes a custom task:
 ```groovy
 tasks.register("compileDrift", Exec) {
     workingDir = rootProject.projectDir.parentFile.parentFile  // project root
-    commandLine "${rootProject.projectDir}/driftw", "compile", "android"
-    // Only run if driftw exists (ejected project) and not on Windows
+    def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+    if (isWindows) {
+        commandLine "cmd", "/c", "${rootProject.projectDir}\\driftw.bat", "compile", "android"
+    } else {
+        commandLine "${rootProject.projectDir}/driftw", "compile", "android"
+    }
     onlyIf {
-        def driftw = file("${rootProject.projectDir}/driftw")
-        def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-        driftw.exists() && driftw.canExecute() && !isWindows
+        def isWin = System.getProperty("os.name").toLowerCase().contains("windows")
+        if (isWin) {
+            file("${rootProject.projectDir}/driftw.bat").exists()
+        } else {
+            def driftw = file("${rootProject.projectDir}/driftw")
+            driftw.exists() && driftw.canExecute()
+        }
     }
 }
 
@@ -217,7 +225,7 @@ tasks.named("preBuild") {
 }
 ```
 
-Press Run in Android Studio (macOS/Linux) → Gradle runs `driftw compile android` → builds Go → then normal Android build.
+Press Run in Android Studio → Gradle runs `driftw compile android` (or `driftw.bat` on Windows) → builds Go → then normal Android build.
 
 **New command:** `drift compile <platform>`
 - Compiles Go code only (no scaffold, no xcodebuild/gradle)
@@ -722,4 +730,3 @@ drift status
 - `drift sync <platform>` - Update ejected project with new drift changes (interactive merge)
 - Selective eject (only certain files)
 - `drift eject --dry-run` - Show what would be created without writing files
-- Windows support for ejected Android builds (`.bat`/`.ps1` wrapper scripts)

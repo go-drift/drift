@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-//go:embed android ios bridge/* xcodeproj/* xtool/* init/* driftw
+//go:embed android ios bridge/* xcodeproj/* xtool/* init/* driftw driftw.bat
 var FS embed.FS
 
 // TemplateData contains the data for template substitution.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# driftw - Drift wrapper for IDE builds (macOS/Linux only)
+# driftw - Drift wrapper for IDE builds
 # Locates drift CLI and Go, then runs drift with provided arguments.
 #
 # Resolution order:
