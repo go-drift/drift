@@ -3,7 +3,6 @@ package cmd
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
 	"github.com/go-drift/drift/cmd/drift/internal/config"
-	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
 
@@ -119,13 +117,13 @@ func runCompile(args []string) error {
 	}
 
 	// Write bridge files
-	if err := writeBridgeFiles(bridgeDir, cfg); err != nil {
+	if err := workspace.WriteBridgeFiles(bridgeDir, cfg); err != nil {
 		return err
 	}
 
 	// Write overlay file for Go compilation
 	overlayPath := filepath.Join(buildDir, "overlay.json")
-	if err := writeOverlay(overlayPath, bridgeDir, root); err != nil {
+	if err := workspace.WriteOverlay(overlayPath, bridgeDir, root); err != nil {
 		return err
 	}
 
@@ -376,65 +374,4 @@ func needsSkiaCopy(versionFile, expectedVersion string) bool {
 	}
 
 	return strings.TrimSpace(string(data)) != expectedVersion
-}
-
-func writeBridgeFiles(dir string, cfg *config.Resolved) error {
-	bridgeFiles, err := templates.GetBridgeFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list bridge templates: %w", err)
-	}
-
-	data := templates.NewTemplateData(cfg.AppName, cfg.AppID, cfg.AppID)
-
-	for _, file := range bridgeFiles {
-		content, err := templates.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to read bridge template %s: %w", file, err)
-		}
-
-		processed, err := templates.ProcessTemplate(string(content), data)
-		if err != nil {
-			return fmt.Errorf("failed to render bridge template %s: %w", file, err)
-		}
-
-		base := templates.FileName(file)
-		base = strings.TrimSuffix(base, ".tmpl")
-
-		destFile := filepath.Join(dir, base)
-		if err := os.WriteFile(destFile, []byte(processed), 0o644); err != nil {
-			return fmt.Errorf("failed to write bridge file %s: %w", destFile, err)
-		}
-	}
-
-	return nil
-}
-
-func writeOverlay(overlayPath, bridgeDir, projectRoot string) error {
-	bridgeFiles, err := templates.GetBridgeFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list bridge templates: %w", err)
-	}
-
-	replace := make(map[string]string, len(bridgeFiles))
-	for _, file := range bridgeFiles {
-		base := templates.FileName(file)
-		base = strings.TrimSuffix(base, ".tmpl")
-		virtualName := "drift_bridge_" + base
-		replace[filepath.Join(projectRoot, virtualName)] = filepath.Join(bridgeDir, base)
-	}
-
-	payload := map[string]map[string]string{
-		"Replace": replace,
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal overlay: %w", err)
-	}
-
-	if err := os.WriteFile(overlayPath, data, 0o644); err != nil {
-		return fmt.Errorf("failed to write overlay: %w", err)
-	}
-
-	return nil
 }
