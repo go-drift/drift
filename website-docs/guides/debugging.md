@@ -110,6 +110,7 @@ curl http://<device-ip>:9999/render-tree | jq .
 - `composite_ms` (float): return samples with `compositeMs >= composite_ms`
 - `semantics_ms` (float): return samples with `semanticsMs >= semantics_ms`
 - `flush_ms` (float): return samples with `platformFlushMs >= flush_ms`
+- `trace_overhead_ms` (float): return samples with `traceOverheadMs >= trace_overhead_ms`
 - `resumed` (bool): return only samples where `resumedThisFrame` is true
 
 Examples:

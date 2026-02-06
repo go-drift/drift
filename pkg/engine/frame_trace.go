@@ -23,6 +23,7 @@ type FramePhaseTimings struct {
 	RecordMs        float64 `json:"recordMs"`
 	CompositeMs     float64 `json:"compositeMs"`
 	PlatformFlushMs float64 `json:"platformFlushMs"`
+	TraceOverheadMs float64 `json:"traceOverheadMs"`
 }
 
 // FrameCounts captures per-frame workload indicators.

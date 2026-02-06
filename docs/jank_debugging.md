@@ -27,7 +27,8 @@ This document proposes lightweight instrumentation for intermittent jank, and a 
         "semanticsMs": 0.0,
         "recordMs": 4.2,
         "compositeMs": 4.5,
-        "platformFlushMs": 2.1
+        "platformFlushMs": 2.1,
+        "traceOverheadMs": 0.15
       },
       "counts": {
         "dirtyLayout": 42,

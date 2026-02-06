@@ -349,6 +349,7 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 	minCompositeMs := parseFloatQuery(r, "composite_ms")
 	minSemanticsMs := parseFloatQuery(r, "semantics_ms")
 	minFlushMs := parseFloatQuery(r, "flush_ms")
+	minTraceOverheadMs := parseFloatQuery(r, "trace_overhead_ms")
 
 	resumeOnly := false
 	if value := r.URL.Query().Get("resumed"); value != "" {
@@ -357,7 +358,7 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 		}
 	}
 
-	if minFrameMs > 0 || minDispatchMs > 0 || minAnimateMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minRecordMs > 0 || minCompositeMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || resumeOnly {
+	if minFrameMs > 0 || minDispatchMs > 0 || minAnimateMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minRecordMs > 0 || minCompositeMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || minTraceOverheadMs > 0 || resumeOnly {
 		filtered := make([]FrameSample, 0, len(resp.Samples))
 		for _, sample := range resp.Samples {
 			if minFrameMs > 0 && sample.FrameMs < minFrameMs {
@@ -385,6 +386,9 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 				continue
 			}
 			if minFlushMs > 0 && sample.Phases.PlatformFlushMs < minFlushMs {
+				continue
+			}
+			if minTraceOverheadMs > 0 && sample.Phases.TraceOverheadMs < minTraceOverheadMs {
 				continue
 			}
 			if resumeOnly && !sample.Flags.ResumedThisFrame {

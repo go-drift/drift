@@ -521,6 +521,7 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 	if a.rootRender != nil {
 		pipeline := a.buildOwner.Pipeline()
 		if traceEnabled {
+			traceOverheadStart := time.Now()
 			traceSample.Counts.DirtyLayout = pipeline.DirtyLayoutCount()
 			traceSample.Counts.DirtyPaintBoundaries = pipeline.DirtyPaintCount()
 			traceSample.Counts.DirtySemantics = pipeline.DirtySemanticsCount()
@@ -529,6 +530,7 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 			traceSample.Counts.PlatformViewCount = platform.GetPlatformViewRegistry().ViewCount()
 			traceSample.DirtyTypes.Layout = pipeline.DirtyLayoutTypes(5)
 			traceSample.DirtyTypes.Semantics = pipeline.DirtySemanticsTypes(5)
+			traceSample.Phases.TraceOverheadMs = durationToMillis(time.Since(traceOverheadStart))
 		}
 
 		var layoutStart time.Time
@@ -612,7 +614,7 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 
 		threshold := a.frameTrace.Threshold()
 		if frameWorkDuration > threshold {
-			fmt.Printf("jank frame %.2fms dispatch=%.2f animate=%.2f build=%.2f layout=%.2f semantics=%.2f record=%.2f composite=%.2f flush=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
+			fmt.Printf("jank frame %.2fms dispatch=%.2f animate=%.2f build=%.2f layout=%.2f semantics=%.2f record=%.2f composite=%.2f flush=%.2f traceOverhead=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
 				traceSample.FrameMs,
 				traceSample.Phases.DispatchMs,
 				traceSample.Phases.AnimateMs,
@@ -622,6 +624,7 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 				traceSample.Phases.RecordMs,
 				traceSample.Phases.CompositeMs,
 				traceSample.Phases.PlatformFlushMs,
+				traceSample.Phases.TraceOverheadMs,
 				traceSample.Counts.DirtyLayout,
 				traceSample.Counts.DirtyPaintBoundaries,
 				traceSample.Counts.DirtySemantics,
