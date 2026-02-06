@@ -123,6 +123,7 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 	var buildDir string
 	if ejected {
 		buildDir = EjectedBuildDir(root, platform)
+		fmt.Printf("Using ejected %s project: %s\n", platform, buildDir)
 	} else {
 		var err error
 		buildDir, err = managedBuildDir(root, cfg, platform)
