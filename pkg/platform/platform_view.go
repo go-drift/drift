@@ -324,9 +324,10 @@ func (r *PlatformViewRegistry) BeginGeometryBatch() {
 	r.batchMu.Unlock()
 }
 
-// FlushGeometryBatch sends all queued geometry updates to native and waits
-// for them to be applied. This ensures native views are positioned correctly
-// before the frame is displayed.
+// FlushGeometryBatch sends all queued geometry updates to native code.
+// Native applies updates asynchronously on its main thread — this call
+// returns as soon as the message is delivered. The frameSeq mechanism
+// ensures stale batches are skipped if native falls behind.
 func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	r.batchMu.Lock()
 	updates := r.batchUpdates
@@ -389,8 +390,8 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 		batch[i] = entry
 	}
 
-	// Send batch to native - this call blocks until native applies all geometries
-	// or timeout occurs. The frameSeq allows native to skip stale batches.
+	// Send batch to native. Native posts to its main thread and returns immediately.
+	// The frameSeq allows native to skip stale batches.
 	_, err := r.channel.Invoke("batchSetGeometry", map[string]any{
 		"frameSeq":   frameSeq,
 		"geometries": batch,

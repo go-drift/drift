@@ -300,9 +300,9 @@ enum PlatformViewHandler {
         view.isHidden = false
     }
 
-    /// Batch geometry update with synchronization.
-    /// Blocks until all geometries are applied on the main thread.
-    /// This ensures native views are positioned before the frame is displayed.
+    /// Batch geometry update. Posts geometry changes to the main thread and returns
+    /// immediately. The frameSeq mechanism ensures stale batches are skipped if the
+    /// main thread falls behind.
     private static func batchSetGeometry(args: [String: Any]) -> (Any?, Error?) {
         guard let frameSeq = args["frameSeq"] as? UInt64,
               let geometries = args["geometries"] as? [[String: Any]] else {
@@ -348,28 +348,15 @@ enum PlatformViewHandler {
             lastAppliedSeq = frameSeq
         }
 
-        // If already on main thread, apply directly (avoid deadlock)
+        // If already on main thread, apply directly
         if Thread.isMainThread {
             applyGeometries()
             return (nil, nil)
         }
 
-        // Block until main thread applies all geometries
-        let semaphore = DispatchSemaphore(value: 0)
-        DispatchQueue.main.async {
-            applyGeometries()
-            semaphore.signal()
-        }
-
-        // Wait with timeout to prevent indefinite blocking
-        // 16ms is roughly one frame at 60fps
-        let result = semaphore.wait(timeout: .now() + .milliseconds(16))
-        if result == .timedOut {
-            // Timeout - main thread is busy. The geometries will still be applied
-            // asynchronously, but this frame may show slight lag.
-            return (["timeout": true], nil)
-        }
-
+        // Post to main thread and return immediately.
+        // frameSeq ensures stale batches are skipped if main thread falls behind.
+        DispatchQueue.main.async { applyGeometries() }
         return (nil, nil)
     }
 

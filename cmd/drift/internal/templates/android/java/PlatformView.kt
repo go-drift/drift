@@ -13,8 +13,6 @@ import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.math.ceil
 import kotlin.math.floor
 
@@ -291,9 +289,9 @@ object PlatformViewHandler {
     }
 
     /**
-     * Batch geometry update with synchronization.
-     * Blocks until all geometries are applied on the main thread.
-     * This ensures native views are positioned before the frame is displayed.
+     * Batch geometry update. Posts geometry changes to the main thread and returns
+     * immediately. The frameSeq mechanism ensures stale batches are skipped if the
+     * main thread falls behind.
      */
     private fun batchSetGeometry(args: Map<*, *>): Pair<Any?, Exception?> {
         val frameSeq = (args["frameSeq"] as? Number)?.toLong() ?: return Pair(null, null)
@@ -337,28 +335,15 @@ object PlatformViewHandler {
             lastAppliedSeq = frameSeq
         }
 
-        // If already on main thread, apply directly (avoid deadlock)
+        // If already on main thread, apply directly
         if (Looper.myLooper() == Looper.getMainLooper()) {
             applyGeometries()
             return Pair(null, null)
         }
 
-        // Block until main thread applies all geometries
-        val latch = CountDownLatch(1)
-        host.post {
-            applyGeometries()
-            latch.countDown()
-        }
-
-        // Wait with timeout to prevent indefinite blocking
-        // 16ms is roughly one frame at 60fps
-        val completed = latch.await(16, TimeUnit.MILLISECONDS)
-        if (!completed) {
-            // Timeout - main thread is busy. The geometries will still be applied
-            // asynchronously, but this frame may show slight lag.
-            return Pair(mapOf("timeout" to true), null)
-        }
-
+        // Post to main thread and return immediately.
+        // frameSeq ensures stale batches are skipped if main thread falls behind.
+        host.post { applyGeometries() }
         return Pair(null, null)
     }
 

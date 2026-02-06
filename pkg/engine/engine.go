@@ -604,8 +604,8 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 			traceSample.Phases.CompositeMs = durationToMillis(time.Since(compositeStart))
 		}
 
-		// Flush geometry batch - blocks until native applies all updates.
-		// This ensures native views are positioned before the frame is displayed.
+		// Flush geometry batch to native. Native applies asynchronously on its
+		// main thread; frameSeq ensures stale batches are skipped.
 		var platformFlushStart time.Time
 		if traceEnabled {
 			platformFlushStart = time.Now()
