@@ -119,7 +119,7 @@ jobs:
               "tarball": "drift-${drift_version}-ios.tar.gz",
               "sha256": "${ios_sha}",
               "device_arches": ["arm64"],
-              "simulator_arches": ["arm64", "x64"]
+              "simulator_arches": ["arm64", "amd64"]
             }
           }
           EOF

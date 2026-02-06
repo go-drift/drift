@@ -26,7 +26,7 @@ package skia
 
 // iOS simulator (GOOS=darwin, not ios)
 #cgo darwin,!ios,arm64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/ios-simulator/arm64 -ldrift_skia -lc++ -framework Metal -framework CoreGraphics -framework Foundation -framework UIKit
-#cgo darwin,!ios,amd64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/ios-simulator/x64 -ldrift_skia -lc++ -framework Metal -framework CoreGraphics -framework Foundation -framework UIKit
+#cgo darwin,!ios,amd64 LDFLAGS: -L${SRCDIR}/../../third_party/drift_skia/ios-simulator/amd64 -ldrift_skia -lc++ -framework Metal -framework CoreGraphics -framework Foundation -framework UIKit
 
 #include "skia_bridge.h"
 #include <stdlib.h>

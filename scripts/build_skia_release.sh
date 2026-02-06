@@ -198,9 +198,9 @@ for platform in "${platforms[@]}"; do
       include_ios=true
       # Device builds
       copy_lib ios arm64
-      # Simulator builds (arm64 for Apple Silicon, x64 for Intel)
+      # Simulator builds (arm64 for Apple Silicon, amd64 for Intel)
       copy_lib ios-simulator arm64
-      copy_lib ios-simulator x64
+      copy_lib ios-simulator amd64
       ;;
   esac
 done
@@ -233,7 +233,7 @@ if [[ "$include_android" = true && "$include_ios" = true ]]; then
     "tarball": "drift-${drift_version}-ios.tar.gz",
     "sha256": "${ios_sha}",
     "device_arches": ["arm64"],
-    "simulator_arches": ["arm64", "x64"]
+    "simulator_arches": ["arm64", "amd64"]
   }
 }
 EOF

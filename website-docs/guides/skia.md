@@ -28,7 +28,7 @@ Supported architectures:
 |---------------|-------------------------|
 | Android       | `arm64`, `arm`, `amd64` |
 | iOS device    | `arm64`                 |
-| iOS simulator | `arm64`, `x64`          |
+| iOS simulator | `arm64`, `amd64`        |
 
 ## Automatic Download (Recommended)
 
@@ -128,7 +128,7 @@ $DRIFT_SRC/scripts/build_skia_ios.sh
 
 Builds `libdrift_skia.a` for:
 - Device: `arm64`
-- Simulator: `arm64` (Apple Silicon), `x64` (Intel)
+- Simulator: `arm64` (Apple Silicon), `amd64` (Intel)
 
 Uses Metal for GPU graphics. The script compiles Skia, then compiles the drift bridge and combines them using libtool. Output is written to `third_party/drift_skia/ios/` and `third_party/drift_skia/ios-simulator/`.
 

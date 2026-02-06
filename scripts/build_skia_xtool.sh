@@ -284,7 +284,7 @@ compile_bridge_simulator() {
 build_device out/ios/arm64 arm64
 
 # Build for iOS Simulator
-# arm64 for Apple Silicon Macs, x64 for Intel Macs
+# arm64 for Apple Silicon Macs, x64 (Skia name) for Intel Macs (output as amd64)
 build_simulator out/ios-simulator/arm64 arm64
 build_simulator out/ios-simulator/x64 x64
 
@@ -296,8 +296,9 @@ compile_bridge_simulator x64
 copy_lib() {
   local platform="$1"
   local arch="$2"
+  local dst_arch="${3:-$arch}"
   local src="$SKIA_DIR/out/$platform/$arch/libdrift_skia.a"
-  local dst="$DRIFT_SKIA_OUT/$platform/$arch"
+  local dst="$DRIFT_SKIA_OUT/$platform/$dst_arch"
   if [[ ! -f "$src" ]]; then
     echo "Missing $src" >&2
     exit 1
@@ -310,5 +311,5 @@ copy_lib() {
 copy_lib ios arm64
 if [[ -n "$IPHONESIMULATOR_SDK" ]]; then
   copy_lib ios-simulator arm64
-  copy_lib ios-simulator x64
+  copy_lib ios-simulator x64 amd64
 fi
