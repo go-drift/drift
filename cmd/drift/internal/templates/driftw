@@ -4,9 +4,10 @@
 
 set -e
 
-# Build candidate list (only include GOBIN if set)
+# Build candidate list
 candidates=("drift")
 [[ -n "$GOBIN" ]] && candidates+=("$GOBIN/drift")
+[[ -n "$GOPATH" ]] && candidates+=("$GOPATH/bin/drift")
 candidates+=(
     "$HOME/go/bin/drift"
     "$HOME/.local/bin/drift"
@@ -16,8 +17,6 @@ candidates+=(
 
 # Try each candidate
 for candidate in "${candidates[@]}"; do
-    # For bare "drift", use command -v to search PATH
-    # For absolute paths, check existence and executable bit explicitly
     if [[ "$candidate" == /* ]]; then
         [[ -x "$candidate" ]] && exec "$candidate" "$@"
     else
@@ -25,7 +24,17 @@ for candidate in "${candidates[@]}"; do
     fi
 done
 
+# Last resort: ask `go` for GOPATH (handles non-default GOPATH in IDE environments)
+for go_bin in "go" "/usr/local/go/bin/go" "/opt/homebrew/bin/go"; do
+    go_path=$(command -v "$go_bin" 2>/dev/null || true)
+    if [[ -x "$go_path" ]]; then
+        gopath=$("$go_path" env GOPATH 2>/dev/null || true)
+        [[ -x "$gopath/bin/drift" ]] && exec "$gopath/bin/drift" "$@"
+        break
+    fi
+done
+
 echo "Error: drift not found in PATH or common locations." >&2
 echo "Install with: go install github.com/go-drift/drift/cmd/drift@latest" >&2
-echo "Or ensure drift is in one of: PATH, \$GOBIN, ~/go/bin, ~/.local/bin, /usr/local/bin" >&2
+echo "Or ensure drift is in one of: PATH, \$GOBIN, \$GOPATH/bin, ~/go/bin, ~/.local/bin, /usr/local/bin" >&2
 exit 1
