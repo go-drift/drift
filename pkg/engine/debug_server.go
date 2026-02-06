@@ -341,6 +341,8 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 		}
 	}
 
+	minDispatchMs := parseFloatQuery(r, "dispatch_ms")
+	minAnimateMs := parseFloatQuery(r, "animate_ms")
 	minBuildMs := parseFloatQuery(r, "build_ms")
 	minLayoutMs := parseFloatQuery(r, "layout_ms")
 	minRecordMs := parseFloatQuery(r, "record_ms")
@@ -355,10 +357,16 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 		}
 	}
 
-	if minFrameMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minRecordMs > 0 || minCompositeMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || resumeOnly {
+	if minFrameMs > 0 || minDispatchMs > 0 || minAnimateMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minRecordMs > 0 || minCompositeMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || resumeOnly {
 		filtered := make([]FrameSample, 0, len(resp.Samples))
 		for _, sample := range resp.Samples {
 			if minFrameMs > 0 && sample.FrameMs < minFrameMs {
+				continue
+			}
+			if minDispatchMs > 0 && sample.Phases.DispatchMs < minDispatchMs {
+				continue
+			}
+			if minAnimateMs > 0 && sample.Phases.AnimateMs < minAnimateMs {
 				continue
 			}
 			if minBuildMs > 0 && sample.Phases.BuildMs < minBuildMs {

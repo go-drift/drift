@@ -15,6 +15,8 @@ const (
 
 // FramePhaseTimings captures time spent in each frame phase (ms).
 type FramePhaseTimings struct {
+	DispatchMs      float64 `json:"dispatchMs"`
+	AnimateMs       float64 `json:"animateMs"`
 	BuildMs         float64 `json:"buildMs"`
 	LayoutMs        float64 `json:"layoutMs"`
 	SemanticsMs     float64 `json:"semanticsMs"`

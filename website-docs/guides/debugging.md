@@ -102,6 +102,8 @@ curl http://<device-ip>:9999/render-tree | jq .
 
 - `limit` (int): return only the last N samples
 - `min_ms` (float): return only samples with `frameMs >= min_ms`
+- `dispatch_ms` (float): return samples with `dispatchMs >= dispatch_ms`
+- `animate_ms` (float): return samples with `animateMs >= animate_ms`
 - `build_ms` (float): return samples with `buildMs >= build_ms`
 - `layout_ms` (float): return samples with `layoutMs >= layout_ms`
 - `record_ms` (float): return samples with `recordMs >= record_ms`

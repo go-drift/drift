@@ -20,6 +20,8 @@ This document proposes lightweight instrumentation for intermittent jank, and a 
       "ts": 1710000000,
       "frameMs": 18.2,
       "phases": {
+        "dispatchMs": 0.1,
+        "animateMs": 0.2,
         "buildMs": 1.9,
         "layoutMs": 3.2,
         "semanticsMs": 0.0,

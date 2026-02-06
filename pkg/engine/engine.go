@@ -465,6 +465,11 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		Height: size.Height / scale,
 	}
 
+	var dispatchStart time.Time
+	if traceEnabled {
+		dispatchStart = time.Now()
+	}
+
 	callbacks := a.drainDispatchQueue()
 	for _, callback := range callbacks {
 		callback()
@@ -473,8 +478,21 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		a.requestFrameLocked()
 	}
 
+	if traceEnabled {
+		traceSample.Phases.DispatchMs = durationToMillis(time.Since(dispatchStart))
+	}
+
+	var animateStart time.Time
+	if traceEnabled {
+		animateStart = time.Now()
+	}
+
 	widgets.StepBallistics()
 	animation.StepTickers()
+
+	if traceEnabled {
+		traceSample.Phases.AnimateMs = durationToMillis(time.Since(animateStart))
+	}
 	a.updateFPS()
 	if a.root == nil {
 		rootWidget := widgets.Root(engineApp{runner: a})
@@ -594,8 +612,10 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 
 		threshold := a.frameTrace.Threshold()
 		if frameWorkDuration > threshold {
-			fmt.Printf("jank frame %.2fms build=%.2f layout=%.2f semantics=%.2f record=%.2f composite=%.2f flush=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
+			fmt.Printf("jank frame %.2fms dispatch=%.2f animate=%.2f build=%.2f layout=%.2f semantics=%.2f record=%.2f composite=%.2f flush=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
 				traceSample.FrameMs,
+				traceSample.Phases.DispatchMs,
+				traceSample.Phases.AnimateMs,
 				traceSample.Phases.BuildMs,
 				traceSample.Phases.LayoutMs,
 				traceSample.Phases.SemanticsMs,
