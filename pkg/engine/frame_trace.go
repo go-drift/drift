@@ -18,7 +18,8 @@ type FramePhaseTimings struct {
 	BuildMs         float64 `json:"buildMs"`
 	LayoutMs        float64 `json:"layoutMs"`
 	SemanticsMs     float64 `json:"semanticsMs"`
-	PaintMs         float64 `json:"paintMs"`
+	RecordMs        float64 `json:"recordMs"`
+	CompositeMs     float64 `json:"compositeMs"`
 	PlatformFlushMs float64 `json:"platformFlushMs"`
 }
 

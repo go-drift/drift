@@ -542,15 +542,25 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 			debugStrokeWidth = 1.0 / scale // Scale-independent 1px stroke
 		}
 
-		var paintStart time.Time
+		var recordStart time.Time
 		if traceEnabled {
-			paintStart = time.Now()
+			recordStart = time.Now()
 			traceSample.DirtyTypes.Paint = pipeline.DirtyPaintTypes(5)
 		}
 
 		// Phase B: Record dirty layers
 		dirtyBoundaries := pipeline.FlushPaint()
 		recordDirtyLayers(dirtyBoundaries, showLayoutBounds, debugStrokeWidth)
+
+		if traceEnabled {
+			traceSample.Phases.RecordMs = durationToMillis(time.Since(recordStart))
+			traceSample.Counts.DirtyPaintBoundaries = len(dirtyBoundaries)
+		}
+
+		var compositeStart time.Time
+		if traceEnabled {
+			compositeStart = time.Now()
+		}
 
 		// Phase C: Composite layer tree via CompositingCanvas
 		canvas.Clear(graphics.Color(backgroundColor.Load()))
@@ -559,9 +569,9 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		compCanvas := NewCompositingCanvas(canvas, platform.GetPlatformViewRegistry())
 		compositeLayerTree(compCanvas, a.rootRender)
 		canvas.Restore()
+
 		if traceEnabled {
-			traceSample.Phases.PaintMs = durationToMillis(time.Since(paintStart))
-			traceSample.Counts.DirtyPaintBoundaries = len(dirtyBoundaries)
+			traceSample.Phases.CompositeMs = durationToMillis(time.Since(compositeStart))
 		}
 
 		// Flush geometry batch - blocks until native applies all updates.
@@ -584,12 +594,13 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 
 		threshold := a.frameTrace.Threshold()
 		if frameWorkDuration > threshold {
-			fmt.Printf("jank frame %.2fms build=%.2f layout=%.2f semantics=%.2f paint=%.2f flush=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
+			fmt.Printf("jank frame %.2fms build=%.2f layout=%.2f semantics=%.2f record=%.2f composite=%.2f flush=%.2f dirtyLayout=%d dirtyPaint=%d dirtySemantics=%d render=%d widget=%d platformViews=%d lifecycle=%s resumed=%t\n",
 				traceSample.FrameMs,
 				traceSample.Phases.BuildMs,
 				traceSample.Phases.LayoutMs,
 				traceSample.Phases.SemanticsMs,
-				traceSample.Phases.PaintMs,
+				traceSample.Phases.RecordMs,
+				traceSample.Phases.CompositeMs,
 				traceSample.Phases.PlatformFlushMs,
 				traceSample.Counts.DirtyLayout,
 				traceSample.Counts.DirtyPaintBoundaries,

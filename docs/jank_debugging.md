@@ -23,7 +23,8 @@ This document proposes lightweight instrumentation for intermittent jank, and a 
         "buildMs": 1.9,
         "layoutMs": 3.2,
         "semanticsMs": 0.0,
-        "paintMs": 8.7,
+        "recordMs": 4.2,
+        "compositeMs": 4.5,
         "platformFlushMs": 2.1
       },
       "counts": {

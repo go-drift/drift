@@ -343,7 +343,8 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 
 	minBuildMs := parseFloatQuery(r, "build_ms")
 	minLayoutMs := parseFloatQuery(r, "layout_ms")
-	minPaintMs := parseFloatQuery(r, "paint_ms")
+	minRecordMs := parseFloatQuery(r, "record_ms")
+	minCompositeMs := parseFloatQuery(r, "composite_ms")
 	minSemanticsMs := parseFloatQuery(r, "semantics_ms")
 	minFlushMs := parseFloatQuery(r, "flush_ms")
 
@@ -354,7 +355,7 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 		}
 	}
 
-	if minFrameMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minPaintMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || resumeOnly {
+	if minFrameMs > 0 || minBuildMs > 0 || minLayoutMs > 0 || minRecordMs > 0 || minCompositeMs > 0 || minSemanticsMs > 0 || minFlushMs > 0 || resumeOnly {
 		filtered := make([]FrameSample, 0, len(resp.Samples))
 		for _, sample := range resp.Samples {
 			if minFrameMs > 0 && sample.FrameMs < minFrameMs {
@@ -366,7 +367,10 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 			if minLayoutMs > 0 && sample.Phases.LayoutMs < minLayoutMs {
 				continue
 			}
-			if minPaintMs > 0 && sample.Phases.PaintMs < minPaintMs {
+			if minRecordMs > 0 && sample.Phases.RecordMs < minRecordMs {
+				continue
+			}
+			if minCompositeMs > 0 && sample.Phases.CompositeMs < minCompositeMs {
 				continue
 			}
 			if minSemanticsMs > 0 && sample.Phases.SemanticsMs < minSemanticsMs {

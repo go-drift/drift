@@ -104,7 +104,8 @@ curl http://<device-ip>:9999/render-tree | jq .
 - `min_ms` (float): return only samples with `frameMs >= min_ms`
 - `build_ms` (float): return samples with `buildMs >= build_ms`
 - `layout_ms` (float): return samples with `layoutMs >= layout_ms`
-- `paint_ms` (float): return samples with `paintMs >= paint_ms`
+- `record_ms` (float): return samples with `recordMs >= record_ms`
+- `composite_ms` (float): return samples with `compositeMs >= composite_ms`
 - `semantics_ms` (float): return samples with `semanticsMs >= semantics_ms`
 - `flush_ms` (float): return samples with `platformFlushMs >= flush_ms`
 - `resumed` (bool): return only samples where `resumedThisFrame` is true
