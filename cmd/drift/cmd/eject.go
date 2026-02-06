@@ -59,6 +59,8 @@ func runEject(args []string) error {
 			platforms = append(platforms, arg)
 		case "all":
 			platforms = []string{"ios", "android"}
+		case "xtool":
+			return fmt.Errorf("xtool eject is not yet supported (xtool uses SwiftPM, not Xcode projects)")
 		default:
 			return fmt.Errorf("unknown argument %q\n\nUsage: drift eject <ios|android|all> [--force]", arg)
 		}

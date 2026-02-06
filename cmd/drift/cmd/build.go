@@ -171,7 +171,7 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
 	}
 
-	jniLibsDir := filepath.Join(ws.AndroidDir, "app", "src", "main", "jniLibs")
+	jniLibsDir := workspace.JniLibsDir(ws.BuildDir, opts.ejected)
 
 	for _, abi := range abis {
 		fmt.Printf("  Compiling for %s...\n", abi.abi)
@@ -375,8 +375,15 @@ func buildIOS(ws *workspace.Workspace, opts iosBuildOptions) error {
 		return fmt.Errorf("failed to build Go library: %w", err)
 	}
 
-	if err := copyFile(skiaLib, filepath.Join(iosDir, "libdrift_skia.a")); err != nil {
-		return fmt.Errorf("failed to copy Skia library: %w", err)
+	skiaVersion := cache.DriftSkiaVersion()
+	skiaVersionFile := filepath.Join(iosDir, ".drift-skia-version")
+	if needsSkiaCopy(skiaVersionFile, skiaVersion) {
+		if err := copyFile(skiaLib, filepath.Join(iosDir, "libdrift_skia.a")); err != nil {
+			return fmt.Errorf("failed to copy Skia library: %w", err)
+		}
+		if err := os.WriteFile(skiaVersionFile, []byte(skiaVersion), 0o644); err != nil {
+			return fmt.Errorf("failed to write Skia version marker: %w", err)
+		}
 	}
 
 	configuration := "Debug"

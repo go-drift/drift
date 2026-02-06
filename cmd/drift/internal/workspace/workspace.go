@@ -163,11 +163,11 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 		return nil, fmt.Errorf("unknown platform %q", platform)
 	}
 
-	if err := writeBridgeFiles(ws.BridgeDir, cfg); err != nil {
+	if err := WriteBridgeFiles(ws.BridgeDir, cfg); err != nil {
 		return nil, err
 	}
 
-	if err := writeOverlay(ws.Overlay, ws.BridgeDir, root); err != nil {
+	if err := WriteOverlay(ws.Overlay, ws.BridgeDir, root); err != nil {
 		return nil, err
 	}
 
@@ -195,7 +195,7 @@ func moduleBuildRoot(cfg *config.Resolved) (string, error) {
 	return cache.BuildRoot(cfg.ModulePath)
 }
 
-func writeBridgeFiles(dir string, cfg *config.Resolved) error {
+func WriteBridgeFiles(dir string, cfg *config.Resolved) error {
 	bridgeFiles, err := templates.GetBridgeFiles()
 	if err != nil {
 		return fmt.Errorf("failed to list bridge templates: %w", err)
@@ -221,8 +221,8 @@ func writeBridgeFiles(dir string, cfg *config.Resolved) error {
 		}
 
 		base := templates.FileName(file)
-		if strings.HasSuffix(base, ".tmpl") {
-			base = strings.TrimSuffix(base, ".tmpl")
+		if before, ok := strings.CutSuffix(base, ".tmpl"); ok {
+			base = before
 		}
 
 		destFile := filepath.Join(dir, base)
@@ -234,7 +234,7 @@ func writeBridgeFiles(dir string, cfg *config.Resolved) error {
 	return nil
 }
 
-func writeOverlay(overlayPath, bridgeDir, projectRoot string) error {
+func WriteOverlay(overlayPath, bridgeDir, projectRoot string) error {
 	bridgeFiles, err := templates.GetBridgeFiles()
 	if err != nil {
 		return fmt.Errorf("failed to list bridge templates: %w", err)
@@ -243,8 +243,8 @@ func writeOverlay(overlayPath, bridgeDir, projectRoot string) error {
 	replace := make(map[string]string, len(bridgeFiles))
 	for _, file := range bridgeFiles {
 		base := templates.FileName(file)
-		if strings.HasSuffix(base, ".tmpl") {
-			base = strings.TrimSuffix(base, ".tmpl")
+		if before, ok := strings.CutSuffix(base, ".tmpl"); ok {
+			base = before
 		}
 		virtualName := "drift_bridge_" + base
 		replace[filepath.Join(projectRoot, virtualName)] = filepath.Join(bridgeDir, base)
