@@ -7,6 +7,8 @@ package {{.PackageName}}
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
+import android.os.Build
+import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -26,6 +28,16 @@ object PlatformViewHandler {
 
     // Frame sequence tracking for geometry batches
     private var lastAppliedSeq: Long = 0
+
+    // Dedicated handler for geometry batches: postAtFrontOfQueue bypasses queued
+    // touch events, and createAsync (API 28+) bypasses the choreographer sync barrier.
+    private val geometryHandler: Handler by lazy {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Handler.createAsync(Looper.getMainLooper())
+        } else {
+            Handler(Looper.getMainLooper())
+        }
+    }
 
     // Supported methods for each view type
     private val webViewMethods = setOf("loadUrl", "goBack", "goForward", "reload")
@@ -352,7 +364,7 @@ object PlatformViewHandler {
         // frameSeq ensures stale batches are skipped if main thread falls behind.
         // Signal geometry applied after the closure runs so the render thread
         // can defer surface presentation until geometry lands.
-        host.post {
+        geometryHandler.postAtFrontOfQueue {
             applyGeometries()
             NativeBridge.geometryApplied()
         }
