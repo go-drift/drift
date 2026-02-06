@@ -3,6 +3,7 @@ package workspace
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -117,6 +118,44 @@ func TestBridgeDir(t *testing.T) {
 	want := filepath.Join("/some/build/dir", "bridge")
 	if got != want {
 		t.Errorf("BridgeDir = %q, want %q", got, want)
+	}
+}
+
+func TestWriteDriftEnv(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := WriteDriftEnv(dir); err != nil {
+		t.Fatalf("WriteDriftEnv failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".drift.env"))
+	if err != nil {
+		t.Fatalf("failed to read .drift.env: %v", err)
+	}
+
+	content := string(data)
+
+	// Should contain DRIFT_BIN assignment
+	if !strings.Contains(content, "DRIFT_BIN=") {
+		t.Error("expected .drift.env to contain DRIFT_BIN=")
+	}
+
+	// Should contain a "do not commit" comment
+	if !strings.Contains(content, "Do not commit") {
+		t.Error("expected .drift.env to contain a do-not-commit comment")
+	}
+
+	// DRIFT_BIN should point to an executable
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "DRIFT_BIN=") {
+			// Extract quoted path
+			path := strings.TrimPrefix(line, "DRIFT_BIN=")
+			path = strings.Trim(path, "\"")
+			if _, err := os.Stat(path); err != nil {
+				t.Errorf("DRIFT_BIN path %q does not exist: %v", path, err)
+			}
+			break
+		}
 	}
 }
 

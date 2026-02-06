@@ -97,6 +97,10 @@ func runCompile(args []string) error {
 	var buildDir string
 	if ejected {
 		buildDir = workspace.EjectedBuildDir(root, platform)
+		// Refresh .drift.env so driftw stays current if drift is reinstalled
+		if err := workspace.WriteDriftEnv(buildDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update .drift.env: %v\n", err)
+		}
 	} else {
 		// Use managed build directory with hash (matches workspace.go)
 		moduleRoot, err := workspace.BuildRoot(cfg)

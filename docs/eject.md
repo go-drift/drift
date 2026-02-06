@@ -295,6 +295,7 @@ This helps users understand the current state and build locations.
 
 ```gitignore
 # Drift build artifacts (add these lines)
+platform/*/.drift.env
 platform/ios/Runner/libdrift.a
 platform/ios/Runner/libdrift_skia.a
 platform/ios/Runner/.drift-skia-version
