@@ -19,16 +19,21 @@ func init() {
 		Long: `Create a new Drift project in a new directory.
 
 This command creates:
-  - A new directory with the given name
+  - A new directory at the specified path
   - go.mod with the specified module path
   - main.go with a starter application
 
 The module path defaults to the project name if not specified.
+The directory path defaults to the project name if not specified.
 
 Examples:
   drift init myapp
-  drift init myapp github.com/username/myapp`,
-		Usage: "drift init <project-name> [module-path]",
+  drift init myapp github.com/username/myapp
+  drift init myapp github.com/username/myapp ./directory
+  drift init myapp github.com/username/myapp ../myapp
+  drift init myapp github.com/username/myapp /absolute/path/to/myapp`,
+
+		Usage: "drift init <project-name> [module-path] [directory]",
 		Run:   runInit,
 	})
 }
@@ -40,14 +45,21 @@ type initTemplateData struct {
 
 func runInit(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("project name is required\n\nUsage: drift init <project-name> [module-path]")
+		return fmt.Errorf("project name is required\n\nUsage: drift init <project-name> [module-path] [directory]")
 	}
 
 	projectName := args[0]
 	modulePath := projectName
+	path := projectName
 	if len(args) > 1 {
 		modulePath = args[1]
 	}
+
+	if len(args) > 2 {
+		path = filepath.Clean(args[2])
+	}
+
+
 
 	// Validate project name
 	if err := validateProjectName(projectName); err != nil {
@@ -55,14 +67,14 @@ func runInit(args []string) error {
 	}
 
 	// Check if directory already exists
-	if _, err := os.Stat(projectName); err == nil {
-		return fmt.Errorf("directory %q already exists", projectName)
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("directory %q already exists", path)
 	}
 
 	fmt.Printf("Creating new Drift project: %s\n", projectName)
 
 	// Create project directory
-	if err := os.MkdirAll(projectName, 0o755); err != nil {
+	if err := os.MkdirAll(path, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -80,8 +92,8 @@ func runInit(args []string) error {
 	}
 
 	for _, f := range initFiles {
-		if err := writeInitTemplate(projectName, f.templatePath, f.destName, data); err != nil {
-			os.RemoveAll(projectName)
+		if err := writeInitTemplate(path, f.templatePath, f.destName, data); err != nil {
+			os.RemoveAll(path)
 			return err
 		}
 		fmt.Printf("  Created %s\n", f.destName)
@@ -90,7 +102,7 @@ func runInit(args []string) error {
 	// Add drift dependency with latest version
 	fmt.Println("  Adding drift dependency...")
 	getCmd := exec.Command("go", "get", "github.com/go-drift/drift@latest")
-	getCmd.Dir = projectName
+	getCmd.Dir = path
 	getCmd.Stdout = os.Stdout
 	getCmd.Stderr = os.Stderr
 	if err := getCmd.Run(); err != nil {
@@ -100,7 +112,7 @@ func runInit(args []string) error {
 	// Run go mod tidy to resolve dependencies
 	fmt.Println("  Running go mod tidy...")
 	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = projectName
+	tidyCmd.Dir = path
 	tidyCmd.Stdout = os.Stdout
 	tidyCmd.Stderr = os.Stderr
 	if err := tidyCmd.Run(); err != nil {
@@ -110,7 +122,7 @@ func runInit(args []string) error {
 	fmt.Println()
 	fmt.Printf("Project created successfully!\n\n")
 	fmt.Printf("Next steps:\n")
-	fmt.Printf("  cd %s\n", projectName)
+	fmt.Printf("  cd %s\n", path)
 	fmt.Printf("  drift run android    # Run on Android\n")
 	fmt.Printf("  drift run ios        # Run on iOS (macOS only)\n")
 
