@@ -3,31 +3,47 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestValidateDirectory(t *testing.T) {
-	tests := []struct {
+	type tc struct {
 		name    string
 		dir     string
 		wantErr bool
-	}{
+	}
+	tests := []tc{
 		{"simple name", "myapp", false},
 		{"relative path", "projects/myapp", false},
 		{"dot-slash relative", "./projects/myapp", false},
 		{"deep relative", "a/b/c/myapp", false},
-		{"absolute nested", "/home/user/projects/myapp", false},
 
-		// Dangerous paths
+		// Dangerous paths (cross-platform)
 		{"empty", "", true},
-		{"root", "/", true},
+		{"root slash", "/", true},
 		{"dot", ".", true},
 		{"dotdot", "..", true},
-		{"root-level /etc", "/etc", true},
-		{"root-level /home", "/home", true},
-		{"root-level /tmp", "/tmp", true},
 	}
+
+	if runtime.GOOS == "windows" {
+		tests = append(tests,
+			tc{"drive root", `C:\`, true},
+			tc{"bare backslash root", `\`, true},
+			tc{"root-level C:\\Users", `C:\Users`, true},
+			tc{"root-level C:\\Windows", `C:\Windows`, true},
+			tc{"nested windows path", `C:\Users\me\projects\myapp`, false},
+		)
+	} else {
+		tests = append(tests,
+			tc{"absolute nested", "/home/user/projects/myapp", false},
+			tc{"root-level /etc", "/etc", true},
+			tc{"root-level /home", "/home", true},
+			tc{"root-level /tmp", "/tmp", true},
+		)
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateDirectory(tt.dir)
@@ -85,8 +101,12 @@ func TestSafeRemoveAll(t *testing.T) {
 	// We can't directly observe a no-op on paths that don't exist,
 	// but we verify it doesn't panic.
 	t.Run("no-ops on dangerous paths", func(t *testing.T) {
-		for _, dangerous := range []string{"", "/", ".", ".."} {
-			safeRemoveAll(dangerous) // must not panic
+		dangerous := []string{"", "/", ".", ".."}
+		if runtime.GOOS == "windows" {
+			dangerous = append(dangerous, `C:\`, `\`)
+		}
+		for _, d := range dangerous {
+			safeRemoveAll(d) // must not panic
 		}
 	})
 }
@@ -95,7 +115,7 @@ func TestScaffoldProject_ProjectNameFromBasename(t *testing.T) {
 	tmp := t.TempDir()
 	dir := filepath.Join(tmp, "projects", "myapp")
 
-	err := scaffoldProject(dir, "myapp", "myapp")
+	err := scaffoldProject(dir, "myapp")
 	if err != nil {
 		t.Fatalf("scaffoldProject(%q) unexpected error: %v", dir, err)
 	}
@@ -119,7 +139,7 @@ func TestScaffoldProject_ModulePathOverride(t *testing.T) {
 	tmp := t.TempDir()
 	dir := filepath.Join(tmp, "myapp")
 
-	err := scaffoldProject(dir, "myapp", "github.com/user/myapp")
+	err := scaffoldProject(dir, "github.com/user/myapp")
 	if err != nil {
 		t.Fatalf("scaffoldProject unexpected error: %v", err)
 	}
@@ -140,7 +160,7 @@ func TestScaffoldProject_RejectsExistingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := scaffoldProject(dir, "myapp", "myapp")
+	err := scaffoldProject(dir, "myapp")
 	if err == nil {
 		t.Fatal("expected error for existing directory, got nil")
 	}
@@ -155,6 +175,25 @@ func TestRunInit_RejectsDangerousDirectory(t *testing.T) {
 		if err == nil {
 			t.Errorf("expected error for dangerous directory %q, got nil", dir)
 		}
+	}
+}
+
+func TestRunInit_RejectsTilde(t *testing.T) {
+	for _, dir := range []string{"~/myapp", "~/projects/myapp"} {
+		err := runInit([]string{dir})
+		if err == nil {
+			t.Errorf("expected error for tilde path %q, got nil", dir)
+		}
+		if err != nil && !strings.Contains(err.Error(), "tilde") {
+			t.Errorf("expected tilde-specific error for %q, got: %v", dir, err)
+		}
+	}
+}
+
+func TestRunInit_RejectsEmptyModulePath(t *testing.T) {
+	err := runInit([]string{"myapp", ""})
+	if err == nil {
+		t.Fatal("expected error for empty module path, got nil")
 	}
 }
 

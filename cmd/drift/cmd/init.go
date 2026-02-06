@@ -50,7 +50,12 @@ func runInit(args []string) error {
 		return fmt.Errorf("directory is required\n\nUsage: drift init <directory> [module-path]")
 	}
 
-	dir := filepath.Clean(args[0])
+	raw := args[0]
+	if strings.HasPrefix(raw, "~") {
+		return fmt.Errorf("tilde (~) is not expanded by drift; use an absolute path or $HOME instead")
+	}
+
+	dir := filepath.Clean(raw)
 
 	// Validate directory path before deriving anything from it
 	if err := validateDirectory(dir); err != nil {
@@ -63,13 +68,17 @@ func runInit(args []string) error {
 		modulePath = args[1]
 	}
 
+	if modulePath == "" {
+		return fmt.Errorf("module path cannot be empty")
+	}
+
 	// Validate project name
 	if err := validateProjectName(projectName); err != nil {
 		return fmt.Errorf("invalid project name %q (derived from directory basename): %w", projectName, err)
 	}
 
 	// Scaffold the project directory and template files
-	if err := scaffoldProject(dir, projectName, modulePath); err != nil {
+	if err := scaffoldProject(dir, modulePath); err != nil {
 		return err
 	}
 
@@ -105,13 +114,13 @@ func runInit(args []string) error {
 // scaffoldProject creates the project directory and writes the template files.
 // This is the portion of init that has no side effects beyond the filesystem,
 // making it safe to call from tests without network access.
-func scaffoldProject(dir, projectName, modulePath string) error {
+func scaffoldProject(dir, modulePath string) error {
 	// Check if directory already exists
 	if _, err := os.Stat(dir); err == nil {
 		return fmt.Errorf("directory %q already exists", dir)
 	}
 
-	fmt.Printf("Creating new Drift project: %s\n", projectName)
+	fmt.Printf("Creating new Drift project: %s\n", filepath.Base(dir))
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -166,20 +175,32 @@ func writeInitTemplate(projectDir, templatePath, destName string, data initTempl
 }
 
 // validateDirectory rejects directory paths that would be dangerous to create or
-// clean up. This includes the filesystem root, the current/parent directory, and
-// root-level absolute paths (e.g. /etc, /home).
+// clean up. This includes filesystem roots (/, C:\), the current/parent directory,
+// and root-level absolute paths (e.g. /etc, C:\Users).
 func validateDirectory(dir string) error {
 	// The "" case is not reachable via runInit (filepath.Clean converts it to
 	// "."), but is included for direct callers of validateDirectory.
+	// "/" is kept explicitly because isVolumeRoot won't match "/" on Windows
+	// (where the separator is \), yet "/" still refers to the current drive root.
 	switch dir {
 	case "", "/", ".", "..":
 		return fmt.Errorf("directory %q is not a valid project location", dir)
 	}
-	// Reject root-level absolute paths (e.g. /etc, /home)
-	if filepath.IsAbs(dir) && filepath.Dir(dir) == "/" {
+	// Reject filesystem roots (\, C:\, etc.)
+	if isVolumeRoot(dir) {
+		return fmt.Errorf("directory %q is not a valid project location", dir)
+	}
+	// Reject root-level absolute paths (e.g. /etc, /home, C:\Users)
+	if filepath.IsAbs(dir) && isVolumeRoot(filepath.Dir(dir)) {
 		return fmt.Errorf("refusing to create project at root-level path %q", dir)
 	}
 	return nil
+}
+
+// isVolumeRoot reports whether dir is a filesystem root. On Unix this is "/",
+// on Windows this covers drive roots like "C:\" and the bare root "\".
+func isVolumeRoot(dir string) bool {
+	return dir == filepath.VolumeName(dir)+string(filepath.Separator)
 }
 
 // safeRemoveAll removes a directory only if the path passes validateDirectory.
