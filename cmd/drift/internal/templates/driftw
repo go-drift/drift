@@ -4,37 +4,34 @@
 
 set -e
 
-# Build candidate list
-candidates=("drift")
-[[ -n "$GOBIN" ]] && candidates+=("$GOBIN/drift")
-[[ -n "$GOPATH" ]] && candidates+=("$GOPATH/bin/drift")
-candidates+=(
-    "$HOME/go/bin/drift"
-    "$HOME/.local/bin/drift"
-    "/usr/local/bin/drift"
-    "/opt/homebrew/bin/drift"
-)
+# Try drift on current PATH
+resolved=$(command -v drift 2>/dev/null || true)
+[[ -x "$resolved" ]] && exec "$resolved" "$@"
 
-# Try each candidate
-for candidate in "${candidates[@]}"; do
-    if [[ "$candidate" == /* ]]; then
-        [[ -x "$candidate" ]] && exec "$candidate" "$@"
-    else
-        resolved=$(command -v "$candidate" 2>/dev/null) && [[ -x "$resolved" ]] && exec "$resolved" "$@"
-    fi
+# Check well-known locations
+for candidate in \
+    "${GOBIN:+$GOBIN/drift}" \
+    "${GOPATH:+$GOPATH/bin/drift}" \
+    "$HOME/go/bin/drift" \
+    "$HOME/.local/bin/drift" \
+    "/usr/local/bin/drift" \
+    "/opt/homebrew/bin/drift"; do
+    [[ -x "$candidate" ]] && exec "$candidate" "$@"
 done
 
-# Last resort: ask `go` for GOPATH (handles non-default GOPATH in IDE environments)
-for go_bin in "go" "/usr/local/go/bin/go" "/opt/homebrew/bin/go"; do
-    go_path=$(command -v "$go_bin" 2>/dev/null || true)
-    if [[ -x "$go_path" ]]; then
-        gopath=$("$go_path" env GOPATH 2>/dev/null || true)
-        [[ -x "$gopath/bin/drift" ]] && exec "$gopath/bin/drift" "$@"
-        break
-    fi
-done
+# macOS: use path_helper to reconstruct system PATH (Homebrew, Go installer, etc.)
+if [[ -x /usr/libexec/path_helper ]]; then
+    eval "$(/usr/libexec/path_helper -s)"
+    resolved=$(command -v drift 2>/dev/null || true)
+    [[ -x "$resolved" ]] && exec "$resolved" "$@"
+fi
 
-echo "Error: drift not found in PATH or common locations." >&2
+# Last resort: replicate the user's terminal environment via login shell
+if [[ -n "$SHELL" ]]; then
+    drift_path=$("$SHELL" -l -c 'command -v drift 2>/dev/null' 2>/dev/null) || true
+    [[ -x "$drift_path" ]] && exec "$drift_path" "$@"
+fi
+
+echo "Error: drift not found." >&2
 echo "Install with: go install github.com/go-drift/drift/cmd/drift@latest" >&2
-echo "Or ensure drift is in one of: PATH, \$GOBIN, \$GOPATH/bin, ~/go/bin, ~/.local/bin, /usr/local/bin" >&2
 exit 1
