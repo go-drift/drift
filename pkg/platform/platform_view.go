@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-drift/drift/pkg/graphics"
 )
@@ -94,6 +95,13 @@ type PlatformViewRegistry struct {
 	// from staying visible at stale positions.
 	viewsSeenThisFrame map[int64]struct{}
 
+	// Geometry-applied signal: native signals after applying geometry so
+	// the render thread can defer surface presentation until both Skia
+	// content and native view geometry land before the same vsync.
+	geometryPending atomic.Bool
+	geometrySignal  chan struct{} // buffered, size 1
+	geometryTimer   *time.Timer  // reusable timer for WaitGeometryApplied (render thread only)
+
 	// Stats for monitoring
 	BatchTimeouts atomic.Uint64
 }
@@ -109,12 +117,17 @@ func GetPlatformViewRegistry() *PlatformViewRegistry {
 }
 
 func newPlatformViewRegistry() *PlatformViewRegistry {
+	timer := time.NewTimer(0)
+	<-timer.C // drain initial fire so the timer is ready for Reset
+
 	r := &PlatformViewRegistry{
 		factories:          make(map[string]PlatformViewFactory),
 		views:              make(map[int64]PlatformView),
 		channel:            NewMethodChannel("drift/platform_views"),
 		geometryCache:      make(map[int64]viewGeometryCache),
 		viewsSeenThisFrame: make(map[int64]struct{}),
+		geometrySignal:     make(chan struct{}, 1),
+		geometryTimer:      timer,
 	}
 
 	// Handle incoming calls from native
@@ -390,6 +403,13 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 		batch[i] = entry
 	}
 
+	// Signal infrastructure: mark pending and drain any stale signal before sending.
+	r.geometryPending.Store(true)
+	select {
+	case <-r.geometrySignal:
+	default:
+	}
+
 	// Send batch to native. Native posts to its main thread and returns immediately.
 	// The frameSeq allows native to skip stale batches.
 	_, err := r.channel.Invoke("batchSetGeometry", map[string]any{
@@ -397,8 +417,39 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 		"geometries": batch,
 	})
 	if err != nil {
-		// Timeout or error - increment stat counter
+		r.geometryPending.Store(false) // no signal will come — don't wait 8ms
 		r.BatchTimeouts.Add(1)
+	}
+}
+
+// WaitGeometryApplied blocks until native confirms geometry has been applied,
+// or until timeout expires. No-op if no geometry batch was sent this frame.
+// GPU work (surface.Flush) is already submitted and pipelines with this wait.
+func (r *PlatformViewRegistry) WaitGeometryApplied(timeout time.Duration) {
+	if !r.geometryPending.Load() {
+		return
+	}
+	r.geometryTimer.Reset(timeout)
+	select {
+	case <-r.geometrySignal:
+	case <-r.geometryTimer.C:
+	}
+	// Stop + drain to leave the timer in a clean state for next frame.
+	if !r.geometryTimer.Stop() {
+		select {
+		case <-r.geometryTimer.C:
+		default:
+		}
+	}
+	r.geometryPending.Store(false)
+}
+
+// SignalGeometryApplied is called by native (via DriftGeometryApplied CGo export)
+// after geometry has been applied on the native main thread.
+func (r *PlatformViewRegistry) SignalGeometryApplied() {
+	select {
+	case r.geometrySignal <- struct{}{}:
+	default:
 	}
 }
 

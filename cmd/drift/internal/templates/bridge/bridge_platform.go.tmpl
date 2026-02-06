@@ -225,6 +225,14 @@ func DriftPlatformIsStreamActive(channelPtr *C.char) C.int {
 	return 0
 }
 
+// DriftGeometryApplied is called by native after applying platform view geometry.
+// This signals the render thread to proceed with surface presentation.
+//
+//export DriftGeometryApplied
+func DriftGeometryApplied() {
+	platform.GetPlatformViewRegistry().SignalGeometryApplied()
+}
+
 // DriftPlatformFree frees memory allocated by Go for native code.
 //
 //export DriftPlatformFree

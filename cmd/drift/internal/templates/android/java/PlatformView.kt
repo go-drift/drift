@@ -303,8 +303,10 @@ object PlatformViewHandler {
             return Pair(null, null)
         }
 
-        // Skip stale batches (older than last applied)
+        // Skip stale batches (older than last applied).
+        // Still signal geometry applied so the render thread doesn't timeout.
         if (frameSeq <= lastAppliedSeq) {
+            NativeBridge.geometryApplied()
             return Pair(null, null)
         }
 
@@ -335,15 +337,21 @@ object PlatformViewHandler {
             lastAppliedSeq = frameSeq
         }
 
-        // If already on main thread, apply directly
+        // If already on main thread, apply directly and signal immediately.
         if (Looper.myLooper() == Looper.getMainLooper()) {
             applyGeometries()
+            NativeBridge.geometryApplied()
             return Pair(null, null)
         }
 
         // Post to main thread and return immediately.
         // frameSeq ensures stale batches are skipped if main thread falls behind.
-        host.post { applyGeometries() }
+        // Signal geometry applied after the closure runs so the render thread
+        // can defer surface presentation until geometry lands.
+        host.post {
+            applyGeometries()
+            NativeBridge.geometryApplied()
+        }
         return Pair(null, null)
     }
 

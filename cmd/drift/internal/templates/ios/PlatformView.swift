@@ -3,6 +3,13 @@
 
 import UIKit
 
+// MARK: - Geometry Applied Signal
+
+/// FFI declaration for the Go-exported DriftGeometryApplied function.
+/// Called after applying platform view geometry to signal the render thread.
+@_silgen_name("DriftGeometryApplied")
+func DriftGeometryApplied()
+
 // MARK: - Platform View Handler
 
 /// Handles platform view channel methods from Go.
@@ -313,8 +320,10 @@ enum PlatformViewHandler {
             return (nil, nil)
         }
 
-        // Skip stale batches (older than last applied)
+        // Skip stale batches (older than last applied).
+        // Still signal geometry applied so the render thread doesn't timeout.
         if frameSeq <= lastAppliedSeq {
+            DriftGeometryApplied()
             return (nil, nil)
         }
 
@@ -348,15 +357,21 @@ enum PlatformViewHandler {
             lastAppliedSeq = frameSeq
         }
 
-        // If already on main thread, apply directly
+        // If already on main thread, apply directly and signal immediately.
         if Thread.isMainThread {
             applyGeometries()
+            DriftGeometryApplied()
             return (nil, nil)
         }
 
         // Post to main thread and return immediately.
         // frameSeq ensures stale batches are skipped if main thread falls behind.
-        DispatchQueue.main.async { applyGeometries() }
+        // Signal geometry applied after the closure runs so the render thread
+        // can defer surface presentation until geometry lands.
+        DispatchQueue.main.async {
+            applyGeometries()
+            DriftGeometryApplied()
+        }
         return (nil, nil)
     }
 

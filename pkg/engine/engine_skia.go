@@ -6,9 +6,11 @@ import (
 	"errors"
 	"log"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/skia"
 )
 
@@ -20,6 +22,12 @@ type skiaStateTracker struct {
 }
 
 var skiaState skiaStateTracker
+
+// platformGeometryTimeout is the maximum time the render thread waits for
+// native to confirm platform view geometry has been applied. Half a frame
+// at 60fps — long enough for the main thread to run a posted closure, short
+// enough to avoid visible stalls if the signal is lost.
+const platformGeometryTimeout = 8 * time.Millisecond
 
 var (
 	errInvalidSize = errors.New("skia: invalid surface size")
@@ -116,6 +124,9 @@ func RenderSkiaGL(width, height int) error {
 		return skiaState.setError(err)
 	}
 	surface.Flush()
+	// Wait for native to confirm geometry applied (no-op if no platform views).
+	// GPU work is already submitted above and runs in parallel with this wait.
+	platform.GetPlatformViewRegistry().WaitGeometryApplied(platformGeometryTimeout)
 	skiaState.clearError()
 	return nil
 }
@@ -143,6 +154,9 @@ func RenderSkiaMetal(width, height int, texture unsafe.Pointer) error {
 		return skiaState.setError(err)
 	}
 	surface.Flush()
+	// Wait for native to confirm geometry applied (no-op if no platform views).
+	// GPU work is already submitted above and runs in parallel with this wait.
+	platform.GetPlatformViewRegistry().WaitGeometryApplied(platformGeometryTimeout)
 	skiaState.clearError()
 	return nil
 }

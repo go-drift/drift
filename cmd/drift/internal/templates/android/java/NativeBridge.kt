@@ -194,4 +194,12 @@ object NativeBridge {
      * @return 1 if a new frame should be rendered, 0 if the frame can be skipped.
      */
     external fun needsFrame(): Int
+
+    /**
+     * Signals the Go render thread that platform view geometry has been applied.
+     *
+     * Called from the main thread after applying geometry updates so the
+     * render thread can proceed with surface presentation (eglSwapBuffers).
+     */
+    external fun geometryApplied()
 }
