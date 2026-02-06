@@ -1,6 +1,17 @@
 package layout
 
-import "slices"
+import (
+	"reflect"
+	"slices"
+)
+
+const defaultTypeCountLimit = 5
+
+// TypeCount records the count for a render object type.
+type TypeCount struct {
+	Type  string `json:"type"`
+	Count int    `json:"count"`
+}
 
 // PipelineOwner tracks render objects that need layout or paint.
 //
@@ -53,9 +64,33 @@ func (p *PipelineOwner) NeedsLayout() bool {
 	return p.needsLayout
 }
 
+// DirtyLayoutCount returns the number of scheduled layout boundaries.
+func (p *PipelineOwner) DirtyLayoutCount() int {
+	return len(p.dirtyLayout)
+}
+
+// DirtyLayoutTypes returns the most common dirty layout boundary types.
+func (p *PipelineOwner) DirtyLayoutTypes(limit int) []TypeCount {
+	return typeCountsForList(p.dirtyLayout, limit)
+}
+
 // NeedsPaint reports if any render objects need paint.
 func (p *PipelineOwner) NeedsPaint() bool {
 	return p.needsPaint
+}
+
+// DirtyPaintCount returns the number of scheduled paint boundaries.
+func (p *PipelineOwner) DirtyPaintCount() int {
+	return len(p.dirtyPaint)
+}
+
+// DirtyPaintTypes returns the most common dirty paint boundary types.
+func (p *PipelineOwner) DirtyPaintTypes(limit int) []TypeCount {
+	list := make([]RenderObject, 0, len(p.dirtyPaint))
+	for obj := range p.dirtyPaint {
+		list = append(list, obj)
+	}
+	return typeCountsForList(list, limit)
 }
 
 // FlushLayoutForRoot runs layout starting from the root.
@@ -200,6 +235,71 @@ func (p *PipelineOwner) ScheduleSemantics(object RenderObject) {
 // NeedsSemantics reports if any render objects need semantics update.
 func (p *PipelineOwner) NeedsSemantics() bool {
 	return p.needsSemantics
+}
+
+// DirtySemanticsCount returns the number of scheduled semantics boundaries.
+func (p *PipelineOwner) DirtySemanticsCount() int {
+	return len(p.dirtySemantics)
+}
+
+// DirtySemanticsTypes returns the most common dirty semantics boundary types.
+func (p *PipelineOwner) DirtySemanticsTypes(limit int) []TypeCount {
+	return typeCountsForList(p.dirtySemantics, limit)
+}
+
+func typeCountsForList(items []RenderObject, limit int) []TypeCount {
+	if len(items) == 0 {
+		return nil
+	}
+	if limit <= 0 {
+		limit = defaultTypeCountLimit
+	}
+
+	counts := make(map[string]int)
+	for _, obj := range items {
+		name := renderTypeName(obj)
+		counts[name]++
+	}
+
+	result := make([]TypeCount, 0, len(counts))
+	for name, count := range counts {
+		result = append(result, TypeCount{Type: name, Count: count})
+	}
+
+	slices.SortFunc(result, func(a, b TypeCount) int {
+		if a.Count == b.Count {
+			if a.Type == b.Type {
+				return 0
+			}
+			if a.Type < b.Type {
+				return -1
+			}
+			return 1
+		}
+		if a.Count > b.Count {
+			return -1
+		}
+		return 1
+	})
+
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result
+}
+
+func renderTypeName(obj RenderObject) string {
+	if obj == nil {
+		return "<nil>"
+	}
+	objType := reflect.TypeOf(obj)
+	if objType.Kind() == reflect.Pointer {
+		objType = objType.Elem()
+	}
+	if objType.Name() == "" {
+		return objType.String()
+	}
+	return objType.Name()
 }
 
 // FlushSemantics returns dirty semantics boundaries sorted by depth.

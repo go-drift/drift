@@ -6,9 +6,12 @@ import (
 
 func main() {
 	app := drift.NewApp(App())
-	// diagnostics := engine.DefaultDiagnosticsConfig()
-	// diagnostics.ShowLayoutBounds = false
-	// diagnostics.DebugServerPort = 9999 // Enable debug server: curl localhost:9999/tree | jq .
-	// app.Diagnostics = diagnostics
+	// app.Diagnostics = &engine.DiagnosticsConfig{
+	// 	ShowFPS:          false,
+	// 	ShowFrameGraph:   false,
+	// 	TargetFrameTime:  16667 * time.Microsecond, // ~16.67ms for 60fps
+	// 	ShowLayoutBounds: false,
+	// 	DebugServerPort:  9999,
+	// }
 	app.Run()
 }

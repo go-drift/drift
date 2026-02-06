@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -111,6 +112,9 @@ func startDebugServer(port int) (int, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/render-tree", handleRenderTree)
 	mux.HandleFunc("/widget-tree", handleWidgetTree)
+	mux.HandleFunc("/frames", handleFrameTimeline)
+	mux.HandleFunc("/runtime", handleRuntime)
+	mux.HandleFunc("/jank", handleJankSnapshot)
 	mux.HandleFunc("/health", handleHealth)
 	mux.HandleFunc("/debug", handleDebug)
 
@@ -153,6 +157,12 @@ func stopDebugServer() {
 const maxTreeDepth = 500
 
 // handleRenderTree returns the render tree as JSON.
+//
+// Locking contract: frameLock is held briefly to read the rootRender pointer.
+// Tree serialization runs after releasing frameLock — the render tree data is
+// safe to read because the HTTP handler runs between frames (no concurrent
+// mutation). Frame-trace and runtime-sample buffers use their own sync.RWMutex
+// and never require frameLock for snapshot reads.
 func handleRenderTree(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -257,6 +267,215 @@ func handleWidgetTree(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
+}
+
+// handleFrameTimeline returns recent frame timing samples as JSON.
+func handleFrameTimeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	frameLock.Lock()
+	trace := app.frameTrace
+	frameLock.Unlock()
+	if trace == nil {
+		http.Error(w, "frame tracing disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	resp := trace.Snapshot()
+
+	applyFrameFilters(r, &resp)
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+// handleRuntime returns recent runtime/GC samples as JSON.
+func handleRuntime(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	frameLock.Lock()
+	buffer := app.runtimeSamples
+	frameLock.Unlock()
+	if buffer == nil {
+		http.Error(w, "runtime sampling disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	samples := applyRuntimeFilters(r, buffer.Snapshot())
+
+	resp := struct {
+		Samples []RuntimeSample `json:"samples"`
+	}{
+		Samples: samples,
+	}
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
+	limit := 0
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	var filters []func(FrameSample) bool
+
+	if v := parseFloatQuery(r, "min_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.FrameMs >= v })
+	}
+	if v := parseFloatQuery(r, "dispatch_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.DispatchMs >= v })
+	}
+	if v := parseFloatQuery(r, "animate_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.AnimateMs >= v })
+	}
+	if v := parseFloatQuery(r, "build_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.BuildMs >= v })
+	}
+	if v := parseFloatQuery(r, "layout_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.LayoutMs >= v })
+	}
+	if v := parseFloatQuery(r, "record_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.RecordMs >= v })
+	}
+	if v := parseFloatQuery(r, "composite_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.CompositeMs >= v })
+	}
+	if v := parseFloatQuery(r, "semantics_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.SemanticsMs >= v })
+	}
+	if v := parseFloatQuery(r, "flush_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.PlatformFlushMs >= v })
+	}
+	if v := parseFloatQuery(r, "trace_overhead_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.TraceOverheadMs >= v })
+	}
+	if value := r.URL.Query().Get("resumed"); value != "" {
+		if parsed, err := strconv.ParseBool(value); err == nil && parsed {
+			filters = append(filters, func(s FrameSample) bool { return s.Flags.ResumedThisFrame })
+		}
+	}
+
+	if len(filters) > 0 {
+		filtered := make([]FrameSample, 0, len(resp.Samples))
+	outer:
+		for _, sample := range resp.Samples {
+			for _, f := range filters {
+				if !f(sample) {
+					continue outer
+				}
+			}
+			filtered = append(filtered, sample)
+		}
+		resp.Samples = filtered
+	}
+
+	if limit > 0 && len(resp.Samples) > limit {
+		resp.Samples = resp.Samples[len(resp.Samples)-limit:]
+	}
+}
+
+func applyRuntimeFilters(r *http.Request, samples []RuntimeSample) []RuntimeSample {
+	windowSeconds := parseFloatQuery(r, "window")
+	if windowSeconds > 0 {
+		cutoff := time.Now().Add(-time.Duration(windowSeconds * float64(time.Second))).UnixMilli()
+		filtered := make([]RuntimeSample, 0, len(samples))
+		for _, sample := range samples {
+			if sample.Timestamp >= cutoff {
+				filtered = append(filtered, sample)
+			}
+		}
+		samples = filtered
+	}
+
+	limit := 0
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 0 && len(samples) > limit {
+		samples = samples[len(samples)-limit:]
+	}
+	return samples
+}
+
+// handleJankSnapshot returns a combined frames/runtime snapshot.
+func handleJankSnapshot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	frameLock.Lock()
+	trace := app.frameTrace
+	runtimeBuffer := app.runtimeSamples
+	frameLock.Unlock()
+
+	if trace == nil {
+		http.Error(w, "frame tracing disabled", http.StatusServiceUnavailable)
+		return
+	}
+	if runtimeBuffer == nil {
+		http.Error(w, "runtime sampling disabled", http.StatusServiceUnavailable)
+		return
+	}
+
+	frames := trace.Snapshot()
+	applyFrameFilters(r, &frames)
+
+	runtimeSamples := runtimeBuffer.Snapshot()
+	runtimeSamples = applyRuntimeFilters(r, runtimeSamples)
+
+	resp := struct {
+		Frames  FrameTimeline   `json:"frames"`
+		Runtime []RuntimeSample `json:"runtime"`
+	}{
+		Frames:  frames,
+		Runtime: runtimeSamples,
+	}
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json encode error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
+func parseFloatQuery(r *http.Request, key string) float64 {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
 }
 
 // serializeWidgetTree recursively converts an element tree to JSON-serializable form.
