@@ -96,8 +96,9 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
                     theme.ButtonOf(ctx, "Pause", func() {
                         s.controller.Pause()
                     }),
-                    theme.ButtonOf(ctx, "Stop", func() {
-                        s.controller.Stop()
+                    theme.ButtonOf(ctx, "Seek +10s", func() {
+                        pos := s.controller.Position()
+                        s.controller.SeekTo(pos + 10*time.Second)
                     }),
                 },
             },
@@ -160,8 +161,11 @@ func (s *audioState) InitState() {
     s.controller.OnPlaybackStateChanged = func(state platform.PlaybackState) {
         s.status.Set(state.String())
     }
+    s.controller.OnPositionChanged = func(position, duration, buffered time.Duration) {
+        s.status.Set(state.String() + " " + position.String() + " / " + duration.String())
+    }
     s.controller.OnError = func(code, message string) {
-        s.status.Set("Error: " + message)
+        s.status.Set("Error (" + code + "): " + message)
     }
 
     s.OnDispose(func() {
@@ -172,6 +176,8 @@ func (s *audioState) InitState() {
 
 ### AudioPlayerController Methods
 
+All methods are safe for concurrent use.
+
 | Method | Description |
 |--------|-------------|
 | `Play(url string)` | Load the URL (if not already loaded) and start playback. Resumes if the same URL is passed after a pause. |
@@ -181,7 +187,11 @@ func (s *audioState) InitState() {
 | `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
 | `SetLooping(looping bool)` | Enable or disable looping |
 | `SetPlaybackSpeed(rate float64)` | Set playback speed (1.0 = normal) |
-| `Dispose()` | Release native resources |
+| `State() PlaybackState` | Current playback state |
+| `Position() time.Duration` | Current playback position |
+| `Duration() time.Duration` | Total media duration |
+| `Buffered() time.Duration` | Buffered position |
+| `Dispose()` | Release native resources. The controller must not be reused after disposal. |
 
 ### AudioPlayerController Callbacks
 
@@ -191,7 +201,7 @@ func (s *audioState) InitState() {
 | `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
 | `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
-### Example: Transport Controls
+### Example: Transport Controls with Seek
 
 ```go
 func (s *audioState) Build(ctx core.BuildContext) core.Widget {
@@ -211,17 +221,17 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
                     }),
                 },
             },
-            // Playback speed controls
             widgets.Row{
                 Children: []core.Widget{
-                    theme.ButtonOf(ctx, "0.5x", func() {
-                        s.controller.SetPlaybackSpeed(0.5)
+                    theme.ButtonOf(ctx, "Seek +10s", func() {
+                        pos := s.controller.Position()
+                        s.controller.SeekTo(pos + 10*time.Second)
                     }),
-                    theme.ButtonOf(ctx, "1x", func() {
-                        s.controller.SetPlaybackSpeed(1.0)
+                    theme.ButtonOf(ctx, "Loop", func() {
+                        s.controller.SetLooping(true)
                     }),
-                    theme.ButtonOf(ctx, "2x", func() {
-                        s.controller.SetPlaybackSpeed(2.0)
+                    theme.ButtonOf(ctx, "Mute", func() {
+                        s.controller.SetVolume(0)
                     }),
                 },
             },
@@ -232,7 +242,7 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
 
 ## Playback States
 
-Both video and audio players share the same `PlaybackState` enum. Use the `String()` method for human-readable labels.
+Both video and audio players share the same `PlaybackState` enum (defined in `platform`). Use the `String()` method for human-readable labels.
 
 | State | Value | Description |
 |-------|-------|-------------|
@@ -243,6 +253,30 @@ Both video and audio players share the same `PlaybackState` enum. Use the `Strin
 | `PlaybackStatePaused` | 4 | Paused, can be resumed |
 
 Errors are delivered through the `OnError` callback rather than as a playback state.
+
+## Error Codes
+
+Both players use canonical error codes that are consistent across Android and iOS:
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| `"source_error"` | `platform.ErrCodeSourceError` | Media source could not be loaded (network failure, invalid URL, unsupported format) |
+| `"decoder_error"` | `platform.ErrCodeDecoderError` | Media could not be decoded or rendered (codec failure, DRM error) |
+| `"playback_failed"` | `platform.ErrCodePlaybackFailed` | General playback failure that does not fit a more specific category |
+
+```go
+controller.OnError = func(code, message string) {
+    switch code {
+    case platform.ErrCodeSourceError:
+        // Network or URL issue, prompt user to check connection
+    case platform.ErrCodeDecoderError:
+        // Format not supported on this device
+    default:
+        // General failure
+    }
+    log.Printf("playback error [%s]: %s", code, message)
+}
+```
 
 ## Next Steps
 

@@ -25,11 +25,19 @@ var (
 // Multiple controllers may exist concurrently, each managing its own native
 // player instance. Call [AudioPlayerController.Dispose] to release resources
 // when a controller is no longer needed.
+//
+// All methods are safe for concurrent use.
 type AudioPlayerController struct {
-	id        int64
-	svc       *audioPlayerServiceState
+	id  int64
+	svc *audioPlayerServiceState
+	mu  sync.RWMutex
+
+	// guarded by mu
 	loadedURL string
-	lastState PlaybackState
+	state     PlaybackState
+	position  time.Duration
+	duration  time.Duration
+	buffered  time.Duration
 
 	// OnPlaybackStateChanged is called when the playback state changes.
 	// Called on the UI thread.
@@ -60,6 +68,34 @@ func NewAudioPlayerController() *AudioPlayerController {
 	audioRegistryMu.Unlock()
 
 	return c
+}
+
+// State returns the current playback state.
+func (c *AudioPlayerController) State() PlaybackState {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state
+}
+
+// Position returns the current playback position.
+func (c *AudioPlayerController) Position() time.Duration {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.position
+}
+
+// Duration returns the total media duration.
+func (c *AudioPlayerController) Duration() time.Duration {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.duration
+}
+
+// Buffered returns the buffered position.
+func (c *AudioPlayerController) Buffered() time.Duration {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.buffered
 }
 
 type audioPlayerServiceState struct {
@@ -97,22 +133,24 @@ func ensureAudioService() *audioPlayerServiceState {
 				bufferedMs, _ := toInt64(m["bufferedMs"])
 
 				state := PlaybackState(stateInt)
-				position := time.Duration(positionMs) * time.Millisecond
-				duration := time.Duration(durationMs) * time.Millisecond
-				buffered := time.Duration(bufferedMs) * time.Millisecond
+				pos := time.Duration(positionMs) * time.Millisecond
+				dur := time.Duration(durationMs) * time.Millisecond
+				buf := time.Duration(bufferedMs) * time.Millisecond
 
-				// Dedup state changes; always fire position updates.
-				stateChanged := state != c.lastState
-				if stateChanged {
-					c.lastState = state
-				}
+				c.mu.Lock()
+				stateChanged := state != c.state
+				c.state = state
+				c.position = pos
+				c.duration = dur
+				c.buffered = buf
+				c.mu.Unlock()
 
 				Dispatch(func() {
 					if stateChanged && c.OnPlaybackStateChanged != nil {
 						c.OnPlaybackStateChanged(state)
 					}
 					if c.OnPositionChanged != nil {
-						c.OnPositionChanged(position, duration, buffered)
+						c.OnPositionChanged(pos, dur, buf)
 					}
 				})
 			},
@@ -168,12 +206,18 @@ func ensureAudioService() *audioPlayerServiceState {
 // Play loads the given URL (if not already loaded) and starts playback.
 // Calling Play with the same URL after a pause resumes playback.
 func (c *AudioPlayerController) Play(url string) {
-	if url != c.loadedURL {
+	c.mu.Lock()
+	needsLoad := url != c.loadedURL
+	if needsLoad {
+		c.loadedURL = url
+	}
+	c.mu.Unlock()
+
+	if needsLoad {
 		c.svc.channel.Invoke("load", map[string]any{
 			"playerId": c.id,
 			"url":      url,
 		})
-		c.loadedURL = url
 	}
 	c.svc.channel.Invoke("play", map[string]any{
 		"playerId": c.id,
@@ -193,7 +237,10 @@ func (c *AudioPlayerController) Stop() {
 	c.svc.channel.Invoke("stop", map[string]any{
 		"playerId": c.id,
 	})
+
+	c.mu.Lock()
 	c.loadedURL = ""
+	c.mu.Unlock()
 }
 
 // SeekTo seeks to the given position.

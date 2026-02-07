@@ -16,6 +16,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
 /**
+ * Maps an ExoPlayer error code to a canonical Drift error code string.
+ * Source/IO/parsing errors (2000-3999) become "source_error",
+ * decoder/audio-track/DRM errors (4000-6999) become "decoder_error",
+ * and everything else becomes "playback_failed".
+ */
+private fun videoErrorCodeString(code: Int): String = when {
+    code in 2000..3999 -> "source_error"
+    code in 4000..6999 -> "decoder_error"
+    else -> "playback_failed"
+}
+
+/**
  * Platform view container for native video player using ExoPlayer.
  *
  * Wraps a PlayerView inside a FrameLayout and replaces the default SurfaceView
@@ -102,7 +114,7 @@ class NativeVideoPlayerContainer(
                     mapOf(
                         "method" to "onVideoError",
                         "viewId" to viewId,
-                        "code" to (error.errorCode.toString()),
+                        "code" to videoErrorCodeString(error.errorCode),
                         "message" to (error.message ?: "Unknown playback error")
                     )
                 )

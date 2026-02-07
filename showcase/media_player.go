@@ -37,6 +37,9 @@ type mediaPlayerState struct {
 	audioStatus     *core.ManagedState[string]
 	audioStateLabel string
 	audioController *platform.AudioPlayerController
+	videoController *widgets.VideoPlayerController
+	audioLooping    bool
+	audioMuted      bool
 }
 
 func (s *mediaPlayerState) InitState() {
@@ -45,6 +48,7 @@ func (s *mediaPlayerState) InitState() {
 	s.audioStateLabel = "Idle"
 
 	s.audioController = platform.NewAudioPlayerController()
+	s.videoController = &widgets.VideoPlayerController{}
 
 	s.audioController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
 		s.audioStateLabel = state.String()
@@ -57,7 +61,7 @@ func (s *mediaPlayerState) InitState() {
 	}
 	s.audioController.OnError = func(code, message string) {
 		s.audioStateLabel = "Error"
-		s.audioStatus.Set("Error: " + message)
+		s.audioStatus.Set("Error (" + code + "): " + message)
 	}
 
 	s.OnDispose(func() {
@@ -73,7 +77,7 @@ func (s *mediaPlayerState) Build(ctx core.BuildContext) core.Widget {
 		sectionTitle("Video Player", colors),
 		widgets.VSpace(8),
 		widgets.Text{
-			Content: "Native platform video player with built-in controls.",
+			Content: "Native platform video player with built-in controls. Use a VideoPlayerController for programmatic control.",
 			Wrap:    true,
 			Style:   labelStyle(colors),
 		},
@@ -83,18 +87,39 @@ func (s *mediaPlayerState) Build(ctx core.BuildContext) core.Widget {
 			Children: []core.Widget{
 				widgets.Expanded{
 					Child: widgets.VideoPlayer{
-						URL:      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-						AutoPlay: false,
-						Volume:   1.0,
-						Height:   220,
+						URL:        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+						Controller: s.videoController,
+						AutoPlay:   false,
+						Volume:     1.0,
+						Height:     220,
 						OnPlaybackStateChanged: func(state platform.PlaybackState) {
 							s.videoStatus.Set(state.String())
 						},
 						OnError: func(code string, message string) {
-							s.videoStatus.Set("Error: " + message)
+							s.videoStatus.Set("Error (" + code + "): " + message)
 						},
 					},
 				},
+			},
+		},
+		widgets.VSpace(8),
+		// Video controller buttons
+		widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+			Children: []core.Widget{
+				smallButton(ctx, "Seek +10s", func() {
+					pos := s.videoController.Position()
+					s.videoController.SeekTo(pos + 10*time.Second)
+				}, colors),
+				widgets.HSpace(6),
+				smallButton(ctx, "Seek -10s", func() {
+					pos := s.videoController.Position()
+					if pos > 10*time.Second {
+						s.videoController.SeekTo(pos - 10*time.Second)
+					} else {
+						s.videoController.SeekTo(0)
+					}
+				}, colors),
 			},
 		},
 		widgets.VSpace(8),
@@ -156,6 +181,26 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				},
 			},
 			widgets.VSpace(8),
+			// Seek controls
+			widgets.Row{
+				MainAxisAlignment: widgets.MainAxisAlignmentStart,
+				Children: []core.Widget{
+					smallButton(ctx, "Seek +10s", func() {
+						pos := s.audioController.Position()
+						s.audioController.SeekTo(pos + 10*time.Second)
+					}, colors),
+					widgets.HSpace(6),
+					smallButton(ctx, "Seek -10s", func() {
+						pos := s.audioController.Position()
+						if pos > 10*time.Second {
+							s.audioController.SeekTo(pos - 10*time.Second)
+						} else {
+							s.audioController.SeekTo(0)
+						}
+					}, colors),
+				},
+			},
+			widgets.VSpace(8),
 			// Playback options
 			widgets.Row{
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
@@ -177,8 +222,35 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 					}, colors),
 				},
 			},
+			widgets.VSpace(8),
+			// Volume and looping
+			widgets.Row{
+				MainAxisAlignment: widgets.MainAxisAlignmentStart,
+				Children: []core.Widget{
+					smallButton(ctx, toggleLabel("Mute", "Unmute", s.audioMuted), func() {
+						s.audioMuted = !s.audioMuted
+						if s.audioMuted {
+							s.audioController.SetVolume(0)
+						} else {
+							s.audioController.SetVolume(1.0)
+						}
+					}, colors),
+					widgets.HSpace(6),
+					smallButton(ctx, toggleLabel("Loop", "Unloop", s.audioLooping), func() {
+						s.audioLooping = !s.audioLooping
+						s.audioController.SetLooping(s.audioLooping)
+					}, colors),
+				},
+			},
 		},
 	}
+}
+
+func toggleLabel(off, on string, active bool) string {
+	if active {
+		return on
+	}
+	return off
 }
 
 func smallButton(ctx core.BuildContext, label string, onTap func(), colors theme.ColorScheme) core.Widget {

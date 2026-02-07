@@ -135,7 +135,7 @@ private class AudioPlayerInstance {
                     channel: "drift/audio_player/errors",
                     data: [
                         "playerId": self.id,
-                        "code": "playback_failed",
+                        "code": Self.errorCode(for: item.error),
                         "message": item.error?.localizedDescription ?? "Unknown playback error"
                     ]
                 )
@@ -209,6 +209,16 @@ private class AudioPlayerInstance {
         if player.timeControlStatus == .playing {
             player.rate = rate
         }
+    }
+
+    /// Maps an AVPlayer error to a canonical Drift error code string.
+    /// URL/network errors become "source_error", everything else is "playback_failed".
+    static func errorCode(for error: Error?) -> String {
+        guard let nsError = error as? NSError else { return "playback_failed" }
+        if nsError.domain == NSURLErrorDomain {
+            return "source_error"
+        }
+        return "playback_failed"
     }
 
     func dispose() {

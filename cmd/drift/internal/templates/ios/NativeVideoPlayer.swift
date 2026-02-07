@@ -124,7 +124,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
                         data: [
                             "method": "onVideoError",
                             "viewId": self.viewId,
-                            "code": "playback_failed",
+                            "code": Self.errorCode(for: error),
                             "message": error?.localizedDescription ?? "Unknown playback error"
                         ]
                     )
@@ -150,6 +150,16 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     @objc private func playerDidFinishPlaying(_ notification: Notification) {
         player.seek(to: .zero)
         player.play()
+    }
+
+    /// Maps an AVPlayer error to a canonical Drift error code string.
+    /// URL/network errors become "source_error", everything else is "playback_failed".
+    static func errorCode(for error: Error?) -> String {
+        guard let nsError = error as? NSError else { return "playback_failed" }
+        if nsError.domain == NSURLErrorDomain {
+            return "source_error"
+        }
+        return "playback_failed"
     }
 
     func dispose() {
@@ -233,7 +243,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
                     data: [
                         "method": "onVideoError",
                         "viewId": self.viewId,
-                        "code": "playback_failed",
+                        "code": Self.errorCode(for: error),
                         "message": error?.localizedDescription ?? "Unknown playback error"
                     ]
                 )
