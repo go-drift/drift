@@ -13,16 +13,32 @@ import (
 type PlaybackState int
 
 const (
-	PlaybackStateIdle      PlaybackState = 0
-	PlaybackStateLoading   PlaybackState = 1 // Reserved: not currently emitted by native players.
+	// PlaybackStateIdle indicates the player has been created but no media is loaded.
+	PlaybackStateIdle PlaybackState = 0
+
+	// PlaybackStateLoading is reserved for future use. Not currently emitted by native players.
+	PlaybackStateLoading PlaybackState = 1
+
+	// PlaybackStateBuffering indicates the player is buffering media data before playback can continue.
 	PlaybackStateBuffering PlaybackState = 2
-	PlaybackStatePlaying   PlaybackState = 3
+
+	// PlaybackStatePlaying indicates the player is actively playing media.
+	PlaybackStatePlaying PlaybackState = 3
+
+	// PlaybackStateCompleted indicates playback has reached the end of the media.
 	PlaybackStateCompleted PlaybackState = 4
-	PlaybackStateError     PlaybackState = 5 // Reserved: errors use separate error callbacks.
-	PlaybackStatePaused    PlaybackState = 6
+
+	// PlaybackStateError is reserved for future use. Errors are delivered through
+	// separate error callbacks ([VideoPlayerClient.OnError], [AudioPlayerController.Errors])
+	// rather than as a playback state.
+	PlaybackStateError PlaybackState = 5
+
+	// PlaybackStatePaused indicates the player is paused and can be resumed.
+	PlaybackStatePaused PlaybackState = 6
 )
 
-// VideoPlayerClient receives callbacks from native video player view.
+// VideoPlayerClient receives playback callbacks from a [VideoPlayerView].
+// Callbacks are dispatched from native event handlers on the platform thread.
 type VideoPlayerClient interface {
 	// OnPlaybackStateChanged is called when the playback state changes.
 	OnPlaybackStateChanged(state PlaybackState)
@@ -34,7 +50,12 @@ type VideoPlayerClient interface {
 	OnError(code string, message string)
 }
 
-// VideoPlayerView is a platform view for native video playback.
+// VideoPlayerView is a platform view that wraps native video playback
+// (ExoPlayer on Android, AVPlayer on iOS). It provides transport controls,
+// position/duration tracking, and playback state observation.
+//
+// Use [VideoPlayerView.SetClient] to receive playback callbacks, or read
+// cached state directly via [VideoPlayerView.State], [VideoPlayerView.PositionMs], etc.
 type VideoPlayerView struct {
 	basePlatformView
 	client VideoPlayerClient
@@ -47,7 +68,9 @@ type VideoPlayerView struct {
 	bufferedMs int64
 }
 
-// NewVideoPlayerView creates a new video player platform view.
+// NewVideoPlayerView creates a new video player platform view with the given
+// view ID and optional callback client. The client may be nil and set later
+// via [VideoPlayerView.SetClient].
 func NewVideoPlayerView(viewID int64, client VideoPlayerClient) *VideoPlayerView {
 	return &VideoPlayerView{
 		basePlatformView: basePlatformView{
@@ -115,6 +138,8 @@ func (v *VideoPlayerView) SetPlaybackSpeed(rate float64) {
 }
 
 // LoadURL loads a new media URL, replacing the current media item.
+// The native player prepares the new URL immediately. If looping was
+// enabled, it remains active for the new item.
 func (v *VideoPlayerView) LoadURL(url string) {
 	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "loadUrl", map[string]any{
 		"url": url,

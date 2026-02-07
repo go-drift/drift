@@ -11,23 +11,28 @@ var (
 	audioPlayerMu       sync.Mutex
 )
 
-// AudioPlayerState represents the state of audio playback.
+// AudioPlayerState represents a snapshot of audio playback state, delivered
+// via [AudioPlayerController.States]. Each update contains the current
+// playback state along with timing information.
 type AudioPlayerState struct {
 	// PlaybackState is the current playback state.
 	PlaybackState PlaybackState
-	// PositionMs is the current position in milliseconds.
+	// PositionMs is the current playback position in milliseconds.
 	PositionMs int64
-	// DurationMs is the total duration in milliseconds.
+	// DurationMs is the total duration of the loaded media in milliseconds.
+	// Zero if no media is loaded.
 	DurationMs int64
-	// BufferedMs is the buffered position in milliseconds.
+	// BufferedMs is the buffered position in milliseconds, indicating how
+	// far ahead the player has downloaded content.
 	BufferedMs int64
 }
 
-// AudioPlayerError represents an audio playback error.
+// AudioPlayerError represents an audio playback error, delivered via
+// [AudioPlayerController.Errors].
 type AudioPlayerError struct {
 	// Code is a platform-specific error code.
 	Code string
-	// Message is the human-readable error description.
+	// Message is a human-readable error description.
 	Message string
 }
 
@@ -35,8 +40,12 @@ type AudioPlayerError struct {
 // Audio has no visual surface, so this uses a standalone platform channel
 // rather than the platform view system.
 //
+// Subscribe to playback updates via [AudioPlayerController.States] and errors
+// via [AudioPlayerController.Errors].
+//
 // Only one AudioPlayerController may exist at a time. Creating a second
-// before disposing the first will panic.
+// before disposing the first will panic. Call [AudioPlayerController.Dispose]
+// to release resources and allow a new instance to be created.
 type AudioPlayerController struct {
 	state    *audioPlayerServiceState
 	states   *Stream[AudioPlayerState]
@@ -98,7 +107,9 @@ func (c *AudioPlayerController) Pause() error {
 	return err
 }
 
-// Stop stops playback and releases resources.
+// Stop stops playback and resets the player to the idle state.
+// The player can be reused by calling [AudioPlayerController.Load] again.
+// To fully release resources, use [AudioPlayerController.Dispose] instead.
 func (c *AudioPlayerController) Stop() error {
 	_, err := c.state.channel.Invoke("stop", nil)
 	return err
@@ -136,17 +147,22 @@ func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
 	return err
 }
 
-// States returns a stream of playback state updates.
+// States returns a stream of [AudioPlayerState] updates. The stream emits
+// a new value whenever the playback state, position, or buffered position changes.
 func (c *AudioPlayerController) States() *Stream[AudioPlayerState] {
 	return c.states
 }
 
-// Errors returns a stream of playback errors.
+// Errors returns a stream of [AudioPlayerError] values. Errors are delivered
+// separately from state updates and indicate issues such as network failures
+// or unsupported media formats.
 func (c *AudioPlayerController) Errors() *Stream[AudioPlayerError] {
 	return c.errs
 }
 
-// Dispose releases the audio player resources.
+// Dispose releases the audio player and its native resources. After disposal,
+// this controller must not be reused. A new [AudioPlayerController] may be
+// created after Dispose returns.
 func (c *AudioPlayerController) Dispose() error {
 	_, err := c.state.channel.Invoke("dispose", nil)
 

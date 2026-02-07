@@ -39,7 +39,8 @@ type VideoPlayer struct {
 	// Looping restarts playback when it reaches the end.
 	Looping bool
 
-	// Volume is the initial volume (0.0 to 1.0). Defaults to 1.0.
+	// Volume sets the playback volume (0.0 to 1.0). Nil uses the platform
+	// default (1.0). Changes are propagated to the native player on rebuild.
 	Volume *float64
 
 	// Width of the video player (0 = expand to fill).
@@ -73,7 +74,9 @@ func (v VideoPlayer) CreateState() core.State {
 	return &videoPlayerState{}
 }
 
-// VideoPlayerController provides programmatic control over a VideoPlayer.
+// VideoPlayerController provides programmatic control over a [VideoPlayer] widget.
+// All methods are safe for concurrent use. Methods are no-ops when no native
+// view is bound (before the widget is first painted or after it is disposed).
 type VideoPlayerController struct {
 	mu   sync.RWMutex
 	view *platform.VideoPlayerView
@@ -139,7 +142,8 @@ func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) {
 	}
 }
 
-// State returns the current playback state.
+// State returns the current playback state, or [platform.PlaybackStateIdle]
+// if no native view is bound.
 func (c *VideoPlayerController) State() platform.PlaybackState {
 	c.mu.RLock()
 	v := c.view
@@ -150,7 +154,8 @@ func (c *VideoPlayerController) State() platform.PlaybackState {
 	return platform.PlaybackStateIdle
 }
 
-// PositionMs returns the current playback position in milliseconds.
+// PositionMs returns the current playback position in milliseconds,
+// or 0 if no native view is bound.
 func (c *VideoPlayerController) PositionMs() int64 {
 	c.mu.RLock()
 	v := c.view
@@ -161,7 +166,8 @@ func (c *VideoPlayerController) PositionMs() int64 {
 	return 0
 }
 
-// DurationMs returns the total duration in milliseconds.
+// DurationMs returns the total media duration in milliseconds,
+// or 0 if no native view is bound or no media is loaded.
 func (c *VideoPlayerController) DurationMs() int64 {
 	c.mu.RLock()
 	v := c.view
@@ -172,7 +178,8 @@ func (c *VideoPlayerController) DurationMs() int64 {
 	return 0
 }
 
-// BufferedMs returns the buffered position in milliseconds.
+// BufferedMs returns the buffered position in milliseconds,
+// or 0 if no native view is bound.
 func (c *VideoPlayerController) BufferedMs() int64 {
 	c.mu.RLock()
 	v := c.view
