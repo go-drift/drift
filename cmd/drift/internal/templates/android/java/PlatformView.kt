@@ -44,7 +44,7 @@ object PlatformViewHandler {
     private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
     private val switchMethods = setOf("setValue", "updateConfig")
     private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
-    private val videoPlayerMethods = setOf("play", "pause", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl")
+    private val videoPlayerMethods = setOf("play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl")
 
     fun init(context: Context, hostView: ViewGroup) {
         this.context = context
@@ -158,6 +158,7 @@ object PlatformViewHandler {
                     when (method) {
                         "play" -> container.play()
                         "pause" -> container.pause()
+                        "stop" -> container.stop()
                         "seekTo" -> {
                             val positionMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
                             container.seekTo(positionMs)

@@ -43,8 +43,7 @@ type VideoPlayer struct {
 	// Looping restarts playback when it reaches the end.
 	Looping bool
 
-	// Volume sets the playback volume (0.0 to 1.0). The default is full
-	// volume (1.0) when left as the zero value.
+	// Volume sets the playback volume (0.0 to 1.0). Zero means muted.
 	Volume float64
 
 	// Width of the video player in logical pixels.
@@ -85,16 +84,22 @@ func (v VideoPlayer) CreateState() core.State {
 // All methods are safe for concurrent use. Methods are no-ops when no native
 // view is bound (before the widget is first painted or after it is disposed).
 type VideoPlayerController struct {
-	mu   sync.RWMutex
-	view *platform.VideoPlayerView
+	mu        sync.RWMutex
+	view      *platform.VideoPlayerView
+	loadedURL string
 }
 
-// Play starts playback.
-func (c *VideoPlayerController) Play() {
+// Play loads the given URL (if not already loaded) and starts playback.
+// Calling Play with the same URL after a pause resumes playback.
+func (c *VideoPlayerController) Play(url string) {
 	c.mu.RLock()
 	v := c.view
 	c.mu.RUnlock()
 	if v != nil {
+		if url != c.loadedURL {
+			v.LoadURL(url)
+			c.loadedURL = url
+		}
 		v.Play()
 	}
 }
@@ -107,6 +112,18 @@ func (c *VideoPlayerController) Pause() {
 	if v != nil {
 		v.Pause()
 	}
+}
+
+// Stop stops playback and resets the player to the idle state.
+// A subsequent call to [VideoPlayerController.Play] will reload the URL.
+func (c *VideoPlayerController) Stop() {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v != nil {
+		v.Stop()
+	}
+	c.loadedURL = ""
 }
 
 // SeekTo seeks to the given position.
@@ -259,7 +276,7 @@ func (s *videoPlayerState) DidUpdateWidget(oldWidget core.StatefulWidget) {
 		s.platformView.SetLooping(w.Looping)
 	}
 	if old.Volume != w.Volume {
-		s.platformView.SetVolume(effectiveVolume(w.Volume))
+		s.platformView.SetVolume(w.Volume)
 	}
 }
 
@@ -281,30 +298,6 @@ func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 	}
 }
 
-// OnPlaybackStateChanged implements platform.VideoPlayerClient.
-func (s *videoPlayerState) OnPlaybackStateChanged(state platform.PlaybackState) {
-	w := s.element.Widget().(VideoPlayer)
-	if w.OnPlaybackStateChanged != nil {
-		w.OnPlaybackStateChanged(state)
-	}
-}
-
-// OnPositionChanged implements platform.VideoPlayerClient.
-func (s *videoPlayerState) OnPositionChanged(position, duration, buffered time.Duration) {
-	w := s.element.Widget().(VideoPlayer)
-	if w.OnPositionChanged != nil {
-		w.OnPositionChanged(position, duration, buffered)
-	}
-}
-
-// OnError implements platform.VideoPlayerClient.
-func (s *videoPlayerState) OnError(code string, message string) {
-	w := s.element.Widget().(VideoPlayer)
-	if w.OnError != nil {
-		w.OnError(code, message)
-	}
-}
-
 func (s *videoPlayerState) ensurePlatformView(config VideoPlayer) {
 	if s.platformView != nil {
 		if config.Controller != nil {
@@ -317,7 +310,7 @@ func (s *videoPlayerState) ensurePlatformView(config VideoPlayer) {
 		"url":      config.URL,
 		"autoPlay": config.AutoPlay,
 		"looping":  config.Looping,
-		"volume":   effectiveVolume(config.Volume),
+		"volume":   config.Volume,
 	}
 
 	view, err := platform.GetPlatformViewRegistry().Create("video_player", params)
@@ -339,7 +332,26 @@ func (s *videoPlayerState) ensurePlatformView(config VideoPlayer) {
 	}
 
 	s.platformView = videoView
-	s.platformView.SetClient(s)
+
+	// Set callbacks that forward to the current widget's callbacks.
+	s.platformView.OnPlaybackStateChanged = func(state platform.PlaybackState) {
+		w := s.element.Widget().(VideoPlayer)
+		if w.OnPlaybackStateChanged != nil {
+			w.OnPlaybackStateChanged(state)
+		}
+	}
+	s.platformView.OnPositionChanged = func(position, duration, buffered time.Duration) {
+		w := s.element.Widget().(VideoPlayer)
+		if w.OnPositionChanged != nil {
+			w.OnPositionChanged(position, duration, buffered)
+		}
+	}
+	s.platformView.OnError = func(code, message string) {
+		w := s.element.Widget().(VideoPlayer)
+		if w.OnError != nil {
+			w.OnError(code, message)
+		}
+	}
 
 	if config.Controller != nil {
 		config.Controller.setView(s.platformView)
@@ -420,12 +432,4 @@ func (r *renderVideoPlayer) HitTest(position graphics.Offset, result *layout.Hit
 	}
 	result.Add(r)
 	return true
-}
-
-// effectiveVolume returns the volume to use, treating 0 as the default (1.0).
-func effectiveVolume(v float64) float64 {
-	if v == 0 {
-		return 1.0
-	}
-	return v
 }

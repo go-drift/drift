@@ -72,7 +72,7 @@ enum PlatformViewHandler {
         } else if container is NativeActivityIndicatorContainer {
             supportedMethods = ["setAnimating", "updateConfig"]
         } else if container is NativeVideoPlayerContainer {
-            supportedMethods = ["play", "pause", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl"]
+            supportedMethods = ["play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl"]
         } else {
             supportedMethods = []
         }
@@ -158,6 +158,8 @@ enum PlatformViewHandler {
                     videoContainer.play()
                 case "pause":
                     videoContainer.pause()
+                case "stop":
+                    videoContainer.stop()
                 case "seekTo":
                     if let positionMs = (args["positionMs"] as? NSNumber)?.int64Value {
                         videoContainer.seekTo(positionMs: positionMs)

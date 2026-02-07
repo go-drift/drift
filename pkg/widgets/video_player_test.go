@@ -10,33 +10,11 @@ import (
 	"github.com/go-drift/drift/pkg/platform"
 )
 
-func TestEffectiveVolume(t *testing.T) {
-	tests := []struct {
-		name string
-		in   float64
-		want float64
-	}{
-		{"zero defaults to 1.0", 0, 1.0},
-		{"explicit value kept", 0.5, 0.5},
-		{"full volume kept", 1.0, 1.0},
-		{"low volume kept", 0.01, 0.01},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := effectiveVolume(tt.in)
-			if got != tt.want {
-				t.Errorf("effectiveVolume(%v) = %v, want %v", tt.in, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestVideoPlayerController_NilViewMethods(t *testing.T) {
 	// All methods should be safe to call with no view bound.
 	c := &VideoPlayerController{}
 
-	c.Play()
+	c.Play("https://example.com/video.mp4")
 	c.Pause()
 	c.SeekTo(time.Second)
 	c.SetVolume(0.5)
@@ -60,7 +38,7 @@ func TestVideoPlayerController_NilViewMethods(t *testing.T) {
 func TestVideoPlayerController_SetAndClearView(t *testing.T) {
 	c := &VideoPlayerController{}
 
-	view := platform.NewVideoPlayerView(42, nil)
+	view := platform.NewVideoPlayerView(42)
 	c.setView(view)
 
 	c.mu.RLock()
@@ -137,7 +115,7 @@ func newVideoPlayerState(t *testing.T, newWidget VideoPlayer) *videoPlayerState 
 	element := core.NewStatefulElement(newWidget, nil)
 	state := &videoPlayerState{
 		element:      element,
-		platformView: platform.NewVideoPlayerView(1, nil),
+		platformView: platform.NewVideoPlayerView(1),
 	}
 	return state
 }

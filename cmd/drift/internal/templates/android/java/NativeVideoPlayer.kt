@@ -66,9 +66,9 @@ class NativeVideoPlayerContainer(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val state = when (playbackState) {
                     Player.STATE_IDLE -> 0
-                    Player.STATE_BUFFERING -> 2
-                    Player.STATE_READY -> 3
-                    Player.STATE_ENDED -> 4
+                    Player.STATE_BUFFERING -> 1
+                    Player.STATE_READY -> 2
+                    Player.STATE_ENDED -> 3
                     else -> 0
                 }
                 PlatformChannelManager.sendEvent(
@@ -83,7 +83,7 @@ class NativeVideoPlayerContainer(
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (player.playbackState == Player.STATE_READY) {
-                    val state = if (isPlaying) 3 else 6 // Playing or Paused
+                    val state = if (isPlaying) 2 else 4 // Playing or Paused
                     PlatformChannelManager.sendEvent(
                         "drift/platform_views",
                         mapOf(
@@ -199,6 +199,10 @@ class NativeVideoPlayerContainer(
 
     fun pause() {
         player.pause()
+    }
+
+    fun stop() {
+        player.stop()
     }
 
     fun seekTo(positionMs: Long) {

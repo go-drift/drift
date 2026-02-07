@@ -315,6 +315,13 @@ func ResetForTest() {
 		ch.mu.Unlock()
 	}
 
+	// Reset audio player registry
+	audioRegistryMu.Lock()
+	audioRegistry = map[int64]*AudioPlayerController{}
+	audioRegistryMu.Unlock()
+	audioServiceOnce = sync.Once{}
+	audioService = nil
+
 	// Re-register built-in listeners (lifecycle, safe area, accessibility)
 	// so the package behaves as if freshly initialized.
 	for _, fn := range builtinInits {

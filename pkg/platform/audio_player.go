@@ -1,143 +1,65 @@
 package platform
 
 import (
-	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-drift/drift/pkg/errors"
 )
 
 var (
-	audioPlayerInstance *AudioPlayerController
-	audioPlayerMu       sync.Mutex
+	audioService     *audioPlayerServiceState
+	audioServiceOnce sync.Once
+
+	audioRegistry   = map[int64]*AudioPlayerController{}
+	audioRegistryMu sync.RWMutex
+
+	audioPlayerNextID atomic.Int64
 )
-
-// AudioPlayerState represents a snapshot of audio playback state, delivered
-// via [AudioPlayerController.OnStateChanged]. Each update contains the current
-// playback state along with timing information.
-type AudioPlayerState struct {
-	// PlaybackState is the current playback state.
-	PlaybackState PlaybackState
-	// Position is the current playback position.
-	Position time.Duration
-	// Duration is the total duration of the loaded media.
-	// Zero if no media is loaded.
-	Duration time.Duration
-	// Buffered is the buffered position, indicating how far ahead the
-	// player has downloaded content.
-	Buffered time.Duration
-}
-
-// AudioPlayerError represents an audio playback error, delivered via
-// [AudioPlayerController.OnError].
-type AudioPlayerError struct {
-	// Code is a platform-specific error code.
-	Code string
-	// Message is a human-readable error description.
-	Message string
-}
 
 // AudioPlayerController provides audio playback control without a visual component.
 // Audio has no visual surface, so this uses a standalone platform channel
-// rather than the platform view system.
+// rather than the platform view system. Build your own UI around the controller.
 //
-// Set [AudioPlayerController.OnStateChanged] and [AudioPlayerController.OnError]
-// to receive playback updates. Callbacks are dispatched on the UI thread.
-//
-// Only one AudioPlayerController may exist at a time. Creating a second
-// before disposing the first returns an error. Call [AudioPlayerController.Dispose]
-// to release resources and allow a new instance to be created.
+// Multiple controllers may exist concurrently, each managing its own native
+// player instance. Call [AudioPlayerController.Dispose] to release resources
+// when a controller is no longer needed.
 type AudioPlayerController struct {
-	state     *audioPlayerServiceState
+	id        int64
+	svc       *audioPlayerServiceState
 	loadedURL string
-	disposed  bool
-	eventSub  *Subscription
-	errorSub  *Subscription
+	lastState PlaybackState
 
-	// OnStateChanged is called when the playback state, position, or
-	// buffered position changes. Called on the UI thread.
-	OnStateChanged func(state AudioPlayerState)
+	// OnPlaybackStateChanged is called when the playback state changes.
+	// Called on the UI thread.
+	OnPlaybackStateChanged func(PlaybackState)
 
-	// OnError is called when a playback error occurs. Called on the UI thread.
-	OnError func(err AudioPlayerError)
+	// OnPositionChanged is called when the playback position updates.
+	// Called on the UI thread.
+	OnPositionChanged func(position, duration, buffered time.Duration)
+
+	// OnError is called when a playback error occurs.
+	// Called on the UI thread.
+	OnError func(code, message string)
 }
 
 // NewAudioPlayerController creates a new audio player controller.
-// Returns an error if another AudioPlayerController already exists and has not been disposed.
-func NewAudioPlayerController() (*AudioPlayerController, error) {
-	audioPlayerMu.Lock()
-	defer audioPlayerMu.Unlock()
+// Each controller manages its own native player instance.
+func NewAudioPlayerController() *AudioPlayerController {
+	svc := ensureAudioService()
+	id := audioPlayerNextID.Add(1)
 
-	if audioPlayerInstance != nil && !audioPlayerInstance.disposed {
-		return nil, fmt.Errorf("drift: only one AudioPlayerController may exist at a time; call Dispose() on the previous instance first")
-	}
-
-	state := newAudioPlayerService()
 	c := &AudioPlayerController{
-		state: state,
+		id:  id,
+		svc: svc,
 	}
 
-	// Listen for state events from native and dispatch to UI thread.
-	c.eventSub = state.events.Listen(EventHandler{
-		OnEvent: func(data any) {
-			val, err := parseAudioPlayerState(data)
-			if err != nil {
-				errors.Report(&errors.DriftError{
-					Op:      "AudioPlayerController.parseState",
-					Kind:    errors.KindParsing,
-					Channel: "drift/audio_player/events",
-					Err:     err,
-				})
-				return
-			}
-			Dispatch(func() {
-				if c.OnStateChanged != nil {
-					c.OnStateChanged(val)
-				}
-			})
-		},
-		OnError: func(err error) {
-			errors.Report(&errors.DriftError{
-				Op:      "AudioPlayerController.stateStream",
-				Kind:    errors.KindPlatform,
-				Channel: "drift/audio_player/events",
-				Err:     err,
-			})
-		},
-	})
+	audioRegistryMu.Lock()
+	audioRegistry[id] = c
+	audioRegistryMu.Unlock()
 
-	// Listen for error events from native and dispatch to UI thread.
-	c.errorSub = state.errors.Listen(EventHandler{
-		OnEvent: func(data any) {
-			val, err := parseAudioPlayerError(data)
-			if err != nil {
-				errors.Report(&errors.DriftError{
-					Op:      "AudioPlayerController.parseError",
-					Kind:    errors.KindParsing,
-					Channel: "drift/audio_player/errors",
-					Err:     err,
-				})
-				return
-			}
-			Dispatch(func() {
-				if c.OnError != nil {
-					c.OnError(val)
-				}
-			})
-		},
-		OnError: func(err error) {
-			errors.Report(&errors.DriftError{
-				Op:      "AudioPlayerController.errorStream",
-				Kind:    errors.KindPlatform,
-				Channel: "drift/audio_player/errors",
-				Err:     err,
-			})
-		},
-	})
-
-	audioPlayerInstance = c
-	return c, nil
+	return c
 }
 
 type audioPlayerServiceState struct {
@@ -146,121 +68,174 @@ type audioPlayerServiceState struct {
 	errors  *EventChannel
 }
 
-func newAudioPlayerService() *audioPlayerServiceState {
-	return &audioPlayerServiceState{
-		channel: NewMethodChannel("drift/audio_player"),
-		events:  NewEventChannel("drift/audio_player/events"),
-		errors:  NewEventChannel("drift/audio_player/errors"),
-	}
+func ensureAudioService() *audioPlayerServiceState {
+	audioServiceOnce.Do(func() {
+		svc := &audioPlayerServiceState{
+			channel: NewMethodChannel("drift/audio_player"),
+			events:  NewEventChannel("drift/audio_player/events"),
+			errors:  NewEventChannel("drift/audio_player/errors"),
+		}
+
+		// Shared event listener: routes events to the correct controller.
+		svc.events.Listen(EventHandler{
+			OnEvent: func(data any) {
+				m, ok := data.(map[string]any)
+				if !ok {
+					return
+				}
+				playerID, _ := toInt64(m["playerId"])
+				audioRegistryMu.RLock()
+				c := audioRegistry[playerID]
+				audioRegistryMu.RUnlock()
+				if c == nil {
+					return
+				}
+
+				stateInt, _ := toInt(m["playbackState"])
+				positionMs, _ := toInt64(m["positionMs"])
+				durationMs, _ := toInt64(m["durationMs"])
+				bufferedMs, _ := toInt64(m["bufferedMs"])
+
+				state := PlaybackState(stateInt)
+				position := time.Duration(positionMs) * time.Millisecond
+				duration := time.Duration(durationMs) * time.Millisecond
+				buffered := time.Duration(bufferedMs) * time.Millisecond
+
+				// Dedup state changes; always fire position updates.
+				stateChanged := state != c.lastState
+				if stateChanged {
+					c.lastState = state
+				}
+
+				Dispatch(func() {
+					if stateChanged && c.OnPlaybackStateChanged != nil {
+						c.OnPlaybackStateChanged(state)
+					}
+					if c.OnPositionChanged != nil {
+						c.OnPositionChanged(position, duration, buffered)
+					}
+				})
+			},
+			OnError: func(err error) {
+				errors.Report(&errors.DriftError{
+					Op:      "AudioPlayerController.stateStream",
+					Kind:    errors.KindPlatform,
+					Channel: "drift/audio_player/events",
+					Err:     err,
+				})
+			},
+		})
+
+		// Shared error listener: routes errors to the correct controller.
+		svc.errors.Listen(EventHandler{
+			OnEvent: func(data any) {
+				m, ok := data.(map[string]any)
+				if !ok {
+					return
+				}
+				playerID, _ := toInt64(m["playerId"])
+				audioRegistryMu.RLock()
+				c := audioRegistry[playerID]
+				audioRegistryMu.RUnlock()
+				if c == nil {
+					return
+				}
+
+				code := parseString(m["code"])
+				message := parseString(m["message"])
+
+				Dispatch(func() {
+					if c.OnError != nil {
+						c.OnError(code, message)
+					}
+				})
+			},
+			OnError: func(err error) {
+				errors.Report(&errors.DriftError{
+					Op:      "AudioPlayerController.errorStream",
+					Kind:    errors.KindPlatform,
+					Channel: "drift/audio_player/errors",
+					Err:     err,
+				})
+			},
+		})
+
+		audioService = svc
+	})
+	return audioService
 }
 
 // Play loads the given URL (if not already loaded) and starts playback.
 // Calling Play with the same URL after a pause resumes playback.
 func (c *AudioPlayerController) Play(url string) {
 	if url != c.loadedURL {
-		c.state.channel.Invoke("load", map[string]any{
-			"url": url,
+		c.svc.channel.Invoke("load", map[string]any{
+			"playerId": c.id,
+			"url":      url,
 		})
 		c.loadedURL = url
 	}
-	c.state.channel.Invoke("play", nil)
+	c.svc.channel.Invoke("play", map[string]any{
+		"playerId": c.id,
+	})
 }
 
 // Pause pauses playback.
 func (c *AudioPlayerController) Pause() {
-	c.state.channel.Invoke("pause", nil)
+	c.svc.channel.Invoke("pause", map[string]any{
+		"playerId": c.id,
+	})
 }
 
 // Stop stops playback and resets the player to the idle state.
 // A subsequent call to [AudioPlayerController.Play] will reload the URL.
 func (c *AudioPlayerController) Stop() {
-	c.state.channel.Invoke("stop", nil)
+	c.svc.channel.Invoke("stop", map[string]any{
+		"playerId": c.id,
+	})
 	c.loadedURL = ""
 }
 
 // SeekTo seeks to the given position.
 func (c *AudioPlayerController) SeekTo(position time.Duration) {
-	c.state.channel.Invoke("seekTo", map[string]any{
+	c.svc.channel.Invoke("seekTo", map[string]any{
+		"playerId":   c.id,
 		"positionMs": position.Milliseconds(),
 	})
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
 func (c *AudioPlayerController) SetVolume(volume float64) {
-	c.state.channel.Invoke("setVolume", map[string]any{
-		"volume": volume,
+	c.svc.channel.Invoke("setVolume", map[string]any{
+		"playerId": c.id,
+		"volume":   volume,
 	})
 }
 
 // SetLooping sets whether playback should loop.
 func (c *AudioPlayerController) SetLooping(looping bool) {
-	c.state.channel.Invoke("setLooping", map[string]any{
-		"looping": looping,
+	c.svc.channel.Invoke("setLooping", map[string]any{
+		"playerId": c.id,
+		"looping":  looping,
 	})
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
 func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) {
-	c.state.channel.Invoke("setPlaybackSpeed", map[string]any{
-		"rate": rate,
+	c.svc.channel.Invoke("setPlaybackSpeed", map[string]any{
+		"playerId": c.id,
+		"rate":     rate,
 	})
 }
 
 // Dispose releases the audio player and its native resources. After disposal,
-// this controller must not be reused. A new [AudioPlayerController] may be
-// created after Dispose returns.
+// this controller must not be reused.
 func (c *AudioPlayerController) Dispose() {
-	if c.eventSub != nil {
-		c.eventSub.Cancel()
-	}
-	if c.errorSub != nil {
-		c.errorSub.Cancel()
-	}
+	audioRegistryMu.Lock()
+	delete(audioRegistry, c.id)
+	audioRegistryMu.Unlock()
 
-	c.state.channel.Invoke("dispose", nil)
-
-	audioPlayerMu.Lock()
-	c.disposed = true
-	if audioPlayerInstance == c {
-		audioPlayerInstance = nil
-	}
-	audioPlayerMu.Unlock()
-}
-
-func parseAudioPlayerState(data any) (AudioPlayerState, error) {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return AudioPlayerState{}, &errors.ParseError{
-			Channel:  "drift/audio_player/events",
-			DataType: "AudioPlayerState",
-			Got:      data,
-		}
-	}
-
-	stateInt, _ := toInt(m["playbackState"])
-	positionMs, _ := toInt64(m["positionMs"])
-	durationMs, _ := toInt64(m["durationMs"])
-	bufferedMs, _ := toInt64(m["bufferedMs"])
-
-	return AudioPlayerState{
-		PlaybackState: PlaybackState(stateInt),
-		Position:      time.Duration(positionMs) * time.Millisecond,
-		Duration:      time.Duration(durationMs) * time.Millisecond,
-		Buffered:      time.Duration(bufferedMs) * time.Millisecond,
-	}, nil
-}
-
-func parseAudioPlayerError(data any) (AudioPlayerError, error) {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return AudioPlayerError{}, &errors.ParseError{
-			Channel:  "drift/audio_player/errors",
-			DataType: "AudioPlayerError",
-			Got:      data,
-		}
-	}
-	return AudioPlayerError{
-		Code:    parseString(m["code"]),
-		Message: parseString(m["message"]),
-	}, nil
+	c.svc.channel.Invoke("dispose", map[string]any{
+		"playerId": c.id,
+	})
 }

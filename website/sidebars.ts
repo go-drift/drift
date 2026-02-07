@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
         'guides/overlay',
         'guides/animation',
         'guides/platform',
+        'guides/media-player',
         'guides/accessibility',
         'guides/error-handling',
         'guides/debugging',

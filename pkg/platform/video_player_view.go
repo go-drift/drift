@@ -6,36 +6,25 @@ import (
 )
 
 // PlaybackState represents the current state of video/audio playback.
-//
-// Native players currently emit Idle(0), Buffering(2), Playing(3),
-// Completed(4), and Paused(6). Loading(1) and Error(5) are reserved
-// for future use; errors are delivered through separate error callbacks
-// rather than as a playback state.
+// Errors are delivered through separate error callbacks rather than as
+// a playback state.
 type PlaybackState int
 
 const (
 	// PlaybackStateIdle indicates the player has been created but no media is loaded.
-	PlaybackStateIdle PlaybackState = 0
-
-	// PlaybackStateLoading is reserved for future use. Not currently emitted by native players.
-	PlaybackStateLoading PlaybackState = 1
+	PlaybackStateIdle PlaybackState = iota
 
 	// PlaybackStateBuffering indicates the player is buffering media data before playback can continue.
-	PlaybackStateBuffering PlaybackState = 2
+	PlaybackStateBuffering
 
 	// PlaybackStatePlaying indicates the player is actively playing media.
-	PlaybackStatePlaying PlaybackState = 3
+	PlaybackStatePlaying
 
 	// PlaybackStateCompleted indicates playback has reached the end of the media.
-	PlaybackStateCompleted PlaybackState = 4
-
-	// PlaybackStateError is reserved for future use. Errors are delivered through
-	// separate error callbacks ([VideoPlayerClient.OnError], [AudioPlayerController.OnError])
-	// rather than as a playback state.
-	PlaybackStateError PlaybackState = 5
+	PlaybackStateCompleted
 
 	// PlaybackStatePaused indicates the player is paused and can be resumed.
-	PlaybackStatePaused PlaybackState = 6
+	PlaybackStatePaused
 )
 
 // String returns a human-readable label for the playback state.
@@ -43,16 +32,12 @@ func (s PlaybackState) String() string {
 	switch s {
 	case PlaybackStateIdle:
 		return "Idle"
-	case PlaybackStateLoading:
-		return "Loading"
 	case PlaybackStateBuffering:
 		return "Buffering"
 	case PlaybackStatePlaying:
 		return "Playing"
 	case PlaybackStateCompleted:
 		return "Completed"
-	case PlaybackStateError:
-		return "Error"
 	case PlaybackStatePaused:
 		return "Paused"
 	default:
@@ -60,55 +45,44 @@ func (s PlaybackState) String() string {
 	}
 }
 
-// VideoPlayerClient receives playback callbacks from a [VideoPlayerView].
-// Callbacks are dispatched on the UI thread via [Dispatch].
-type VideoPlayerClient interface {
-	// OnPlaybackStateChanged is called when the playback state changes.
-	OnPlaybackStateChanged(state PlaybackState)
-
-	// OnPositionChanged is called when the playback position updates.
-	OnPositionChanged(position, duration, buffered time.Duration)
-
-	// OnError is called when a playback error occurs.
-	OnError(code string, message string)
-}
-
 // VideoPlayerView is a platform view that wraps native video playback
 // (ExoPlayer on Android, AVPlayer on iOS). It provides transport controls,
 // position/duration tracking, and playback state observation.
 //
-// Use [VideoPlayerView.SetClient] to receive playback callbacks, or read
-// cached state directly via [VideoPlayerView.State], [VideoPlayerView.Position], etc.
+// Set the callback fields to receive playback events, or read cached state
+// directly via [VideoPlayerView.State], [VideoPlayerView.Position], etc.
 type VideoPlayerView struct {
 	basePlatformView
-	client VideoPlayerClient
-	mu     sync.RWMutex
+	mu sync.RWMutex
 
 	// Cached playback state
 	state    PlaybackState
 	position time.Duration
 	duration time.Duration
 	buffered time.Duration
+
+	// OnPlaybackStateChanged is called when the playback state changes.
+	// Called on the UI thread via [Dispatch].
+	OnPlaybackStateChanged func(PlaybackState)
+
+	// OnPositionChanged is called when the playback position updates.
+	// Called on the UI thread via [Dispatch].
+	OnPositionChanged func(position, duration, buffered time.Duration)
+
+	// OnError is called when a playback error occurs.
+	// Called on the UI thread via [Dispatch].
+	OnError func(code, message string)
 }
 
 // NewVideoPlayerView creates a new video player platform view with the given
-// view ID and optional callback client. The client may be nil and set later
-// via [VideoPlayerView.SetClient].
-func NewVideoPlayerView(viewID int64, client VideoPlayerClient) *VideoPlayerView {
+// view ID. Set the callback fields to receive playback events.
+func NewVideoPlayerView(viewID int64) *VideoPlayerView {
 	return &VideoPlayerView{
 		basePlatformView: basePlatformView{
 			viewID:   viewID,
 			viewType: "video_player",
 		},
-		client: client,
 	}
-}
-
-// SetClient sets the callback client for this view.
-func (v *VideoPlayerView) SetClient(client VideoPlayerClient) {
-	v.mu.Lock()
-	v.client = client
-	v.mu.Unlock()
 }
 
 // Create implements PlatformView. Video player lifecycle is managed entirely
@@ -130,6 +104,11 @@ func (v *VideoPlayerView) Play() {
 // Pause pauses playback.
 func (v *VideoPlayerView) Pause() {
 	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "pause", nil)
+}
+
+// Stop stops playback and resets the player to the idle state.
+func (v *VideoPlayerView) Stop() {
+	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "stop", nil)
 }
 
 // SeekTo seeks to the given position.
@@ -201,12 +180,12 @@ func (v *VideoPlayerView) Buffered() time.Duration {
 func (v *VideoPlayerView) handlePlaybackStateChanged(state PlaybackState) {
 	v.mu.Lock()
 	v.state = state
-	client := v.client
+	cb := v.OnPlaybackStateChanged
 	v.mu.Unlock()
 
-	if client != nil {
+	if cb != nil {
 		Dispatch(func() {
-			client.OnPlaybackStateChanged(state)
+			cb(state)
 		})
 	}
 }
@@ -217,12 +196,12 @@ func (v *VideoPlayerView) handlePositionChanged(position, duration, buffered tim
 	v.position = position
 	v.duration = duration
 	v.buffered = buffered
-	client := v.client
+	cb := v.OnPositionChanged
 	v.mu.Unlock()
 
-	if client != nil {
+	if cb != nil {
 		Dispatch(func() {
-			client.OnPositionChanged(position, duration, buffered)
+			cb(position, duration, buffered)
 		})
 	}
 }
@@ -230,12 +209,12 @@ func (v *VideoPlayerView) handlePositionChanged(position, duration, buffered tim
 // handleError processes error events from native.
 func (v *VideoPlayerView) handleError(code string, message string) {
 	v.mu.RLock()
-	client := v.client
+	cb := v.OnError
 	v.mu.RUnlock()
 
-	if client != nil {
+	if cb != nil {
 		Dispatch(func() {
-			client.OnError(code, message)
+			cb(code, message)
 		})
 	}
 }
@@ -248,7 +227,7 @@ func (f *videoPlayerViewFactory) ViewType() string {
 }
 
 func (f *videoPlayerViewFactory) Create(viewID int64, params map[string]any) (PlatformView, error) {
-	return NewVideoPlayerView(viewID, nil), nil
+	return NewVideoPlayerView(viewID), nil
 }
 
 func init() {

@@ -35,35 +35,33 @@ type mediaPlayerState struct {
 	core.StateBase
 	videoStatus     *core.ManagedState[string]
 	audioStatus     *core.ManagedState[string]
+	audioStateLabel string
 	audioController *platform.AudioPlayerController
 }
 
 func (s *mediaPlayerState) InitState() {
 	s.videoStatus = core.NewManagedState(&s.StateBase, "Idle")
 	s.audioStatus = core.NewManagedState(&s.StateBase, "Idle")
+	s.audioStateLabel = "Idle"
 
-	c, err := platform.NewAudioPlayerController()
-	if err != nil {
-		s.audioStatus.Set("Error: " + err.Error())
-		return
+	s.audioController = platform.NewAudioPlayerController()
+
+	s.audioController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
+		s.audioStateLabel = state.String()
+		s.audioStatus.Set(s.audioStateLabel)
 	}
-	s.audioController = c
-
-	s.audioController.OnStateChanged = func(state platform.AudioPlayerState) {
-		label := state.PlaybackState.String()
-		position := formatDuration(state.Position)
-		duration := formatDuration(state.Duration)
-		s.audioStatus.Set(label + " \u00b7 " + position + " / " + duration)
+	s.audioController.OnPositionChanged = func(position, duration, buffered time.Duration) {
+		pos := formatDuration(position)
+		dur := formatDuration(duration)
+		s.audioStatus.Set(s.audioStateLabel + " \u00b7 " + pos + " / " + dur)
 	}
-
-	s.audioController.OnError = func(err platform.AudioPlayerError) {
-		s.audioStatus.Set("Error: " + err.Message)
+	s.audioController.OnError = func(code, message string) {
+		s.audioStateLabel = "Error"
+		s.audioStatus.Set("Error: " + message)
 	}
 
 	s.OnDispose(func() {
-		if s.audioController != nil {
-			s.audioController.Dispose()
-		}
+		s.audioController.Dispose()
 	})
 }
 
@@ -144,22 +142,16 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
 					theme.ButtonOf(ctx, "Play", func() {
-						if s.audioController != nil {
-							s.audioController.Play(audioURL)
-						}
+						s.audioController.Play(audioURL)
 					}),
 					widgets.HSpace(8),
 					theme.ButtonOf(ctx, "Pause", func() {
-						if s.audioController != nil {
-							s.audioController.Pause()
-						}
+						s.audioController.Pause()
 					}),
 					widgets.HSpace(8),
 					theme.ButtonOf(ctx, "Stop", func() {
-						if s.audioController != nil {
-							s.audioController.Stop()
-							s.audioStatus.Set("Stopped")
-						}
+						s.audioController.Stop()
+						s.audioStatus.Set("Stopped")
 					}),
 				},
 			},
@@ -169,27 +161,19 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
 					smallButton(ctx, "0.5x", func() {
-						if s.audioController != nil {
-							s.audioController.SetPlaybackSpeed(0.5)
-						}
+						s.audioController.SetPlaybackSpeed(0.5)
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "1x", func() {
-						if s.audioController != nil {
-							s.audioController.SetPlaybackSpeed(1.0)
-						}
+						s.audioController.SetPlaybackSpeed(1.0)
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "1.5x", func() {
-						if s.audioController != nil {
-							s.audioController.SetPlaybackSpeed(1.5)
-						}
+						s.audioController.SetPlaybackSpeed(1.5)
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "2x", func() {
-						if s.audioController != nil {
-							s.audioController.SetPlaybackSpeed(2.0)
-						}
+						s.audioController.SetPlaybackSpeed(2.0)
 					}, colors),
 				},
 			},

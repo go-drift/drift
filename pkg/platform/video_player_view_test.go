@@ -9,13 +9,10 @@ func TestVideoPlayerView_HandlePlaybackStateChanged(t *testing.T) {
 	setupTestBridge(t)
 
 	var receivedState PlaybackState
-	client := &testVideoPlayerClient{
-		onPlaybackStateChanged: func(state PlaybackState) {
-			receivedState = state
-		},
+	view := NewVideoPlayerView(1)
+	view.OnPlaybackStateChanged = func(state PlaybackState) {
+		receivedState = state
 	}
-
-	view := NewVideoPlayerView(1, client)
 
 	view.handlePlaybackStateChanged(PlaybackStatePlaying)
 
@@ -31,15 +28,13 @@ func TestVideoPlayerView_HandlePositionChanged(t *testing.T) {
 	setupTestBridge(t)
 
 	var gotPos, gotDur, gotBuf time.Duration
-	client := &testVideoPlayerClient{
-		onPositionChanged: func(position, duration, buffered time.Duration) {
-			gotPos = position
-			gotDur = duration
-			gotBuf = buffered
-		},
+	view := NewVideoPlayerView(1)
+	view.OnPositionChanged = func(position, duration, buffered time.Duration) {
+		gotPos = position
+		gotDur = duration
+		gotBuf = buffered
 	}
 
-	view := NewVideoPlayerView(1, client)
 	view.handlePositionChanged(5*time.Second, 2*time.Minute, 30*time.Second)
 
 	if gotPos != 5*time.Second || gotDur != 2*time.Minute || gotBuf != 30*time.Second {
@@ -60,14 +55,12 @@ func TestVideoPlayerView_HandleError(t *testing.T) {
 	setupTestBridge(t)
 
 	var gotCode, gotMsg string
-	client := &testVideoPlayerClient{
-		onError: func(code string, message string) {
-			gotCode = code
-			gotMsg = message
-		},
+	view := NewVideoPlayerView(1)
+	view.OnError = func(code string, message string) {
+		gotCode = code
+		gotMsg = message
 	}
 
-	view := NewVideoPlayerView(1, client)
 	view.handleError("ERR_DECODE", "codec not supported")
 
 	if gotCode != "ERR_DECODE" {
@@ -78,57 +71,13 @@ func TestVideoPlayerView_HandleError(t *testing.T) {
 	}
 }
 
-func TestVideoPlayerView_NilClientDoesNotPanic(t *testing.T) {
+func TestVideoPlayerView_NilCallbacksDoNotPanic(t *testing.T) {
 	setupTestBridge(t)
 
-	view := NewVideoPlayerView(1, nil)
+	view := NewVideoPlayerView(1)
 
-	// None of these should panic with a nil client.
+	// None of these should panic with nil callbacks.
 	view.handlePlaybackStateChanged(PlaybackStatePlaying)
 	view.handlePositionChanged(time.Second, 2*time.Second, time.Second+500*time.Millisecond)
 	view.handleError("ERR", "test")
-}
-
-func TestVideoPlayerView_SetClient(t *testing.T) {
-	setupTestBridge(t)
-
-	view := NewVideoPlayerView(1, nil)
-
-	var called bool
-	view.SetClient(&testVideoPlayerClient{
-		onPlaybackStateChanged: func(state PlaybackState) {
-			called = true
-		},
-	})
-
-	view.handlePlaybackStateChanged(PlaybackStatePaused)
-
-	if !called {
-		t.Error("expected callback after SetClient")
-	}
-}
-
-// testVideoPlayerClient is a test implementation of VideoPlayerClient.
-type testVideoPlayerClient struct {
-	onPlaybackStateChanged func(state PlaybackState)
-	onPositionChanged      func(position, duration, buffered time.Duration)
-	onError                func(code string, message string)
-}
-
-func (c *testVideoPlayerClient) OnPlaybackStateChanged(state PlaybackState) {
-	if c.onPlaybackStateChanged != nil {
-		c.onPlaybackStateChanged(state)
-	}
-}
-
-func (c *testVideoPlayerClient) OnPositionChanged(position, duration, buffered time.Duration) {
-	if c.onPositionChanged != nil {
-		c.onPositionChanged(position, duration, buffered)
-	}
-}
-
-func (c *testVideoPlayerClient) OnError(code string, message string) {
-	if c.onError != nil {
-		c.onError(code, message)
-	}
 }

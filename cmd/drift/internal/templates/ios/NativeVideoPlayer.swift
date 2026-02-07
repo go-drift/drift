@@ -58,14 +58,14 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
                 if let item = player.currentItem,
                    item.duration.isNumeric,
                    CMTimeCompare(player.currentTime(), item.duration) >= 0 {
-                    state = 4 // Completed
+                    state = 3 // Completed
                 } else {
-                    state = 6 // Paused
+                    state = 4 // Paused
                 }
             case .waitingToPlayAtSpecifiedRate:
-                state = 2 // Buffering
+                state = 1 // Buffering
             case .playing:
-                state = 3 // Playing
+                state = 2 // Playing
             @unknown default:
                 state = 0 // Idle
             }
@@ -180,6 +180,11 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
 
     func pause() {
         player.pause()
+    }
+
+    func stop() {
+        player.pause()
+        player.seek(to: .zero)
     }
 
     func seekTo(positionMs: Int64) {

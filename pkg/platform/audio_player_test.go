@@ -7,69 +7,32 @@ import (
 func TestAudioPlayerController_Lifecycle(t *testing.T) {
 	setupTestBridge(t)
 
-	c, err := NewAudioPlayerController()
-	if err != nil {
-		t.Fatalf("NewAudioPlayerController failed: %v", err)
-	}
+	c := NewAudioPlayerController()
 	if c == nil {
 		t.Fatal("expected non-nil controller")
 	}
-	if c.disposed {
-		t.Fatal("new controller should not be disposed")
-	}
 
 	c.Dispose()
-	if !c.disposed {
-		t.Error("controller should be disposed after Dispose()")
-	}
 }
 
-func TestAudioPlayerController_SingletonError(t *testing.T) {
+func TestAudioPlayerController_MultiInstance(t *testing.T) {
 	setupTestBridge(t)
 
-	c, err := NewAudioPlayerController()
-	if err != nil {
-		t.Fatalf("first NewAudioPlayerController failed: %v", err)
-	}
-	defer c.Dispose()
+	c1 := NewAudioPlayerController()
+	c2 := NewAudioPlayerController()
 
-	// Creating a second controller should return an error.
-	c2, err := NewAudioPlayerController()
-	if err == nil {
-		t.Fatal("expected error when creating second controller")
+	if c1.id == c2.id {
+		t.Error("expected different IDs for each controller")
 	}
-	if c2 != nil {
-		t.Fatal("expected nil controller on error")
-	}
-}
 
-func TestAudioPlayerController_ReuseAfterDispose(t *testing.T) {
-	setupTestBridge(t)
-
-	c1, err := NewAudioPlayerController()
-	if err != nil {
-		t.Fatalf("first NewAudioPlayerController failed: %v", err)
-	}
 	c1.Dispose()
-
-	// Creating a new controller after disposing the first should succeed.
-	c2, err := NewAudioPlayerController()
-	if err != nil {
-		t.Fatalf("second NewAudioPlayerController failed: %v", err)
-	}
-	if c2 == nil {
-		t.Fatal("expected non-nil controller after previous was disposed")
-	}
 	c2.Dispose()
 }
 
 func TestAudioPlayerController_PlayAutoLoads(t *testing.T) {
 	setupTestBridge(t)
 
-	c, err := NewAudioPlayerController()
-	if err != nil {
-		t.Fatalf("NewAudioPlayerController failed: %v", err)
-	}
+	c := NewAudioPlayerController()
 	defer c.Dispose()
 
 	// First Play should load and play.
@@ -85,10 +48,7 @@ func TestAudioPlayerController_PlayAutoLoads(t *testing.T) {
 func TestAudioPlayerController_StopResetsLoadedURL(t *testing.T) {
 	setupTestBridge(t)
 
-	c, err := NewAudioPlayerController()
-	if err != nil {
-		t.Fatalf("NewAudioPlayerController failed: %v", err)
-	}
+	c := NewAudioPlayerController()
 	defer c.Dispose()
 
 	c.Play("https://example.com/song.mp3")
