@@ -125,7 +125,7 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
         }
     }
 
-    private fun wakeFrameLoop() {
+    fun wakeFrameLoop() {
         NativeBridge.requestFrame()
         requestRender()
         startFrameLoop()

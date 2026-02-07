@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(container)
 
         PlatformChannelManager.setView(surfaceView)
+        PlatformChannelManager.setOnFrameNeeded { surfaceView.wakeFrameLoop() }
 
         // Initialize platform view handler with the container
         PlatformViewHandler.init(this, container)
@@ -110,9 +111,7 @@ class MainActivity : AppCompatActivity() {
                     isEnabled = true
                 } else {
                     // Go handled the back button - wake frame loop to render the change
-                    NativeBridge.requestFrame()
-                    surfaceView.requestRender()
-                    surfaceView.startFrameLoop()
+                    surfaceView.wakeFrameLoop()
                 }
             }
         })
@@ -126,9 +125,7 @@ class MainActivity : AppCompatActivity() {
         DeepLinkHandler.handleIntent(intent, "open")
         if (::surfaceView.isInitialized) {
             surfaceView.onResume()
-            NativeBridge.requestFrame()
-            surfaceView.requestRender()
-            surfaceView.startFrameLoop()
+            surfaceView.wakeFrameLoop()
         }
     }
 
@@ -157,9 +154,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         surfaceView.onResume()
-        NativeBridge.requestFrame()
-        surfaceView.requestRender()
-        surfaceView.startFrameLoop()
+        surfaceView.wakeFrameLoop()
     }
 
     /**

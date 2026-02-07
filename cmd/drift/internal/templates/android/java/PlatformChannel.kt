@@ -47,6 +47,7 @@ object PlatformChannelManager {
     private val handlers = mutableMapOf<String, MethodHandler>()
     private val codec = JsonCodec
     private var lastError: String? = null
+    private var onFrameNeeded: (() -> Unit)? = null
 
     /**
      * Initializes the platform channel manager with the application context.
@@ -62,6 +63,14 @@ object PlatformChannelManager {
      */
     fun setView(view: View?) {
         this.view = view
+    }
+
+    /**
+     * Sets a callback invoked after sending events to Go, so the
+     * rendering surface can schedule a new frame for the state change.
+     */
+    fun setOnFrameNeeded(callback: () -> Unit) {
+        onFrameNeeded = callback
     }
 
     fun currentActivity(): Activity? {
@@ -132,10 +141,12 @@ object PlatformChannelManager {
 
     /**
      * Sends an event to Go listeners.
+     * After dispatching, wakes the frame loop so the engine renders the state change.
      */
     fun sendEvent(channel: String, data: Any?) {
         val encoded = codec.encode(data)
         NativeBridge.platformHandleEvent(channel, encoded, encoded.size)
+        onFrameNeeded?.invoke()
     }
 
     /**
