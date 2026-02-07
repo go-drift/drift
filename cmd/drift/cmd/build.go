@@ -51,6 +51,7 @@ Or check Xcode -> Settings -> Accounts -> select team -> View Details`,
 
 type buildOptions struct {
 	noFetch bool
+	ejected bool
 }
 
 type iosBuildOptions struct {
@@ -112,6 +113,9 @@ func runBuild(args []string) error {
 		return err
 	}
 
+	// Check if platform is ejected
+	ejected := workspace.IsEjected(root, platform)
+
 	ws, err := workspace.Prepare(root, cfg, platform)
 	if err != nil {
 		return err
@@ -119,10 +123,13 @@ func runBuild(args []string) error {
 
 	switch platform {
 	case "android":
+		androidOpts.ejected = ejected
 		return buildAndroid(ws, androidOpts)
 	case "ios":
+		iosOpts.ejected = ejected
 		return buildIOS(ws, iosOpts)
 	case "xtool":
+		xtoolOpts.ejected = ejected
 		return buildXtool(ws, xtoolOpts)
 	default:
 		return fmt.Errorf("unknown platform %q (use android, ios, or xtool)", platform)
@@ -164,7 +171,7 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
 	}
 
-	jniLibsDir := filepath.Join(ws.AndroidDir, "app", "src", "main", "jniLibs")
+	jniLibsDir := workspace.JniLibsDir(ws.BuildDir, opts.ejected)
 
 	for _, abi := range abis {
 		fmt.Printf("  Compiling for %s...\n", abi.abi)
@@ -368,8 +375,15 @@ func buildIOS(ws *workspace.Workspace, opts iosBuildOptions) error {
 		return fmt.Errorf("failed to build Go library: %w", err)
 	}
 
-	if err := copyFile(skiaLib, filepath.Join(iosDir, "libdrift_skia.a")); err != nil {
-		return fmt.Errorf("failed to copy Skia library: %w", err)
+	skiaVersion := cache.DriftSkiaVersion()
+	skiaVersionFile := filepath.Join(iosDir, ".drift-skia-version")
+	if needsSkiaCopy(skiaVersionFile, skiaVersion) {
+		if err := copyFile(skiaLib, filepath.Join(iosDir, "libdrift_skia.a")); err != nil {
+			return fmt.Errorf("failed to copy Skia library: %w", err)
+		}
+		if err := os.WriteFile(skiaVersionFile, []byte(skiaVersion), 0o644); err != nil {
+			return fmt.Errorf("failed to write Skia version marker: %w", err)
+		}
 	}
 
 	configuration := "Debug"

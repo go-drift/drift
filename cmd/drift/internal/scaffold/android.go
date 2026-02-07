@@ -10,7 +10,14 @@ import (
 )
 
 // WriteAndroid writes the Android project files to root.
+// If settings.Ejected is true, this returns early without writing anything.
+// For ejected builds, bridge files and jniLibs are handled separately by
+// workspace.Prepare and the compile command.
 func WriteAndroid(root string, settings Settings) error {
+	if settings.Ejected {
+		return nil
+	}
+
 	androidDir := filepath.Join(root, "android")
 	appDir := filepath.Join(androidDir, "app")
 	srcDir := filepath.Join(appDir, "src", "main")
