@@ -33,11 +33,10 @@ type AudioPlayerController struct {
 	mu  sync.RWMutex
 
 	// guarded by mu
-	loadedURL string
-	state     PlaybackState
-	position  time.Duration
-	duration  time.Duration
-	buffered  time.Duration
+	state    PlaybackState
+	position time.Duration
+	duration time.Duration
+	buffered time.Duration
 
 	// OnPlaybackStateChanged is called when the playback state changes.
 	// Called on the UI thread.
@@ -203,22 +202,18 @@ func ensureAudioService() *audioPlayerServiceState {
 	return audioService
 }
 
-// Play loads the given URL (if not already loaded) and starts playback.
-// Calling Play with the same URL after a pause resumes playback.
-func (c *AudioPlayerController) Play(url string) {
-	c.mu.Lock()
-	needsLoad := url != c.loadedURL
-	if needsLoad {
-		c.loadedURL = url
-	}
-	c.mu.Unlock()
+// Load prepares the given URL for playback. The native player begins buffering
+// the media source. Call [AudioPlayerController.Play] to start playback.
+func (c *AudioPlayerController) Load(url string) {
+	c.svc.channel.Invoke("load", map[string]any{
+		"playerId": c.id,
+		"url":      url,
+	})
+}
 
-	if needsLoad {
-		c.svc.channel.Invoke("load", map[string]any{
-			"playerId": c.id,
-			"url":      url,
-		})
-	}
+// Play starts or resumes playback. Call [AudioPlayerController.Load] first
+// to set the media URL.
+func (c *AudioPlayerController) Play() {
 	c.svc.channel.Invoke("play", map[string]any{
 		"playerId": c.id,
 	})
@@ -232,15 +227,10 @@ func (c *AudioPlayerController) Pause() {
 }
 
 // Stop stops playback and resets the player to the idle state.
-// A subsequent call to [AudioPlayerController.Play] will reload the URL.
 func (c *AudioPlayerController) Stop() {
 	c.svc.channel.Invoke("stop", map[string]any{
 		"playerId": c.id,
 	})
-
-	c.mu.Lock()
-	c.loadedURL = ""
-	c.mu.Unlock()
 }
 
 // SeekTo seeks to the given position.

@@ -84,22 +84,28 @@ func (v VideoPlayer) CreateState() core.State {
 // All methods are safe for concurrent use. Methods are no-ops when no native
 // view is bound (before the widget is first painted or after it is disposed).
 type VideoPlayerController struct {
-	mu        sync.RWMutex
-	view      *platform.VideoPlayerView
-	loadedURL string
+	mu   sync.RWMutex
+	view *platform.VideoPlayerView
 }
 
-// Play loads the given URL (if not already loaded) and starts playback.
-// Calling Play with the same URL after a pause resumes playback.
-func (c *VideoPlayerController) Play(url string) {
+// Load loads a new media URL, replacing the current media item.
+// Call [VideoPlayerController.Play] to start playback.
+func (c *VideoPlayerController) Load(url string) {
 	c.mu.RLock()
 	v := c.view
 	c.mu.RUnlock()
 	if v != nil {
-		if url != c.loadedURL {
-			v.LoadURL(url)
-			c.loadedURL = url
-		}
+		v.Load(url)
+	}
+}
+
+// Play starts or resumes playback. Call [VideoPlayerController.Load] first
+// to set the media URL.
+func (c *VideoPlayerController) Play() {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v != nil {
 		v.Play()
 	}
 }
@@ -115,7 +121,6 @@ func (c *VideoPlayerController) Pause() {
 }
 
 // Stop stops playback and resets the player to the idle state.
-// A subsequent call to [VideoPlayerController.Play] will reload the URL.
 func (c *VideoPlayerController) Stop() {
 	c.mu.RLock()
 	v := c.view
@@ -123,7 +128,6 @@ func (c *VideoPlayerController) Stop() {
 	if v != nil {
 		v.Stop()
 	}
-	c.loadedURL = ""
 }
 
 // SeekTo seeks to the given position.
@@ -270,7 +274,7 @@ func (s *videoPlayerState) DidUpdateWidget(oldWidget core.StatefulWidget) {
 
 	// Propagate property changes to the native view
 	if old.URL != w.URL {
-		s.platformView.LoadURL(w.URL)
+		s.platformView.Load(w.URL)
 	}
 	if old.Looping != w.Looping {
 		s.platformView.SetLooping(w.Looping)

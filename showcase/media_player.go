@@ -64,6 +64,8 @@ func (s *mediaPlayerState) InitState() {
 		s.audioStatus.Set("Error (" + code + "): " + message)
 	}
 
+	s.audioController.Load(audioURL)
+
 	s.OnDispose(func() {
 		s.audioController.Dispose()
 	})
@@ -167,7 +169,7 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
 					theme.ButtonOf(ctx, "Play", func() {
-						s.audioController.Play(audioURL)
+						s.audioController.Play()
 					}),
 					widgets.HSpace(8),
 					theme.ButtonOf(ctx, "Pause", func() {

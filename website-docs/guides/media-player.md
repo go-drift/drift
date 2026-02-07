@@ -91,7 +91,8 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Play", func() {
-                        s.controller.Play("https://example.com/video.mp4")
+                        s.controller.Load("https://example.com/video.mp4")
+                        s.controller.Play()
                     }),
                     theme.ButtonOf(ctx, "Pause", func() {
                         s.controller.Pause()
@@ -113,9 +114,10 @@ All methods are safe for concurrent use. Methods are no-ops before the widget is
 
 | Method | Description |
 |--------|-------------|
-| `Play(url string)` | Load the URL (if not already loaded) and start playback. Resumes if the same URL is passed after a pause. |
+| `Load(url string)` | Load a media URL. The native player begins buffering the media source. |
+| `Play()` | Start or resume playback |
 | `Pause()` | Pause playback |
-| `Stop()` | Stop playback and reset to idle. A subsequent Play call will reload the URL. |
+| `Stop()` | Stop playback and reset to idle |
 | `SeekTo(position time.Duration)` | Seek to a position |
 | `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
 | `SetLooping(looping bool)` | Enable or disable looping |
@@ -162,7 +164,7 @@ func (s *audioState) InitState() {
         s.status.Set(state.String())
     }
     s.controller.OnPositionChanged = func(position, duration, buffered time.Duration) {
-        s.status.Set(state.String() + " " + position.String() + " / " + duration.String())
+        s.status.Set(position.String() + " / " + duration.String())
     }
     s.controller.OnError = func(code, message string) {
         s.status.Set("Error (" + code + "): " + message)
@@ -180,9 +182,10 @@ All methods are safe for concurrent use.
 
 | Method | Description |
 |--------|-------------|
-| `Play(url string)` | Load the URL (if not already loaded) and start playback. Resumes if the same URL is passed after a pause. |
+| `Load(url string)` | Load a media URL. The native player begins buffering the media source. |
+| `Play()` | Start or resume playback |
 | `Pause()` | Pause playback |
-| `Stop()` | Stop playback and reset to idle. A subsequent Play call will reload the URL. |
+| `Stop()` | Stop playback and reset to idle |
 | `SeekTo(position time.Duration)` | Seek to a position |
 | `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
 | `SetLooping(looping bool)` | Enable or disable looping |
@@ -211,7 +214,8 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Play", func() {
-                        s.controller.Play("https://example.com/song.mp3")
+                        s.controller.Load("https://example.com/song.mp3")
+                        s.controller.Play()
                     }),
                     theme.ButtonOf(ctx, "Pause", func() {
                         s.controller.Pause()

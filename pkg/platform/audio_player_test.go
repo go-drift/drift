@@ -30,33 +30,19 @@ func TestAudioPlayerController_MultiInstance(t *testing.T) {
 	c2.Dispose()
 }
 
-func TestAudioPlayerController_PlayAutoLoads(t *testing.T) {
+func TestAudioPlayerController_LoadAndPlay(t *testing.T) {
 	setupTestBridge(t)
 
 	c := NewAudioPlayerController()
 	defer c.Dispose()
 
-	// First Play should load and play.
-	c.Play("https://example.com/song.mp3")
+	// Load prepares the URL, Play starts playback.
+	c.Load("https://example.com/song.mp3")
+	c.Play()
 
-	// Second Play with same URL should only play (not re-load).
-	c.Play("https://example.com/song.mp3")
-
-	// Play with different URL should load the new URL.
-	c.Play("https://example.com/other.mp3")
-}
-
-func TestAudioPlayerController_StopResetsLoadedURL(t *testing.T) {
-	setupTestBridge(t)
-
-	c := NewAudioPlayerController()
-	defer c.Dispose()
-
-	c.Play("https://example.com/song.mp3")
-	c.Stop()
-
-	// After Stop, the loaded URL is cleared, so Play should re-load.
-	c.Play("https://example.com/song.mp3")
+	// Load a different URL.
+	c.Load("https://example.com/other.mp3")
+	c.Play()
 }
 
 func TestAudioPlayerController_StateGetters_DefaultValues(t *testing.T) {
@@ -228,7 +214,8 @@ func TestAudioPlayerController_TransportMethods(t *testing.T) {
 	defer c.Dispose()
 
 	// All transport methods should execute without error.
-	c.Play("https://example.com/song.mp3")
+	c.Load("https://example.com/song.mp3")
+	c.Play()
 	c.Pause()
 	c.SeekTo(30 * time.Second)
 	c.SetVolume(0.5)
@@ -248,14 +235,15 @@ func TestAudioPlayerController_PlayPauseSeekCycle(t *testing.T) {
 		states = append(states, state)
 	}
 
-	// Simulate: play, buffering, playing, pause, seek, resume, completed
-	c.Play("https://example.com/song.mp3")
+	// Simulate: load, play, buffering, playing, pause, seek, resume, completed
+	c.Load("https://example.com/song.mp3")
+	c.Play()
 	sendAudioEvent(t, c, 1, 0, 0, 0)     // Buffering
 	sendAudioEvent(t, c, 2, 0, 60000, 0) // Playing
 	c.Pause()
 	sendAudioEvent(t, c, 4, 15000, 60000, 60000) // Paused at 15s
 	c.SeekTo(30 * time.Second)
-	c.Play("https://example.com/song.mp3")       // Resume (same URL, no reload)
+	c.Play()                                     // Resume
 	sendAudioEvent(t, c, 2, 30000, 60000, 60000) // Playing from 30s
 	sendAudioEvent(t, c, 3, 60000, 60000, 60000) // Completed
 

@@ -14,7 +14,8 @@ func TestVideoPlayerController_NilViewMethods(t *testing.T) {
 	// All methods should be safe to call with no view bound.
 	c := &VideoPlayerController{}
 
-	c.Play("https://example.com/video.mp4")
+	c.Load("https://example.com/video.mp4")
+	c.Play()
 	c.Pause()
 	c.SeekTo(time.Second)
 	c.SetVolume(0.5)

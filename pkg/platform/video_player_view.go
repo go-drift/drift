@@ -99,10 +99,10 @@ func (v *VideoPlayerView) SetPlaybackSpeed(rate float64) {
 	})
 }
 
-// LoadURL loads a new media URL, replacing the current media item.
+// Load loads a new media URL, replacing the current media item.
 // The native player prepares the new URL immediately. If looping was
 // enabled, it remains active for the new item.
-func (v *VideoPlayerView) LoadURL(url string) {
+func (v *VideoPlayerView) Load(url string) {
 	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "loadUrl", map[string]any{
 		"url": url,
 	})
