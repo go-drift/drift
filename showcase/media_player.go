@@ -47,7 +47,7 @@ func (s *mediaPlayerState) InitState() {
 	s.audioStatus = core.NewManagedState(&s.StateBase, "Idle")
 	s.audioStateLabel = "Idle"
 
-	s.audioController = platform.NewAudioPlayerController()
+	s.audioController = core.UseController(&s.StateBase, platform.NewAudioPlayerController)
 	s.videoController = &widgets.VideoPlayerController{}
 
 	s.audioController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
@@ -65,10 +65,6 @@ func (s *mediaPlayerState) InitState() {
 	}
 
 	s.audioController.Load(audioURL)
-
-	s.OnDispose(func() {
-		s.audioController.Dispose()
-	})
 }
 
 func (s *mediaPlayerState) Build(ctx core.BuildContext) core.Widget {

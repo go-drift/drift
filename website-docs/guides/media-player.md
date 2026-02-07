@@ -147,7 +147,10 @@ widgets.VideoPlayer{
 Multiple controllers may exist concurrently, each managing its own native player instance. Call `Dispose` to release resources when a controller is no longer needed.
 
 ```go
-import "github.com/go-drift/drift/pkg/platform"
+import (
+    "github.com/go-drift/drift/pkg/core"
+    "github.com/go-drift/drift/pkg/platform"
+)
 
 type audioState struct {
     core.StateBase
@@ -157,7 +160,7 @@ type audioState struct {
 
 func (s *audioState) InitState() {
     s.status = core.NewManagedState(&s.StateBase, "Idle")
-    s.controller = platform.NewAudioPlayerController()
+    s.controller = core.UseController(&s.StateBase, platform.NewAudioPlayerController)
 
     // Callbacks are delivered on the UI thread.
     s.controller.OnPlaybackStateChanged = func(state platform.PlaybackState) {
@@ -169,12 +172,10 @@ func (s *audioState) InitState() {
     s.controller.OnError = func(code, message string) {
         s.status.Set("Error (" + code + "): " + message)
     }
-
-    s.OnDispose(func() {
-        s.controller.Dispose()
-    })
 }
 ```
+
+`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. For non-widget contexts (tests, standalone services), use `platform.NewAudioPlayerController()` directly and call `Dispose()` manually.
 
 ### AudioPlayerController Methods
 
