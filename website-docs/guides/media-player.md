@@ -8,6 +8,8 @@ sidebar_position: 12
 
 Drift provides native media playback through two APIs: the `VideoPlayer` widget for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI.
 
+Both APIs deliver callbacks on the UI thread, so you can update widget state directly without wrapping calls in `drift.Dispatch`.
+
 ## Video Player
 
 The `VideoPlayer` widget embeds a native video player (ExoPlayer on Android, AVPlayer on iOS) with built-in transport controls including play/pause, seek bar, and time display.
@@ -16,10 +18,25 @@ The `VideoPlayer` widget embeds a native video player (ExoPlayer on Android, AVP
 import "github.com/go-drift/drift/pkg/widgets"
 
 widgets.VideoPlayer{
-    URL:      "https://example.com/video.mp4",
-    AutoPlay: false,
-    Width:    0,   // 0 = expand to fill available width
-    Height:   225,
+    URL:    "https://example.com/video.mp4",
+    Volume: 1.0,
+    Height: 225,
+}
+```
+
+Width and Height set explicit dimensions in logical pixels. To fill available width, wrap the widget in layout widgets such as `Expanded` inside a `Row`:
+
+```go
+widgets.Row{
+    Children: []core.Widget{
+        widgets.Expanded{
+            Child: widgets.VideoPlayer{
+                URL:    "https://example.com/video.mp4",
+                Volume: 1.0,
+                Height: 225,
+            },
+        },
+    },
 }
 ```
 
@@ -31,12 +48,12 @@ widgets.VideoPlayer{
 | `Controller` | `*VideoPlayerController` | Programmatic playback control |
 | `AutoPlay` | `bool` | Start playback automatically when the view is created |
 | `Looping` | `bool` | Restart playback when it reaches the end |
-| `Volume` | `*float64` | Playback volume (0.0 to 1.0). Nil uses platform default (1.0) |
-| `Width` | `float64` | Player width in logical pixels (0 = expand to fill) |
-| `Height` | `float64` | Player height in logical pixels (0 = 200 default) |
-| `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes |
-| `OnPositionChanged` | `func(positionMs, durationMs, bufferedMs int64)` | Called when playback position updates |
-| `OnError` | `func(code, message string)` | Called when a playback error occurs |
+| `Volume` | `float64` | Playback volume (0.0 to 1.0). Defaults to full volume (1.0) when zero |
+| `Width` | `float64` | Player width in logical pixels |
+| `Height` | `float64` | Player height in logical pixels |
+| `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
+| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
+| `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
 ### Controller
 
@@ -65,11 +82,10 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
             widgets.VideoPlayer{
                 URL:        "https://example.com/video.mp4",
                 Controller: s.controller,
+                Volume:     1.0,
                 Height:     225,
                 OnPlaybackStateChanged: func(state platform.PlaybackState) {
-                    drift.Dispatch(func() {
-                        s.status.Set(stateLabel(state))
-                    })
+                    s.status.Set(state.String())
                 },
             },
             widgets.Row{
@@ -95,14 +111,14 @@ All methods are safe for concurrent use. Methods are no-ops before the widget is
 |--------|-------------|
 | `Play()` | Start or resume playback |
 | `Pause()` | Pause playback |
-| `SeekTo(positionMs int64)` | Seek to a position in milliseconds |
+| `SeekTo(position time.Duration)` | Seek to a position |
 | `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
 | `SetLooping(looping bool)` | Enable or disable looping |
 | `SetPlaybackSpeed(rate float64)` | Set playback speed (1.0 = normal) |
 | `State() PlaybackState` | Current playback state |
-| `PositionMs() int64` | Current position in milliseconds |
-| `DurationMs() int64` | Total duration in milliseconds |
-| `BufferedMs() int64` | Buffered position in milliseconds |
+| `Position() time.Duration` | Current playback position |
+| `Duration() time.Duration` | Total media duration |
+| `Buffered() time.Duration` | Buffered position |
 
 ### Dynamic Property Updates
 
@@ -113,6 +129,7 @@ When widget properties change between rebuilds, the native player is updated aut
 widgets.VideoPlayer{
     URL:     s.currentURL.Get(), // rebuild with a new URL to switch videos
     Looping: s.loopEnabled.Get(),
+    Volume:  1.0,
 }
 ```
 
@@ -120,43 +137,36 @@ widgets.VideoPlayer{
 
 `AudioPlayerController` provides audio playback without a visual component. It uses a standalone platform channel, so there is no embedded native view. Build your own UI around the controller.
 
-Only one `AudioPlayerController` may exist at a time. Creating a second before disposing the first will panic.
+Only one `AudioPlayerController` may exist at a time. Creating a second before disposing the first returns an error.
 
 ```go
 import "github.com/go-drift/drift/pkg/platform"
 
 type audioState struct {
     core.StateBase
-    controller   *platform.AudioPlayerController
-    status       *core.ManagedState[string]
-    unsubscribes []func()
+    controller *platform.AudioPlayerController
+    status     *core.ManagedState[string]
 }
 
 func (s *audioState) InitState() {
     s.status = core.NewManagedState(&s.StateBase, "Idle")
-    s.controller = platform.NewAudioPlayerController()
 
-    // Subscribe to state updates
-    unsub := s.controller.States().Listen(func(state platform.AudioPlayerState) {
-        drift.Dispatch(func() {
-            s.status.Set(formatAudioStatus(state))
-        })
-    })
-    s.unsubscribes = append(s.unsubscribes, unsub)
+    c, err := platform.NewAudioPlayerController()
+    if err != nil {
+        s.status.Set("Error: " + err.Error())
+        return
+    }
+    s.controller = c
 
-    // Subscribe to errors
-    errUnsub := s.controller.Errors().Listen(func(err platform.AudioPlayerError) {
-        drift.Dispatch(func() {
-            s.status.Set("Error: " + err.Message)
-        })
-    })
-    s.unsubscribes = append(s.unsubscribes, errUnsub)
+    // Callbacks are delivered on the UI thread.
+    s.controller.OnStateChanged = func(state platform.AudioPlayerState) {
+        s.status.Set(state.PlaybackState.String())
+    }
+    s.controller.OnError = func(err platform.AudioPlayerError) {
+        s.status.Set("Error: " + err.Message)
+    }
 
-    // Clean up on dispose
     s.OnDispose(func() {
-        for _, unsub := range s.unsubscribes {
-            unsub()
-        }
         s.controller.Dispose()
     })
 }
@@ -164,19 +174,23 @@ func (s *audioState) InitState() {
 
 ### AudioPlayerController Methods
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `Load(url string)` | `error` | Load a media URL for playback |
-| `Play()` | `error` | Start or resume playback |
-| `Pause()` | `error` | Pause playback |
-| `Stop()` | `error` | Stop playback and reset to idle (reusable after calling Load again) |
-| `SeekTo(positionMs int64)` | `error` | Seek to a position in milliseconds |
-| `SetVolume(volume float64)` | `error` | Set volume (0.0 to 1.0) |
-| `SetLooping(looping bool)` | `error` | Enable or disable looping |
-| `SetPlaybackSpeed(rate float64)` | `error` | Set playback speed (1.0 = normal) |
-| `States()` | `*Stream[AudioPlayerState]` | Stream of playback state updates |
-| `Errors()` | `*Stream[AudioPlayerError]` | Stream of playback errors |
-| `Dispose()` | `error` | Release native resources (required before creating a new controller) |
+| Method | Description |
+|--------|-------------|
+| `Play(url string)` | Load the URL (if not already loaded) and start playback. Resumes if the same URL is passed after a pause. |
+| `Pause()` | Pause playback |
+| `Stop()` | Stop playback and reset to idle. A subsequent Play call will reload the URL. |
+| `SeekTo(position time.Duration)` | Seek to a position |
+| `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
+| `SetLooping(looping bool)` | Enable or disable looping |
+| `SetPlaybackSpeed(rate float64)` | Set playback speed (1.0 = normal) |
+| `Dispose()` | Release native resources (required before creating a new controller) |
+
+### AudioPlayerController Callbacks
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `OnStateChanged` | `func(AudioPlayerState)` | Called when playback state, position, or buffered position changes (UI thread) |
+| `OnError` | `func(AudioPlayerError)` | Called when a playback error occurs (UI thread) |
 
 ### AudioPlayerState Fields
 
@@ -185,9 +199,9 @@ Each state update contains the current playback state and timing information:
 | Field | Type | Description |
 |-------|------|-------------|
 | `PlaybackState` | `PlaybackState` | Current playback state |
-| `PositionMs` | `int64` | Current playback position in milliseconds |
-| `DurationMs` | `int64` | Total media duration in milliseconds (0 if no media loaded) |
-| `BufferedMs` | `int64` | Buffered position in milliseconds |
+| `Position` | `time.Duration` | Current playback position |
+| `Duration` | `time.Duration` | Total media duration (zero if no media loaded) |
+| `Buffered` | `time.Duration` | Buffered position |
 
 ### Example: Transport Controls
 
@@ -199,8 +213,7 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Play", func() {
-                        s.controller.Load("https://example.com/song.mp3")
-                        s.controller.Play()
+                        s.controller.Play("https://example.com/song.mp3")
                     }),
                     theme.ButtonOf(ctx, "Pause", func() {
                         s.controller.Pause()
@@ -231,7 +244,7 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
 
 ## Playback States
 
-Both video and audio players share the same `PlaybackState` enum:
+Both video and audio players share the same `PlaybackState` enum. Use the `String()` method for human-readable labels.
 
 | State | Value | Description |
 |-------|-------|-------------|
@@ -241,31 +254,7 @@ Both video and audio players share the same `PlaybackState` enum:
 | `PlaybackStateCompleted` | 4 | Playback reached the end of the media |
 | `PlaybackStatePaused` | 6 | Paused, can be resumed |
 
-:::note Reserved States
-`PlaybackStateLoading` (1) and `PlaybackStateError` (5) are reserved for future use. Errors are delivered through separate callbacks (`OnError` for video, `Errors()` stream for audio) rather than as a playback state.
-:::
-
-## Thread Safety
-
-`VideoPlayerController` methods are safe to call from any goroutine. When updating UI state from playback callbacks, wrap calls with `drift.Dispatch`:
-
-```go
-OnPlaybackStateChanged: func(state platform.PlaybackState) {
-    drift.Dispatch(func() {
-        s.status.Set(stateLabel(state))
-    })
-},
-```
-
-The same applies to `AudioPlayerController` stream listeners:
-
-```go
-s.controller.States().Listen(func(state platform.AudioPlayerState) {
-    drift.Dispatch(func() {
-        s.updateUI(state)
-    })
-})
-```
+Values 1 (`PlaybackStateLoading`) and 5 (`PlaybackStateError`) are reserved for future use. Errors are delivered through the `OnError` callback rather than as a playback state.
 
 ## Next Steps
 

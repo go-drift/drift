@@ -2,6 +2,7 @@ package platform
 
 import (
 	"testing"
+	"time"
 )
 
 func TestVideoPlayerView_HandlePlaybackStateChanged(t *testing.T) {
@@ -29,29 +30,29 @@ func TestVideoPlayerView_HandlePlaybackStateChanged(t *testing.T) {
 func TestVideoPlayerView_HandlePositionChanged(t *testing.T) {
 	setupTestBridge(t)
 
-	var gotPos, gotDur, gotBuf int64
+	var gotPos, gotDur, gotBuf time.Duration
 	client := &testVideoPlayerClient{
-		onPositionChanged: func(positionMs, durationMs, bufferedMs int64) {
-			gotPos = positionMs
-			gotDur = durationMs
-			gotBuf = bufferedMs
+		onPositionChanged: func(position, duration, buffered time.Duration) {
+			gotPos = position
+			gotDur = duration
+			gotBuf = buffered
 		},
 	}
 
 	view := NewVideoPlayerView(1, client)
-	view.handlePositionChanged(5000, 120000, 30000)
+	view.handlePositionChanged(5*time.Second, 2*time.Minute, 30*time.Second)
 
-	if gotPos != 5000 || gotDur != 120000 || gotBuf != 30000 {
-		t.Errorf("position callback: got (%d, %d, %d), want (5000, 120000, 30000)", gotPos, gotDur, gotBuf)
+	if gotPos != 5*time.Second || gotDur != 2*time.Minute || gotBuf != 30*time.Second {
+		t.Errorf("position callback: got (%v, %v, %v), want (5s, 2m0s, 30s)", gotPos, gotDur, gotBuf)
 	}
-	if view.PositionMs() != 5000 {
-		t.Errorf("cached position: got %d, want 5000", view.PositionMs())
+	if view.Position() != 5*time.Second {
+		t.Errorf("cached position: got %v, want 5s", view.Position())
 	}
-	if view.DurationMs() != 120000 {
-		t.Errorf("cached duration: got %d, want 120000", view.DurationMs())
+	if view.Duration() != 2*time.Minute {
+		t.Errorf("cached duration: got %v, want 2m0s", view.Duration())
 	}
-	if view.BufferedMs() != 30000 {
-		t.Errorf("cached buffered: got %d, want 30000", view.BufferedMs())
+	if view.Buffered() != 30*time.Second {
+		t.Errorf("cached buffered: got %v, want 30s", view.Buffered())
 	}
 }
 
@@ -84,7 +85,7 @@ func TestVideoPlayerView_NilClientDoesNotPanic(t *testing.T) {
 
 	// None of these should panic with a nil client.
 	view.handlePlaybackStateChanged(PlaybackStatePlaying)
-	view.handlePositionChanged(1000, 2000, 1500)
+	view.handlePositionChanged(time.Second, 2*time.Second, time.Second+500*time.Millisecond)
 	view.handleError("ERR", "test")
 }
 
@@ -110,7 +111,7 @@ func TestVideoPlayerView_SetClient(t *testing.T) {
 // testVideoPlayerClient is a test implementation of VideoPlayerClient.
 type testVideoPlayerClient struct {
 	onPlaybackStateChanged func(state PlaybackState)
-	onPositionChanged      func(positionMs, durationMs, bufferedMs int64)
+	onPositionChanged      func(position, duration, buffered time.Duration)
 	onError                func(code string, message string)
 }
 
@@ -120,9 +121,9 @@ func (c *testVideoPlayerClient) OnPlaybackStateChanged(state PlaybackState) {
 	}
 }
 
-func (c *testVideoPlayerClient) OnPositionChanged(positionMs, durationMs, bufferedMs int64) {
+func (c *testVideoPlayerClient) OnPositionChanged(position, duration, buffered time.Duration) {
 	if c.onPositionChanged != nil {
-		c.onPositionChanged(positionMs, durationMs, bufferedMs)
+		c.onPositionChanged(position, duration, buffered)
 	}
 }
 

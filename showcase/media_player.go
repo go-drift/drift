@@ -1,8 +1,9 @@
 package main
 
 import (
+	"time"
+
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
@@ -35,40 +36,34 @@ type mediaPlayerState struct {
 	videoStatus     *core.ManagedState[string]
 	audioStatus     *core.ManagedState[string]
 	audioController *platform.AudioPlayerController
-	audioLoaded     bool
-	unsubscribes    []func()
 }
 
 func (s *mediaPlayerState) InitState() {
 	s.videoStatus = core.NewManagedState(&s.StateBase, "Idle")
 	s.audioStatus = core.NewManagedState(&s.StateBase, "Idle")
 
-	s.audioController = platform.NewAudioPlayerController()
+	c, err := platform.NewAudioPlayerController()
+	if err != nil {
+		s.audioStatus.Set("Error: " + err.Error())
+		return
+	}
+	s.audioController = c
 
-	// Listen for audio state changes
-	unsub := s.audioController.States().Listen(func(state platform.AudioPlayerState) {
-		drift.Dispatch(func() {
-			label := playbackStateLabel(state.PlaybackState)
-			position := formatDuration(state.PositionMs)
-			duration := formatDuration(state.DurationMs)
-			s.audioStatus.Set(label + " \u00b7 " + position + " / " + duration)
-		})
-	})
-	s.unsubscribes = append(s.unsubscribes, unsub)
+	s.audioController.OnStateChanged = func(state platform.AudioPlayerState) {
+		label := state.PlaybackState.String()
+		position := formatDuration(state.Position)
+		duration := formatDuration(state.Duration)
+		s.audioStatus.Set(label + " \u00b7 " + position + " / " + duration)
+	}
 
-	// Listen for audio errors
-	errUnsub := s.audioController.Errors().Listen(func(err platform.AudioPlayerError) {
-		drift.Dispatch(func() {
-			s.audioStatus.Set("Error: " + err.Message)
-		})
-	})
-	s.unsubscribes = append(s.unsubscribes, errUnsub)
+	s.audioController.OnError = func(err platform.AudioPlayerError) {
+		s.audioStatus.Set("Error: " + err.Message)
+	}
 
 	s.OnDispose(func() {
-		for _, unsub := range s.unsubscribes {
-			unsub()
+		if s.audioController != nil {
+			s.audioController.Dispose()
 		}
-		s.audioController.Dispose()
 	})
 }
 
@@ -85,20 +80,23 @@ func (s *mediaPlayerState) Build(ctx core.BuildContext) core.Widget {
 			Style:   labelStyle(colors),
 		},
 		widgets.VSpace(12),
-		widgets.VideoPlayer{
-			URL:      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-			AutoPlay: false,
-			Width:    0, // expand to fill
-			Height:   220,
-			OnPlaybackStateChanged: func(state platform.PlaybackState) {
-				drift.Dispatch(func() {
-					s.videoStatus.Set(playbackStateLabel(state))
-				})
-			},
-			OnError: func(code string, message string) {
-				drift.Dispatch(func() {
-					s.videoStatus.Set("Error: " + message)
-				})
+		widgets.Row{
+			MainAxisSize: widgets.MainAxisSizeMax,
+			Children: []core.Widget{
+				widgets.Expanded{
+					Child: widgets.VideoPlayer{
+						URL:      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+						AutoPlay: false,
+						Volume:   1.0,
+						Height:   220,
+						OnPlaybackStateChanged: func(state platform.PlaybackState) {
+							s.videoStatus.Set(state.String())
+						},
+						OnError: func(code string, message string) {
+							s.videoStatus.Set("Error: " + message)
+						},
+					},
+				},
 			},
 		},
 		widgets.VSpace(8),
@@ -146,23 +144,22 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
 					theme.ButtonOf(ctx, "Play", func() {
-						if !s.audioLoaded {
-							s.audioController.Load(audioURL)
-							s.audioLoaded = true
+						if s.audioController != nil {
+							s.audioController.Play(audioURL)
 						}
-						s.audioController.Play()
 					}),
 					widgets.HSpace(8),
 					theme.ButtonOf(ctx, "Pause", func() {
-						s.audioController.Pause()
+						if s.audioController != nil {
+							s.audioController.Pause()
+						}
 					}),
 					widgets.HSpace(8),
 					theme.ButtonOf(ctx, "Stop", func() {
-						s.audioController.Stop()
-						s.audioLoaded = false
-						drift.Dispatch(func() {
+						if s.audioController != nil {
+							s.audioController.Stop()
 							s.audioStatus.Set("Stopped")
-						})
+						}
 					}),
 				},
 			},
@@ -172,19 +169,27 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
 					smallButton(ctx, "0.5x", func() {
-						s.audioController.SetPlaybackSpeed(0.5)
+						if s.audioController != nil {
+							s.audioController.SetPlaybackSpeed(0.5)
+						}
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "1x", func() {
-						s.audioController.SetPlaybackSpeed(1.0)
+						if s.audioController != nil {
+							s.audioController.SetPlaybackSpeed(1.0)
+						}
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "1.5x", func() {
-						s.audioController.SetPlaybackSpeed(1.5)
+						if s.audioController != nil {
+							s.audioController.SetPlaybackSpeed(1.5)
+						}
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "2x", func() {
-						s.audioController.SetPlaybackSpeed(2.0)
+						if s.audioController != nil {
+							s.audioController.SetPlaybackSpeed(2.0)
+						}
 					}, colors),
 				},
 			},
@@ -210,37 +215,16 @@ func smallButton(ctx core.BuildContext, label string, onTap func(), colors theme
 	}
 }
 
-func playbackStateLabel(state platform.PlaybackState) string {
-	switch state {
-	case platform.PlaybackStateIdle:
-		return "Idle"
-	case platform.PlaybackStateLoading:
-		return "Loading"
-	case platform.PlaybackStateBuffering:
-		return "Buffering"
-	case platform.PlaybackStatePlaying:
-		return "Playing"
-	case platform.PlaybackStateCompleted:
-		return "Completed"
-	case platform.PlaybackStatePaused:
-		return "Paused"
-	case platform.PlaybackStateError:
-		return "Error"
-	default:
-		return "Unknown"
-	}
-}
-
-func formatDuration(ms int64) string {
-	if ms <= 0 {
+func formatDuration(d time.Duration) string {
+	if d <= 0 {
 		return "0:00"
 	}
-	totalSeconds := ms / 1000
+	totalSeconds := int(d.Seconds())
 	minutes := totalSeconds / 60
 	seconds := totalSeconds % 60
-	secStr := itoa(int(seconds))
+	secStr := itoa(seconds)
 	if seconds < 10 {
 		secStr = "0" + secStr
 	}
-	return itoa(int(minutes)) + ":" + secStr
+	return itoa(minutes) + ":" + secStr
 }

@@ -100,7 +100,7 @@ type PlatformViewRegistry struct {
 	// content and native view geometry land before the same vsync.
 	geometryPending atomic.Bool
 	geometrySignal  chan struct{} // buffered, size 1
-	geometryTimer   *time.Timer  // reusable timer for WaitGeometryApplied (render thread only)
+	geometryTimer   *time.Timer   // reusable timer for WaitGeometryApplied (render thread only)
 
 	// Stats for monitoring
 	BatchTimeouts atomic.Uint64
@@ -640,7 +640,11 @@ func (r *PlatformViewRegistry) handleVideoPositionChanged(args map[string]any) (
 	r.mu.RUnlock()
 
 	if videoView, ok := view.(*VideoPlayerView); ok {
-		videoView.handlePositionChanged(positionMs, durationMs, bufferedMs)
+		videoView.handlePositionChanged(
+			time.Duration(positionMs)*time.Millisecond,
+			time.Duration(durationMs)*time.Millisecond,
+			time.Duration(bufferedMs)*time.Millisecond,
+		)
 	}
 	return nil, nil
 }

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"sync"
+	"time"
 )
 
 // PlaybackState represents the current state of video/audio playback.
@@ -29,7 +30,7 @@ const (
 	PlaybackStateCompleted PlaybackState = 4
 
 	// PlaybackStateError is reserved for future use. Errors are delivered through
-	// separate error callbacks ([VideoPlayerClient.OnError], [AudioPlayerController.Errors])
+	// separate error callbacks ([VideoPlayerClient.OnError], [AudioPlayerController.OnError])
 	// rather than as a playback state.
 	PlaybackStateError PlaybackState = 5
 
@@ -37,14 +38,36 @@ const (
 	PlaybackStatePaused PlaybackState = 6
 )
 
+// String returns a human-readable label for the playback state.
+func (s PlaybackState) String() string {
+	switch s {
+	case PlaybackStateIdle:
+		return "Idle"
+	case PlaybackStateLoading:
+		return "Loading"
+	case PlaybackStateBuffering:
+		return "Buffering"
+	case PlaybackStatePlaying:
+		return "Playing"
+	case PlaybackStateCompleted:
+		return "Completed"
+	case PlaybackStateError:
+		return "Error"
+	case PlaybackStatePaused:
+		return "Paused"
+	default:
+		return "Unknown"
+	}
+}
+
 // VideoPlayerClient receives playback callbacks from a [VideoPlayerView].
-// Callbacks are dispatched from native event handlers on the platform thread.
+// Callbacks are dispatched on the UI thread via [Dispatch].
 type VideoPlayerClient interface {
 	// OnPlaybackStateChanged is called when the playback state changes.
 	OnPlaybackStateChanged(state PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
-	OnPositionChanged(positionMs, durationMs, bufferedMs int64)
+	OnPositionChanged(position, duration, buffered time.Duration)
 
 	// OnError is called when a playback error occurs.
 	OnError(code string, message string)
@@ -55,17 +78,17 @@ type VideoPlayerClient interface {
 // position/duration tracking, and playback state observation.
 //
 // Use [VideoPlayerView.SetClient] to receive playback callbacks, or read
-// cached state directly via [VideoPlayerView.State], [VideoPlayerView.PositionMs], etc.
+// cached state directly via [VideoPlayerView.State], [VideoPlayerView.Position], etc.
 type VideoPlayerView struct {
 	basePlatformView
 	client VideoPlayerClient
 	mu     sync.RWMutex
 
 	// Cached playback state
-	state      PlaybackState
-	positionMs int64
-	durationMs int64
-	bufferedMs int64
+	state    PlaybackState
+	position time.Duration
+	duration time.Duration
+	buffered time.Duration
 }
 
 // NewVideoPlayerView creates a new video player platform view with the given
@@ -109,10 +132,10 @@ func (v *VideoPlayerView) Pause() {
 	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "pause", nil)
 }
 
-// SeekTo seeks to a position in milliseconds.
-func (v *VideoPlayerView) SeekTo(positionMs int64) {
+// SeekTo seeks to the given position.
+func (v *VideoPlayerView) SeekTo(position time.Duration) {
 	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "seekTo", map[string]any{
-		"positionMs": positionMs,
+		"positionMs": position.Milliseconds(),
 	})
 }
 
@@ -153,25 +176,25 @@ func (v *VideoPlayerView) State() PlaybackState {
 	return v.state
 }
 
-// PositionMs returns the current playback position in milliseconds.
-func (v *VideoPlayerView) PositionMs() int64 {
+// Position returns the current playback position.
+func (v *VideoPlayerView) Position() time.Duration {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	return v.positionMs
+	return v.position
 }
 
-// DurationMs returns the total duration in milliseconds.
-func (v *VideoPlayerView) DurationMs() int64 {
+// Duration returns the total media duration.
+func (v *VideoPlayerView) Duration() time.Duration {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	return v.durationMs
+	return v.duration
 }
 
-// BufferedMs returns the buffered position in milliseconds.
-func (v *VideoPlayerView) BufferedMs() int64 {
+// Buffered returns the buffered position.
+func (v *VideoPlayerView) Buffered() time.Duration {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	return v.bufferedMs
+	return v.buffered
 }
 
 // handlePlaybackStateChanged processes state change events from native.
@@ -182,21 +205,25 @@ func (v *VideoPlayerView) handlePlaybackStateChanged(state PlaybackState) {
 	v.mu.Unlock()
 
 	if client != nil {
-		client.OnPlaybackStateChanged(state)
+		Dispatch(func() {
+			client.OnPlaybackStateChanged(state)
+		})
 	}
 }
 
 // handlePositionChanged processes position update events from native.
-func (v *VideoPlayerView) handlePositionChanged(positionMs, durationMs, bufferedMs int64) {
+func (v *VideoPlayerView) handlePositionChanged(position, duration, buffered time.Duration) {
 	v.mu.Lock()
-	v.positionMs = positionMs
-	v.durationMs = durationMs
-	v.bufferedMs = bufferedMs
+	v.position = position
+	v.duration = duration
+	v.buffered = buffered
 	client := v.client
 	v.mu.Unlock()
 
 	if client != nil {
-		client.OnPositionChanged(positionMs, durationMs, bufferedMs)
+		Dispatch(func() {
+			client.OnPositionChanged(position, duration, buffered)
+		})
 	}
 }
 
@@ -207,7 +234,9 @@ func (v *VideoPlayerView) handleError(code string, message string) {
 	v.mu.RUnlock()
 
 	if client != nil {
-		client.OnError(code, message)
+		Dispatch(func() {
+			client.OnError(code, message)
+		})
 	}
 }
 

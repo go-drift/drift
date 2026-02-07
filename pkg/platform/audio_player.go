@@ -1,7 +1,9 @@
 package platform
 
 import (
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/go-drift/drift/pkg/errors"
 )
@@ -12,23 +14,23 @@ var (
 )
 
 // AudioPlayerState represents a snapshot of audio playback state, delivered
-// via [AudioPlayerController.States]. Each update contains the current
+// via [AudioPlayerController.OnStateChanged]. Each update contains the current
 // playback state along with timing information.
 type AudioPlayerState struct {
 	// PlaybackState is the current playback state.
 	PlaybackState PlaybackState
-	// PositionMs is the current playback position in milliseconds.
-	PositionMs int64
-	// DurationMs is the total duration of the loaded media in milliseconds.
+	// Position is the current playback position.
+	Position time.Duration
+	// Duration is the total duration of the loaded media.
 	// Zero if no media is loaded.
-	DurationMs int64
-	// BufferedMs is the buffered position in milliseconds, indicating how
-	// far ahead the player has downloaded content.
-	BufferedMs int64
+	Duration time.Duration
+	// Buffered is the buffered position, indicating how far ahead the
+	// player has downloaded content.
+	Buffered time.Duration
 }
 
 // AudioPlayerError represents an audio playback error, delivered via
-// [AudioPlayerController.Errors].
+// [AudioPlayerController.OnError].
 type AudioPlayerError struct {
 	// Code is a platform-specific error code.
 	Code string
@@ -40,37 +42,102 @@ type AudioPlayerError struct {
 // Audio has no visual surface, so this uses a standalone platform channel
 // rather than the platform view system.
 //
-// Subscribe to playback updates via [AudioPlayerController.States] and errors
-// via [AudioPlayerController.Errors].
+// Set [AudioPlayerController.OnStateChanged] and [AudioPlayerController.OnError]
+// to receive playback updates. Callbacks are dispatched on the UI thread.
 //
 // Only one AudioPlayerController may exist at a time. Creating a second
-// before disposing the first will panic. Call [AudioPlayerController.Dispose]
+// before disposing the first returns an error. Call [AudioPlayerController.Dispose]
 // to release resources and allow a new instance to be created.
 type AudioPlayerController struct {
-	state    *audioPlayerServiceState
-	states   *Stream[AudioPlayerState]
-	errs     *Stream[AudioPlayerError]
-	disposed bool
+	state     *audioPlayerServiceState
+	loadedURL string
+	disposed  bool
+	eventSub  *Subscription
+	errorSub  *Subscription
+
+	// OnStateChanged is called when the playback state, position, or
+	// buffered position changes. Called on the UI thread.
+	OnStateChanged func(state AudioPlayerState)
+
+	// OnError is called when a playback error occurs. Called on the UI thread.
+	OnError func(err AudioPlayerError)
 }
 
 // NewAudioPlayerController creates a new audio player controller.
-// Panics if another AudioPlayerController already exists and has not been disposed.
-func NewAudioPlayerController() *AudioPlayerController {
+// Returns an error if another AudioPlayerController already exists and has not been disposed.
+func NewAudioPlayerController() (*AudioPlayerController, error) {
 	audioPlayerMu.Lock()
 	defer audioPlayerMu.Unlock()
 
 	if audioPlayerInstance != nil && !audioPlayerInstance.disposed {
-		panic("drift: only one AudioPlayerController may exist at a time; call Dispose() on the previous instance first")
+		return nil, fmt.Errorf("drift: only one AudioPlayerController may exist at a time; call Dispose() on the previous instance first")
 	}
 
 	state := newAudioPlayerService()
 	c := &AudioPlayerController{
-		state:  state,
-		states: NewStream("drift/audio_player/events", state.events, parseAudioPlayerStateWithError),
-		errs:   NewStream("drift/audio_player/errors", state.errors, parseAudioPlayerErrorWithError),
+		state: state,
 	}
+
+	// Listen for state events from native and dispatch to UI thread.
+	c.eventSub = state.events.Listen(EventHandler{
+		OnEvent: func(data any) {
+			val, err := parseAudioPlayerState(data)
+			if err != nil {
+				errors.Report(&errors.DriftError{
+					Op:      "AudioPlayerController.parseState",
+					Kind:    errors.KindParsing,
+					Channel: "drift/audio_player/events",
+					Err:     err,
+				})
+				return
+			}
+			Dispatch(func() {
+				if c.OnStateChanged != nil {
+					c.OnStateChanged(val)
+				}
+			})
+		},
+		OnError: func(err error) {
+			errors.Report(&errors.DriftError{
+				Op:      "AudioPlayerController.stateStream",
+				Kind:    errors.KindPlatform,
+				Channel: "drift/audio_player/events",
+				Err:     err,
+			})
+		},
+	})
+
+	// Listen for error events from native and dispatch to UI thread.
+	c.errorSub = state.errors.Listen(EventHandler{
+		OnEvent: func(data any) {
+			val, err := parseAudioPlayerError(data)
+			if err != nil {
+				errors.Report(&errors.DriftError{
+					Op:      "AudioPlayerController.parseError",
+					Kind:    errors.KindParsing,
+					Channel: "drift/audio_player/errors",
+					Err:     err,
+				})
+				return
+			}
+			Dispatch(func() {
+				if c.OnError != nil {
+					c.OnError(val)
+				}
+			})
+		},
+		OnError: func(err error) {
+			errors.Report(&errors.DriftError{
+				Op:      "AudioPlayerController.errorStream",
+				Kind:    errors.KindPlatform,
+				Channel: "drift/audio_player/errors",
+				Err:     err,
+			})
+		},
+	})
+
 	audioPlayerInstance = c
-	return c
+	return c, nil
 }
 
 type audioPlayerServiceState struct {
@@ -87,84 +154,70 @@ func newAudioPlayerService() *audioPlayerServiceState {
 	}
 }
 
-// Load loads a media URL for playback.
-func (c *AudioPlayerController) Load(url string) error {
-	_, err := c.state.channel.Invoke("load", map[string]any{
-		"url": url,
-	})
-	return err
-}
-
-// Play starts or resumes playback.
-func (c *AudioPlayerController) Play() error {
-	_, err := c.state.channel.Invoke("play", nil)
-	return err
+// Play loads the given URL (if not already loaded) and starts playback.
+// Calling Play with the same URL after a pause resumes playback.
+func (c *AudioPlayerController) Play(url string) {
+	if url != c.loadedURL {
+		c.state.channel.Invoke("load", map[string]any{
+			"url": url,
+		})
+		c.loadedURL = url
+	}
+	c.state.channel.Invoke("play", nil)
 }
 
 // Pause pauses playback.
-func (c *AudioPlayerController) Pause() error {
-	_, err := c.state.channel.Invoke("pause", nil)
-	return err
+func (c *AudioPlayerController) Pause() {
+	c.state.channel.Invoke("pause", nil)
 }
 
 // Stop stops playback and resets the player to the idle state.
-// The player can be reused by calling [AudioPlayerController.Load] again.
-// To fully release resources, use [AudioPlayerController.Dispose] instead.
-func (c *AudioPlayerController) Stop() error {
-	_, err := c.state.channel.Invoke("stop", nil)
-	return err
+// A subsequent call to [AudioPlayerController.Play] will reload the URL.
+func (c *AudioPlayerController) Stop() {
+	c.state.channel.Invoke("stop", nil)
+	c.loadedURL = ""
 }
 
-// SeekTo seeks to a position in milliseconds.
-func (c *AudioPlayerController) SeekTo(positionMs int64) error {
-	_, err := c.state.channel.Invoke("seekTo", map[string]any{
-		"positionMs": positionMs,
+// SeekTo seeks to the given position.
+func (c *AudioPlayerController) SeekTo(position time.Duration) {
+	c.state.channel.Invoke("seekTo", map[string]any{
+		"positionMs": position.Milliseconds(),
 	})
-	return err
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
-func (c *AudioPlayerController) SetVolume(volume float64) error {
-	_, err := c.state.channel.Invoke("setVolume", map[string]any{
+func (c *AudioPlayerController) SetVolume(volume float64) {
+	c.state.channel.Invoke("setVolume", map[string]any{
 		"volume": volume,
 	})
-	return err
 }
 
 // SetLooping sets whether playback should loop.
-func (c *AudioPlayerController) SetLooping(looping bool) error {
-	_, err := c.state.channel.Invoke("setLooping", map[string]any{
+func (c *AudioPlayerController) SetLooping(looping bool) {
+	c.state.channel.Invoke("setLooping", map[string]any{
 		"looping": looping,
 	})
-	return err
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
-func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
-	_, err := c.state.channel.Invoke("setPlaybackSpeed", map[string]any{
+func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) {
+	c.state.channel.Invoke("setPlaybackSpeed", map[string]any{
 		"rate": rate,
 	})
-	return err
-}
-
-// States returns a stream of [AudioPlayerState] updates. The stream emits
-// a new value whenever the playback state, position, or buffered position changes.
-func (c *AudioPlayerController) States() *Stream[AudioPlayerState] {
-	return c.states
-}
-
-// Errors returns a stream of [AudioPlayerError] values. Errors are delivered
-// separately from state updates and indicate issues such as network failures
-// or unsupported media formats.
-func (c *AudioPlayerController) Errors() *Stream[AudioPlayerError] {
-	return c.errs
 }
 
 // Dispose releases the audio player and its native resources. After disposal,
 // this controller must not be reused. A new [AudioPlayerController] may be
 // created after Dispose returns.
-func (c *AudioPlayerController) Dispose() error {
-	_, err := c.state.channel.Invoke("dispose", nil)
+func (c *AudioPlayerController) Dispose() {
+	if c.eventSub != nil {
+		c.eventSub.Cancel()
+	}
+	if c.errorSub != nil {
+		c.errorSub.Cancel()
+	}
+
+	c.state.channel.Invoke("dispose", nil)
 
 	audioPlayerMu.Lock()
 	c.disposed = true
@@ -172,11 +225,9 @@ func (c *AudioPlayerController) Dispose() error {
 		audioPlayerInstance = nil
 	}
 	audioPlayerMu.Unlock()
-
-	return err
 }
 
-func parseAudioPlayerStateWithError(data any) (AudioPlayerState, error) {
+func parseAudioPlayerState(data any) (AudioPlayerState, error) {
 	m, ok := data.(map[string]any)
 	if !ok {
 		return AudioPlayerState{}, &errors.ParseError{
@@ -193,13 +244,13 @@ func parseAudioPlayerStateWithError(data any) (AudioPlayerState, error) {
 
 	return AudioPlayerState{
 		PlaybackState: PlaybackState(stateInt),
-		PositionMs:    positionMs,
-		DurationMs:    durationMs,
-		BufferedMs:    bufferedMs,
+		Position:      time.Duration(positionMs) * time.Millisecond,
+		Duration:      time.Duration(durationMs) * time.Millisecond,
+		Buffered:      time.Duration(bufferedMs) * time.Millisecond,
 	}, nil
 }
 
-func parseAudioPlayerErrorWithError(data any) (AudioPlayerError, error) {
+func parseAudioPlayerError(data any) (AudioPlayerError, error) {
 	m, ok := data.(map[string]any)
 	if !ok {
 		return AudioPlayerError{}, &errors.ParseError{

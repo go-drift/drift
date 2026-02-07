@@ -3,6 +3,7 @@ package widgets
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/errors"
@@ -16,6 +17,9 @@ import (
 // The native player provides standard controls (play/pause, seek bar, time display)
 // on both platforms. No Drift overlay is needed.
 //
+// Width and Height set explicit dimensions. Use layout widgets such as [Expanded]
+// to fill available space.
+//
 // # Creation Pattern
 //
 //	controller := &widgets.VideoPlayerController{}
@@ -23,7 +27,7 @@ import (
 //	    URL:        "https://example.com/video.mp4",
 //	    Controller: controller,
 //	    AutoPlay:   true,
-//	    Width:      400,
+//	    Volume:     1.0,
 //	    Height:     225,
 //	}
 type VideoPlayer struct {
@@ -39,23 +43,26 @@ type VideoPlayer struct {
 	// Looping restarts playback when it reaches the end.
 	Looping bool
 
-	// Volume sets the playback volume (0.0 to 1.0). Nil uses the platform
-	// default (1.0). Changes are propagated to the native player on rebuild.
-	Volume *float64
+	// Volume sets the playback volume (0.0 to 1.0). The default is full
+	// volume (1.0) when left as the zero value.
+	Volume float64
 
-	// Width of the video player (0 = expand to fill).
+	// Width of the video player in logical pixels.
 	Width float64
 
-	// Height of the video player (0 = 200 default).
+	// Height of the video player in logical pixels.
 	Height float64
 
 	// OnPlaybackStateChanged is called when the playback state changes.
+	// Called on the UI thread.
 	OnPlaybackStateChanged func(state platform.PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
-	OnPositionChanged func(positionMs, durationMs, bufferedMs int64)
+	// Called on the UI thread.
+	OnPositionChanged func(position, duration, buffered time.Duration)
 
 	// OnError is called when a playback error occurs.
+	// Called on the UI thread.
 	OnError func(code string, message string)
 }
 
@@ -102,13 +109,13 @@ func (c *VideoPlayerController) Pause() {
 	}
 }
 
-// SeekTo seeks to a position in milliseconds.
-func (c *VideoPlayerController) SeekTo(positionMs int64) {
+// SeekTo seeks to the given position.
+func (c *VideoPlayerController) SeekTo(position time.Duration) {
 	c.mu.RLock()
 	v := c.view
 	c.mu.RUnlock()
 	if v != nil {
-		v.SeekTo(positionMs)
+		v.SeekTo(position)
 	}
 }
 
@@ -154,38 +161,38 @@ func (c *VideoPlayerController) State() platform.PlaybackState {
 	return platform.PlaybackStateIdle
 }
 
-// PositionMs returns the current playback position in milliseconds,
+// Position returns the current playback position,
 // or 0 if no native view is bound.
-func (c *VideoPlayerController) PositionMs() int64 {
+func (c *VideoPlayerController) Position() time.Duration {
 	c.mu.RLock()
 	v := c.view
 	c.mu.RUnlock()
 	if v != nil {
-		return v.PositionMs()
+		return v.Position()
 	}
 	return 0
 }
 
-// DurationMs returns the total media duration in milliseconds,
+// Duration returns the total media duration,
 // or 0 if no native view is bound or no media is loaded.
-func (c *VideoPlayerController) DurationMs() int64 {
+func (c *VideoPlayerController) Duration() time.Duration {
 	c.mu.RLock()
 	v := c.view
 	c.mu.RUnlock()
 	if v != nil {
-		return v.DurationMs()
+		return v.Duration()
 	}
 	return 0
 }
 
-// BufferedMs returns the buffered position in milliseconds,
+// Buffered returns the buffered position,
 // or 0 if no native view is bound.
-func (c *VideoPlayerController) BufferedMs() int64 {
+func (c *VideoPlayerController) Buffered() time.Duration {
 	c.mu.RLock()
 	v := c.view
 	c.mu.RUnlock()
 	if v != nil {
-		return v.BufferedMs()
+		return v.Buffered()
 	}
 	return 0
 }
@@ -251,12 +258,8 @@ func (s *videoPlayerState) DidUpdateWidget(oldWidget core.StatefulWidget) {
 	if old.Looping != w.Looping {
 		s.platformView.SetLooping(w.Looping)
 	}
-	if volumeChanged(old.Volume, w.Volume) {
-		v := 1.0
-		if w.Volume != nil {
-			v = *w.Volume
-		}
-		s.platformView.SetVolume(v)
+	if old.Volume != w.Volume {
+		s.platformView.SetVolume(effectiveVolume(w.Volume))
 	}
 }
 
@@ -270,20 +273,11 @@ func (s *videoPlayerState) SetState(fn func()) {
 func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 	w := s.element.Widget().(VideoPlayer)
 
-	height := w.Height
-	if height == 0 {
-		height = 200
-	}
-
 	return videoPlayerRender{
-		url:      w.URL,
-		autoPlay: w.AutoPlay,
-		looping:  w.Looping,
-		volume:   w.Volume,
-		width:    w.Width,
-		height:   height,
-		state:    s,
-		config:   w,
+		width:  w.Width,
+		height: w.Height,
+		state:  s,
+		config: w,
 	}
 }
 
@@ -296,10 +290,10 @@ func (s *videoPlayerState) OnPlaybackStateChanged(state platform.PlaybackState) 
 }
 
 // OnPositionChanged implements platform.VideoPlayerClient.
-func (s *videoPlayerState) OnPositionChanged(positionMs, durationMs, bufferedMs int64) {
+func (s *videoPlayerState) OnPositionChanged(position, duration, buffered time.Duration) {
 	w := s.element.Widget().(VideoPlayer)
 	if w.OnPositionChanged != nil {
-		w.OnPositionChanged(positionMs, durationMs, bufferedMs)
+		w.OnPositionChanged(position, duration, buffered)
 	}
 }
 
@@ -323,9 +317,7 @@ func (s *videoPlayerState) ensurePlatformView(config VideoPlayer) {
 		"url":      config.URL,
 		"autoPlay": config.AutoPlay,
 		"looping":  config.Looping,
-	}
-	if config.Volume != nil {
-		params["volume"] = *config.Volume
+		"volume":   effectiveVolume(config.Volume),
 	}
 
 	view, err := platform.GetPlatformViewRegistry().Create("video_player", params)
@@ -355,14 +347,10 @@ func (s *videoPlayerState) ensurePlatformView(config VideoPlayer) {
 }
 
 type videoPlayerRender struct {
-	url      string
-	autoPlay bool
-	looping  bool
-	volume   *float64
-	width    float64
-	height   float64
-	state    *videoPlayerState
-	config   VideoPlayer
+	width  float64
+	height float64
+	state  *videoPlayerState
+	config VideoPlayer
 }
 
 func (v videoPlayerRender) CreateElement() core.Element {
@@ -405,15 +393,8 @@ type renderVideoPlayer struct {
 
 func (r *renderVideoPlayer) PerformLayout() {
 	constraints := r.Constraints()
-	width := r.width
-	if width == 0 {
-		width = constraints.MaxWidth
-	}
-	width = min(max(width, constraints.MinWidth), constraints.MaxWidth)
-
-	height := r.height
-	height = min(max(height, constraints.MinHeight), constraints.MaxHeight)
-
+	width := min(max(r.width, constraints.MinWidth), constraints.MaxWidth)
+	height := min(max(r.height, constraints.MinHeight), constraints.MaxHeight)
 	r.SetSize(graphics.Size{Width: width, Height: height})
 }
 
@@ -441,12 +422,10 @@ func (r *renderVideoPlayer) HitTest(position graphics.Offset, result *layout.Hit
 	return true
 }
 
-func volumeChanged(a, b *float64) bool {
-	if a == nil && b == nil {
-		return false
+// effectiveVolume returns the volume to use, treating 0 as the default (1.0).
+func effectiveVolume(v float64) float64 {
+	if v == 0 {
+		return 1.0
 	}
-	if a == nil || b == nil {
-		return true
-	}
-	return *a != *b
+	return v
 }

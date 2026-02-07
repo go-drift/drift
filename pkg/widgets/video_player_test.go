@@ -4,34 +4,29 @@ import (
 	"encoding/json"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/platform"
 )
 
-func TestVolumeChanged(t *testing.T) {
-	v1 := 0.5
-	v2 := 0.8
-	v1dup := 0.5
-
+func TestEffectiveVolume(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b *float64
-		want bool
+		in   float64
+		want float64
 	}{
-		{"both nil", nil, nil, false},
-		{"a nil b set", nil, &v1, true},
-		{"a set b nil", &v1, nil, true},
-		{"same value", &v1, &v1dup, false},
-		{"different value", &v1, &v2, true},
-		{"same pointer", &v1, &v1, false},
+		{"zero defaults to 1.0", 0, 1.0},
+		{"explicit value kept", 0.5, 0.5},
+		{"full volume kept", 1.0, 1.0},
+		{"low volume kept", 0.01, 0.01},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := volumeChanged(tt.a, tt.b)
+			got := effectiveVolume(tt.in)
 			if got != tt.want {
-				t.Errorf("volumeChanged(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+				t.Errorf("effectiveVolume(%v) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -43,7 +38,7 @@ func TestVideoPlayerController_NilViewMethods(t *testing.T) {
 
 	c.Play()
 	c.Pause()
-	c.SeekTo(1000)
+	c.SeekTo(time.Second)
 	c.SetVolume(0.5)
 	c.SetLooping(true)
 	c.SetPlaybackSpeed(2.0)
@@ -51,14 +46,14 @@ func TestVideoPlayerController_NilViewMethods(t *testing.T) {
 	if c.State() != platform.PlaybackStateIdle {
 		t.Errorf("State() with nil view: got %d, want %d", c.State(), platform.PlaybackStateIdle)
 	}
-	if c.PositionMs() != 0 {
-		t.Error("PositionMs() with nil view should be 0")
+	if c.Position() != 0 {
+		t.Error("Position() with nil view should be 0")
 	}
-	if c.DurationMs() != 0 {
-		t.Error("DurationMs() with nil view should be 0")
+	if c.Duration() != 0 {
+		t.Error("Duration() with nil view should be 0")
 	}
-	if c.BufferedMs() != 0 {
-		t.Error("BufferedMs() with nil view should be 0")
+	if c.Buffered() != 0 {
+		t.Error("Buffered() with nil view should be 0")
 	}
 }
 
@@ -201,8 +196,7 @@ func TestDidUpdateWidget_LoopingChange(t *testing.T) {
 func TestDidUpdateWidget_VolumeChange(t *testing.T) {
 	bridge := setupVideoBridge(t)
 
-	vol := 0.3
-	newWidget := VideoPlayer{URL: "https://example.com/v.mp4", Volume: &vol}
+	newWidget := VideoPlayer{URL: "https://example.com/v.mp4", Volume: 0.3}
 	state := newVideoPlayerState(t, newWidget)
 
 	oldWidget := VideoPlayer{URL: "https://example.com/v.mp4"}
@@ -210,7 +204,7 @@ func TestDidUpdateWidget_VolumeChange(t *testing.T) {
 
 	call := bridge.findCall("setVolume")
 	if call == nil {
-		t.Fatal("expected setVolume call when Volume changes from nil to value")
+		t.Fatal("expected setVolume call when Volume changes")
 	}
 	if v, _ := call.args["volume"].(float64); v != 0.3 {
 		t.Errorf("setVolume: got %f, want 0.3", v)
