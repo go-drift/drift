@@ -1,7 +1,7 @@
 ---
 id: debugging
 title: Debugging & Diagnostics
-sidebar_position: 14
+sidebar_position: 15
 ---
 
 # Debugging & Diagnostics
