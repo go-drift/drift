@@ -171,6 +171,12 @@ func (r *PlatformViewRegistry) handleEvent(data any) {
 		r.handleFocusChanged(dataMap)
 	case "onSwitchChanged":
 		r.handleSwitchChanged(dataMap)
+	case "onPlaybackStateChanged":
+		r.handleVideoPlaybackStateChanged(dataMap)
+	case "onPositionChanged":
+		r.handleVideoPositionChanged(dataMap)
+	case "onVideoError":
+		r.handleVideoError(dataMap)
 	}
 }
 
@@ -537,6 +543,15 @@ func (r *PlatformViewRegistry) handleMethodCall(method string, args any) (any, e
 	case "onSwitchChanged":
 		return r.handleSwitchChanged(argsMap)
 
+	case "onPlaybackStateChanged":
+		return r.handleVideoPlaybackStateChanged(argsMap)
+
+	case "onPositionChanged":
+		return r.handleVideoPositionChanged(argsMap)
+
+	case "onVideoError":
+		return r.handleVideoError(argsMap)
+
 	default:
 		return nil, ErrMethodNotFound
 	}
@@ -596,6 +611,51 @@ func (r *PlatformViewRegistry) handleSwitchChanged(args map[string]any) (any, er
 
 	if switchView, ok := view.(*SwitchView); ok {
 		switchView.handleValueChanged(value)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleVideoPlaybackStateChanged(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	stateInt, _ := toInt(args["state"])
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if videoView, ok := view.(*VideoPlayerView); ok {
+		videoView.handlePlaybackStateChanged(PlaybackState(stateInt))
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleVideoPositionChanged(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	positionMs, _ := toInt64(args["positionMs"])
+	durationMs, _ := toInt64(args["durationMs"])
+	bufferedMs, _ := toInt64(args["bufferedMs"])
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if videoView, ok := view.(*VideoPlayerView); ok {
+		videoView.handlePositionChanged(positionMs, durationMs, bufferedMs)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleVideoError(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	code, _ := args["code"].(string)
+	message, _ := args["message"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if videoView, ok := view.(*VideoPlayerView); ok {
+		videoView.handleError(code, message)
 	}
 	return nil, nil
 }

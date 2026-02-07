@@ -71,6 +71,7 @@ var demos = []Demo{
 	// Media demos
 	{"/camera", "Camera", "Photo capture and gallery access", CategoryMedia, "icon-camera.svg", buildCameraPage},
 	{"/webview", "WebView", "Embedded browser view", CategoryMedia, "icon-globe.svg", buildWebViewPage},
+	{"/media-player", "Media Player", "Video and audio playback", CategoryMedia, "icon-play.svg", buildMediaPlayerPage},
 
 	// System demos
 	{"/permissions", "Other Permissions", "Contacts, calendar, storage access", CategorySystem, "icon-shield.svg", buildPermissionsPage},

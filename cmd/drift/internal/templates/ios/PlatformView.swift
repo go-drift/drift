@@ -71,6 +71,8 @@ enum PlatformViewHandler {
             supportedMethods = ["setValue", "updateConfig"]
         } else if container is NativeActivityIndicatorContainer {
             supportedMethods = ["setAnimating", "updateConfig"]
+        } else if container is NativeVideoPlayerContainer {
+            supportedMethods = ["play", "pause", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl"]
         } else {
             supportedMethods = []
         }
@@ -149,6 +151,37 @@ enum PlatformViewHandler {
                     break
                 }
             }
+        } else if let videoContainer = container as? NativeVideoPlayerContainer {
+            DispatchQueue.main.async {
+                switch method {
+                case "play":
+                    videoContainer.play()
+                case "pause":
+                    videoContainer.pause()
+                case "seekTo":
+                    if let positionMs = (args["positionMs"] as? NSNumber)?.int64Value {
+                        videoContainer.seekTo(positionMs: positionMs)
+                    }
+                case "setVolume":
+                    if let volume = (args["volume"] as? NSNumber)?.floatValue {
+                        videoContainer.setVolume(volume)
+                    }
+                case "setLooping":
+                    if let looping = args["looping"] as? Bool {
+                        videoContainer.setLooping(looping)
+                    }
+                case "setPlaybackSpeed":
+                    if let rate = (args["rate"] as? NSNumber)?.floatValue {
+                        videoContainer.setPlaybackSpeed(rate)
+                    }
+                case "loadUrl":
+                    if let urlString = args["url"] as? String {
+                        videoContainer.loadUrl(urlString)
+                    }
+                default:
+                    break
+                }
+            }
         }
 
         return (nil, nil)
@@ -174,6 +207,8 @@ enum PlatformViewHandler {
             container = NativeSwitchContainer(viewId: viewId, params: params)
         case "activity_indicator":
             container = NativeActivityIndicatorContainer(viewId: viewId, params: params)
+        case "video_player":
+            container = NativeVideoPlayerContainer(viewId: viewId, params: params)
         default:
             return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Unknown view type: \(viewType)"]))
         }

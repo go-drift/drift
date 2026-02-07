@@ -261,6 +261,11 @@ object PlatformChannelManager {
         register("drift/time_picker") { method, args ->
             TimePickerHandler.handle(method, args)
         }
+
+        // Audio Player channel
+        register("drift/audio_player") { method, args ->
+            AudioPlayerHandler.handle(context, method, args)
+        }
     }
 
     private fun setupLifecycleObserver() {

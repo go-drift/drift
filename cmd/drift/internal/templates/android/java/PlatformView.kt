@@ -44,6 +44,7 @@ object PlatformViewHandler {
     private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
     private val switchMethods = setOf("setValue", "updateConfig")
     private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
+    private val videoPlayerMethods = setOf("play", "pause", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl")
 
     fun init(context: Context, hostView: ViewGroup) {
         this.context = context
@@ -82,6 +83,7 @@ object PlatformViewHandler {
             is NativeTextInputContainer -> method in textInputMethods
             is NativeSwitchContainer -> method in switchMethods
             is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
+            is NativeVideoPlayerContainer -> method in videoPlayerMethods
             else -> false
         }
         if (!supported) {
@@ -152,6 +154,34 @@ object PlatformViewHandler {
                         }
                     }
                 }
+                is NativeVideoPlayerContainer -> {
+                    when (method) {
+                        "play" -> container.play()
+                        "pause" -> container.pause()
+                        "seekTo" -> {
+                            val positionMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
+                            container.seekTo(positionMs)
+                        }
+                        "setVolume" -> {
+                            val volume = (args["volume"] as? Number)?.toFloat() ?: 1.0f
+                            container.setVolume(volume)
+                        }
+                        "setLooping" -> {
+                            val looping = args["looping"] as? Boolean ?: false
+                            container.setLooping(looping)
+                        }
+                        "setPlaybackSpeed" -> {
+                            val rate = (args["rate"] as? Number)?.toFloat() ?: 1.0f
+                            container.setPlaybackSpeed(rate)
+                        }
+                        "loadUrl" -> {
+                            val url = args["url"] as? String
+                            if (url != null) {
+                                container.loadUrl(url)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -175,6 +205,7 @@ object PlatformViewHandler {
             "textinput" -> { { NativeTextInputContainer(ctx, viewId, params) } }
             "switch" -> { { NativeSwitchContainer(ctx, viewId, params) } }
             "activity_indicator" -> { { NativeActivityIndicatorContainer(ctx, viewId, params) } }
+            "video_player" -> { { NativeVideoPlayerContainer(ctx, viewId, params) } }
             else -> null
         }
 

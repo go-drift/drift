@@ -317,6 +317,11 @@ final class PlatformChannelManager {
         register(channel: "drift/time_picker") { method, args in
             return TimePickerHandler.handle(method: method, args: args)
         }
+
+        // Audio Player channel
+        register(channel: "drift/audio_player") { method, args in
+            return AudioPlayerHandler.handle(method: method, args: args)
+        }
     }
 }
 
