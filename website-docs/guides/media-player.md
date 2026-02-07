@@ -269,6 +269,8 @@ Both players use canonical error codes that are consistent across Android and iO
 | `"decoder_error"` | `platform.ErrCodeDecoderError` | Media could not be decoded or rendered (codec failure, DRM error) |
 | `"playback_failed"` | `platform.ErrCodePlaybackFailed` | General playback failure that does not fit a more specific category |
 
+Native implementations map platform-specific errors to these codes, so error handling behaves the same on Android and iOS.
+
 ```go
 controller.OnError = func(code, message string) {
     switch code {
