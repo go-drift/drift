@@ -31,14 +31,14 @@ func TestWebViewController_ViewID(t *testing.T) {
 	}
 }
 
-func TestWebViewController_LoadURL(t *testing.T) {
+func TestWebViewController_Load(t *testing.T) {
 	setupTestBridge(t)
 
 	c := NewWebViewController()
 	defer c.Dispose()
 
-	if err := c.LoadURL("https://example.com"); err != nil {
-		t.Errorf("LoadURL: %v", err)
+	if err := c.Load("https://example.com"); err != nil {
+		t.Errorf("Load: %v", err)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestWebViewController_MethodsReturnErrDisposedAfterDispose(t *testing.T) {
 		name string
 		fn   func() error
 	}{
-		{"LoadURL", func() error { return c.LoadURL("https://example.com") }},
+		{"Load", func() error { return c.Load("https://example.com") }},
 		{"GoBack", func() error { return c.GoBack() }},
 		{"GoForward", func() error { return c.GoForward() }},
 		{"Reload", func() error { return c.Reload() }},

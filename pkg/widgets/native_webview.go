@@ -14,7 +14,7 @@ import (
 //
 //	s.web = core.UseController(&s.StateBase, platform.NewWebViewController)
 //	s.web.OnPageFinished = func(url string) { ... }
-//	s.web.LoadURL("https://example.com")
+//	s.web.Load("https://example.com")
 //
 //	// in Build:
 //	widgets.NativeWebView{Controller: s.web, Height: 400}

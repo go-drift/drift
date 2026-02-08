@@ -6,7 +6,7 @@ sidebar_position: 12
 
 # Media Player
 
-Drift provides native media playback through two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI. The video controller creates its native surface eagerly on construction, while the audio controller defers native player creation until the first method call.
+Drift provides native media playback through two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI. Audio and video controllers share the same method set but are separate types. The video controller creates its native surface eagerly on construction, while the audio controller defers native player creation until the first method call.
 
 Both APIs deliver callbacks on the UI thread, so you can update widget state directly without wrapping calls in `drift.Dispatch`.
 
@@ -255,6 +255,8 @@ Both video and audio players share the same `PlaybackState` enum (defined in `pl
 Errors are delivered through the `OnError` callback rather than as a playback state.
 
 ## Error Codes
+
+Control methods like `Load` and `Play` return an `error` that indicates a communication failure with the native player (for example, calling a method after disposal). The `OnError` callback fires for playback-time errors reported by the native player, such as network failures or unsupported codecs.
 
 Both controllers use canonical error codes that are consistent across Android and iOS.
 

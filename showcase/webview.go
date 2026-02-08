@@ -33,7 +33,7 @@ type webViewState struct {
 func (s *webViewState) InitState() {
 	s.controller = core.UseController(&s.StateBase, platform.NewWebViewController)
 
-	s.controller.LoadURL("https://www.google.com")
+	s.controller.Load("https://www.google.com")
 }
 
 func (s *webViewState) Build(ctx core.BuildContext) core.Widget {

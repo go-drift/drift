@@ -15,12 +15,12 @@ import (
 //
 //	s.web = core.UseController(&s.StateBase, platform.NewWebViewController)
 //	s.web.OnPageFinished = func(url string) { ... }
-//	s.web.LoadURL("https://example.com")
+//	s.web.Load("https://example.com")
 //
 // Pass the controller to a [widgets.NativeWebView] widget to embed the native
 // surface in the widget tree.
 //
-// Set callback fields before calling [WebViewController.LoadURL] to ensure
+// Set callback fields before calling [WebViewController.Load] to ensure
 // no events are missed.
 //
 // All methods are safe for concurrent use.
@@ -94,8 +94,8 @@ func (c *WebViewController) ViewID() int64 {
 	return c.viewID
 }
 
-// LoadURL loads the specified URL.
-func (c *WebViewController) LoadURL(url string) error {
+// Load loads the specified URL.
+func (c *WebViewController) Load(url string) error {
 	if c.viewID == 0 {
 		return ErrDisposed
 	}
