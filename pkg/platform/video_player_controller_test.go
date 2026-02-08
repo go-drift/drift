@@ -227,13 +227,13 @@ func TestVideoPlayerController_TransportMethods(t *testing.T) {
 	c.Stop()
 }
 
-func TestVideoPlayerController_MethodsReturnErrorAfterDispose(t *testing.T) {
+func TestVideoPlayerController_MethodsNoOpAfterDispose(t *testing.T) {
 	setupTestBridge(t)
 
 	c := NewVideoPlayerController()
 	c.Dispose()
 
-	// All methods should return ErrViewNotCreated after Dispose.
+	// All methods should silently no-op after Dispose.
 	for _, tc := range []struct {
 		name string
 		fn   func() error
@@ -247,8 +247,8 @@ func TestVideoPlayerController_MethodsReturnErrorAfterDispose(t *testing.T) {
 		{"SetLooping", func() error { return c.SetLooping(true) }},
 		{"SetPlaybackSpeed", func() error { return c.SetPlaybackSpeed(1.5) }},
 	} {
-		if err := tc.fn(); err != ErrViewNotCreated {
-			t.Errorf("%s after Dispose: got %v, want ErrViewNotCreated", tc.name, err)
+		if err := tc.fn(); err != nil {
+			t.Errorf("%s after Dispose: got %v, want nil", tc.name, err)
 		}
 	}
 
