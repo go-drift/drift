@@ -55,6 +55,8 @@ widgets.Row{
 | `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
 | `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
+Set all callbacks in the struct literal that first supplies a URL. Because the native player begins loading as soon as the widget is painted, callbacks added in a later rebuild may miss early events.
+
 ### Controller
 
 Use `VideoPlayerController` for programmatic control. Create the controller once, pass it to the widget, and call methods from event handlers:

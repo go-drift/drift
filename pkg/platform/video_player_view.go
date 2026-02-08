@@ -9,8 +9,10 @@ import (
 // (ExoPlayer on Android, AVPlayer on iOS). It provides transport controls,
 // position/duration tracking, and playback state observation.
 //
-// Set the callback fields to receive playback events, or read cached state
-// directly via [VideoPlayerView.State], [VideoPlayerView.Position], etc.
+// Set callback fields (OnPlaybackStateChanged, OnPositionChanged, OnError)
+// before calling [VideoPlayerView.Load] or any other playback method to
+// ensure no events are missed. Cached state is also available via
+// [VideoPlayerView.State], [VideoPlayerView.Position], etc.
 type VideoPlayerView struct {
 	basePlatformView
 	mu sync.RWMutex

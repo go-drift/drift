@@ -20,6 +20,11 @@ import (
 // Width and Height set explicit dimensions. Use layout widgets such as [Expanded]
 // to fill available space.
 //
+// Set callback fields (OnPlaybackStateChanged, OnPositionChanged, OnError) in
+// the struct literal that first supplies a URL. Because the native player begins
+// loading as soon as the widget is painted, callbacks added in a later rebuild
+// may miss early events such as the initial state transition.
+//
 // # Creation Pattern
 //
 //	controller := &widgets.VideoPlayerController{}
@@ -54,14 +59,20 @@ type VideoPlayer struct {
 
 	// OnPlaybackStateChanged is called when the playback state changes.
 	// Called on the UI thread.
+	// Set this in the struct literal that first supplies a URL to avoid
+	// missing events.
 	OnPlaybackStateChanged func(state platform.PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
 	// Called on the UI thread.
+	// Set this in the struct literal that first supplies a URL to avoid
+	// missing events.
 	OnPositionChanged func(position, duration, buffered time.Duration)
 
 	// OnError is called when a playback error occurs.
 	// Called on the UI thread.
+	// Set this in the struct literal that first supplies a URL to avoid
+	// missing events.
 	OnError func(code string, message string)
 }
 
