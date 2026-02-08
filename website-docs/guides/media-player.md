@@ -89,7 +89,7 @@ widgets.Row{
 
 Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
 
-`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. For non-widget contexts (tests, standalone services), use `platform.NewVideoPlayerController()` directly and call `Dispose()` manually.
+`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `platform.NewVideoPlayerController()` directly and call `Dispose()` manually.
 
 ### VideoPlayer Widget Fields
 
@@ -171,7 +171,7 @@ func (s *audioState) InitState() {
 
 Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
 
-`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. For non-widget contexts (tests, standalone services), use `platform.NewAudioPlayerController()` directly and call `Dispose()` manually.
+`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `platform.NewAudioPlayerController()` directly and call `Dispose()` manually.
 
 ### AudioPlayerController Methods
 
