@@ -59,7 +59,7 @@ private class AudioPlayerInstance {
         let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self else { return }
-            let positionMs = Int64(CMTimeGetSeconds(time) * 1000)
+            let positionMs = time.isNumeric ? Int64(CMTimeGetSeconds(time) * 1000) : 0
             var durationMs: Int64 = 0
             var bufferedMs: Int64 = 0
 
@@ -94,7 +94,8 @@ private class AudioPlayerInstance {
     }
 
     func sendStateEvent(state: Int) {
-        let positionMs = Int64(CMTimeGetSeconds(player.currentTime()) * 1000)
+        let currentTime = player.currentTime()
+        let positionMs = currentTime.isNumeric ? Int64(CMTimeGetSeconds(currentTime) * 1000) : 0
         var durationMs: Int64 = 0
         var bufferedMs: Int64 = 0
 
