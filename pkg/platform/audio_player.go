@@ -26,6 +26,10 @@ var (
 // player instance. Call [AudioPlayerController.Dispose] to release resources
 // when a controller is no longer needed.
 //
+// Set callback fields (OnPlaybackStateChanged, OnPositionChanged, OnError)
+// before calling [AudioPlayerController.Load] or any other playback method
+// to ensure no events are missed.
+//
 // All methods are safe for concurrent use.
 type AudioPlayerController struct {
 	id  int64
@@ -40,14 +44,20 @@ type AudioPlayerController struct {
 
 	// OnPlaybackStateChanged is called when the playback state changes.
 	// Called on the UI thread.
+	// Set this before calling [AudioPlayerController.Load] or any other
+	// playback method to avoid missing events.
 	OnPlaybackStateChanged func(PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
 	// Called on the UI thread.
+	// Set this before calling [AudioPlayerController.Load] or any other
+	// playback method to avoid missing events.
 	OnPositionChanged func(position, duration, buffered time.Duration)
 
 	// OnError is called when a playback error occurs.
 	// Called on the UI thread.
+	// Set this before calling [AudioPlayerController.Load] or any other
+	// playback method to avoid missing events.
 	OnError func(code, message string)
 }
 

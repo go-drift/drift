@@ -23,14 +23,17 @@ type VideoPlayerView struct {
 
 	// OnPlaybackStateChanged is called when the playback state changes.
 	// Called on the UI thread via [Dispatch].
+	// Set this before calling any playback method to avoid missing events.
 	OnPlaybackStateChanged func(PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
 	// Called on the UI thread via [Dispatch].
+	// Set this before calling any playback method to avoid missing events.
 	OnPositionChanged func(position, duration, buffered time.Duration)
 
 	// OnError is called when a playback error occurs.
 	// Called on the UI thread via [Dispatch].
+	// Set this before calling any playback method to avoid missing events.
 	OnError func(code, message string)
 }
 
