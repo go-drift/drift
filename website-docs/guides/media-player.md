@@ -95,7 +95,7 @@ Set all callbacks before calling `Load`, `Play`, or any other playback method. C
 
 ### VideoPlayerController Methods
 
-All methods are safe for concurrent use.
+All methods are safe for concurrent use. Set callback fields before calling `Load`.
 
 | Method | Description |
 |--------|-------------|
@@ -154,6 +154,8 @@ func (s *audioState) InitState() {
     s.controller.OnError = func(code, message string) {
         s.status.Set("Error (" + code + "): " + message)
     }
+
+    s.controller.Load("https://example.com/song.mp3")
 }
 ```
 
@@ -163,7 +165,7 @@ Set all callbacks before calling `Load`, `Play`, or any other playback method. C
 
 ### AudioPlayerController Methods
 
-All methods are safe for concurrent use.
+All methods are safe for concurrent use. Set callback fields before calling `Load`.
 
 | Method | Description |
 |--------|-------------|
@@ -199,7 +201,6 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Play", func() {
-                        s.controller.Load("https://example.com/song.mp3")
                         s.controller.Play()
                     }),
                     theme.ButtonOf(ctx, "Pause", func() {

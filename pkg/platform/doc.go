@@ -24,4 +24,16 @@
 // package defines its own processed versions with logical coordinates.
 // These duplications are intentional: collapsing them would couple
 // embedder APIs to framework internals.
+//
+// # Media Controllers
+//
+// AudioPlayerController and VideoPlayerController share an identical method
+// set (Load, Play, Pause, Stop, SeekTo, SetVolume, SetLooping,
+// SetPlaybackSpeed, State, Position, Duration, Buffered, Dispose) and
+// callback fields (OnPlaybackStateChanged, OnPositionChanged, OnError).
+// A shared interface is intentionally omitted today because there are no
+// consumers that need to abstract over both types. If generic media
+// components (seek bar, notification manager) are added later, extract a
+// MediaController interface at that point rather than forcing one
+// prematurely.
 package platform

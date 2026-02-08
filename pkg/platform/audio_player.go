@@ -30,7 +30,9 @@ var (
 // before calling [AudioPlayerController.Load] or any other playback method
 // to ensure no events are missed.
 //
-// All methods are safe for concurrent use.
+// All methods are safe for concurrent use. Callback fields are plain struct
+// fields; set them before calling Load and do not modify them after playback
+// begins.
 type AudioPlayerController struct {
 	id  int64
 	svc *audioPlayerServiceState
