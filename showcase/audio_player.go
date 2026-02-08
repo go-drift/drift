@@ -5,50 +5,45 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
-	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-func buildMediaPlayerPage(ctx core.BuildContext) core.Widget {
-	return mediaPlayerPage{}
+const audioURL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+
+func buildAudioPlayerPage(ctx core.BuildContext) core.Widget {
+	return audioPlayerPage{}
 }
 
-type mediaPlayerPage struct{}
+type audioPlayerPage struct{}
 
-func (m mediaPlayerPage) CreateElement() core.Element {
-	return core.NewStatefulElement(m, nil)
+func (a audioPlayerPage) CreateElement() core.Element {
+	return core.NewStatefulElement(a, nil)
 }
 
-func (m mediaPlayerPage) Key() any {
+func (a audioPlayerPage) Key() any {
 	return nil
 }
 
-func (m mediaPlayerPage) CreateState() core.State {
-	return &mediaPlayerState{}
+func (a audioPlayerPage) CreateState() core.State {
+	return &audioPlayerState{}
 }
 
-const audioURL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-
-type mediaPlayerState struct {
+type audioPlayerState struct {
 	core.StateBase
-	videoStatus     *core.ManagedState[string]
 	audioStatus     *core.ManagedState[string]
 	audioStateLabel string
 	audioController *platform.AudioPlayerController
-	videoController *widgets.VideoPlayerController
 	audioLooping    bool
 	audioMuted      bool
 }
 
-func (s *mediaPlayerState) InitState() {
-	s.videoStatus = core.NewManagedState(&s.StateBase, "Idle")
+func (s *audioPlayerState) InitState() {
 	s.audioStatus = core.NewManagedState(&s.StateBase, "Idle")
 	s.audioStateLabel = "Idle"
 
 	s.audioController = core.UseController(&s.StateBase, platform.NewAudioPlayerController)
-	s.videoController = &widgets.VideoPlayerController{}
 
 	s.audioController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
 		s.audioStateLabel = state.String()
@@ -67,66 +62,10 @@ func (s *mediaPlayerState) InitState() {
 	s.audioController.Load(audioURL)
 }
 
-func (s *mediaPlayerState) Build(ctx core.BuildContext) core.Widget {
+func (s *audioPlayerState) Build(ctx core.BuildContext) core.Widget {
 	_, colors, _ := theme.UseTheme(ctx)
 
-	return demoPage(ctx, "Media Player",
-		// Video section
-		sectionTitle("Video Player", colors),
-		widgets.VSpace(8),
-		widgets.Text{
-			Content: "Native platform video player with built-in controls. Use a VideoPlayerController for programmatic control.",
-			Wrap:    true,
-			Style:   labelStyle(colors),
-		},
-		widgets.VSpace(12),
-		widgets.Row{
-			MainAxisSize: widgets.MainAxisSizeMax,
-			Children: []core.Widget{
-				widgets.Expanded{
-					Child: widgets.VideoPlayer{
-						URL:        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-						Controller: s.videoController,
-						AutoPlay:   false,
-						Volume:     1.0,
-						Height:     220,
-						OnPlaybackStateChanged: func(state platform.PlaybackState) {
-							s.videoStatus.Set(state.String())
-						},
-						OnError: func(code string, message string) {
-							s.videoStatus.Set("Error (" + code + "): " + message)
-						},
-					},
-				},
-			},
-		},
-		widgets.VSpace(8),
-		// Video controller buttons
-		widgets.Row{
-			MainAxisAlignment: widgets.MainAxisAlignmentStart,
-			Children: []core.Widget{
-				smallButton(ctx, "Seek +10s", func() {
-					pos := s.videoController.Position()
-					s.videoController.SeekTo(pos + 10*time.Second)
-				}, colors),
-				widgets.HSpace(6),
-				smallButton(ctx, "Seek -10s", func() {
-					pos := s.videoController.Position()
-					if pos > 10*time.Second {
-						s.videoController.SeekTo(pos - 10*time.Second)
-					} else {
-						s.videoController.SeekTo(0)
-					}
-				}, colors),
-			},
-		},
-		widgets.VSpace(8),
-		statusCard(s.videoStatus.Get(), colors),
-		widgets.VSpace(32),
-
-		// Audio section
-		sectionTitle("Audio Player", colors),
-		widgets.VSpace(8),
+	return demoPage(ctx, "Audio Player",
 		widgets.Text{
 			Content: "Standalone audio playback with no visual surface. Build your own UI with the controller.",
 			Wrap:    true,
@@ -140,12 +79,12 @@ func (s *mediaPlayerState) Build(ctx core.BuildContext) core.Widget {
 	)
 }
 
-func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.ColorScheme) core.Widget {
+func (s *audioPlayerState) audioControls(ctx core.BuildContext, colors theme.ColorScheme) core.Widget {
 	return widgets.Column{
 		MainAxisSize:       widgets.MainAxisSizeMin,
 		CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
 		Children: []core.Widget{
-			// URL display
+			// Song label
 			widgets.Container{
 				Color:        colors.SurfaceVariant,
 				BorderRadius: 6,
@@ -199,7 +138,7 @@ func (s *mediaPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				},
 			},
 			widgets.VSpace(8),
-			// Playback options
+			// Playback speed
 			widgets.Row{
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
@@ -249,24 +188,6 @@ func toggleLabel(off, on string, active bool) string {
 		return on
 	}
 	return off
-}
-
-func smallButton(ctx core.BuildContext, label string, onTap func(), colors theme.ColorScheme) core.Widget {
-	return widgets.GestureDetector{
-		OnTap: onTap,
-		Child: widgets.Container{
-			Color:        colors.SurfaceContainerHigh,
-			BorderRadius: 6,
-			Padding:      layout.EdgeInsetsSymmetric(12, 6),
-			Child: widgets.Text{
-				Content: label,
-				Style: graphics.TextStyle{
-					Color:    colors.OnSurface,
-					FontSize: 13,
-				},
-			},
-		},
-	}
 }
 
 func formatDuration(d time.Duration) string {

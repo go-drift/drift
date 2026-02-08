@@ -71,7 +71,8 @@ var demos = []Demo{
 	// Media demos
 	{"/camera", "Camera", "Photo capture and gallery access", CategoryMedia, "icon-camera.svg", buildCameraPage},
 	{"/webview", "WebView", "Embedded browser view", CategoryMedia, "icon-globe.svg", buildWebViewPage},
-	{"/media-player", "Media Player", "Video and audio playback", CategoryMedia, "icon-play.svg", buildMediaPlayerPage},
+	{"/video-player", "Video Player", "Native video playback with controls", CategoryMedia, "icon-play.svg", buildVideoPlayerPage},
+	{"/audio-player", "Audio Player", "Headless audio with custom UI", CategoryMedia, "icon-music.svg", buildAudioPlayerPage},
 
 	// System demos
 	{"/permissions", "Other Permissions", "Contacts, calendar, storage access", CategorySystem, "icon-shield.svg", buildPermissionsPage},
