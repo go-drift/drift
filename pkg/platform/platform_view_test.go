@@ -68,21 +68,8 @@ func (v *stubView) SetVisible(bool)                    {}
 
 func setupTestBridge(t *testing.T) *testBridge {
 	bridge := &testBridge{}
-	old := nativeBridge
-	nativeBridge = bridge
-
-	// Register an inline dispatch so dispatched callbacks execute immediately in tests.
-	oldDispatch := dispatchFunc
-	dispatchMu.Lock()
-	dispatchFunc = func(cb func()) { cb() }
-	dispatchMu.Unlock()
-
-	t.Cleanup(func() {
-		nativeBridge = old
-		dispatchMu.Lock()
-		dispatchFunc = oldDispatch
-		dispatchMu.Unlock()
-	})
+	SetupTestBridge(t.Cleanup)
+	SetNativeBridge(bridge)
 	return bridge
 }
 

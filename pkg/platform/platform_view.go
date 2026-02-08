@@ -135,11 +135,15 @@ func newPlatformViewRegistry() *PlatformViewRegistry {
 
 	// Also listen for events from native (text changes, focus, etc.)
 	eventChannel := NewEventChannel("drift/platform_views")
-	eventChannel.Listen(EventHandler{
-		OnEvent: func(data any) {
-			r.handleEvent(data)
-		},
-	})
+	listenForViewEvents := func() {
+		eventChannel.Listen(EventHandler{
+			OnEvent: func(data any) {
+				r.handleEvent(data)
+			},
+		})
+	}
+	listenForViewEvents()
+	registerBuiltinInit(listenForViewEvents)
 
 	return r
 }
