@@ -99,19 +99,19 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 
 | Method | Description |
 |--------|-------------|
-| `Load(url string)` | Load a media URL. The native player begins buffering the media source. |
-| `Play()` | Start or resume playback |
-| `Pause()` | Pause playback |
-| `Stop()` | Stop playback and reset to idle |
-| `SeekTo(position time.Duration)` | Seek to a position |
-| `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
-| `SetLooping(looping bool)` | Enable or disable looping |
-| `SetPlaybackSpeed(rate float64)` | Set playback speed (1.0 = normal) |
+| `Load(url string) error` | Load a media URL. The native player begins buffering the media source. |
+| `Play() error` | Start or resume playback |
+| `Pause() error` | Pause playback |
+| `Stop() error` | Stop playback and reset to idle |
+| `SeekTo(position time.Duration) error` | Seek to a position |
+| `SetVolume(volume float64) error` | Set volume (0.0 to 1.0) |
+| `SetLooping(looping bool) error` | Enable or disable looping |
+| `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal) |
 | `State() PlaybackState` | Current playback state |
 | `Position() time.Duration` | Current playback position |
 | `Duration() time.Duration` | Total media duration |
 | `Buffered() time.Duration` | Buffered position |
-| `ViewID() int64` | Platform view ID (used internally by the widget) |
+| `ViewID() int64` | Platform view ID, or 0 if the view was not created |
 | `Dispose()` | Release native resources. The controller must not be reused after disposal. |
 
 ### VideoPlayerController Callbacks
@@ -169,19 +169,19 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 
 | Method | Description |
 |--------|-------------|
-| `Load(url string)` | Load a media URL. The native player begins buffering the media source. |
-| `Play()` | Start or resume playback |
-| `Pause()` | Pause playback |
-| `Stop()` | Stop playback and reset to idle |
-| `SeekTo(position time.Duration)` | Seek to a position |
-| `SetVolume(volume float64)` | Set volume (0.0 to 1.0) |
-| `SetLooping(looping bool)` | Enable or disable looping |
-| `SetPlaybackSpeed(rate float64)` | Set playback speed (1.0 = normal) |
+| `Load(url string) error` | Load a media URL. The native player begins buffering the media source. |
+| `Play() error` | Start or resume playback |
+| `Pause() error` | Pause playback |
+| `Stop() error` | Stop playback and reset to idle |
+| `SeekTo(position time.Duration) error` | Seek to a position |
+| `SetVolume(volume float64) error` | Set volume (0.0 to 1.0) |
+| `SetLooping(looping bool) error` | Enable or disable looping |
+| `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal) |
 | `State() PlaybackState` | Current playback state |
 | `Position() time.Duration` | Current playback position |
 | `Duration() time.Duration` | Total media duration |
 | `Buffered() time.Duration` | Buffered position |
-| `Dispose()` | Release native resources. The controller must not be reused after disposal. |
+| `Dispose()` | Release native resources. Idempotent; safe to call more than once. |
 
 ### AudioPlayerController Callbacks
 

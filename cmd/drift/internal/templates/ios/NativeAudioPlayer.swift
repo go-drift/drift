@@ -39,17 +39,23 @@ private class AudioPlayerInstance {
                 } else {
                     state = 4 // Paused
                 }
+                self.stopPositionUpdates()
             case .waitingToPlayAtSpecifiedRate:
                 state = 1 // Buffering
+                self.stopPositionUpdates()
             case .playing:
                 state = 2 // Playing
+                self.startPositionUpdates()
             @unknown default:
                 state = 0 // Idle
+                self.stopPositionUpdates()
             }
             self.sendStateEvent(state: state)
         }
+    }
 
-        // Add periodic time observer for position updates
+    private func startPositionUpdates() {
+        guard timeObserver == nil else { return }
         let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self else { return }
@@ -67,34 +73,23 @@ private class AudioPlayerInstance {
                 }
             }
 
-            let playbackState: Int
-            switch self.player.timeControlStatus {
-            case .paused:
-                if self.player.currentItem == nil {
-                    playbackState = 0
-                } else if self.hasReachedEnd {
-                    playbackState = 3
-                } else {
-                    playbackState = 4
-                }
-            case .waitingToPlayAtSpecifiedRate:
-                playbackState = 1
-            case .playing:
-                playbackState = 2
-            @unknown default:
-                playbackState = 0
-            }
-
             PlatformChannelManager.shared.sendEvent(
                 channel: "drift/audio_player/events",
                 data: [
                     "playerId": self.id,
-                    "playbackState": playbackState,
+                    "playbackState": 2, // Playing
                     "positionMs": positionMs,
                     "durationMs": max(durationMs, 0),
                     "bufferedMs": bufferedMs
                 ]
             )
+        }
+    }
+
+    private func stopPositionUpdates() {
+        if let observer = timeObserver {
+            player.removeTimeObserver(observer)
+            timeObserver = nil
         }
     }
 
@@ -263,10 +258,7 @@ private class AudioPlayerInstance {
     }
 
     func dispose() {
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-            timeObserver = nil
-        }
+        stopPositionUpdates()
         timeControlObservation?.invalidate()
         timeControlObservation = nil
         itemStatusObservation?.invalidate()

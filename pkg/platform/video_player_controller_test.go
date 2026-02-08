@@ -227,21 +227,30 @@ func TestVideoPlayerController_TransportMethods(t *testing.T) {
 	c.Stop()
 }
 
-func TestVideoPlayerController_MethodsNoOpAfterDispose(t *testing.T) {
+func TestVideoPlayerController_MethodsReturnErrorAfterDispose(t *testing.T) {
 	setupTestBridge(t)
 
 	c := NewVideoPlayerController()
 	c.Dispose()
 
-	// All methods should be no-ops after Dispose.
-	c.Load("https://example.com/video.mp4")
-	c.Play()
-	c.Pause()
-	c.Stop()
-	c.SeekTo(time.Second)
-	c.SetVolume(0.5)
-	c.SetLooping(true)
-	c.SetPlaybackSpeed(1.5)
+	// All methods should return ErrViewNotCreated after Dispose.
+	for _, tc := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"Load", func() error { return c.Load("https://example.com/video.mp4") }},
+		{"Play", func() error { return c.Play() }},
+		{"Pause", func() error { return c.Pause() }},
+		{"Stop", func() error { return c.Stop() }},
+		{"SeekTo", func() error { return c.SeekTo(time.Second) }},
+		{"SetVolume", func() error { return c.SetVolume(0.5) }},
+		{"SetLooping", func() error { return c.SetLooping(true) }},
+		{"SetPlaybackSpeed", func() error { return c.SetPlaybackSpeed(1.5) }},
+	} {
+		if err := tc.fn(); err != ErrViewNotCreated {
+			t.Errorf("%s after Dispose: got %v, want ErrViewNotCreated", tc.name, err)
+		}
+	}
 
 	if c.State() != PlaybackStateIdle {
 		t.Errorf("State() after Dispose: got %v, want Idle", c.State())

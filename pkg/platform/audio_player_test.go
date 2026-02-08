@@ -272,6 +272,30 @@ func TestAudioPlayerController_PlayPauseSeekCycle(t *testing.T) {
 	}
 }
 
+func TestAudioPlayerController_MethodsNoOpAfterDispose(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewAudioPlayerController()
+	c.Dispose()
+
+	// All methods should be no-ops after Dispose.
+	c.Load("https://example.com/song.mp3")
+	c.Play()
+	c.Pause()
+	c.Stop()
+	c.SeekTo(time.Second)
+	c.SetVolume(0.5)
+	c.SetLooping(true)
+	c.SetPlaybackSpeed(1.5)
+
+	if c.State() != PlaybackStateIdle {
+		t.Errorf("State() after Dispose: got %v, want Idle", c.State())
+	}
+	if c.Position() != 0 {
+		t.Error("Position() after Dispose should be 0")
+	}
+}
+
 func TestAudioPlayerController_EventRoutesToCorrectInstance(t *testing.T) {
 	setupTestBridge(t)
 

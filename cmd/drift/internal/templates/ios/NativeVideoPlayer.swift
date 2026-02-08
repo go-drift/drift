@@ -62,12 +62,16 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
                 } else {
                     state = 4 // Paused
                 }
+                self.stopPositionUpdates()
             case .waitingToPlayAtSpecifiedRate:
                 state = 1 // Buffering
+                self.stopPositionUpdates()
             case .playing:
                 state = 2 // Playing
+                self.startPositionUpdates()
             @unknown default:
                 state = 0 // Idle
+                self.stopPositionUpdates()
             }
             PlatformChannelManager.shared.sendEvent(
                 channel: "drift/platform_views",
@@ -79,7 +83,18 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
             )
         }
 
-        // Add periodic time observer for position updates
+        // Load media if URL provided
+        if let urlString = params["url"] as? String, let url = URL(string: urlString) {
+            loadItem(url: url)
+
+            if autoPlay {
+                player.play()
+            }
+        }
+    }
+
+    private func startPositionUpdates() {
+        guard timeObserver == nil else { return }
         let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self else { return }
@@ -87,7 +102,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
             var durationMs: Int64 = 0
             var bufferedMs: Int64 = 0
 
-            if let item = player.currentItem {
+            if let item = self.player.currentItem {
                 if item.duration.isNumeric {
                     durationMs = Int64(CMTimeGetSeconds(item.duration) * 1000)
                 }
@@ -108,14 +123,12 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
                 ]
             )
         }
+    }
 
-        // Load media if URL provided
-        if let urlString = params["url"] as? String, let url = URL(string: urlString) {
-            loadItem(url: url)
-
-            if autoPlay {
-                player.play()
-            }
+    private func stopPositionUpdates() {
+        if let observer = timeObserver {
+            player.removeTimeObserver(observer)
+            timeObserver = nil
         }
     }
 
@@ -207,10 +220,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     }
 
     func dispose() {
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-            timeObserver = nil
-        }
+        stopPositionUpdates()
         timeControlObservation?.invalidate()
         timeControlObservation = nil
         itemStatusObservation?.invalidate()

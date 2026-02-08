@@ -4,8 +4,15 @@ import (
 	"fmt"
 	"time"
 
+	stderrors "errors"
+
 	"github.com/go-drift/drift/pkg/errors"
 )
+
+// ErrViewNotCreated is returned when a VideoPlayerController method is called
+// but the underlying platform view was never created (creation failure) or has
+// been disposed.
+var ErrViewNotCreated = stderrors.New("platform: video player view not created")
 
 // VideoPlayerController provides video playback control with a native visual
 // surface (ExoPlayer on Android, AVPlayer on iOS). The controller creates
@@ -139,67 +146,67 @@ func (c *VideoPlayerController) Buffered() time.Duration {
 // Load loads a new media URL, replacing the current media item.
 // Call [VideoPlayerController.Play] to start playback.
 func (c *VideoPlayerController) Load(url string) error {
-	if c.view != nil {
-		return c.view.Load(url)
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.Load(url)
 }
 
 // Play starts or resumes playback. Call [VideoPlayerController.Load] first
 // to set the media URL.
 func (c *VideoPlayerController) Play() error {
-	if c.view != nil {
-		return c.view.Play()
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.Play()
 }
 
 // Pause pauses playback.
 func (c *VideoPlayerController) Pause() error {
-	if c.view != nil {
-		return c.view.Pause()
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.Pause()
 }
 
 // Stop stops playback and resets the player to the idle state.
 func (c *VideoPlayerController) Stop() error {
-	if c.view != nil {
-		return c.view.Stop()
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.Stop()
 }
 
 // SeekTo seeks to the given position.
 func (c *VideoPlayerController) SeekTo(position time.Duration) error {
-	if c.view != nil {
-		return c.view.SeekTo(position)
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.SeekTo(position)
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
 func (c *VideoPlayerController) SetVolume(volume float64) error {
-	if c.view != nil {
-		return c.view.SetVolume(volume)
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.SetVolume(volume)
 }
 
 // SetLooping sets whether playback should loop.
 func (c *VideoPlayerController) SetLooping(looping bool) error {
-	if c.view != nil {
-		return c.view.SetLooping(looping)
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.SetLooping(looping)
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
 func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) error {
-	if c.view != nil {
-		return c.view.SetPlaybackSpeed(rate)
+	if c.view == nil {
+		return ErrViewNotCreated
 	}
-	return nil
+	return c.view.SetPlaybackSpeed(rate)
 }
 
 // Dispose releases the video player and its native resources. After disposal,
