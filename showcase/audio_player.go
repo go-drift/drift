@@ -113,7 +113,6 @@ func (s *audioPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 					widgets.HSpace(8),
 					theme.ButtonOf(ctx, "Stop", func() {
 						s.audioController.Stop()
-						s.audioStatus.Set("Stopped")
 					}),
 				},
 			},

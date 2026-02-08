@@ -18,8 +18,11 @@ Create a `VideoPlayerController` with `UseController`, set callbacks, and pass i
 
 ```go
 import (
+    "time"
+
     "github.com/go-drift/drift/pkg/core"
     "github.com/go-drift/drift/pkg/platform"
+    "github.com/go-drift/drift/pkg/theme"
     "github.com/go-drift/drift/pkg/widgets"
 )
 
@@ -35,6 +38,9 @@ func (s *playerState) InitState() {
 
     s.controller.OnPlaybackStateChanged = func(state platform.PlaybackState) {
         s.status.Set(state.String())
+    }
+    s.controller.OnPositionChanged = func(position, duration, buffered time.Duration) {
+        s.status.Set(position.String() + " / " + duration.String())
     }
     s.controller.OnError = func(code, message string) {
         s.status.Set("Error (" + code + "): " + message)
@@ -130,8 +136,12 @@ Multiple controllers may exist concurrently, each managing its own native player
 
 ```go
 import (
+    "time"
+
     "github.com/go-drift/drift/pkg/core"
     "github.com/go-drift/drift/pkg/platform"
+    "github.com/go-drift/drift/pkg/theme"
+    "github.com/go-drift/drift/pkg/widgets"
 )
 
 type audioState struct {
@@ -246,23 +256,13 @@ Errors are delivered through the `OnError` callback rather than as a playback st
 
 ## Error Codes
 
-All media controllers use canonical error codes that are consistent across Android and iOS.
-
-### Audio and Video
+Both controllers use canonical error codes that are consistent across Android and iOS.
 
 | Code | Constant | Description |
 |------|----------|-------------|
 | `"source_error"` | `platform.ErrCodeSourceError` | Media source could not be loaded (network failure, invalid URL, unsupported format) |
 | `"decoder_error"` | `platform.ErrCodeDecoderError` | Media could not be decoded or rendered (codec failure, DRM error) |
 | `"playback_failed"` | `platform.ErrCodePlaybackFailed` | General playback failure that does not fit a more specific category |
-
-### WebView
-
-| Code | Constant | Description |
-|------|----------|-------------|
-| `"network_error"` | `platform.ErrCodeNetworkError` | DNS resolution, connectivity, or timeout failure |
-| `"ssl_error"` | `platform.ErrCodeSSLError` | TLS/certificate failure (untrusted, expired) |
-| `"load_failed"` | `platform.ErrCodeLoadFailed` | General page load failure that does not fit a more specific category |
 
 Native implementations map platform-specific errors to these codes, so error handling behaves the same on Android and iOS.
 
