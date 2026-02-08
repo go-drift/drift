@@ -79,7 +79,7 @@ class NativeVideoPlayerContainer(
                 val state = when (playbackState) {
                     Player.STATE_IDLE -> 0
                     Player.STATE_BUFFERING -> 1
-                    Player.STATE_READY -> 2
+                    Player.STATE_READY -> if (player.isPlaying) 2 else 4 // Playing or Paused
                     Player.STATE_ENDED -> 3
                     else -> 0
                 }
