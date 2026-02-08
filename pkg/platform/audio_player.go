@@ -214,65 +214,73 @@ func ensureAudioService() *audioPlayerServiceState {
 
 // Load prepares the given URL for playback. The native player begins buffering
 // the media source. Call [AudioPlayerController.Play] to start playback.
-func (c *AudioPlayerController) Load(url string) {
-	c.svc.channel.Invoke("load", map[string]any{
+func (c *AudioPlayerController) Load(url string) error {
+	_, err := c.svc.channel.Invoke("load", map[string]any{
 		"playerId": c.id,
 		"url":      url,
 	})
+	return err
 }
 
 // Play starts or resumes playback. Call [AudioPlayerController.Load] first
 // to set the media URL.
-func (c *AudioPlayerController) Play() {
-	c.svc.channel.Invoke("play", map[string]any{
+func (c *AudioPlayerController) Play() error {
+	_, err := c.svc.channel.Invoke("play", map[string]any{
 		"playerId": c.id,
 	})
+	return err
 }
 
 // Pause pauses playback.
-func (c *AudioPlayerController) Pause() {
-	c.svc.channel.Invoke("pause", map[string]any{
+func (c *AudioPlayerController) Pause() error {
+	_, err := c.svc.channel.Invoke("pause", map[string]any{
 		"playerId": c.id,
 	})
+	return err
 }
 
 // Stop stops playback and resets the player to the idle state.
-func (c *AudioPlayerController) Stop() {
-	c.svc.channel.Invoke("stop", map[string]any{
+func (c *AudioPlayerController) Stop() error {
+	_, err := c.svc.channel.Invoke("stop", map[string]any{
 		"playerId": c.id,
 	})
+	return err
 }
 
 // SeekTo seeks to the given position.
-func (c *AudioPlayerController) SeekTo(position time.Duration) {
-	c.svc.channel.Invoke("seekTo", map[string]any{
+func (c *AudioPlayerController) SeekTo(position time.Duration) error {
+	_, err := c.svc.channel.Invoke("seekTo", map[string]any{
 		"playerId":   c.id,
 		"positionMs": position.Milliseconds(),
 	})
+	return err
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
-func (c *AudioPlayerController) SetVolume(volume float64) {
-	c.svc.channel.Invoke("setVolume", map[string]any{
+func (c *AudioPlayerController) SetVolume(volume float64) error {
+	_, err := c.svc.channel.Invoke("setVolume", map[string]any{
 		"playerId": c.id,
 		"volume":   volume,
 	})
+	return err
 }
 
 // SetLooping sets whether playback should loop.
-func (c *AudioPlayerController) SetLooping(looping bool) {
-	c.svc.channel.Invoke("setLooping", map[string]any{
+func (c *AudioPlayerController) SetLooping(looping bool) error {
+	_, err := c.svc.channel.Invoke("setLooping", map[string]any{
 		"playerId": c.id,
 		"looping":  looping,
 	})
+	return err
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
-func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) {
-	c.svc.channel.Invoke("setPlaybackSpeed", map[string]any{
+func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
+	_, err := c.svc.channel.Invoke("setPlaybackSpeed", map[string]any{
 		"playerId": c.id,
 		"rate":     rate,
 	})
+	return err
 }
 
 // Dispose releases the audio player and its native resources. After disposal,

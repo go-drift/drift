@@ -136,60 +136,68 @@ func (c *VideoPlayerController) Buffered() time.Duration {
 
 // Load loads a new media URL, replacing the current media item.
 // Call [VideoPlayerController.Play] to start playback.
-func (c *VideoPlayerController) Load(url string) {
+func (c *VideoPlayerController) Load(url string) error {
 	if c.view != nil {
-		c.view.Load(url)
+		return c.view.Load(url)
 	}
+	return nil
 }
 
 // Play starts or resumes playback. Call [VideoPlayerController.Load] first
 // to set the media URL.
-func (c *VideoPlayerController) Play() {
+func (c *VideoPlayerController) Play() error {
 	if c.view != nil {
-		c.view.Play()
+		return c.view.Play()
 	}
+	return nil
 }
 
 // Pause pauses playback.
-func (c *VideoPlayerController) Pause() {
+func (c *VideoPlayerController) Pause() error {
 	if c.view != nil {
-		c.view.Pause()
+		return c.view.Pause()
 	}
+	return nil
 }
 
 // Stop stops playback and resets the player to the idle state.
-func (c *VideoPlayerController) Stop() {
+func (c *VideoPlayerController) Stop() error {
 	if c.view != nil {
-		c.view.Stop()
+		return c.view.Stop()
 	}
+	return nil
 }
 
 // SeekTo seeks to the given position.
-func (c *VideoPlayerController) SeekTo(position time.Duration) {
+func (c *VideoPlayerController) SeekTo(position time.Duration) error {
 	if c.view != nil {
-		c.view.SeekTo(position)
+		return c.view.SeekTo(position)
 	}
+	return nil
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
-func (c *VideoPlayerController) SetVolume(volume float64) {
+func (c *VideoPlayerController) SetVolume(volume float64) error {
 	if c.view != nil {
-		c.view.SetVolume(volume)
+		return c.view.SetVolume(volume)
 	}
+	return nil
 }
 
 // SetLooping sets whether playback should loop.
-func (c *VideoPlayerController) SetLooping(looping bool) {
+func (c *VideoPlayerController) SetLooping(looping bool) error {
 	if c.view != nil {
-		c.view.SetLooping(looping)
+		return c.view.SetLooping(looping)
 	}
+	return nil
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
-func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) {
+func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) error {
 	if c.view != nil {
-		c.view.SetPlaybackSpeed(rate)
+		return c.view.SetPlaybackSpeed(rate)
 	}
+	return nil
 }
 
 // Dispose releases the video player and its native resources. After disposal,

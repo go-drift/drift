@@ -62,55 +62,63 @@ func (v *VideoPlayerView) Create(params map[string]any) error {
 func (v *VideoPlayerView) Dispose() {}
 
 // Play starts playback.
-func (v *VideoPlayerView) Play() {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "play", nil)
+func (v *VideoPlayerView) Play() error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "play", nil)
+	return err
 }
 
 // Pause pauses playback.
-func (v *VideoPlayerView) Pause() {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "pause", nil)
+func (v *VideoPlayerView) Pause() error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "pause", nil)
+	return err
 }
 
 // Stop stops playback and resets the player to the idle state.
-func (v *VideoPlayerView) Stop() {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "stop", nil)
+func (v *VideoPlayerView) Stop() error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "stop", nil)
+	return err
 }
 
 // SeekTo seeks to the given position.
-func (v *VideoPlayerView) SeekTo(position time.Duration) {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "seekTo", map[string]any{
+func (v *VideoPlayerView) SeekTo(position time.Duration) error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "seekTo", map[string]any{
 		"positionMs": position.Milliseconds(),
 	})
+	return err
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
-func (v *VideoPlayerView) SetVolume(volume float64) {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setVolume", map[string]any{
+func (v *VideoPlayerView) SetVolume(volume float64) error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setVolume", map[string]any{
 		"volume": volume,
 	})
+	return err
 }
 
 // SetLooping sets whether playback should loop.
-func (v *VideoPlayerView) SetLooping(looping bool) {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setLooping", map[string]any{
+func (v *VideoPlayerView) SetLooping(looping bool) error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setLooping", map[string]any{
 		"looping": looping,
 	})
+	return err
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
-func (v *VideoPlayerView) SetPlaybackSpeed(rate float64) {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setPlaybackSpeed", map[string]any{
+func (v *VideoPlayerView) SetPlaybackSpeed(rate float64) error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setPlaybackSpeed", map[string]any{
 		"rate": rate,
 	})
+	return err
 }
 
 // Load loads a new media URL, replacing the current media item.
 // The native player prepares the new URL immediately. If looping was
 // enabled, it remains active for the new item.
-func (v *VideoPlayerView) Load(url string) {
-	GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "load", map[string]any{
+func (v *VideoPlayerView) Load(url string) error {
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "load", map[string]any{
 		"url": url,
 	})
+	return err
 }
 
 // State returns the current playback state.
