@@ -152,11 +152,12 @@ func (v *VideoPlayerView) Buffered() time.Duration {
 // handlePlaybackStateChanged processes state change events from native.
 func (v *VideoPlayerView) handlePlaybackStateChanged(state PlaybackState) {
 	v.mu.Lock()
+	stateChanged := state != v.state
 	v.state = state
 	cb := v.OnPlaybackStateChanged
 	v.mu.Unlock()
 
-	if cb != nil {
+	if stateChanged && cb != nil {
 		Dispatch(func() {
 			cb(state)
 		})

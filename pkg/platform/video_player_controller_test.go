@@ -86,8 +86,16 @@ func TestVideoPlayerController_PlaybackStateCallback(t *testing.T) {
 		"viewId": c.ViewID(),
 		"state":  2, // Playing
 	})
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(),
+		"state":  2, // Playing again (dedup)
+	})
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(),
+		"state":  4, // Paused
+	})
 
-	want := []PlaybackState{PlaybackStateBuffering, PlaybackStatePlaying}
+	want := []PlaybackState{PlaybackStateBuffering, PlaybackStatePlaying, PlaybackStatePaused}
 	if len(received) != len(want) {
 		t.Fatalf("callback count: got %d, want %d", len(received), len(want))
 	}
