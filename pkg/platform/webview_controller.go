@@ -133,7 +133,8 @@ func (c *WebViewController) Reload() error {
 }
 
 // Dispose releases the web view and its native resources. After disposal,
-// this controller must not be reused.
+// this controller must not be reused. Dispose is idempotent; calling it more
+// than once is safe.
 func (c *WebViewController) Dispose() {
 	if c.viewID != 0 {
 		GetPlatformViewRegistry().Dispose(c.viewID)

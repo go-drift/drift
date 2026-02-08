@@ -203,7 +203,8 @@ func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) error {
 }
 
 // Dispose releases the video player and its native resources. After disposal,
-// this controller must not be reused.
+// this controller must not be reused. Dispose is idempotent; calling it more
+// than once is safe.
 func (c *VideoPlayerController) Dispose() {
 	if c.viewID != 0 {
 		GetPlatformViewRegistry().Dispose(c.viewID)
