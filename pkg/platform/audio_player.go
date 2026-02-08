@@ -51,6 +51,8 @@ type AudioPlayerController struct {
 	OnPlaybackStateChanged func(PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
+	// The native platform fires this callback approximately every 250ms
+	// while media is loaded.
 	// Called on the UI thread.
 	// Set this before calling [AudioPlayerController.Load] or any other
 	// playback method to avoid missing events.

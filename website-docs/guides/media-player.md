@@ -125,7 +125,7 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | Field | Type | Description |
 |-------|------|-------------|
 | `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
-| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
+| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called approximately every 250ms while media is loaded (UI thread) |
 | `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
 ## Audio Player
@@ -198,7 +198,7 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | Field | Type | Description |
 |-------|------|-------------|
 | `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
-| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
+| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called approximately every 250ms while media is loaded (UI thread) |
 | `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
 ### Example: Transport Controls with Seek

@@ -29,6 +29,8 @@ type VideoPlayerView struct {
 	OnPlaybackStateChanged func(PlaybackState)
 
 	// OnPositionChanged is called when the playback position updates.
+	// The native platform fires this callback approximately every 250ms
+	// while media is loaded.
 	// Called on the UI thread via [Dispatch].
 	// Set this before calling any playback method to avoid missing events.
 	OnPositionChanged func(position, duration, buffered time.Duration)
