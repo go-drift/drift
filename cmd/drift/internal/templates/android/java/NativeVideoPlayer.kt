@@ -83,6 +83,9 @@ class NativeVideoPlayerContainer(
                     Player.STATE_ENDED -> 3
                     else -> 0
                 }
+                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                    stopPositionUpdates()
+                }
                 PlatformChannelManager.sendEvent(
                     "drift/platform_views",
                     mapOf(

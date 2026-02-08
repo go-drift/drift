@@ -14,7 +14,6 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     private let playerVC: AVPlayerViewController
     private let player: AVQueuePlayer
     private var timeObserver: Any?
-    private var statusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
     private var endOfItemObserver: NSObjectProtocol?
@@ -212,8 +211,6 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
             player.removeTimeObserver(observer)
             timeObserver = nil
         }
-        statusObservation?.invalidate()
-        statusObservation = nil
         timeControlObservation?.invalidate()
         timeControlObservation = nil
         itemStatusObservation?.invalidate()

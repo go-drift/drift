@@ -7,6 +7,7 @@
 
 import AVFoundation
 
+@MainActor
 enum DriftMediaSession {
     private static var activeCount = 0
 
