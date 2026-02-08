@@ -537,7 +537,7 @@ class NativeWebViewContainer: NSObject, PlatformViewContainer, WKNavigationDeleg
         PlatformChannelManager.shared.sendEvent(
             channel: "drift/platform_views",
             data: [
-                "method": "onError",
+                "method": "onWebViewError",
                 "viewId": viewId,
                 "error": error.localizedDescription
             ]

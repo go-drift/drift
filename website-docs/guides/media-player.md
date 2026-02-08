@@ -6,7 +6,7 @@ sidebar_position: 12
 
 # Media Player
 
-Drift provides native media playback through two APIs: the `VideoPlayer` widget for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI.
+Drift provides native media playback through two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI.
 
 Both APIs deliver callbacks on the UI thread, so you can update widget state directly without wrapping calls in `drift.Dispatch`.
 
@@ -14,88 +14,44 @@ Both APIs deliver callbacks on the UI thread, so you can update widget state dir
 
 The `VideoPlayer` widget embeds a native video player (ExoPlayer on Android, AVPlayer on iOS) with built-in transport controls including play/pause, seek bar, and time display.
 
-```go
-import "github.com/go-drift/drift/pkg/widgets"
-
-widgets.VideoPlayer{
-    URL:    "https://example.com/video.mp4",
-    Volume: 1.0,
-    Height: 225,
-}
-```
-
-Width and Height set explicit dimensions in logical pixels. To fill available width, wrap the widget in layout widgets such as `Expanded` inside a `Row`:
-
-```go
-widgets.Row{
-    Children: []core.Widget{
-        widgets.Expanded{
-            Child: widgets.VideoPlayer{
-                URL:    "https://example.com/video.mp4",
-                Volume: 1.0,
-                Height: 225,
-            },
-        },
-    },
-}
-```
-
-### VideoPlayer Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `URL` | `string` | Media URL to play |
-| `Controller` | `*VideoPlayerController` | Programmatic playback control |
-| `AutoPlay` | `bool` | Start playback automatically when the view is created |
-| `Looping` | `bool` | Restart playback when it reaches the end |
-| `Volume` | `float64` | Playback volume (0.0 to 1.0). Zero means muted. |
-| `Width` | `float64` | Player width in logical pixels |
-| `Height` | `float64` | Player height in logical pixels |
-| `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
-| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
-| `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
-
-Set all callbacks in the struct literal that first supplies a URL. Because the native player begins loading as soon as the widget is painted, callbacks added in a later rebuild may miss early events.
-
-### Controller
-
-Use `VideoPlayerController` for programmatic control. Create the controller once, pass it to the widget, and call methods from event handlers:
+Create a `VideoPlayerController` with `UseController`, set callbacks, and pass it to the widget:
 
 ```go
 import (
+    "github.com/go-drift/drift/pkg/core"
     "github.com/go-drift/drift/pkg/platform"
     "github.com/go-drift/drift/pkg/widgets"
 )
 
 type playerState struct {
     core.StateBase
-    controller *widgets.VideoPlayerController
+    controller *platform.VideoPlayerController
     status     *core.ManagedState[string]
 }
 
 func (s *playerState) InitState() {
-    s.controller = &widgets.VideoPlayerController{}
     s.status = core.NewManagedState(&s.StateBase, "Idle")
+    s.controller = core.UseController(&s.StateBase, platform.NewVideoPlayerController)
+
+    s.controller.OnPlaybackStateChanged = func(state platform.PlaybackState) {
+        s.status.Set(state.String())
+    }
+    s.controller.OnError = func(code, message string) {
+        s.status.Set("Error (" + code + "): " + message)
+    }
+
+    s.controller.Load("https://example.com/video.mp4")
 }
 
 func (s *playerState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Column{
         Children: []core.Widget{
             widgets.VideoPlayer{
-                URL:        "https://example.com/video.mp4",
                 Controller: s.controller,
-                Volume:     1.0,
                 Height:     225,
-                OnPlaybackStateChanged: func(state platform.PlaybackState) {
-                    s.status.Set(state.String())
-                },
             },
             widgets.Row{
                 Children: []core.Widget{
-                    theme.ButtonOf(ctx, "Play", func() {
-                        s.controller.Load("https://example.com/video.mp4")
-                        s.controller.Play()
-                    }),
                     theme.ButtonOf(ctx, "Pause", func() {
                         s.controller.Pause()
                     }),
@@ -110,9 +66,36 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-### Controller Methods
+Width and Height set explicit dimensions in logical pixels. To fill available width, wrap the widget in layout widgets such as `Expanded` inside a `Row`:
 
-All methods are safe for concurrent use. Methods are no-ops before the widget is first painted or after it is disposed.
+```go
+widgets.Row{
+    Children: []core.Widget{
+        widgets.Expanded{
+            Child: widgets.VideoPlayer{
+                Controller: s.controller,
+                Height:     225,
+            },
+        },
+    },
+}
+```
+
+Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
+
+`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. For non-widget contexts (tests, standalone services), use `platform.NewVideoPlayerController()` directly and call `Dispose()` manually.
+
+### VideoPlayer Widget Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Controller` | `*platform.VideoPlayerController` | The controller that provides the native surface and playback control |
+| `Width` | `float64` | Player width in logical pixels |
+| `Height` | `float64` | Player height in logical pixels |
+
+### VideoPlayerController Methods
+
+All methods are safe for concurrent use.
 
 | Method | Description |
 |--------|-------------|
@@ -128,19 +111,16 @@ All methods are safe for concurrent use. Methods are no-ops before the widget is
 | `Position() time.Duration` | Current playback position |
 | `Duration() time.Duration` | Total media duration |
 | `Buffered() time.Duration` | Buffered position |
+| `ViewID() int64` | Platform view ID (used internally by the widget) |
+| `Dispose()` | Release native resources. The controller must not be reused after disposal. |
 
-### Dynamic Property Updates
+### VideoPlayerController Callbacks
 
-When widget properties change between rebuilds, the native player is updated automatically. URL changes load the new media, and looping/volume changes are applied immediately:
-
-```go
-// Changing the URL triggers a native loadUrl call
-widgets.VideoPlayer{
-    URL:     s.currentURL.Get(), // rebuild with a new URL to switch videos
-    Looping: s.loopEnabled.Get(),
-    Volume:  1.0,
-}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
+| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called when playback position updates (UI thread) |
+| `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
 ## Audio Player
 

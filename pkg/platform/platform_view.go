@@ -177,6 +177,12 @@ func (r *PlatformViewRegistry) handleEvent(data any) {
 		r.handleVideoPositionChanged(dataMap)
 	case "onVideoError":
 		r.handleVideoError(dataMap)
+	case "onPageStarted":
+		r.handleWebViewPageStarted(dataMap)
+	case "onPageFinished":
+		r.handleWebViewPageFinished(dataMap)
+	case "onWebViewError":
+		r.handleWebViewError(dataMap)
 	}
 }
 
@@ -552,6 +558,15 @@ func (r *PlatformViewRegistry) handleMethodCall(method string, args any) (any, e
 	case "onVideoError":
 		return r.handleVideoError(argsMap)
 
+	case "onPageStarted":
+		return r.handleWebViewPageStarted(argsMap)
+
+	case "onPageFinished":
+		return r.handleWebViewPageFinished(argsMap)
+
+	case "onWebViewError":
+		return r.handleWebViewError(argsMap)
+
 	default:
 		return nil, ErrMethodNotFound
 	}
@@ -660,6 +675,48 @@ func (r *PlatformViewRegistry) handleVideoError(args map[string]any) (any, error
 
 	if videoView, ok := view.(*VideoPlayerView); ok {
 		videoView.handleError(code, message)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleWebViewPageStarted(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	url, _ := args["url"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if webView, ok := view.(*nativeWebView); ok {
+		webView.handlePageStarted(url)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleWebViewPageFinished(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	url, _ := args["url"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if webView, ok := view.(*nativeWebView); ok {
+		webView.handlePageFinished(url)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleWebViewError(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	message, _ := args["error"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if webView, ok := view.(*nativeWebView); ok {
+		webView.handleError(message)
 	}
 	return nil, nil
 }

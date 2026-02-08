@@ -74,23 +74,21 @@ object PlatformViewHandler {
             ?: return Pair(null, IllegalArgumentException("Missing method"))
         val host = hostView ?: return Pair(null, IllegalStateException("Host view not initialized"))
 
-        val container = views[viewId]
-            ?: return Pair(null, IllegalArgumentException("View not found: $viewId"))
-
-        // Validate method is supported before posting
-        val supported = when (container) {
-            is NativeWebViewContainer -> method in webViewMethods
-            is NativeTextInputContainer -> method in textInputMethods
-            is NativeSwitchContainer -> method in switchMethods
-            is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
-            is NativeVideoPlayerContainer -> method in videoPlayerMethods
-            else -> false
-        }
-        if (!supported) {
-            return Pair(null, IllegalArgumentException("Unknown method '$method' for view type"))
-        }
-
+        // Post the entire lookup + dispatch to the UI thread so it is ordered
+        // after the create() post that populates views[viewId].
         host.post {
+            val container = views[viewId] ?: return@post
+
+            val supported = when (container) {
+                is NativeWebViewContainer -> method in webViewMethods
+                is NativeTextInputContainer -> method in textInputMethods
+                is NativeSwitchContainer -> method in switchMethods
+                is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
+                is NativeVideoPlayerContainer -> method in videoPlayerMethods
+                else -> false
+            }
+            if (!supported) return@post
+
             when (container) {
                 is NativeWebViewContainer -> {
                     when (method) {
@@ -499,7 +497,7 @@ class NativeWebViewContainer(
                 PlatformChannelManager.sendEvent(
                     "drift/platform_views",
                     mapOf(
-                        "method" to "onError",
+                        "method" to "onWebViewError",
                         "viewId" to viewId,
                         "error" to errorMessage
                     )

@@ -30,12 +30,22 @@ func (v videoPlayerPage) CreateState() core.State {
 type videoPlayerState struct {
 	core.StateBase
 	videoStatus     *core.ManagedState[string]
-	videoController *widgets.VideoPlayerController
+	videoController *platform.VideoPlayerController
 }
 
 func (s *videoPlayerState) InitState() {
 	s.videoStatus = core.NewManagedState(&s.StateBase, "Idle")
-	s.videoController = &widgets.VideoPlayerController{}
+
+	s.videoController = core.UseController(&s.StateBase, platform.NewVideoPlayerController)
+
+	s.videoController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
+		s.videoStatus.Set(state.String())
+	}
+	s.videoController.OnError = func(code string, message string) {
+		s.videoStatus.Set("Error (" + code + "): " + message)
+	}
+
+	s.videoController.Load("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
 }
 
 func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
@@ -53,17 +63,8 @@ func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 			Children: []core.Widget{
 				widgets.Expanded{
 					Child: widgets.VideoPlayer{
-						URL:        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
 						Controller: s.videoController,
-						AutoPlay:   false,
-						Volume:     1.0,
 						Height:     220,
-						OnPlaybackStateChanged: func(state platform.PlaybackState) {
-							s.videoStatus.Set(state.String())
-						},
-						OnError: func(code string, message string) {
-							s.videoStatus.Set("Error (" + code + "): " + message)
-						},
 					},
 				},
 			},
