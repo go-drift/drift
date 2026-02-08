@@ -100,7 +100,7 @@ type PlatformViewRegistry struct {
 	// content and native view geometry land before the same vsync.
 	geometryPending atomic.Bool
 	geometrySignal  chan struct{} // buffered, size 1
-	geometryTimer   *time.Timer  // reusable timer for WaitGeometryApplied (render thread only)
+	geometryTimer   *time.Timer   // reusable timer for WaitGeometryApplied (render thread only)
 
 	// Stats for monitoring
 	BatchTimeouts atomic.Uint64
@@ -135,11 +135,15 @@ func newPlatformViewRegistry() *PlatformViewRegistry {
 
 	// Also listen for events from native (text changes, focus, etc.)
 	eventChannel := NewEventChannel("drift/platform_views")
-	eventChannel.Listen(EventHandler{
-		OnEvent: func(data any) {
-			r.handleEvent(data)
-		},
-	})
+	listenForViewEvents := func() {
+		eventChannel.Listen(EventHandler{
+			OnEvent: func(data any) {
+				r.handleEvent(data)
+			},
+		})
+	}
+	listenForViewEvents()
+	registerBuiltinInit(listenForViewEvents)
 
 	return r
 }
@@ -171,6 +175,18 @@ func (r *PlatformViewRegistry) handleEvent(data any) {
 		r.handleFocusChanged(dataMap)
 	case "onSwitchChanged":
 		r.handleSwitchChanged(dataMap)
+	case "onPlaybackStateChanged":
+		r.handleVideoPlaybackStateChanged(dataMap)
+	case "onPositionChanged":
+		r.handleVideoPositionChanged(dataMap)
+	case "onVideoError":
+		r.handleVideoError(dataMap)
+	case "onPageStarted":
+		r.handleWebViewPageStarted(dataMap)
+	case "onPageFinished":
+		r.handleWebViewPageFinished(dataMap)
+	case "onWebViewError":
+		r.handleWebViewError(dataMap)
 	}
 }
 
@@ -537,6 +553,24 @@ func (r *PlatformViewRegistry) handleMethodCall(method string, args any) (any, e
 	case "onSwitchChanged":
 		return r.handleSwitchChanged(argsMap)
 
+	case "onPlaybackStateChanged":
+		return r.handleVideoPlaybackStateChanged(argsMap)
+
+	case "onPositionChanged":
+		return r.handleVideoPositionChanged(argsMap)
+
+	case "onVideoError":
+		return r.handleVideoError(argsMap)
+
+	case "onPageStarted":
+		return r.handleWebViewPageStarted(argsMap)
+
+	case "onPageFinished":
+		return r.handleWebViewPageFinished(argsMap)
+
+	case "onWebViewError":
+		return r.handleWebViewError(argsMap)
+
 	default:
 		return nil, ErrMethodNotFound
 	}
@@ -596,6 +630,98 @@ func (r *PlatformViewRegistry) handleSwitchChanged(args map[string]any) (any, er
 
 	if switchView, ok := view.(*SwitchView); ok {
 		switchView.handleValueChanged(value)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleVideoPlaybackStateChanged(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	stateInt, _ := toInt(args["state"])
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if videoView, ok := view.(*videoPlayerView); ok {
+		videoView.handlePlaybackStateChanged(PlaybackState(stateInt))
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleVideoPositionChanged(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	positionMs, _ := toInt64(args["positionMs"])
+	durationMs, _ := toInt64(args["durationMs"])
+	bufferedMs, _ := toInt64(args["bufferedMs"])
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if videoView, ok := view.(*videoPlayerView); ok {
+		videoView.handlePositionChanged(
+			time.Duration(positionMs)*time.Millisecond,
+			time.Duration(durationMs)*time.Millisecond,
+			time.Duration(bufferedMs)*time.Millisecond,
+		)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleVideoError(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	code, _ := args["code"].(string)
+	message, _ := args["message"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if videoView, ok := view.(*videoPlayerView); ok {
+		videoView.handleError(code, message)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleWebViewPageStarted(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	url, _ := args["url"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if webView, ok := view.(*nativeWebView); ok {
+		webView.handlePageStarted(url)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleWebViewPageFinished(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	url, _ := args["url"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if webView, ok := view.(*nativeWebView); ok {
+		webView.handlePageFinished(url)
+	}
+	return nil, nil
+}
+
+func (r *PlatformViewRegistry) handleWebViewError(args map[string]any) (any, error) {
+	viewID, _ := toInt64(args["viewId"])
+	code, _ := args["code"].(string)
+	message, _ := args["message"].(string)
+
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+
+	if webView, ok := view.(*nativeWebView); ok {
+		webView.handleError(code, message)
 	}
 	return nil, nil
 }

@@ -40,10 +40,11 @@ object PlatformViewHandler {
     }
 
     // Supported methods for each view type
-    private val webViewMethods = setOf("loadUrl", "goBack", "goForward", "reload")
+    private val webViewMethods = setOf("load", "goBack", "goForward", "reload")
     private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
     private val switchMethods = setOf("setValue", "updateConfig")
     private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
+    private val videoPlayerMethods = setOf("play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "load")
 
     fun init(context: Context, hostView: ViewGroup) {
         this.context = context
@@ -73,26 +74,25 @@ object PlatformViewHandler {
             ?: return Pair(null, IllegalArgumentException("Missing method"))
         val host = hostView ?: return Pair(null, IllegalStateException("Host view not initialized"))
 
-        val container = views[viewId]
-            ?: return Pair(null, IllegalArgumentException("View not found: $viewId"))
-
-        // Validate method is supported before posting
-        val supported = when (container) {
-            is NativeWebViewContainer -> method in webViewMethods
-            is NativeTextInputContainer -> method in textInputMethods
-            is NativeSwitchContainer -> method in switchMethods
-            is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
-            else -> false
-        }
-        if (!supported) {
-            return Pair(null, IllegalArgumentException("Unknown method '$method' for view type"))
-        }
-
+        // Post the entire lookup + dispatch to the UI thread so it is ordered
+        // after the create() post that populates views[viewId].
         host.post {
+            val container = views[viewId] ?: return@post
+
+            val supported = when (container) {
+                is NativeWebViewContainer -> method in webViewMethods
+                is NativeTextInputContainer -> method in textInputMethods
+                is NativeSwitchContainer -> method in switchMethods
+                is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
+                is NativeVideoPlayerContainer -> method in videoPlayerMethods
+                else -> false
+            }
+            if (!supported) return@post
+
             when (container) {
                 is NativeWebViewContainer -> {
                     when (method) {
-                        "loadUrl" -> {
+                        "load" -> {
                             val url = args["url"] as? String
                             if (url != null) {
                                 container.view.loadUrl(url)
@@ -152,6 +152,35 @@ object PlatformViewHandler {
                         }
                     }
                 }
+                is NativeVideoPlayerContainer -> {
+                    when (method) {
+                        "play" -> container.play()
+                        "pause" -> container.pause()
+                        "stop" -> container.stop()
+                        "seekTo" -> {
+                            val positionMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
+                            container.seekTo(positionMs)
+                        }
+                        "setVolume" -> {
+                            val volume = (args["volume"] as? Number)?.toFloat() ?: 1.0f
+                            container.setVolume(volume)
+                        }
+                        "setLooping" -> {
+                            val looping = args["looping"] as? Boolean ?: false
+                            container.setLooping(looping)
+                        }
+                        "setPlaybackSpeed" -> {
+                            val rate = (args["rate"] as? Number)?.toFloat() ?: 1.0f
+                            container.setPlaybackSpeed(rate)
+                        }
+                        "load" -> {
+                            val url = args["url"] as? String
+                            if (url != null) {
+                                container.load(url)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -175,6 +204,7 @@ object PlatformViewHandler {
             "textinput" -> { { NativeTextInputContainer(ctx, viewId, params) } }
             "switch" -> { { NativeSwitchContainer(ctx, viewId, params) } }
             "activity_indicator" -> { { NativeActivityIndicatorContainer(ctx, viewId, params) } }
+            "video_player" -> { { NativeVideoPlayerContainer(ctx, viewId, params) } }
             else -> null
         }
 
@@ -459,7 +489,12 @@ class NativeWebViewContainer(
                 error: android.webkit.WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                val errorMessage = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val code = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    webViewErrorCodeString(error?.errorCode ?: 0)
+                } else {
+                    "load_failed"
+                }
+                val message = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                     error?.description?.toString() ?: "Unknown error"
                 } else {
                     "Unknown error"
@@ -467,9 +502,10 @@ class NativeWebViewContainer(
                 PlatformChannelManager.sendEvent(
                     "drift/platform_views",
                     mapOf(
-                        "method" to "onError",
+                        "method" to "onWebViewError",
                         "viewId" to viewId,
-                        "error" to errorMessage
+                        "code" to code,
+                        "message" to message
                     )
                 )
             }
@@ -485,4 +521,15 @@ class NativeWebViewContainer(
         view.stopLoading()
         view.destroy()
     }
+}
+
+private fun webViewErrorCodeString(errorCode: Int): String = when (errorCode) {
+    android.webkit.WebViewClient.ERROR_HOST_LOOKUP,
+    android.webkit.WebViewClient.ERROR_CONNECT,
+    android.webkit.WebViewClient.ERROR_IO,
+    android.webkit.WebViewClient.ERROR_TIMEOUT,
+    android.webkit.WebViewClient.ERROR_REDIRECT_LOOP,
+    android.webkit.WebViewClient.ERROR_TOO_MANY_REQUESTS -> "network_error"
+    android.webkit.WebViewClient.ERROR_FAILED_SSL_HANDSHAKE -> "ssl_error"
+    else -> "load_failed"
 }

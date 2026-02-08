@@ -1,7 +1,7 @@
 ---
 id: accessibility
 title: Accessibility
-sidebar_position: 12
+sidebar_position: 13
 ---
 
 # Accessibility

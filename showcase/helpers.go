@@ -73,6 +73,25 @@ func formatSize(bytes int64) string {
 	}
 }
 
+// smallButton creates a compact tappable button for secondary actions.
+func smallButton(ctx core.BuildContext, label string, onTap func(), colors theme.ColorScheme) core.Widget {
+	return widgets.GestureDetector{
+		OnTap: onTap,
+		Child: widgets.Container{
+			Color:        colors.SurfaceContainerHigh,
+			BorderRadius: 6,
+			Padding:      layout.EdgeInsetsSymmetric(12, 6),
+			Child: widgets.Text{
+				Content: label,
+				Style: graphics.TextStyle{
+					Color:    colors.OnSurface,
+					FontSize: 13,
+				},
+			},
+		},
+	}
+}
+
 // demoPage creates a standard demo page with scroll view and column layout.
 // This is the common pattern used by most showcase pages.
 func demoPage(ctx core.BuildContext, title string, items ...core.Widget) core.Widget {

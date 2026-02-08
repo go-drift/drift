@@ -68,9 +68,8 @@ func (v *stubView) SetVisible(bool)                    {}
 
 func setupTestBridge(t *testing.T) *testBridge {
 	bridge := &testBridge{}
-	old := nativeBridge
-	nativeBridge = bridge
-	t.Cleanup(func() { nativeBridge = old })
+	SetupTestBridge(t.Cleanup)
+	SetNativeBridge(bridge)
 	return bridge
 }
 

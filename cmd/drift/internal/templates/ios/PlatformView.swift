@@ -64,13 +64,15 @@ enum PlatformViewHandler {
         // Validate method is supported
         let supportedMethods: Set<String>
         if container is NativeWebViewContainer {
-            supportedMethods = ["loadUrl", "goBack", "goForward", "reload"]
+            supportedMethods = ["load", "goBack", "goForward", "reload"]
         } else if container is NativeTextInputContainer {
             supportedMethods = ["setText", "setSelection", "setValue", "focus", "blur", "updateConfig"]
         } else if container is NativeSwitchContainer {
             supportedMethods = ["setValue", "updateConfig"]
         } else if container is NativeActivityIndicatorContainer {
             supportedMethods = ["setAnimating", "updateConfig"]
+        } else if container is NativeVideoPlayerContainer {
+            supportedMethods = ["play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "load"]
         } else {
             supportedMethods = []
         }
@@ -82,7 +84,7 @@ enum PlatformViewHandler {
         if let webViewContainer = container as? NativeWebViewContainer {
             DispatchQueue.main.async {
                 switch method {
-                case "loadUrl":
+                case "load":
                     if let urlString = args["url"] as? String,
                        let url = URL(string: urlString) {
                         webViewContainer.loadURL(url)
@@ -149,6 +151,39 @@ enum PlatformViewHandler {
                     break
                 }
             }
+        } else if let videoContainer = container as? NativeVideoPlayerContainer {
+            DispatchQueue.main.async {
+                switch method {
+                case "play":
+                    videoContainer.play()
+                case "pause":
+                    videoContainer.pause()
+                case "stop":
+                    videoContainer.stop()
+                case "seekTo":
+                    if let positionMs = (args["positionMs"] as? NSNumber)?.int64Value {
+                        videoContainer.seekTo(positionMs: positionMs)
+                    }
+                case "setVolume":
+                    if let volume = (args["volume"] as? NSNumber)?.floatValue {
+                        videoContainer.setVolume(volume)
+                    }
+                case "setLooping":
+                    if let looping = args["looping"] as? Bool {
+                        videoContainer.setLooping(looping)
+                    }
+                case "setPlaybackSpeed":
+                    if let rate = (args["rate"] as? NSNumber)?.floatValue {
+                        videoContainer.setPlaybackSpeed(rate)
+                    }
+                case "load":
+                    if let urlString = args["url"] as? String {
+                        videoContainer.load(urlString)
+                    }
+                default:
+                    break
+                }
+            }
         }
 
         return (nil, nil)
@@ -174,6 +209,8 @@ enum PlatformViewHandler {
             container = NativeSwitchContainer(viewId: viewId, params: params)
         case "activity_indicator":
             container = NativeActivityIndicatorContainer(viewId: viewId, params: params)
+        case "video_player":
+            container = NativeVideoPlayerContainer(viewId: viewId, params: params)
         default:
             return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Unknown view type: \(viewType)"]))
         }
@@ -500,10 +537,47 @@ class NativeWebViewContainer: NSObject, PlatformViewContainer, WKNavigationDeleg
         PlatformChannelManager.shared.sendEvent(
             channel: "drift/platform_views",
             data: [
-                "method": "onError",
+                "method": "onWebViewError",
                 "viewId": viewId,
-                "error": error.localizedDescription
+                "code": webViewErrorCode(for: error),
+                "message": error.localizedDescription
             ]
         )
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        PlatformChannelManager.shared.sendEvent(
+            channel: "drift/platform_views",
+            data: [
+                "method": "onWebViewError",
+                "viewId": viewId,
+                "code": webViewErrorCode(for: error),
+                "message": error.localizedDescription
+            ]
+        )
+    }
+
+    private func webViewErrorCode(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorServerCertificateHasBadDate,
+                 NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorServerCertificateHasUnknownRoot,
+                 NSURLErrorServerCertificateNotYetValid,
+                 NSURLErrorClientCertificateRejected,
+                 NSURLErrorClientCertificateRequired:
+                return "ssl_error"
+            case NSURLErrorTimedOut,
+                 NSURLErrorCannotFindHost,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorNotConnectedToInternet:
+                return "network_error"
+            default:
+                return "load_failed"
+            }
+        }
+        return "load_failed"
     }
 }

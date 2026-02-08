@@ -8,32 +8,33 @@ import (
 )
 
 // NativeWebView embeds a native web browser view.
+//
+// Create a [platform.WebViewController] with [core.UseController] and pass
+// it to this widget:
+//
+//	s.web = core.UseController(&s.StateBase, platform.NewWebViewController)
+//	s.web.OnPageFinished = func(url string) { ... }
+//	s.web.Load("https://example.com")
+//
+//	// in Build:
+//	widgets.NativeWebView{Controller: s.web, Height: 400}
+//
+// Width and Height set explicit dimensions. If Width is 0, the view expands
+// to fill available width.
 type NativeWebView struct {
-	// InitialURL is the URL to load when the view is created.
-	InitialURL string
+	// Controller provides the native web view surface and navigation control.
+	Controller *platform.WebViewController
 
-	// Controller provides programmatic control over the web view.
-	Controller *WebViewController
-
-	// OnPageStarted is called when a page starts loading.
-	OnPageStarted func(url string)
-
-	// OnPageFinished is called when a page finishes loading.
-	OnPageFinished func(url string)
-
-	// OnError is called when a loading error occurs.
-	OnError func(err error)
-
-	// Width of the web view (0 = expand to fill).
+	// Width of the web view in logical pixels (0 = expand to fill).
 	Width float64
 
-	// Height of the web view.
+	// Height of the web view in logical pixels.
 	Height float64
 }
 
-// CreateElement creates the element for the stateful widget.
+// CreateElement creates the element for this render object widget.
 func (n NativeWebView) CreateElement() core.Element {
-	return core.NewStatefulElement(n, nil)
+	return core.NewRenderObjectElement(n, nil)
 }
 
 // Key returns the widget key.
@@ -41,164 +42,31 @@ func (n NativeWebView) Key() any {
 	return nil
 }
 
-// CreateState creates the state for this widget.
-func (n NativeWebView) CreateState() core.State {
-	return &nativeWebViewState{}
-}
-
-// WebViewController provides control over a NativeWebView.
-type WebViewController struct {
-	viewID int64
-}
-
-// LoadURL loads the specified URL.
-func (c *WebViewController) LoadURL(url string) error {
-	if c.viewID == 0 {
-		return nil
-	}
-	_, err := platform.GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "loadUrl", map[string]any{
-		"url": url,
-	})
-	return err
-}
-
-// GoBack navigates back in history.
-func (c *WebViewController) GoBack() error {
-	if c.viewID == 0 {
-		return nil
-	}
-	_, err := platform.GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "goBack", nil)
-	return err
-}
-
-// GoForward navigates forward in history.
-func (c *WebViewController) GoForward() error {
-	if c.viewID == 0 {
-		return nil
-	}
-	_, err := platform.GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "goForward", nil)
-	return err
-}
-
-// Reload reloads the current page.
-func (c *WebViewController) Reload() error {
-	if c.viewID == 0 {
-		return nil
-	}
-	_, err := platform.GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "reload", nil)
-	return err
-}
-
-type nativeWebViewState struct {
-	element *core.StatefulElement
-	viewID  int64
-}
-
-func (s *nativeWebViewState) ensurePlatformView(initialURL string, controller *WebViewController) {
-	if s.viewID != 0 {
-		if controller != nil {
-			controller.viewID = s.viewID
-		}
-		return
-	}
-
-	params := map[string]any{}
-	if initialURL != "" {
-		params["initialUrl"] = initialURL
-	}
-
-	view, err := platform.GetPlatformViewRegistry().Create("native_webview", params)
-	if err != nil {
-		return
-	}
-
-	s.viewID = view.ViewID()
-	if controller != nil {
-		controller.viewID = s.viewID
-	}
-}
-
-func (s *nativeWebViewState) SetElement(e *core.StatefulElement) {
-	s.element = e
-}
-
-func (s *nativeWebViewState) InitState() {}
-
-func (s *nativeWebViewState) Dispose() {
-	if s.viewID != 0 {
-		platform.GetPlatformViewRegistry().Dispose(s.viewID)
-		s.viewID = 0
-	}
-}
-
-func (s *nativeWebViewState) DidChangeDependencies() {}
-
-func (s *nativeWebViewState) DidUpdateWidget(oldWidget core.StatefulWidget) {}
-
-func (s *nativeWebViewState) SetState(fn func()) {
-	fn()
-	if s.element != nil {
-		s.element.MarkNeedsBuild()
-	}
-}
-
-func (s *nativeWebViewState) Build(ctx core.BuildContext) core.Widget {
-	w := s.element.Widget().(NativeWebView)
-
-	// Default height
-	height := w.Height
+// CreateRenderObject creates the render object for this widget.
+func (n NativeWebView) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
+	height := n.Height
 	if height == 0 {
 		height = 300
 	}
-
-	return nativeWebViewRender{
-		initialURL: w.InitialURL,
-		width:      w.Width,
-		height:     height,
-		controller: w.Controller,
-		state:      s,
-		config:     w,
-	}
-}
-
-// nativeWebViewRender is a render widget for the web view.
-type nativeWebViewRender struct {
-	initialURL string
-	width      float64
-	height     float64
-	controller *WebViewController
-	state      *nativeWebViewState
-	config     NativeWebView
-}
-
-func (n nativeWebViewRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(n, nil)
-}
-
-func (n nativeWebViewRender) Key() any {
-	return nil
-}
-
-func (n nativeWebViewRender) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
 	r := &renderNativeWebView{
-		initialURL: n.initialURL,
-		width:      n.width,
-		height:     n.height,
-		controller: n.controller,
-		state:      n.state,
+		controller: n.Controller,
+		width:      n.Width,
+		height:     height,
 	}
-
 	r.SetSelf(r)
 	return r
 }
 
-func (n nativeWebViewRender) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
+// UpdateRenderObject updates the render object with new widget properties.
+func (n NativeWebView) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 	if r, ok := renderObject.(*renderNativeWebView); ok {
-		r.initialURL = n.initialURL
-		r.width = n.width
-		r.height = n.height
-		r.controller = n.controller
-		r.state = n.state
+		height := n.Height
+		if height == 0 {
+			height = 300
+		}
+		r.controller = n.Controller
+		r.width = n.Width
+		r.height = height
 		r.MarkNeedsLayout()
 		r.MarkNeedsPaint()
 	}
@@ -206,11 +74,9 @@ func (n nativeWebViewRender) UpdateRenderObject(ctx core.BuildContext, renderObj
 
 type renderNativeWebView struct {
 	layout.RenderBoxBase
-	initialURL string
+	controller *platform.WebViewController
 	width      float64
 	height     float64
-	controller *WebViewController
-	state      *nativeWebViewState
 }
 
 func (r *renderNativeWebView) PerformLayout() {
@@ -228,45 +94,15 @@ func (r *renderNativeWebView) PerformLayout() {
 }
 
 func (r *renderNativeWebView) Paint(ctx *layout.PaintContext) {
-	// Ensure platform view exists and record its embedding
-	if r.state != nil {
-		r.state.ensurePlatformView(r.initialURL, r.controller)
-		if r.state.viewID != 0 {
-			ctx.EmbedPlatformView(r.state.viewID, r.Size())
-		}
-	}
-
 	size := r.Size()
 
 	// Draw a placeholder background for the web view
 	bgPaint := graphics.DefaultPaint()
 	bgPaint.Color = graphics.Color(0xFFF0F0F0) // Light gray
-
 	ctx.Canvas.DrawRect(graphics.RectFromLTWH(0, 0, size.Width, size.Height), bgPaint)
 
-	// Draw border
-	borderPaint := graphics.DefaultPaint()
-	borderPaint.Color = graphics.Color(0xFFCCCCCC)
-	borderPaint.Style = graphics.PaintStyleStroke
-	borderPaint.StrokeWidth = 1
-
-	ctx.Canvas.DrawRect(graphics.RectFromLTWH(0.5, 0.5, size.Width-1, size.Height-1), borderPaint)
-
-	// Draw a "web view" label in the center (placeholder until native view is positioned)
-	textStyle := graphics.TextStyle{
-		FontSize: 14,
-		Color:    graphics.Color(0xFF999999),
-	}
-	manager, _ := graphics.DefaultFontManagerErr()
-	if manager == nil {
-		// Error already reported by DefaultFontManagerErr
-		return
-	}
-	layout, err := graphics.LayoutText("WebView", textStyle, manager)
-	if err == nil {
-		textX := (size.Width - layout.Size.Width) / 2
-		textY := (size.Height - layout.Size.Height) / 2
-		ctx.Canvas.DrawText(layout, graphics.Offset{X: textX, Y: textY})
+	if r.controller != nil && r.controller.ViewID() != 0 {
+		ctx.EmbedPlatformView(r.controller.ViewID(), size)
 	}
 }
 
