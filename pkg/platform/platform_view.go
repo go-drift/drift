@@ -642,7 +642,7 @@ func (r *PlatformViewRegistry) handleVideoPlaybackStateChanged(args map[string]a
 	view := r.views[viewID]
 	r.mu.RUnlock()
 
-	if videoView, ok := view.(*VideoPlayerView); ok {
+	if videoView, ok := view.(*videoPlayerView); ok {
 		videoView.handlePlaybackStateChanged(PlaybackState(stateInt))
 	}
 	return nil, nil
@@ -658,7 +658,7 @@ func (r *PlatformViewRegistry) handleVideoPositionChanged(args map[string]any) (
 	view := r.views[viewID]
 	r.mu.RUnlock()
 
-	if videoView, ok := view.(*VideoPlayerView); ok {
+	if videoView, ok := view.(*videoPlayerView); ok {
 		videoView.handlePositionChanged(
 			time.Duration(positionMs)*time.Millisecond,
 			time.Duration(durationMs)*time.Millisecond,
@@ -677,7 +677,7 @@ func (r *PlatformViewRegistry) handleVideoError(args map[string]any) (any, error
 	view := r.views[viewID]
 	r.mu.RUnlock()
 
-	if videoView, ok := view.(*VideoPlayerView); ok {
+	if videoView, ok := view.(*videoPlayerView); ok {
 		videoView.handleError(code, message)
 	}
 	return nil, nil

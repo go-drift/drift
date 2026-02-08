@@ -9,7 +9,7 @@ func TestVideoPlayerView_HandlePlaybackStateChanged(t *testing.T) {
 	setupTestBridge(t)
 
 	var receivedState PlaybackState
-	view := NewVideoPlayerView(1)
+	view := newVideoPlayerView(1)
 	view.OnPlaybackStateChanged = func(state PlaybackState) {
 		receivedState = state
 	}
@@ -28,7 +28,7 @@ func TestVideoPlayerView_HandlePositionChanged(t *testing.T) {
 	setupTestBridge(t)
 
 	var gotPos, gotDur, gotBuf time.Duration
-	view := NewVideoPlayerView(1)
+	view := newVideoPlayerView(1)
 	view.OnPositionChanged = func(position, duration, buffered time.Duration) {
 		gotPos = position
 		gotDur = duration
@@ -55,7 +55,7 @@ func TestVideoPlayerView_HandleError(t *testing.T) {
 	setupTestBridge(t)
 
 	var gotCode, gotMsg string
-	view := NewVideoPlayerView(1)
+	view := newVideoPlayerView(1)
 	view.OnError = func(code string, message string) {
 		gotCode = code
 		gotMsg = message
@@ -74,7 +74,7 @@ func TestVideoPlayerView_HandleError(t *testing.T) {
 func TestVideoPlayerView_NilCallbacksDoNotPanic(t *testing.T) {
 	setupTestBridge(t)
 
-	view := NewVideoPlayerView(1)
+	view := newVideoPlayerView(1)
 
 	// None of these should panic with nil callbacks.
 	view.handlePlaybackStateChanged(PlaybackStatePlaying)
@@ -85,7 +85,7 @@ func TestVideoPlayerView_NilCallbacksDoNotPanic(t *testing.T) {
 func TestVideoPlayerView_CreateAndDispose(t *testing.T) {
 	setupTestBridge(t)
 
-	view := NewVideoPlayerView(42)
+	view := newVideoPlayerView(42)
 
 	if err := view.Create(nil); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -107,7 +107,7 @@ func TestVideoPlayerView_TransportMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registry Create: %v", err)
 	}
-	v := view.(*VideoPlayerView)
+	v := view.(*videoPlayerView)
 	defer r.Dispose(v.ViewID())
 
 	for _, tc := range []struct {
@@ -132,7 +132,7 @@ func TestVideoPlayerView_TransportMethods(t *testing.T) {
 func TestVideoPlayerView_StateGetters_DefaultValues(t *testing.T) {
 	setupTestBridge(t)
 
-	view := NewVideoPlayerView(1)
+	view := newVideoPlayerView(1)
 
 	if view.State() != PlaybackStateIdle {
 		t.Errorf("initial State(): got %v, want Idle", view.State())

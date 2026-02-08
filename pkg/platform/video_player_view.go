@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-// VideoPlayerView is a platform view that wraps native video playback
+// videoPlayerView is a platform view that wraps native video playback
 // (ExoPlayer on Android, AVPlayer on iOS). It provides transport controls,
 // position/duration tracking, and playback state observation.
 //
 // Set callback fields (OnPlaybackStateChanged, OnPositionChanged, OnError)
-// before calling [VideoPlayerView.Load] or any other playback method to
+// before calling [videoPlayerView.Load] or any other playback method to
 // ensure no events are missed. Cached state is also available via
-// [VideoPlayerView.State], [VideoPlayerView.Position], etc.
-type VideoPlayerView struct {
+// [videoPlayerView.State], [videoPlayerView.Position], etc.
+type videoPlayerView struct {
 	basePlatformView
 	mu sync.RWMutex
 
@@ -41,10 +41,10 @@ type VideoPlayerView struct {
 	OnError func(code, message string)
 }
 
-// NewVideoPlayerView creates a new video player platform view with the given
+// newVideoPlayerView creates a new video player platform view with the given
 // view ID. Set the callback fields to receive playback events.
-func NewVideoPlayerView(viewID int64) *VideoPlayerView {
-	return &VideoPlayerView{
+func newVideoPlayerView(viewID int64) *videoPlayerView {
+	return &videoPlayerView{
 		basePlatformView: basePlatformView{
 			viewID:   viewID,
 			viewType: "video_player",
@@ -55,34 +55,34 @@ func NewVideoPlayerView(viewID int64) *VideoPlayerView {
 // Create implements PlatformView. Video player lifecycle is managed entirely
 // by the native side (ExoPlayer/AVPlayer) upon creation via the registry,
 // so no additional initialization is needed here.
-func (v *VideoPlayerView) Create(params map[string]any) error {
+func (v *videoPlayerView) Create(params map[string]any) error {
 	return nil
 }
 
 // Dispose implements PlatformView. Cleanup is handled by the registry's
 // Dispose method, which sends the dispose command to the native player.
-func (v *VideoPlayerView) Dispose() {}
+func (v *videoPlayerView) Dispose() {}
 
 // Play starts playback.
-func (v *VideoPlayerView) Play() error {
+func (v *videoPlayerView) Play() error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "play", nil)
 	return err
 }
 
 // Pause pauses playback.
-func (v *VideoPlayerView) Pause() error {
+func (v *videoPlayerView) Pause() error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "pause", nil)
 	return err
 }
 
 // Stop stops playback and resets the player to the idle state.
-func (v *VideoPlayerView) Stop() error {
+func (v *videoPlayerView) Stop() error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "stop", nil)
 	return err
 }
 
 // SeekTo seeks to the given position.
-func (v *VideoPlayerView) SeekTo(position time.Duration) error {
+func (v *videoPlayerView) SeekTo(position time.Duration) error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "seekTo", map[string]any{
 		"positionMs": position.Milliseconds(),
 	})
@@ -90,7 +90,7 @@ func (v *VideoPlayerView) SeekTo(position time.Duration) error {
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
-func (v *VideoPlayerView) SetVolume(volume float64) error {
+func (v *videoPlayerView) SetVolume(volume float64) error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setVolume", map[string]any{
 		"volume": volume,
 	})
@@ -98,7 +98,7 @@ func (v *VideoPlayerView) SetVolume(volume float64) error {
 }
 
 // SetLooping sets whether playback should loop.
-func (v *VideoPlayerView) SetLooping(looping bool) error {
+func (v *videoPlayerView) SetLooping(looping bool) error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setLooping", map[string]any{
 		"looping": looping,
 	})
@@ -106,7 +106,7 @@ func (v *VideoPlayerView) SetLooping(looping bool) error {
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
-func (v *VideoPlayerView) SetPlaybackSpeed(rate float64) error {
+func (v *videoPlayerView) SetPlaybackSpeed(rate float64) error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "setPlaybackSpeed", map[string]any{
 		"rate": rate,
 	})
@@ -116,7 +116,7 @@ func (v *VideoPlayerView) SetPlaybackSpeed(rate float64) error {
 // Load loads a new media URL, replacing the current media item.
 // The native player prepares the new URL immediately. If looping was
 // enabled, it remains active for the new item.
-func (v *VideoPlayerView) Load(url string) error {
+func (v *videoPlayerView) Load(url string) error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "load", map[string]any{
 		"url": url,
 	})
@@ -124,35 +124,35 @@ func (v *VideoPlayerView) Load(url string) error {
 }
 
 // State returns the current playback state.
-func (v *VideoPlayerView) State() PlaybackState {
+func (v *videoPlayerView) State() PlaybackState {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return v.state
 }
 
 // Position returns the current playback position.
-func (v *VideoPlayerView) Position() time.Duration {
+func (v *videoPlayerView) Position() time.Duration {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return v.position
 }
 
 // Duration returns the total media duration.
-func (v *VideoPlayerView) Duration() time.Duration {
+func (v *videoPlayerView) Duration() time.Duration {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return v.duration
 }
 
 // Buffered returns the buffered position.
-func (v *VideoPlayerView) Buffered() time.Duration {
+func (v *videoPlayerView) Buffered() time.Duration {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	return v.buffered
 }
 
 // handlePlaybackStateChanged processes state change events from native.
-func (v *VideoPlayerView) handlePlaybackStateChanged(state PlaybackState) {
+func (v *videoPlayerView) handlePlaybackStateChanged(state PlaybackState) {
 	v.mu.Lock()
 	stateChanged := state != v.state
 	v.state = state
@@ -167,7 +167,7 @@ func (v *VideoPlayerView) handlePlaybackStateChanged(state PlaybackState) {
 }
 
 // handlePositionChanged processes position update events from native.
-func (v *VideoPlayerView) handlePositionChanged(position, duration, buffered time.Duration) {
+func (v *videoPlayerView) handlePositionChanged(position, duration, buffered time.Duration) {
 	v.mu.Lock()
 	v.position = position
 	v.duration = duration
@@ -183,7 +183,7 @@ func (v *VideoPlayerView) handlePositionChanged(position, duration, buffered tim
 }
 
 // handleError processes error events from native.
-func (v *VideoPlayerView) handleError(code string, message string) {
+func (v *videoPlayerView) handleError(code string, message string) {
 	v.mu.RLock()
 	cb := v.OnError
 	v.mu.RUnlock()
@@ -203,7 +203,7 @@ func (f *videoPlayerViewFactory) ViewType() string {
 }
 
 func (f *videoPlayerViewFactory) Create(viewID int64, params map[string]any) (PlatformView, error) {
-	return NewVideoPlayerView(viewID), nil
+	return newVideoPlayerView(viewID), nil
 }
 
 func init() {

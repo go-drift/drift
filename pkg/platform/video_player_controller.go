@@ -32,7 +32,7 @@ import (
 // missed.
 type VideoPlayerController struct {
 	mu     sync.RWMutex
-	view   *VideoPlayerView // guarded by mu
+	view   *videoPlayerView // guarded by mu
 	viewID int64            // guarded by mu
 
 	// OnPlaybackStateChanged is called when the playback state changes.
@@ -71,7 +71,7 @@ func NewVideoPlayerController() *VideoPlayerController {
 		return c
 	}
 
-	videoView, ok := view.(*VideoPlayerView)
+	videoView, ok := view.(*videoPlayerView)
 	if !ok {
 		errors.Report(&errors.DriftError{
 			Op:  "NewVideoPlayerController",
