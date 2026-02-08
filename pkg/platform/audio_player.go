@@ -34,11 +34,11 @@ var (
 // at any time, but setting them before calling Load ensures no events are
 // missed.
 type AudioPlayerController struct {
-	id  int64
 	svc *audioPlayerServiceState
 	mu  sync.RWMutex
 
 	// guarded by mu
+	id       int64
 	state    PlaybackState
 	position time.Duration
 	duration time.Duration
@@ -217,11 +217,14 @@ func ensureAudioService() *audioPlayerServiceState {
 // Load prepares the given URL for playback. The native player begins buffering
 // the media source. Call [AudioPlayerController.Play] to start playback.
 func (c *AudioPlayerController) Load(url string) error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("load", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 		"url":      url,
 	})
 	return err
@@ -230,44 +233,56 @@ func (c *AudioPlayerController) Load(url string) error {
 // Play starts or resumes playback. Call [AudioPlayerController.Load] first
 // to set the media URL.
 func (c *AudioPlayerController) Play() error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("play", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 	})
 	return err
 }
 
 // Pause pauses playback.
 func (c *AudioPlayerController) Pause() error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("pause", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 	})
 	return err
 }
 
 // Stop stops playback and resets the player to the idle state.
 func (c *AudioPlayerController) Stop() error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("stop", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 	})
 	return err
 }
 
 // SeekTo seeks to the given position.
 func (c *AudioPlayerController) SeekTo(position time.Duration) error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("seekTo", map[string]any{
-		"playerId":   c.id,
+		"playerId":   id,
 		"positionMs": position.Milliseconds(),
 	})
 	return err
@@ -275,11 +290,14 @@ func (c *AudioPlayerController) SeekTo(position time.Duration) error {
 
 // SetVolume sets the playback volume (0.0 to 1.0).
 func (c *AudioPlayerController) SetVolume(volume float64) error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("setVolume", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 		"volume":   volume,
 	})
 	return err
@@ -287,11 +305,14 @@ func (c *AudioPlayerController) SetVolume(volume float64) error {
 
 // SetLooping sets whether playback should loop.
 func (c *AudioPlayerController) SetLooping(looping bool) error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("setLooping", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 		"looping":  looping,
 	})
 	return err
@@ -299,11 +320,14 @@ func (c *AudioPlayerController) SetLooping(looping bool) error {
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
 func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
-	if c.id == 0 {
+	c.mu.RLock()
+	id := c.id
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("setPlaybackSpeed", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 		"rate":     rate,
 	})
 	return err
@@ -313,11 +337,13 @@ func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
 // this controller must not be reused. Dispose is idempotent; calling it more
 // than once is safe.
 func (c *AudioPlayerController) Dispose() {
-	if c.id == 0 {
-		return
-	}
+	c.mu.Lock()
 	id := c.id
 	c.id = 0
+	c.mu.Unlock()
+	if id == 0 {
+		return
+	}
 
 	audioRegistryMu.Lock()
 	delete(audioRegistry, id)

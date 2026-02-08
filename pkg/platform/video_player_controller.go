@@ -2,6 +2,7 @@ package platform
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-drift/drift/pkg/errors"
@@ -30,8 +31,9 @@ import (
 // at any time, but setting them before calling Load ensures no events are
 // missed.
 type VideoPlayerController struct {
-	view   *VideoPlayerView
-	viewID int64
+	mu     sync.RWMutex
+	view   *VideoPlayerView // guarded by mu
+	viewID int64            // guarded by mu
 
 	// OnPlaybackStateChanged is called when the playback state changes.
 	// Called on the UI thread.
@@ -101,37 +103,52 @@ func NewVideoPlayerController() *VideoPlayerController {
 
 // ViewID returns the platform view ID, or 0 if the view was not created.
 func (c *VideoPlayerController) ViewID() int64 {
-	return c.viewID
+	c.mu.RLock()
+	id := c.viewID
+	c.mu.RUnlock()
+	return id
 }
 
 // State returns the current playback state.
 func (c *VideoPlayerController) State() PlaybackState {
-	if c.view != nil {
-		return c.view.State()
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v != nil {
+		return v.State()
 	}
 	return PlaybackStateIdle
 }
 
 // Position returns the current playback position.
 func (c *VideoPlayerController) Position() time.Duration {
-	if c.view != nil {
-		return c.view.Position()
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v != nil {
+		return v.Position()
 	}
 	return 0
 }
 
 // Duration returns the total media duration.
 func (c *VideoPlayerController) Duration() time.Duration {
-	if c.view != nil {
-		return c.view.Duration()
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v != nil {
+		return v.Duration()
 	}
 	return 0
 }
 
 // Buffered returns the buffered position.
 func (c *VideoPlayerController) Buffered() time.Duration {
-	if c.view != nil {
-		return c.view.Buffered()
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v != nil {
+		return v.Buffered()
 	}
 	return 0
 }
@@ -139,76 +156,103 @@ func (c *VideoPlayerController) Buffered() time.Duration {
 // Load loads a new media URL, replacing the current media item.
 // Call [VideoPlayerController.Play] to start playback.
 func (c *VideoPlayerController) Load(url string) error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.Load(url)
+	return v.Load(url)
 }
 
 // Play starts or resumes playback. Call [VideoPlayerController.Load] first
 // to set the media URL.
 func (c *VideoPlayerController) Play() error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.Play()
+	return v.Play()
 }
 
 // Pause pauses playback.
 func (c *VideoPlayerController) Pause() error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.Pause()
+	return v.Pause()
 }
 
 // Stop stops playback and resets the player to the idle state.
 func (c *VideoPlayerController) Stop() error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.Stop()
+	return v.Stop()
 }
 
 // SeekTo seeks to the given position.
 func (c *VideoPlayerController) SeekTo(position time.Duration) error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.SeekTo(position)
+	return v.SeekTo(position)
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0).
 func (c *VideoPlayerController) SetVolume(volume float64) error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.SetVolume(volume)
+	return v.SetVolume(volume)
 }
 
 // SetLooping sets whether playback should loop.
 func (c *VideoPlayerController) SetLooping(looping bool) error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.SetLooping(looping)
+	return v.SetLooping(looping)
 }
 
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
 func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	v := c.view
+	c.mu.RUnlock()
+	if v == nil {
 		return ErrDisposed
 	}
-	return c.view.SetPlaybackSpeed(rate)
+	return v.SetPlaybackSpeed(rate)
 }
 
 // Dispose releases the video player and its native resources. After disposal,
 // this controller must not be reused. Dispose is idempotent; calling it more
 // than once is safe.
 func (c *VideoPlayerController) Dispose() {
-	if c.viewID != 0 {
-		GetPlatformViewRegistry().Dispose(c.viewID)
-		c.view = nil
-		c.viewID = 0
+	c.mu.Lock()
+	id := c.viewID
+	c.view = nil
+	c.viewID = 0
+	c.mu.Unlock()
+	if id != 0 {
+		GetPlatformViewRegistry().Dispose(id)
 	}
 }
