@@ -31,8 +31,8 @@ import (
 //
 // # Image Fit Modes
 //
+//   - ImageFitContain: Scales to fit within the box while maintaining aspect ratio (default)
 //   - ImageFitFill: Stretches the image to completely fill the box (may distort)
-//   - ImageFitContain: Scales to fit within the box while maintaining aspect ratio
 //   - ImageFitCover: Scales to cover the box while maintaining aspect ratio (may crop)
 //   - ImageFitNone: Uses the image's intrinsic size
 //   - ImageFitScaleDown: Like Contain, but never scales up
@@ -61,10 +61,11 @@ type Image struct {
 type ImageFit int
 
 const (
-	// ImageFitFill stretches the image to fill its bounds.
-	ImageFitFill ImageFit = iota
 	// ImageFitContain scales the image to fit within its bounds.
-	ImageFitContain
+	// This is the zero value, making it the default for [Image].
+	ImageFitContain ImageFit = iota
+	// ImageFitFill stretches the image to fill its bounds.
+	ImageFitFill
 	// ImageFitCover scales the image to cover its bounds.
 	ImageFitCover
 	// ImageFitNone leaves the image at its intrinsic size.
@@ -221,9 +222,6 @@ func (r *renderImage) Paint(ctx *layout.PaintContext) {
 	}
 
 	fit := r.fit
-	if fit == 0 {
-		fit = ImageFitFill
-	}
 	alignment := r.alignment
 	if alignment == (layout.Alignment{}) {
 		alignment = layout.AlignmentCenter

@@ -13,10 +13,10 @@ import (
 type ActivityIndicatorSize = platform.ActivityIndicatorSize
 
 const (
+	// ActivityIndicatorSizeMedium is a medium spinner.
+	ActivityIndicatorSizeMedium = platform.ActivityIndicatorSizeMedium
 	// ActivityIndicatorSizeSmall is a small spinner.
 	ActivityIndicatorSizeSmall = platform.ActivityIndicatorSizeSmall
-	// ActivityIndicatorSizeMedium is a medium spinner (default).
-	ActivityIndicatorSizeMedium = platform.ActivityIndicatorSizeMedium
 	// ActivityIndicatorSizeLarge is a large spinner.
 	ActivityIndicatorSizeLarge = platform.ActivityIndicatorSizeLarge
 )

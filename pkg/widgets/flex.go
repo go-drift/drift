@@ -107,11 +107,11 @@ func (a CrossAxisAlignment) String() string {
 type MainAxisSize int
 
 const (
-	// MainAxisSizeMin sizes the container to fit its children (shrink-wrap).
-	MainAxisSizeMin MainAxisSize = iota
 	// MainAxisSizeMax expands to fill all available space along the main axis.
-	// This is required for [Expanded] children to receive space.
-	MainAxisSizeMax
+	// This is the zero value, making it the default for [Row] and [Column].
+	MainAxisSizeMax MainAxisSize = iota
+	// MainAxisSizeMin sizes the container to fit its children (shrink-wrap).
+	MainAxisSizeMin
 )
 
 // String returns a human-readable representation of the main axis size.
@@ -176,9 +176,8 @@ type FlexFitProvider interface {
 //
 // # Sizing Behavior
 //
-// By default (MainAxisSizeMin), Row shrinks to fit its children. Set
-// MainAxisSizeMax to expand and fill available horizontal space - this is
-// required when using [Expanded] children.
+// By default, Row expands to fill available horizontal space. Set
+// MainAxisSizeMin to shrink-wrap the children instead.
 //
 // # Alignment
 //
@@ -191,7 +190,6 @@ type FlexFitProvider interface {
 // Wrap children in [Expanded] to make them share remaining space proportionally:
 //
 //	Row{
-//	    MainAxisSize: MainAxisSizeMax,
 //	    Children: []core.Widget{
 //	        Text{Content: "Label"},
 //	        Expanded{Child: TextField{...}}, // Takes remaining space
@@ -259,9 +257,8 @@ func (r Row) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Rende
 //
 // # Sizing Behavior
 //
-// By default (MainAxisSizeMin), Column shrinks to fit its children. Set
-// MainAxisSizeMax to expand and fill available vertical space - this is
-// required when using [Expanded] children.
+// By default, Column expands to fill available vertical space. Set
+// MainAxisSizeMin to shrink-wrap the children instead.
 //
 // # Alignment
 //
@@ -274,7 +271,6 @@ func (r Row) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Rende
 // Wrap children in [Expanded] to make them share remaining space proportionally:
 //
 //	Column{
-//	    MainAxisSize: MainAxisSizeMax,
 //	    Children: []core.Widget{
 //	        Text{Content: "Header"},
 //	        Expanded{Child: ListView{...}}, // Takes remaining space
@@ -423,6 +419,14 @@ func (r *renderFlex) PerformLayout() {
 		))
 	}
 
+	// If the main axis is unbounded, Max is meaningless (there's no finite
+	// space to fill). Fall back to Min so the container shrink-wraps instead
+	// of expanding to infinity. This makes Row/Column safe inside ScrollView.
+	effectiveAxisSize := r.axisSize
+	if effectiveAxisSize == MainAxisSizeMax && maxMain == math.MaxFloat64 {
+		effectiveAxisSize = MainAxisSizeMin
+	}
+
 	mainSize := 0.0
 	crossSize := 0.0
 	totalFlex := 0
@@ -442,7 +446,9 @@ func (r *renderFlex) PerformLayout() {
 		crossSize = math.Max(crossSize, r.crossAxis(childSize))
 	}
 
-	// Check for flex children with unbounded main axis
+	// Expanded/Flexible children need a finite main axis to divide space.
+	// Plain Row/Column without flex children is handled above by effectiveAxisSize,
+	// but flex children in unbounded constraints is a developer mistake worth surfacing.
 	if totalFlex > 0 && maxMain == math.MaxFloat64 {
 		containerType := "Row"
 		mainAxisName := "width"
@@ -453,14 +459,10 @@ func (r *renderFlex) PerformLayout() {
 		panic(fmt.Sprintf(
 			"Expanded/Flexible used in %s with unbounded %s.\n\n"+
 				"Flex children need a finite main axis to divide space. This happens when:\n"+
-				"- The %s is inside a ScrollView (which has unbounded %s)\n"+
-				"- The %s has MainAxisSizeMin and no constrained %s from parent\n\n"+
+				"- The %s is inside a ScrollView (which has unbounded %s)\n\n"+
 				"Solutions:\n"+
 				"- Remove Expanded/Flexible and use fixed-size widgets instead\n"+
-				"- Set MainAxisSizeMax on the %s and ensure parent provides bounded %s\n"+
 				"- Wrap the %s in a SizedBox or Container with a fixed %s",
-			containerType, mainAxisName,
-			containerType, mainAxisName,
 			containerType, mainAxisName,
 			containerType, mainAxisName,
 			containerType, mainAxisName,
@@ -468,7 +470,7 @@ func (r *renderFlex) PerformLayout() {
 	}
 
 	remaining := max(maxMain-mainSize, 0)
-	if r.axisSize != MainAxisSizeMax {
+	if effectiveAxisSize != MainAxisSizeMax {
 		remaining = 0
 	}
 
@@ -490,7 +492,7 @@ func (r *renderFlex) PerformLayout() {
 	}
 
 	finalMain := mainSize
-	if r.axisSize == MainAxisSizeMax {
+	if effectiveAxisSize == MainAxisSizeMax {
 		finalMain = maxMain
 	}
 

@@ -30,7 +30,6 @@ import (
 // A row where text takes only the space it needs, while a panel fills the rest:
 //
 //	Row{
-//	    MainAxisSize: MainAxisSizeMax,
 //	    Children: []core.Widget{
 //	        Flexible{Child: Text{Content: "Short"}},  // Uses only needed width
 //	        Expanded{Child: panel},                   // Fills remaining space
@@ -42,7 +41,6 @@ import (
 // Distribute space proportionally while allowing children to be smaller:
 //
 //	Row{
-//	    MainAxisSize: MainAxisSizeMax,
 //	    Children: []core.Widget{
 //	        Flexible{Flex: 1, Child: smallWidget},  // Gets up to 1/3 of space
 //	        Flexible{Flex: 2, Child: largeWidget},  // Gets up to 2/3 of space

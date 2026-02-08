@@ -8,10 +8,10 @@ import (
 type ActivityIndicatorSize int
 
 const (
+	// ActivityIndicatorSizeMedium is a medium spinner.
+	ActivityIndicatorSizeMedium ActivityIndicatorSize = iota
 	// ActivityIndicatorSizeSmall is a small spinner.
-	ActivityIndicatorSizeSmall ActivityIndicatorSize = iota
-	// ActivityIndicatorSizeMedium is a medium spinner (default).
-	ActivityIndicatorSizeMedium
+	ActivityIndicatorSizeSmall
 	// ActivityIndicatorSizeLarge is a large spinner.
 	ActivityIndicatorSizeLarge
 )

@@ -29,7 +29,7 @@
 //	col := ColumnOf(
 //	    MainAxisAlignmentCenter,
 //	    CrossAxisAlignmentCenter,
-//	    MainAxisSizeMin,
+//	    MainAxisSizeMax,
 //	    child1, child2,
 //	)
 //

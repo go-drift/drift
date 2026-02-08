@@ -60,7 +60,6 @@ Arrange children horizontally:
 widgets.Row{
     MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
     CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-    MainAxisSize:       widgets.MainAxisSizeMax,
     Children: []core.Widget{
         avatar,
         widgets.Expanded{Child: title},
@@ -116,13 +115,11 @@ Controls how children are positioned along the main axis:
 
 ```go
 // Example: Evenly distribute buttons
-widgets.RowOf(
-    widgets.MainAxisAlignmentSpaceEvenly,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMax,
-    cancelButton,
-    saveButton,
-)
+widgets.Row{
+    MainAxisAlignment:  widgets.MainAxisAlignmentSpaceEvenly,
+    CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+    Children: []core.Widget{cancelButton, saveButton},
+}
 ```
 
 ## Cross Axis Alignment
@@ -138,13 +135,10 @@ Controls how children are positioned along the cross axis:
 
 ```go
 // Example: Stretch children to full width
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStretch,
-    widgets.MainAxisSizeMax,
-    cardOne,
-    cardTwo,
-)
+widgets.Column{
+    CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
+    Children: []core.Widget{cardOne, cardTwo},
+}
 ```
 
 ## Main Axis Size
@@ -153,11 +147,13 @@ Controls how much space the flex container takes:
 
 | Size | Effect |
 |------|--------|
+| `MainAxisSizeMax` (default) | Take all available space |
 | `MainAxisSizeMin` | Take minimum needed space |
-| `MainAxisSizeMax` | Take all available space |
+
+`MainAxisSizeMax` is the zero value, so `Row{}` and `Column{}` expand to fill their parent by default. Set `MainAxisSizeMin` explicitly when you want shrink-wrap behavior.
 
 ```go
-// Example: Column that takes minimum height
+// Example: Column that shrink-wraps its children
 widgets.ColumnOf(
     widgets.MainAxisAlignmentStart,
     widgets.CrossAxisAlignmentStart,
@@ -378,15 +374,15 @@ widgets.SizedBox{Height: 16}
 Fill remaining space in a flex container:
 
 ```go
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMax,
-    avatar,
-    widgets.HSpace(12),
-    widgets.Expanded{Child: nameAndStatus},  // Takes remaining width
-    menuButton,
-)
+widgets.Row{
+    CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+    Children: []core.Widget{
+        avatar,
+        widgets.HSpace(12),
+        widgets.Expanded{Child: nameAndStatus},  // Takes remaining width
+        menuButton,
+    },
+}
 ```
 
 ### Expanded with Flex
@@ -394,13 +390,12 @@ widgets.RowOf(
 Control how space is distributed:
 
 ```go
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMax,
-    widgets.Expanded{Flex: 2, Child: leftPanel},  // 2/3 of space
-    widgets.Expanded{Flex: 1, Child: rightPanel}, // 1/3 of space
-)
+widgets.Row{
+    Children: []core.Widget{
+        widgets.Expanded{Flex: 2, Child: leftPanel},  // 2/3 of space
+        widgets.Expanded{Flex: 1, Child: rightPanel}, // 1/3 of space
+    },
+}
 ```
 
 ### Flexible
@@ -419,13 +414,13 @@ widgets.RowOf(
 Text takes only the width it needs, while the panel fills the rest:
 
 ```go
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMax,
-    widgets.Flexible{Child: widgets.Text{Content: "Short"}},  // Uses only needed width
-    widgets.Expanded{Child: panel},                           // Fills remaining space
-)
+widgets.Row{
+    CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+    Children: []core.Widget{
+        widgets.Flexible{Child: widgets.Text{Content: "Short"}},  // Uses only needed width
+        widgets.Expanded{Child: panel},                           // Fills remaining space
+    },
+}
 ```
 
 #### With Flex Factors
@@ -433,13 +428,12 @@ widgets.RowOf(
 Distribute space proportionally while allowing children to be smaller than allocated:
 
 ```go
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMax,
-    widgets.Flexible{Flex: 1, Child: labelA},  // Gets up to 1/3 of space
-    widgets.Flexible{Flex: 2, Child: labelB},  // Gets up to 2/3 of space
-)
+widgets.Row{
+    Children: []core.Widget{
+        widgets.Flexible{Flex: 1, Child: labelA},  // Gets up to 1/3 of space
+        widgets.Flexible{Flex: 2, Child: labelB},  // Gets up to 2/3 of space
+    },
+}
 ```
 
 #### FlexFit Options
@@ -843,23 +837,25 @@ widgets.DecoratedBox{
 
 ```go
 widgets.PaddingAll(16,
-    widgets.RowOf(
-        widgets.MainAxisAlignmentStart,
-        widgets.CrossAxisAlignmentCenter,
-        widgets.MainAxisSizeMax,
-        avatar,
-        widgets.HSpace(16),
-        widgets.Expanded{
-            Child: widgets.ColumnOf(
-                widgets.MainAxisAlignmentCenter,
-                widgets.CrossAxisAlignmentStart,
-                widgets.MainAxisSizeMin,
-                widgets.Text{Content: name, Style: textTheme.TitleMedium},
-                widgets.Text{Content: subtitle, Style: textTheme.BodySmall},
-            ),
+    widgets.Row{
+        CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+        Children: []core.Widget{
+            avatar,
+            widgets.HSpace(16),
+            widgets.Expanded{
+                Child: widgets.Column{
+                    MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+                    CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+                    MainAxisSize:       widgets.MainAxisSizeMin,
+                    Children: []core.Widget{
+                        widgets.Text{Content: name, Style: textTheme.TitleMedium},
+                        widgets.Text{Content: subtitle, Style: textTheme.BodySmall},
+                    },
+                },
+            },
+            chevronIcon,
         },
-        chevronIcon,
-    ),
+    },
 )
 ```
 
@@ -869,14 +865,15 @@ widgets.PaddingAll(16,
 widgets.Container{
     Color:   colors.Surface,
     Padding: layout.EdgeInsetsSymmetric(16, 12),
-    Child: widgets.RowOf(
-        widgets.MainAxisAlignmentSpaceBetween,
-        widgets.CrossAxisAlignmentCenter,
-        widgets.MainAxisSizeMax,
-        backButton,
-        widgets.Text{Content: title, Style: textTheme.TitleLarge},
-        menuButton,
-    ),
+    Child: widgets.Row{
+        MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
+        CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+        Children: []core.Widget{
+            backButton,
+            widgets.Text{Content: title, Style: textTheme.TitleLarge},
+            menuButton,
+        },
+    },
 }
 ```
 

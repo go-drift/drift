@@ -24,11 +24,11 @@ class NativeActivityIndicatorContainer(
 
     init {
         // Determine size based on parameter
-        val sizeParam = (params["size"] as? Number)?.toInt() ?: 1 // Default to medium
+        val sizeParam = (params["size"] as? Number)?.toInt() ?: 0 // Default to medium
         val styleAttr = when (sizeParam) {
-            0 -> android.R.attr.progressBarStyleSmall
+            1 -> android.R.attr.progressBarStyleSmall
             2 -> android.R.attr.progressBarStyleLarge
-            else -> android.R.attr.progressBarStyle // Medium
+            else -> android.R.attr.progressBarStyle // Medium (0)
         }
 
         progressBar = ProgressBar(context, null, styleAttr).apply {

@@ -17,15 +17,15 @@ import (
 // [Flexible] instead when the child should be allowed to be smaller than its
 // allocated space.
 //
-// Important: The parent Row or Column must have [MainAxisSizeMax] for Expanded
-// to receive any space. With [MainAxisSizeMin], there is no remaining space to fill.
+// Note: With [MainAxisSizeMin], there is no remaining space to fill, so
+// Expanded children receive zero space. Using Expanded inside a [ScrollView]
+// (unbounded main axis) will panic, since there is no finite space to divide.
 //
 // # Example
 //
 // Fill remaining space between fixed-size widgets:
 //
 //	Row{
-//	    MainAxisSize: MainAxisSizeMax,
 //	    Children: []core.Widget{
 //	        Icon{...},                                // Fixed size
 //	        Expanded{Child: Text{Content: "..."}},   // Fills remaining space
@@ -38,7 +38,6 @@ import (
 // Distribute space proportionally among multiple Expanded children:
 //
 //	Row{
-//	    MainAxisSize: MainAxisSizeMax,
 //	    Children: []core.Widget{
 //	        Expanded{Flex: 1, Child: panelA}, // Gets 1/3 of space
 //	        Expanded{Flex: 2, Child: panelB}, // Gets 2/3 of space

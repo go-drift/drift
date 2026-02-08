@@ -15,24 +15,24 @@ class NativeActivityIndicatorContainer: NSObject, PlatformViewContainer {
         self.viewId = viewId
 
         // Determine style based on size parameter
-        let sizeParam = params["size"] as? Int ?? 1 // Default to medium
+        let sizeParam = params["size"] as? Int ?? 0 // Default to medium
         let style: UIActivityIndicatorView.Style
         if #available(iOS 13.0, *) {
             switch sizeParam {
-            case 0: // Small
+            case 1: // Small
                 style = .medium
             case 2: // Large
                 style = .large
-            default: // Medium (1)
+            default: // Medium (0)
                 style = .medium
             }
         } else {
             switch sizeParam {
-            case 0: // Small
+            case 1: // Small
                 style = .white
             case 2: // Large
                 style = .whiteLarge
-            default: // Medium
+            default: // Medium (0)
                 style = .white
             }
         }
