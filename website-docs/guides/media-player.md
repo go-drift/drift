@@ -6,7 +6,7 @@ sidebar_position: 12
 
 # Media Player
 
-Drift provides native media playback through two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI.
+Drift provides native media playback through two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI. The video controller creates its native surface eagerly on construction, while the audio controller defers native player creation until the first method call.
 
 Both APIs deliver callbacks on the UI thread, so you can update widget state directly without wrapping calls in `drift.Dispatch`.
 
