@@ -37,12 +37,20 @@ func TestAudioPlayerController_LoadAndPlay(t *testing.T) {
 	defer c.Dispose()
 
 	// Load prepares the URL, Play starts playback.
-	c.Load("https://example.com/song.mp3")
-	c.Play()
+	if err := c.Load("https://example.com/song.mp3"); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := c.Play(); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
 
 	// Load a different URL.
-	c.Load("https://example.com/other.mp3")
-	c.Play()
+	if err := c.Load("https://example.com/other.mp3"); err != nil {
+		t.Fatalf("Load (second): %v", err)
+	}
+	if err := c.Play(); err != nil {
+		t.Fatalf("Play (second): %v", err)
+	}
 }
 
 func TestAudioPlayerController_StateGetters_DefaultValues(t *testing.T) {
@@ -214,14 +222,23 @@ func TestAudioPlayerController_TransportMethods(t *testing.T) {
 	defer c.Dispose()
 
 	// All transport methods should execute without error.
-	c.Load("https://example.com/song.mp3")
-	c.Play()
-	c.Pause()
-	c.SeekTo(30 * time.Second)
-	c.SetVolume(0.5)
-	c.SetLooping(true)
-	c.SetPlaybackSpeed(1.5)
-	c.Stop()
+	for _, tc := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"Load", func() error { return c.Load("https://example.com/song.mp3") }},
+		{"Play", func() error { return c.Play() }},
+		{"Pause", func() error { return c.Pause() }},
+		{"SeekTo", func() error { return c.SeekTo(30 * time.Second) }},
+		{"SetVolume", func() error { return c.SetVolume(0.5) }},
+		{"SetLooping", func() error { return c.SetLooping(true) }},
+		{"SetPlaybackSpeed", func() error { return c.SetPlaybackSpeed(1.5) }},
+		{"Stop", func() error { return c.Stop() }},
+	} {
+		if err := tc.fn(); err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
 }
 
 func TestAudioPlayerController_PlayPauseSeekCycle(t *testing.T) {
@@ -236,14 +253,24 @@ func TestAudioPlayerController_PlayPauseSeekCycle(t *testing.T) {
 	}
 
 	// Simulate: load, play, buffering, playing, pause, seek, resume, completed
-	c.Load("https://example.com/song.mp3")
-	c.Play()
+	if err := c.Load("https://example.com/song.mp3"); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := c.Play(); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
 	sendAudioEvent(t, c, 1, 0, 0, 0)     // Buffering
 	sendAudioEvent(t, c, 2, 0, 60000, 0) // Playing
-	c.Pause()
+	if err := c.Pause(); err != nil {
+		t.Fatalf("Pause: %v", err)
+	}
 	sendAudioEvent(t, c, 4, 15000, 60000, 60000) // Paused at 15s
-	c.SeekTo(30 * time.Second)
-	c.Play()                                     // Resume
+	if err := c.SeekTo(30 * time.Second); err != nil {
+		t.Fatalf("SeekTo: %v", err)
+	}
+	if err := c.Play(); err != nil {
+		t.Fatalf("Play (resume): %v", err)
+	}
 	sendAudioEvent(t, c, 2, 30000, 60000, 60000) // Playing from 30s
 	sendAudioEvent(t, c, 3, 60000, 60000, 60000) // Completed
 
@@ -278,21 +305,84 @@ func TestAudioPlayerController_MethodsNoOpAfterDispose(t *testing.T) {
 	c := NewAudioPlayerController()
 	c.Dispose()
 
-	// All methods should be no-ops after Dispose.
-	c.Load("https://example.com/song.mp3")
-	c.Play()
-	c.Pause()
-	c.Stop()
-	c.SeekTo(time.Second)
-	c.SetVolume(0.5)
-	c.SetLooping(true)
-	c.SetPlaybackSpeed(1.5)
+	// All methods should silently no-op after Dispose.
+	for _, tc := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"Load", func() error { return c.Load("https://example.com/song.mp3") }},
+		{"Play", func() error { return c.Play() }},
+		{"Pause", func() error { return c.Pause() }},
+		{"Stop", func() error { return c.Stop() }},
+		{"SeekTo", func() error { return c.SeekTo(time.Second) }},
+		{"SetVolume", func() error { return c.SetVolume(0.5) }},
+		{"SetLooping", func() error { return c.SetLooping(true) }},
+		{"SetPlaybackSpeed", func() error { return c.SetPlaybackSpeed(1.5) }},
+	} {
+		if err := tc.fn(); err != nil {
+			t.Errorf("%s after Dispose: got %v, want nil", tc.name, err)
+		}
+	}
 
 	if c.State() != PlaybackStateIdle {
 		t.Errorf("State() after Dispose: got %v, want Idle", c.State())
 	}
 	if c.Position() != 0 {
 		t.Error("Position() after Dispose should be 0")
+	}
+}
+
+func TestAudioPlayerController_DoubleDispose(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewAudioPlayerController()
+	c.Dispose()
+	c.Dispose() // second call should be a safe no-op
+}
+
+func TestAudioPlayerController_EventAfterDispose(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewAudioPlayerController()
+	id := c.id
+
+	var callbackFired bool
+	c.OnPlaybackStateChanged = func(PlaybackState) { callbackFired = true }
+	c.OnPositionChanged = func(_, _, _ time.Duration) { callbackFired = true }
+	c.OnError = func(_, _ string) { callbackFired = true }
+
+	c.Dispose()
+
+	// Simulate native events arriving for the now-disposed player ID.
+	// The registry lookup should return nil, so nothing should happen.
+	eventData, err := DefaultCodec.Encode(map[string]any{
+		"playerId":      id,
+		"playbackState": 2,
+		"positionMs":    int64(1000),
+		"durationMs":    int64(60000),
+		"bufferedMs":    int64(5000),
+	})
+	if err != nil {
+		t.Fatalf("encode event: %v", err)
+	}
+	if err := HandleEvent("drift/audio_player/events", eventData); err != nil {
+		t.Fatalf("HandleEvent (state): %v", err)
+	}
+
+	errorData, err := DefaultCodec.Encode(map[string]any{
+		"playerId": id,
+		"code":     "test",
+		"message":  "post-dispose",
+	})
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	if err := HandleEvent("drift/audio_player/errors", errorData); err != nil {
+		t.Fatalf("HandleEvent (error): %v", err)
+	}
+
+	if callbackFired {
+		t.Error("callbacks should not fire for a disposed controller")
 	}
 }
 

@@ -235,6 +235,50 @@ func TestVideoPlayerController_TransportMethods(t *testing.T) {
 	c.Stop()
 }
 
+func TestVideoPlayerController_DoubleDispose(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewVideoPlayerController()
+	c.Dispose()
+	c.Dispose() // second call should be a safe no-op
+}
+
+func TestVideoPlayerController_EventAfterDispose(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewVideoPlayerController()
+	viewID := c.ViewID()
+
+	var callbackFired bool
+	c.OnPlaybackStateChanged = func(PlaybackState) { callbackFired = true }
+	c.OnPositionChanged = func(_, _, _ time.Duration) { callbackFired = true }
+	c.OnError = func(_, _ string) { callbackFired = true }
+
+	c.Dispose()
+
+	// Simulate native events arriving for the now-disposed view ID.
+	// The registry lookup should return nil, so nothing should happen.
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": viewID,
+		"state":  2,
+	})
+	sendVideoViewEvent(t, "onPositionChanged", map[string]any{
+		"viewId":     viewID,
+		"positionMs": int64(1000),
+		"durationMs": int64(60000),
+		"bufferedMs": int64(5000),
+	})
+	sendVideoViewEvent(t, "onVideoError", map[string]any{
+		"viewId":  viewID,
+		"code":    "test",
+		"message": "post-dispose",
+	})
+
+	if callbackFired {
+		t.Error("callbacks should not fire for a disposed controller")
+	}
+}
+
 func TestVideoPlayerController_MethodsNoOpAfterDispose(t *testing.T) {
 	setupTestBridge(t)
 
