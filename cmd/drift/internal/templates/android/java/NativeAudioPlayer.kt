@@ -193,7 +193,10 @@ object AudioPlayerHandler {
 
     private fun stop(playerId: Long): Pair<Any?, Exception?> {
         handler.post {
-            players[playerId]?.player?.stop()
+            val instance = players[playerId] ?: return@post
+            instance.player.stop()
+            instance.player.seekTo(0)
+            instance.sendStateEvent(0) // Idle with position reset to zero
         }
         return Pair(null, null)
     }

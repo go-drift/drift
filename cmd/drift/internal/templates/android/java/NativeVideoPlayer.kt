@@ -220,6 +220,15 @@ class NativeVideoPlayerContainer(
 
     fun stop() {
         player.stop()
+        player.seekTo(0)
+        PlatformChannelManager.sendEvent(
+            "drift/platform_views",
+            mapOf(
+                "method" to "onPlaybackStateChanged",
+                "viewId" to viewId,
+                "state" to 0 // Idle with position reset to zero
+            )
+        )
     }
 
     fun seekTo(positionMs: Long) {

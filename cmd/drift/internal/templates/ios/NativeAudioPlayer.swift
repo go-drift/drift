@@ -191,7 +191,10 @@ private class AudioPlayerInstance {
         isStopped = true
         hasReachedEnd = false
         player.pause()
-        player.seek(to: .zero)
+        player.seek(to: .zero) { [weak self] _ in
+            guard let self = self else { return }
+            self.sendStateEvent(state: 0) // Idle with position reset to zero
+        }
     }
 
     func seekTo(positionMs: Int64) {
