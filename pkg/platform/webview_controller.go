@@ -39,8 +39,8 @@ type WebViewController struct {
 	OnPageFinished func(url string)
 
 	// OnError is called when a loading error occurs.
-	// The code parameter is one of the ErrCodeNetworkError, ErrCodeSSLError,
-	// or ErrCodeLoadFailed constants. Called on the UI thread.
+	// The code parameter is one of [ErrCodeNetworkError], [ErrCodeSSLError],
+	// or [ErrCodeLoadFailed]. Called on the UI thread.
 	OnError func(code, message string)
 }
 

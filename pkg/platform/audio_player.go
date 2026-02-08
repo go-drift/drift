@@ -59,6 +59,8 @@ type AudioPlayerController struct {
 	OnPositionChanged func(position, duration, buffered time.Duration)
 
 	// OnError is called when a playback error occurs.
+	// The code parameter is one of [ErrCodeSourceError],
+	// [ErrCodeDecoderError], or [ErrCodePlaybackFailed].
 	// Called on the UI thread.
 	// Set this before calling [AudioPlayerController.Load] or any other
 	// playback method to avoid missing events.
