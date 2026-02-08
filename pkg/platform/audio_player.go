@@ -276,13 +276,20 @@ func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) {
 }
 
 // Dispose releases the audio player and its native resources. After disposal,
-// this controller must not be reused.
+// this controller must not be reused. Dispose is idempotent; calling it more
+// than once is safe.
 func (c *AudioPlayerController) Dispose() {
+	if c.id == 0 {
+		return
+	}
+	id := c.id
+	c.id = 0
+
 	audioRegistryMu.Lock()
-	delete(audioRegistry, c.id)
+	delete(audioRegistry, id)
 	audioRegistryMu.Unlock()
 
 	c.svc.channel.Invoke("dispose", map[string]any{
-		"playerId": c.id,
+		"playerId": id,
 	})
 }
