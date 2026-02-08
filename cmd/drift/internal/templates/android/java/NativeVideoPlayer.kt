@@ -9,6 +9,8 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -34,7 +36,15 @@ class NativeVideoPlayerContainer(
     private val player: ExoPlayer
 
     init {
-        player = ExoPlayer.Builder(context).build()
+        player = ExoPlayer.Builder(context).build().also {
+            it.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus= */ true
+            )
+        }
 
         playerView = PlayerView(context).apply {
             layoutParams = FrameLayout.LayoutParams(

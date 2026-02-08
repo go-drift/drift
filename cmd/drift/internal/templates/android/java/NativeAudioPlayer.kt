@@ -8,6 +8,8 @@ package {{.PackageName}}
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -21,7 +23,15 @@ private class AudioPlayerInstance(
     context: Context,
     private val handler: Handler
 ) {
-    val player: ExoPlayer = ExoPlayer.Builder(context).build()
+    val player: ExoPlayer = ExoPlayer.Builder(context).build().also {
+        it.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .build(),
+            /* handleAudioFocus= */ true
+        )
+    }
     private var positionRunnable: Runnable? = null
 
     init {
