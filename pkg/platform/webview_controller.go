@@ -2,6 +2,7 @@ package platform
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/go-drift/drift/pkg/errors"
 )
@@ -25,8 +26,9 @@ import (
 //
 // All methods are safe for concurrent use.
 type WebViewController struct {
-	view   *nativeWebView
-	viewID int64
+	mu     sync.RWMutex
+	view   *nativeWebView // guarded by mu
+	viewID int64          // guarded by mu
 
 	// OnPageStarted is called when a page starts loading.
 	// Called on the UI thread.
@@ -91,15 +93,21 @@ func NewWebViewController() *WebViewController {
 
 // ViewID returns the platform view ID, or 0 if the view was not created.
 func (c *WebViewController) ViewID() int64 {
-	return c.viewID
+	c.mu.RLock()
+	id := c.viewID
+	c.mu.RUnlock()
+	return id
 }
 
 // Load loads the specified URL.
 func (c *WebViewController) Load(url string) error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	id := c.viewID
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "loadUrl", map[string]any{
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(id, "loadUrl", map[string]any{
 		"url": url,
 	})
 	return err
@@ -107,28 +115,37 @@ func (c *WebViewController) Load(url string) error {
 
 // GoBack navigates back in history.
 func (c *WebViewController) GoBack() error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	id := c.viewID
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "goBack", nil)
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(id, "goBack", nil)
 	return err
 }
 
 // GoForward navigates forward in history.
 func (c *WebViewController) GoForward() error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	id := c.viewID
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "goForward", nil)
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(id, "goForward", nil)
 	return err
 }
 
 // Reload reloads the current page.
 func (c *WebViewController) Reload() error {
-	if c.viewID == 0 {
+	c.mu.RLock()
+	id := c.viewID
+	c.mu.RUnlock()
+	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "reload", nil)
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(id, "reload", nil)
 	return err
 }
 
@@ -136,9 +153,12 @@ func (c *WebViewController) Reload() error {
 // this controller must not be reused. Dispose is idempotent; calling it more
 // than once is safe.
 func (c *WebViewController) Dispose() {
-	if c.viewID != 0 {
-		GetPlatformViewRegistry().Dispose(c.viewID)
-		c.view = nil
-		c.viewID = 0
+	c.mu.Lock()
+	id := c.viewID
+	c.view = nil
+	c.viewID = 0
+	c.mu.Unlock()
+	if id != 0 {
+		GetPlatformViewRegistry().Dispose(id)
 	}
 }
