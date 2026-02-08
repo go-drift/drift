@@ -23,8 +23,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     init(viewId: Int, params: [String: Any]) {
         self.viewId = viewId
 
-        try? AVAudioSession.sharedInstance().setCategory(.playback)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        DriftMediaSession.activate()
 
         let player = AVPlayer()
         self.player = player
@@ -194,7 +193,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
         player.replaceCurrentItem(with: nil)
         view.removeFromSuperview()
 
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        DriftMediaSession.deactivate()
     }
 
     func play() {

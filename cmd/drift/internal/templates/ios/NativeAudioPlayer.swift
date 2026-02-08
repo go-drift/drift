@@ -20,12 +20,7 @@ private class AudioPlayerInstance {
     init(id: Int) {
         self.id = id
 
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("[drift] AVAudioSession setup failed: \(error)")
-        }
+        DriftMediaSession.activate()
 
         self.player = AVPlayer()
 
@@ -352,12 +347,7 @@ enum AudioPlayerHandler {
 
     private static func dispose(playerId: Int) -> (Any?, Error?) {
         players.removeValue(forKey: playerId)?.dispose()
-
-        // Deactivate audio session if no more players
-        if players.isEmpty {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        }
-
+        DriftMediaSession.deactivate()
         return (nil, nil)
     }
 }
