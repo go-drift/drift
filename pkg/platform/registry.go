@@ -315,6 +315,11 @@ func ResetForTest() {
 		ch.mu.Unlock()
 	}
 
+	// Reset dispatch function
+	dispatchMu.Lock()
+	dispatchFunc = nil
+	dispatchMu.Unlock()
+
 	// Reset audio player registry
 	audioRegistryMu.Lock()
 	audioRegistry = map[int64]*AudioPlayerController{}

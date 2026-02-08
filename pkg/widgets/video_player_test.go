@@ -24,7 +24,7 @@ func TestVideoPlayer_NilController(t *testing.T) {
 }
 
 func TestVideoPlayer_WithController(t *testing.T) {
-	setupVideoBridge(t)
+	platform.SetupTestBridge(t.Cleanup)
 
 	c := platform.NewVideoPlayerController()
 	defer c.Dispose()
@@ -44,19 +44,3 @@ func TestVideoPlayer_WithController(t *testing.T) {
 		t.Error("expected non-zero ViewID from controller")
 	}
 }
-
-// setupVideoBridge configures a test bridge for widget-level tests.
-func setupVideoBridge(t *testing.T) {
-	t.Helper()
-	platform.SetNativeBridge(&widgetTestBridge{})
-	t.Cleanup(func() { platform.ResetForTest() })
-}
-
-type widgetTestBridge struct{}
-
-func (b *widgetTestBridge) InvokeMethod(channel, method string, argsData []byte) ([]byte, error) {
-	return platform.DefaultCodec.Encode(nil)
-}
-
-func (b *widgetTestBridge) StartEventStream(string) error { return nil }
-func (b *widgetTestBridge) StopEventStream(string) error  { return nil }
