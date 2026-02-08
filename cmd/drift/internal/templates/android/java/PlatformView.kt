@@ -44,7 +44,7 @@ object PlatformViewHandler {
     private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
     private val switchMethods = setOf("setValue", "updateConfig")
     private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
-    private val videoPlayerMethods = setOf("play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "loadUrl")
+    private val videoPlayerMethods = setOf("play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "load")
 
     fun init(context: Context, hostView: ViewGroup) {
         this.context = context
@@ -173,10 +173,10 @@ object PlatformViewHandler {
                             val rate = (args["rate"] as? Number)?.toFloat() ?: 1.0f
                             container.setPlaybackSpeed(rate)
                         }
-                        "loadUrl" -> {
+                        "load" -> {
                             val url = args["url"] as? String
                             if (url != null) {
-                                container.loadUrl(url)
+                                container.load(url)
                             }
                         }
                     }

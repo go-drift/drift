@@ -291,7 +291,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
         }
     }
 
-    func loadUrl(_ urlString: String) {
+    func load(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         loadItem(url: url)
     }

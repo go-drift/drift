@@ -233,7 +233,7 @@ class NativeVideoPlayerContainer(
         player.setPlaybackSpeed(rate)
     }
 
-    fun loadUrl(url: String) {
+    fun load(url: String) {
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
         player.prepare()
