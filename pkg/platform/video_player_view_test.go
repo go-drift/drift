@@ -81,3 +81,69 @@ func TestVideoPlayerView_NilCallbacksDoNotPanic(t *testing.T) {
 	view.handlePositionChanged(time.Second, 2*time.Second, time.Second+500*time.Millisecond)
 	view.handleError("ERR", "test")
 }
+
+func TestVideoPlayerView_CreateAndDispose(t *testing.T) {
+	setupTestBridge(t)
+
+	view := NewVideoPlayerView(42)
+
+	if err := view.Create(nil); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if view.ViewID() != 42 {
+		t.Errorf("ViewID: got %d, want 42", view.ViewID())
+	}
+
+	// Dispose should not panic.
+	view.Dispose()
+}
+
+func TestVideoPlayerView_TransportMethods(t *testing.T) {
+	setupTestBridge(t)
+
+	r := GetPlatformViewRegistry()
+	view, err := r.Create("video_player", nil)
+	if err != nil {
+		t.Fatalf("registry Create: %v", err)
+	}
+	v := view.(*VideoPlayerView)
+	defer r.Dispose(v.ViewID())
+
+	for _, tc := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"Load", func() error { return v.Load("https://example.com/video.mp4") }},
+		{"Play", func() error { return v.Play() }},
+		{"Pause", func() error { return v.Pause() }},
+		{"SeekTo", func() error { return v.SeekTo(30 * time.Second) }},
+		{"SetVolume", func() error { return v.SetVolume(0.5) }},
+		{"SetLooping", func() error { return v.SetLooping(true) }},
+		{"SetPlaybackSpeed", func() error { return v.SetPlaybackSpeed(1.5) }},
+		{"Stop", func() error { return v.Stop() }},
+	} {
+		if err := tc.fn(); err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+}
+
+func TestVideoPlayerView_StateGetters_DefaultValues(t *testing.T) {
+	setupTestBridge(t)
+
+	view := NewVideoPlayerView(1)
+
+	if view.State() != PlaybackStateIdle {
+		t.Errorf("initial State(): got %v, want Idle", view.State())
+	}
+	if view.Position() != 0 {
+		t.Error("initial Position() should be 0")
+	}
+	if view.Duration() != 0 {
+		t.Error("initial Duration() should be 0")
+	}
+	if view.Buffered() != 0 {
+		t.Error("initial Buffered() should be 0")
+	}
+}

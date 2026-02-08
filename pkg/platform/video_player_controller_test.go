@@ -225,14 +225,23 @@ func TestVideoPlayerController_TransportMethods(t *testing.T) {
 	defer c.Dispose()
 
 	// All transport methods should execute without error.
-	c.Load("https://example.com/video.mp4")
-	c.Play()
-	c.Pause()
-	c.SeekTo(30 * time.Second)
-	c.SetVolume(0.5)
-	c.SetLooping(true)
-	c.SetPlaybackSpeed(1.5)
-	c.Stop()
+	for _, tc := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"Load", func() error { return c.Load("https://example.com/video.mp4") }},
+		{"Play", func() error { return c.Play() }},
+		{"Pause", func() error { return c.Pause() }},
+		{"SeekTo", func() error { return c.SeekTo(30 * time.Second) }},
+		{"SetVolume", func() error { return c.SetVolume(0.5) }},
+		{"SetLooping", func() error { return c.SetLooping(true) }},
+		{"SetPlaybackSpeed", func() error { return c.SetPlaybackSpeed(1.5) }},
+		{"Stop", func() error { return c.Stop() }},
+	} {
+		if err := tc.fn(); err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
 }
 
 func TestVideoPlayerController_DoubleDispose(t *testing.T) {
