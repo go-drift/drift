@@ -285,5 +285,5 @@ controller.OnError = func(code, message string) {
 ## Next Steps
 
 - [Platform Services](/docs/guides/platform) - Permissions, clipboard, haptics, and other platform APIs
-- [Widgets](/docs/guides/widgets) - Built-in widget catalog
+- [Widget Catalog](/docs/category/widget-catalog) - Detailed usage for every Drift widget
 - [State Management](/docs/guides/state-management) - Managing widget state

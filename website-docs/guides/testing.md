@@ -271,6 +271,6 @@ if diff := before.Diff(after); diff != "" {
 
 ## Next Steps
 
-- [Widgets](/docs/guides/widgets) - Available built-in widgets
+- [Widget Catalog](/docs/category/widget-catalog) - Detailed usage for every Drift widget
 - [Gestures](/docs/guides/gestures) - Gesture handling in detail
 - [Animation](/docs/guides/animation) - Animation system

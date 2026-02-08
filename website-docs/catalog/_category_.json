@@ -1,0 +1,8 @@
+{
+  "label": "Widget Catalog",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "Find detailed usage for every Drift widget."
+  }
+}

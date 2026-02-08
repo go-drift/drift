@@ -1,10 +1,10 @@
 ---
 id: widgets
-title: Widgets
+title: Widget Architecture
 sidebar_position: 2
 ---
 
-# Widgets
+# Widget Architecture
 
 Widgets are the building blocks of Drift applications. Everything you see on screen is a widget.
 
@@ -154,118 +154,6 @@ If you want defaults from the theme, prefer `theme.XxxOf(ctx, ...)`.
 Themed widgets use disabled colors from theme data. Explicit widgets without
 `DisabledXxxColor` fields fall back to a 0.5 opacity wrapper when disabled.
 
-## Available Widgets
-
-### Layout Widgets
-
-| Widget | Purpose |
-|--------|---------|
-| `Row` | Horizontal arrangement |
-| `Column` | Vertical arrangement |
-| `Stack` | Overlay children |
-| `IndexedStack` | Show one child at a time by index |
-| `Center` | Center child in available space |
-| `Padding` | Add spacing around child |
-| `Container` | Decoration, sizing, alignment |
-| `SizedBox` | Fixed dimensions |
-| `Expanded` | Fill remaining flex space |
-| `SafeArea` | Avoid system UI (notches, nav bars) |
-| `Positioned` | Absolute positioning within Stack |
-
-### Display Widgets
-
-| Widget | Purpose |
-|--------|---------|
-| `Text` | Display text with styling |
-| `Icon` | Material icons |
-| `SvgImage` | SVG rendering with flexible sizing |
-| `SvgIcon` | Square SVG icons (convenience wrapper) |
-| `Image` | Display images from assets/files |
-
-#### Caching Static SVGs
-
-For static SVG assets (logos, icons), cache loaded icons so rebuilds reuse the
-same underlying SVG DOM:
-
-```go
-var svgCache = svg.NewIconCache()
-
-func loadIcon(name string) *svg.Icon {
-    icon, err := svgCache.Get(name, func() (*svg.Icon, error) {
-        f, err := assetFS.Open("assets/" + name)
-        if err != nil {
-            return nil, err
-        }
-        defer f.Close()
-        return svg.Load(f)
-    })
-    if err != nil {
-        return nil
-    }
-    return icon
-}
-```
-
-### Progress Indicators
-
-| Widget | Purpose |
-|--------|---------|
-| `ActivityIndicator` | Native platform spinner |
-| `CircularProgressIndicator` | Circular progress (determinate/indeterminate) |
-| `LinearProgressIndicator` | Linear progress bar (determinate/indeterminate) |
-
-### Input Widgets
-
-| Widget | Purpose |
-|--------|---------|
-| `Button` | Tappable button with haptic feedback |
-| `TextInput` | Base native text input |
-| `TextField` | Decorated native text input with label and helper text |
-| `TextFormField` | TextField with form validation |
-| `Checkbox` | Boolean toggle |
-| `Radio` | Single selection from group |
-| `Switch` | Native on/off toggle (UISwitch/SwitchCompat) |
-| `Toggle` | Drift-rendered on/off toggle |
-| `Dropdown` | Selection menu |
-| `DatePicker` | Native date picker modal |
-| `TimePicker` | Native time picker modal |
-| `Form` | Form container with validation |
-
-### Scrolling Widgets
-
-| Widget | Purpose |
-|--------|---------|
-| `ScrollView` | Scrollable content |
-| `ListView` | Scrollable list of widgets |
-| `ListViewBuilder` | Virtualized lazy-loading list |
-
-### Decorative Widgets
-
-| Widget | Purpose |
-|--------|---------|
-| `ClipRRect` | Rounded rectangle clipping |
-| `DecoratedBox` | Background, border, gradient, shadow |
-| `Opacity` | Static transparency |
-| `AnimatedOpacity` | Animated transparency |
-| `AnimatedContainer` | Animated layout/decoration changes |
-| `RepaintBoundary` | Isolate paint for performance |
-
-### Navigation Widgets
-
-| Widget | Purpose |
-|--------|---------|
-| `Navigator` | Stack-based route management |
-| `TabBar` | Tab navigation bar |
-| `TabScaffold` | Tab layout with content |
-
-### Error Handling
-
-| Widget | Purpose |
-|--------|---------|
-| `ErrorBoundary` | Catch panics and display fallback UI |
-| `ErrorWidget` | Inline error display (default fallback) |
-| `DebugErrorScreen` | Full-screen error display (debug mode) |
-
 ## Custom Stateless Widgets
 
 Create a stateless widget for UI that depends only on its configuration:
@@ -323,9 +211,8 @@ func (s *counterState) Build(ctx core.BuildContext) core.Widget {
 
 ## Next Steps
 
-- [Lists & Scrolling](/docs/guides/lists) - ListView, virtualized lists, scroll physics
-- [Layout](/docs/guides/layout) - Arranging widgets with Flex, Stack, and containers
+- [Layout System](/docs/guides/layout) - Constraints, composition, and layout concepts
+- [Widget Catalog](/docs/category/widget-catalog) - Detailed usage for every Drift widget
 - [Theming](/docs/guides/theming) - Colors, typography, and styling
 - [State Management](/docs/guides/state-management) - Managing widget state
-- [Error Handling](/docs/guides/error-handling) - Error boundaries and fallback UI
 - [API Reference](/docs/api/widgets) - Full widgets API

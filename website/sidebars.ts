@@ -13,15 +13,14 @@ const sidebars: SidebarsConfig = {
       items: [
         'guides/getting-started',
         'guides/widgets',
-        'guides/lists',
         'guides/layout',
-        'guides/theming',
         'guides/state-management',
+        'guides/theming',
         'guides/forms',
-        'guides/gestures',
+        'guides/animation',
         'guides/navigation',
         'guides/overlay',
-        'guides/animation',
+        'guides/gestures',
         'guides/platform',
         'guides/media-player',
         'guides/accessibility',
@@ -30,6 +29,68 @@ const sidebars: SidebarsConfig = {
         'guides/testing',
         'guides/skia',
         'guides/xtool-setup',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Widget Catalog',
+      link: {
+        type: 'generated-index',
+        description: 'Find detailed usage for every Drift widget.',
+      },
+      items: [
+        {
+          type: 'category',
+          label: 'Layout',
+          items: [
+            'catalog/layout/column-row',
+            'catalog/layout/stack-positioned',
+            'catalog/layout/wrap',
+            'catalog/layout/container-decoratedbox',
+            'catalog/layout/sizedbox',
+            'catalog/layout/padding',
+            'catalog/layout/expanded-flexible',
+            'catalog/layout/center-align',
+            'catalog/layout/safearea',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Display',
+          items: [
+            'catalog/display/text',
+            'catalog/display/icon',
+            'catalog/display/image-svg',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Input',
+          items: [
+            'catalog/input/button',
+            'catalog/input/textfield',
+            'catalog/input/checkbox-radio',
+            'catalog/input/switch-toggle',
+            'catalog/input/dropdown',
+            'catalog/input/datepicker-timepicker',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Lists & Scrolling',
+          items: [
+            'catalog/scrolling/listview',
+            'catalog/scrolling/scrollview',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Feedback',
+          items: [
+            'catalog/feedback/progress-indicators',
+            'catalog/feedback/error-boundary',
+          ],
+        },
       ],
     },
     {

@@ -48,6 +48,7 @@ Ready to build your first app?
 
 ## Learn More
 
-- [Widgets](/docs/guides/widgets) - UI building blocks
+- [Widget Architecture](/docs/guides/widgets) - UI building blocks
+- [Widget Catalog](/docs/category/widget-catalog) - Detailed usage for every widget
 - [State Management](/docs/guides/state-management) - Managing app state
 - [API Reference](/docs/api/core) - Full API documentation

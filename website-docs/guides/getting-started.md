@@ -241,7 +241,7 @@ drift run ios --simulator "iPhone 16"
 
 ## Next Steps
 
-- [Widgets](/docs/guides/widgets) - Build UI with widgets
-- [Lists & Scrolling](/docs/guides/lists) - Display scrollable content
-- [Layout](/docs/guides/layout) - Arrange widgets on screen
+- [Widget Architecture](/docs/guides/widgets) - Build UI with widgets
+- [Widget Catalog](/docs/category/widget-catalog) - Detailed usage for every Drift widget
+- [Layout System](/docs/guides/layout) - Arrange widgets on screen
 - [State Management](/docs/guides/state-management) - Handle app state
