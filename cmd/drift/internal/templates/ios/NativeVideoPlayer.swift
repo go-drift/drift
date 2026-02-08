@@ -21,6 +21,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     private var playbackSpeed: Float = 1.0
     private var isLooping: Bool = false
     private var hasReachedEnd: Bool = false
+    private var isStopped: Bool = false
 
     init(viewId: Int, params: [String: Any]) {
         self.viewId = viewId
@@ -55,7 +56,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
             let state: Int
             switch player.timeControlStatus {
             case .paused:
-                if player.currentItem == nil {
+                if player.currentItem == nil || self.isStopped {
                     state = 0 // Idle
                 } else if self.hasReachedEnd {
                     state = 3 // Completed
@@ -134,6 +135,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
 
     /// Loads an AVPlayerItem from a URL, setting up observers and looping.
     private func loadItem(url: URL) {
+        isStopped = false
         hasReachedEnd = false
 
         // Disable existing looper before replacing the item
@@ -213,6 +215,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     }
 
     func play() {
+        isStopped = false
         hasReachedEnd = false
         player.play()
         if playbackSpeed != 1.0 {
@@ -225,22 +228,10 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     }
 
     func stop() {
+        isStopped = true
         hasReachedEnd = false
-
-        // Disable looper before clearing the item
-        playerLooper?.disableLooping()
-        playerLooper = nil
-
-        // Remove item-specific observers
-        if let observer = endOfItemObserver {
-            NotificationCenter.default.removeObserver(observer)
-            endOfItemObserver = nil
-        }
-        itemStatusObservation?.invalidate()
-        itemStatusObservation = nil
-
         player.pause()
-        player.replaceCurrentItem(with: nil)
+        player.seek(to: .zero)
     }
 
     func seekTo(positionMs: Int64) {

@@ -175,7 +175,11 @@ object AudioPlayerHandler {
 
     private fun play(playerId: Long): Pair<Any?, Exception?> {
         handler.post {
-            ensurePlayer(playerId).player.play()
+            val player = ensurePlayer(playerId).player
+            if (player.playbackState == Player.STATE_IDLE) {
+                player.prepare()
+            }
+            player.play()
         }
         return Pair(null, null)
     }

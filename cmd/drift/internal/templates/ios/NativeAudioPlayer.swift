@@ -18,6 +18,7 @@ private class AudioPlayerInstance {
     private var playbackSpeed: Float = 1.0
     private var isLooping: Bool = false
     private var hasReachedEnd: Bool = false
+    private var isStopped: Bool = false
 
     init(id: Int) {
         self.id = id
@@ -32,7 +33,7 @@ private class AudioPlayerInstance {
             let state: Int
             switch player.timeControlStatus {
             case .paused:
-                if player.currentItem == nil {
+                if player.currentItem == nil || self.isStopped {
                     state = 0 // Idle
                 } else if self.hasReachedEnd {
                     state = 3 // Completed
@@ -122,6 +123,7 @@ private class AudioPlayerInstance {
     }
 
     func load(url: URL) {
+        isStopped = false
         hasReachedEnd = false
 
         // Disable existing looper before replacing the item
@@ -173,6 +175,7 @@ private class AudioPlayerInstance {
     }
 
     func play() {
+        isStopped = false
         hasReachedEnd = false
         player.play()
         if playbackSpeed != 1.0 {
@@ -185,22 +188,10 @@ private class AudioPlayerInstance {
     }
 
     func stop() {
+        isStopped = true
         hasReachedEnd = false
-
-        // Disable looper before clearing the item
-        playerLooper?.disableLooping()
-        playerLooper = nil
-
-        // Remove item-specific observers
-        if let observer = endOfItemObserver {
-            NotificationCenter.default.removeObserver(observer)
-            endOfItemObserver = nil
-        }
-        itemStatusObservation?.invalidate()
-        itemStatusObservation = nil
-
         player.pause()
-        player.replaceCurrentItem(with: nil)
+        player.seek(to: .zero)
     }
 
     func seekTo(positionMs: Int64) {
@@ -249,6 +240,7 @@ private class AudioPlayerInstance {
         playbackSpeed = 1.0
         isLooping = false
         hasReachedEnd = false
+        isStopped = false
     }
 }
 

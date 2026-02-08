@@ -108,7 +108,7 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | `Load(url string) error` | Load a media URL. The native player begins buffering the media source. |
 | `Play() error` | Start or resume playback |
 | `Pause() error` | Pause playback |
-| `Stop() error` | Stop playback and reset to idle |
+| `Stop() error` | Stop playback and reset to idle. Media stays loaded; calling `Play` restarts from the beginning. Use `Dispose` to release resources. |
 | `SeekTo(position time.Duration) error` | Seek to a position |
 | `SetVolume(volume float64) error` | Set volume (0.0 to 1.0). Values outside this range are clamped by the native player. |
 | `SetLooping(looping bool) error` | Enable or disable looping |
@@ -182,7 +182,7 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | `Load(url string) error` | Load a media URL. The native player begins buffering the media source. |
 | `Play() error` | Start or resume playback |
 | `Pause() error` | Pause playback |
-| `Stop() error` | Stop playback and reset to idle |
+| `Stop() error` | Stop playback and reset to idle. Media stays loaded; calling `Play` restarts from the beginning. Use `Dispose` to release resources. |
 | `SeekTo(position time.Duration) error` | Seek to a position |
 | `SetVolume(volume float64) error` | Set volume (0.0 to 1.0). Values outside this range are clamped by the native player. |
 | `SetLooping(looping bool) error` | Enable or disable looping |

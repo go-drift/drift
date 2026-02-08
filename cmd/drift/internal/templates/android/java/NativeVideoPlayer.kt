@@ -208,6 +208,9 @@ class NativeVideoPlayerContainer(
     }
 
     fun play() {
+        if (player.playbackState == Player.STATE_IDLE) {
+            player.prepare()
+        }
         player.play()
     }
 

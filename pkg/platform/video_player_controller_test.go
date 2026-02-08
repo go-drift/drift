@@ -244,6 +244,110 @@ func TestVideoPlayerController_TransportMethods(t *testing.T) {
 	}
 }
 
+func TestVideoPlayerController_PlayAfterStop(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewVideoPlayerController()
+	defer c.Dispose()
+
+	var states []PlaybackState
+	c.OnPlaybackStateChanged = func(state PlaybackState) {
+		states = append(states, state)
+	}
+
+	// Load and play.
+	if err := c.Load("https://example.com/video.mp4"); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if err := c.Play(); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 1, // Buffering
+	})
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 2, // Playing
+	})
+
+	// Stop resets to idle.
+	if err := c.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 0, // Idle
+	})
+
+	// Play again after stop should work.
+	if err := c.Play(); err != nil {
+		t.Fatalf("Play (after stop): %v", err)
+	}
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 1, // Buffering
+	})
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 2, // Playing
+	})
+
+	want := []PlaybackState{
+		PlaybackStateBuffering, // initial buffer
+		PlaybackStatePlaying,   // first play
+		PlaybackStateIdle,      // stop
+		PlaybackStateBuffering, // restart buffer
+		PlaybackStatePlaying,   // restart play
+	}
+	if len(states) != len(want) {
+		t.Fatalf("state count: got %d, want %d\ngot: %v", len(states), len(want), states)
+	}
+	for i := range want {
+		if states[i] != want[i] {
+			t.Errorf("state[%d]: got %v, want %v", i, states[i], want[i])
+		}
+	}
+}
+
+func TestVideoPlayerController_StopResetsPosition(t *testing.T) {
+	setupTestBridge(t)
+
+	c := NewVideoPlayerController()
+	defer c.Dispose()
+
+	// Play to a mid-stream position.
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 2, // Playing
+	})
+	sendVideoViewEvent(t, "onPositionChanged", map[string]any{
+		"viewId":     c.ViewID(),
+		"positionMs": int64(45000),
+		"durationMs": int64(180000),
+		"bufferedMs": int64(90000),
+	})
+
+	if c.Position() != 45*time.Second {
+		t.Errorf("Position before stop: got %v, want 45s", c.Position())
+	}
+
+	// Stop resets position to zero.
+	if err := c.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	sendVideoViewEvent(t, "onPlaybackStateChanged", map[string]any{
+		"viewId": c.ViewID(), "state": 0, // Idle
+	})
+	sendVideoViewEvent(t, "onPositionChanged", map[string]any{
+		"viewId":     c.ViewID(),
+		"positionMs": int64(0),
+		"durationMs": int64(180000),
+		"bufferedMs": int64(0),
+	})
+
+	if c.State() != PlaybackStateIdle {
+		t.Errorf("State after stop: got %v, want Idle", c.State())
+	}
+	if c.Position() != 0 {
+		t.Errorf("Position after stop: got %v, want 0", c.Position())
+	}
+}
+
 func TestVideoPlayerController_DoubleDispose(t *testing.T) {
 	setupTestBridge(t)
 

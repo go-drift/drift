@@ -192,7 +192,9 @@ func (c *VideoPlayerController) Pause() error {
 	return v.Pause()
 }
 
-// Stop stops playback and resets the player to the idle state.
+// Stop stops playback and resets the player to the idle state. The loaded
+// media is retained, so calling Play will restart playback from the beginning.
+// To release native resources, use Dispose instead.
 func (c *VideoPlayerController) Stop() error {
 	c.mu.RLock()
 	v := c.view

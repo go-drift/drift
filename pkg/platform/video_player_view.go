@@ -75,7 +75,8 @@ func (v *videoPlayerView) Pause() error {
 	return err
 }
 
-// Stop stops playback and resets the player to the idle state.
+// Stop stops playback and resets the player to the idle state. The loaded
+// media is retained, so calling Play will restart playback from the beginning.
 func (v *videoPlayerView) Stop() error {
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(v.viewID, "stop", nil)
 	return err
