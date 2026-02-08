@@ -327,6 +327,20 @@ func ResetForTest() {
 	audioServiceOnce = sync.Once{}
 	audioService = nil
 
+	// Reset platform view registry (views, IDs, geometry cache)
+	if platformViewRegistry != nil {
+		platformViewRegistry.mu.Lock()
+		platformViewRegistry.views = make(map[int64]PlatformView)
+		platformViewRegistry.mu.Unlock()
+		platformViewRegistry.nextID.Store(0)
+		platformViewRegistry.batchMu.Lock()
+		platformViewRegistry.geometryCache = make(map[int64]viewGeometryCache)
+		platformViewRegistry.viewsSeenThisFrame = make(map[int64]struct{})
+		platformViewRegistry.batchUpdates = nil
+		platformViewRegistry.batchMode = false
+		platformViewRegistry.batchMu.Unlock()
+	}
+
 	// Re-register built-in listeners (lifecycle, safe area, accessibility)
 	// so the package behaves as if freshly initialized.
 	for _, fn := range builtinInits {
