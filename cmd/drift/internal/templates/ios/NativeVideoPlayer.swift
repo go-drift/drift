@@ -160,7 +160,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
                     data: [
                         "method": "onVideoError",
                         "viewId": self.viewId,
-                        "code": Self.errorCode(for: error),
+                        "code": mediaErrorCode(for: error),
                         "message": error?.localizedDescription ?? "Unknown playback error"
                     ]
                 )
@@ -191,32 +191,6 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
         if isLooping {
             playerLooper = AVPlayerLooper(player: player, templateItem: item)
         }
-    }
-
-    /// Maps an AVPlayer error to a canonical Drift error code string.
-    /// Aligns with the Android ExoPlayer mapping so that both platforms
-    /// produce the same set of codes: "source_error", "decoder_error",
-    /// "playback_failed".
-    static func errorCode(for error: Error?) -> String {
-        guard let error = error else { return "playback_failed" }
-
-        if let avError = error as? AVError {
-            switch avError.code {
-            case .decoderNotFound, .decoderTemporarilyUnavailable,
-                 .contentIsNotAuthorized:
-                return "decoder_error"
-            case .fileFormatNotRecognized, .failedToParse:
-                return "source_error"
-            default:
-                break
-            }
-        }
-
-        if (error as NSError).domain == NSURLErrorDomain {
-            return "source_error"
-        }
-
-        return "playback_failed"
     }
 
     func dispose() {
