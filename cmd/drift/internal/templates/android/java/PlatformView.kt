@@ -40,7 +40,7 @@ object PlatformViewHandler {
     }
 
     // Supported methods for each view type
-    private val webViewMethods = setOf("loadUrl", "goBack", "goForward", "reload")
+    private val webViewMethods = setOf("load", "goBack", "goForward", "reload")
     private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
     private val switchMethods = setOf("setValue", "updateConfig")
     private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
@@ -92,7 +92,7 @@ object PlatformViewHandler {
             when (container) {
                 is NativeWebViewContainer -> {
                     when (method) {
-                        "loadUrl" -> {
+                        "load" -> {
                             val url = args["url"] as? String
                             if (url != null) {
                                 container.view.loadUrl(url)

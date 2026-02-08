@@ -107,7 +107,7 @@ func (c *WebViewController) Load(url string) error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := GetPlatformViewRegistry().InvokeViewMethod(id, "loadUrl", map[string]any{
+	_, err := GetPlatformViewRegistry().InvokeViewMethod(id, "load", map[string]any{
 		"url": url,
 	})
 	return err

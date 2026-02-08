@@ -64,7 +64,7 @@ enum PlatformViewHandler {
         // Validate method is supported
         let supportedMethods: Set<String>
         if container is NativeWebViewContainer {
-            supportedMethods = ["loadUrl", "goBack", "goForward", "reload"]
+            supportedMethods = ["load", "goBack", "goForward", "reload"]
         } else if container is NativeTextInputContainer {
             supportedMethods = ["setText", "setSelection", "setValue", "focus", "blur", "updateConfig"]
         } else if container is NativeSwitchContainer {
@@ -84,7 +84,7 @@ enum PlatformViewHandler {
         if let webViewContainer = container as? NativeWebViewContainer {
             DispatchQueue.main.async {
                 switch method {
-                case "loadUrl":
+                case "load":
                     if let urlString = args["url"] as? String,
                        let url = URL(string: urlString) {
                         webViewContainer.loadURL(url)

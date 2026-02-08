@@ -27,9 +27,9 @@ import (
 // before calling [VideoPlayerController.Load] or any other playback method
 // to ensure no events are missed.
 //
-// All methods are safe for concurrent use. Callback fields may be reassigned
-// at any time, but setting them before calling Load ensures no events are
-// missed.
+// All methods are safe for concurrent use. Callback fields should be set
+// on the UI thread (e.g. in InitState or a UseController callback). Setting
+// them before calling Load ensures no events are missed.
 type VideoPlayerController struct {
 	mu     sync.RWMutex
 	view   *videoPlayerView // guarded by mu
