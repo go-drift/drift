@@ -218,7 +218,7 @@ func ensureAudioService() *audioPlayerServiceState {
 // the media source. Call [AudioPlayerController.Play] to start playback.
 func (c *AudioPlayerController) Load(url string) error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("load", map[string]any{
 		"playerId": c.id,
@@ -231,7 +231,7 @@ func (c *AudioPlayerController) Load(url string) error {
 // to set the media URL.
 func (c *AudioPlayerController) Play() error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("play", map[string]any{
 		"playerId": c.id,
@@ -242,7 +242,7 @@ func (c *AudioPlayerController) Play() error {
 // Pause pauses playback.
 func (c *AudioPlayerController) Pause() error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("pause", map[string]any{
 		"playerId": c.id,
@@ -253,7 +253,7 @@ func (c *AudioPlayerController) Pause() error {
 // Stop stops playback and resets the player to the idle state.
 func (c *AudioPlayerController) Stop() error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("stop", map[string]any{
 		"playerId": c.id,
@@ -264,7 +264,7 @@ func (c *AudioPlayerController) Stop() error {
 // SeekTo seeks to the given position.
 func (c *AudioPlayerController) SeekTo(position time.Duration) error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("seekTo", map[string]any{
 		"playerId":   c.id,
@@ -276,7 +276,7 @@ func (c *AudioPlayerController) SeekTo(position time.Duration) error {
 // SetVolume sets the playback volume (0.0 to 1.0).
 func (c *AudioPlayerController) SetVolume(volume float64) error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("setVolume", map[string]any{
 		"playerId": c.id,
@@ -288,7 +288,7 @@ func (c *AudioPlayerController) SetVolume(volume float64) error {
 // SetLooping sets whether playback should loop.
 func (c *AudioPlayerController) SetLooping(looping bool) error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("setLooping", map[string]any{
 		"playerId": c.id,
@@ -300,7 +300,7 @@ func (c *AudioPlayerController) SetLooping(looping bool) error {
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
 func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
 	if c.id == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := c.svc.channel.Invoke("setPlaybackSpeed", map[string]any{
 		"playerId": c.id,

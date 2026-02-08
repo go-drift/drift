@@ -97,7 +97,7 @@ func (c *WebViewController) ViewID() int64 {
 // LoadURL loads the specified URL.
 func (c *WebViewController) LoadURL(url string) error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "loadUrl", map[string]any{
 		"url": url,
@@ -108,7 +108,7 @@ func (c *WebViewController) LoadURL(url string) error {
 // GoBack navigates back in history.
 func (c *WebViewController) GoBack() error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "goBack", nil)
 	return err
@@ -117,7 +117,7 @@ func (c *WebViewController) GoBack() error {
 // GoForward navigates forward in history.
 func (c *WebViewController) GoForward() error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "goForward", nil)
 	return err
@@ -126,7 +126,7 @@ func (c *WebViewController) GoForward() error {
 // Reload reloads the current page.
 func (c *WebViewController) Reload() error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	_, err := GetPlatformViewRegistry().InvokeViewMethod(c.viewID, "reload", nil)
 	return err

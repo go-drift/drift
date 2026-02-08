@@ -140,7 +140,7 @@ func (c *VideoPlayerController) Buffered() time.Duration {
 // Call [VideoPlayerController.Play] to start playback.
 func (c *VideoPlayerController) Load(url string) error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.Load(url)
 }
@@ -149,7 +149,7 @@ func (c *VideoPlayerController) Load(url string) error {
 // to set the media URL.
 func (c *VideoPlayerController) Play() error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.Play()
 }
@@ -157,7 +157,7 @@ func (c *VideoPlayerController) Play() error {
 // Pause pauses playback.
 func (c *VideoPlayerController) Pause() error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.Pause()
 }
@@ -165,7 +165,7 @@ func (c *VideoPlayerController) Pause() error {
 // Stop stops playback and resets the player to the idle state.
 func (c *VideoPlayerController) Stop() error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.Stop()
 }
@@ -173,7 +173,7 @@ func (c *VideoPlayerController) Stop() error {
 // SeekTo seeks to the given position.
 func (c *VideoPlayerController) SeekTo(position time.Duration) error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.SeekTo(position)
 }
@@ -181,7 +181,7 @@ func (c *VideoPlayerController) SeekTo(position time.Duration) error {
 // SetVolume sets the playback volume (0.0 to 1.0).
 func (c *VideoPlayerController) SetVolume(volume float64) error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.SetVolume(volume)
 }
@@ -189,7 +189,7 @@ func (c *VideoPlayerController) SetVolume(volume float64) error {
 // SetLooping sets whether playback should loop.
 func (c *VideoPlayerController) SetLooping(looping bool) error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.SetLooping(looping)
 }
@@ -197,7 +197,7 @@ func (c *VideoPlayerController) SetLooping(looping bool) error {
 // SetPlaybackSpeed sets the playback speed (1.0 = normal).
 func (c *VideoPlayerController) SetPlaybackSpeed(rate float64) error {
 	if c.viewID == 0 {
-		return nil
+		return ErrDisposed
 	}
 	return c.view.SetPlaybackSpeed(rate)
 }

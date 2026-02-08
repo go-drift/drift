@@ -162,23 +162,24 @@ func TestWebViewController_NilCallbacksDoNotPanic(t *testing.T) {
 	})
 }
 
-func TestWebViewController_MethodsNoOpAfterDispose(t *testing.T) {
+func TestWebViewController_MethodsReturnErrDisposedAfterDispose(t *testing.T) {
 	setupTestBridge(t)
 
 	c := NewWebViewController()
 	c.Dispose()
 
-	// All methods should be no-ops after Dispose (viewID is 0).
-	if err := c.LoadURL("https://example.com"); err != nil {
-		t.Errorf("LoadURL after Dispose: %v", err)
-	}
-	if err := c.GoBack(); err != nil {
-		t.Errorf("GoBack after Dispose: %v", err)
-	}
-	if err := c.GoForward(); err != nil {
-		t.Errorf("GoForward after Dispose: %v", err)
-	}
-	if err := c.Reload(); err != nil {
-		t.Errorf("Reload after Dispose: %v", err)
+	// All methods should return ErrDisposed after Dispose.
+	for _, tc := range []struct {
+		name string
+		fn   func() error
+	}{
+		{"LoadURL", func() error { return c.LoadURL("https://example.com") }},
+		{"GoBack", func() error { return c.GoBack() }},
+		{"GoForward", func() error { return c.GoForward() }},
+		{"Reload", func() error { return c.Reload() }},
+	} {
+		if err := tc.fn(); err != ErrDisposed {
+			t.Errorf("%s after Dispose: got %v, want ErrDisposed", tc.name, err)
+		}
 	}
 }
