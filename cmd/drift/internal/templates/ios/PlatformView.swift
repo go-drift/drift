@@ -539,8 +539,45 @@ class NativeWebViewContainer: NSObject, PlatformViewContainer, WKNavigationDeleg
             data: [
                 "method": "onWebViewError",
                 "viewId": viewId,
-                "error": error.localizedDescription
+                "code": webViewErrorCode(for: error),
+                "message": error.localizedDescription
             ]
         )
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        PlatformChannelManager.shared.sendEvent(
+            channel: "drift/platform_views",
+            data: [
+                "method": "onWebViewError",
+                "viewId": viewId,
+                "code": webViewErrorCode(for: error),
+                "message": error.localizedDescription
+            ]
+        )
+    }
+
+    private func webViewErrorCode(for error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            switch nsError.code {
+            case NSURLErrorServerCertificateHasBadDate,
+                 NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorServerCertificateHasUnknownRoot,
+                 NSURLErrorServerCertificateNotYetValid,
+                 NSURLErrorClientCertificateRejected,
+                 NSURLErrorClientCertificateRequired:
+                return "ssl_error"
+            case NSURLErrorTimedOut,
+                 NSURLErrorCannotFindHost,
+                 NSURLErrorCannotConnectToHost,
+                 NSURLErrorNetworkConnectionLost,
+                 NSURLErrorNotConnectedToInternet:
+                return "network_error"
+            default:
+                return "load_failed"
+            }
+        }
+        return "load_failed"
     }
 }

@@ -489,7 +489,12 @@ class NativeWebViewContainer(
                 error: android.webkit.WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                val errorMessage = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val code = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    webViewErrorCodeString(error?.errorCode ?: 0)
+                } else {
+                    "load_failed"
+                }
+                val message = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                     error?.description?.toString() ?: "Unknown error"
                 } else {
                     "Unknown error"
@@ -499,7 +504,8 @@ class NativeWebViewContainer(
                     mapOf(
                         "method" to "onWebViewError",
                         "viewId" to viewId,
-                        "error" to errorMessage
+                        "code" to code,
+                        "message" to message
                     )
                 )
             }
@@ -515,4 +521,15 @@ class NativeWebViewContainer(
         view.stopLoading()
         view.destroy()
     }
+}
+
+private fun webViewErrorCodeString(errorCode: Int): String = when (errorCode) {
+    android.webkit.WebViewClient.ERROR_HOST_LOOKUP,
+    android.webkit.WebViewClient.ERROR_CONNECT,
+    android.webkit.WebViewClient.ERROR_IO,
+    android.webkit.WebViewClient.ERROR_TIMEOUT,
+    android.webkit.WebViewClient.ERROR_REDIRECT_LOOP,
+    android.webkit.WebViewClient.ERROR_TOO_MANY_REQUESTS -> "network_error"
+    android.webkit.WebViewClient.ERROR_FAILED_SSL_HANDSHAKE -> "ssl_error"
+    else -> "load_failed"
 }

@@ -709,14 +709,15 @@ func (r *PlatformViewRegistry) handleWebViewPageFinished(args map[string]any) (a
 
 func (r *PlatformViewRegistry) handleWebViewError(args map[string]any) (any, error) {
 	viewID, _ := toInt64(args["viewId"])
-	message, _ := args["error"].(string)
+	code, _ := args["code"].(string)
+	message, _ := args["message"].(string)
 
 	r.mu.RLock()
 	view := r.views[viewID]
 	r.mu.RUnlock()
 
 	if webView, ok := view.(*nativeWebView); ok {
-		webView.handleError(message)
+		webView.handleError(code, message)
 	}
 	return nil, nil
 }

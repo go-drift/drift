@@ -37,8 +37,9 @@ type WebViewController struct {
 	OnPageFinished func(url string)
 
 	// OnError is called when a loading error occurs.
-	// Called on the UI thread.
-	OnError func(errMsg string)
+	// The code parameter is one of the ErrCodeNetworkError, ErrCodeSSLError,
+	// or ErrCodeLoadFailed constants. Called on the UI thread.
+	OnError func(code, message string)
 }
 
 // NewWebViewController creates a new web view controller.
@@ -79,9 +80,9 @@ func NewWebViewController() *WebViewController {
 			c.OnPageFinished(url)
 		}
 	}
-	webView.OnError = func(errMsg string) {
+	webView.OnError = func(code, message string) {
 		if c.OnError != nil {
-			c.OnError(errMsg)
+			c.OnError(code, message)
 		}
 	}
 

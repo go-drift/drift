@@ -120,18 +120,23 @@ func TestWebViewController_ErrorCallback(t *testing.T) {
 	c := NewWebViewController()
 	defer c.Dispose()
 
-	var gotErr string
-	c.OnError = func(errMsg string) {
-		gotErr = errMsg
+	var gotCode, gotMessage string
+	c.OnError = func(code, message string) {
+		gotCode = code
+		gotMessage = message
 	}
 
 	sendWebViewEvent(t, "onWebViewError", map[string]any{
-		"viewId": c.ViewID(),
-		"error":  "net::ERR_NAME_NOT_RESOLVED",
+		"viewId":  c.ViewID(),
+		"code":    "network_error",
+		"message": "net::ERR_NAME_NOT_RESOLVED",
 	})
 
-	if gotErr != "net::ERR_NAME_NOT_RESOLVED" {
-		t.Errorf("OnError: got %q, want %q", gotErr, "net::ERR_NAME_NOT_RESOLVED")
+	if gotCode != "network_error" {
+		t.Errorf("OnError code: got %q, want %q", gotCode, "network_error")
+	}
+	if gotMessage != "net::ERR_NAME_NOT_RESOLVED" {
+		t.Errorf("OnError message: got %q, want %q", gotMessage, "net::ERR_NAME_NOT_RESOLVED")
 	}
 }
 
@@ -151,8 +156,9 @@ func TestWebViewController_NilCallbacksDoNotPanic(t *testing.T) {
 		"url":    "https://example.com",
 	})
 	sendWebViewEvent(t, "onWebViewError", map[string]any{
-		"viewId": c.ViewID(),
-		"error":  "test error",
+		"viewId":  c.ViewID(),
+		"code":    "load_failed",
+		"message": "test error",
 	})
 }
 

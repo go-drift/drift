@@ -30,8 +30,9 @@ type nativeWebView struct {
 	OnPageFinished func(url string)
 
 	// OnError is called when a loading error occurs.
-	// Called on the UI thread via [Dispatch].
-	OnError func(errMsg string)
+	// The code parameter is one of the ErrCodeNetworkError, ErrCodeSSLError,
+	// or ErrCodeLoadFailed constants. Called on the UI thread via [Dispatch].
+	OnError func(code, message string)
 }
 
 func (v *nativeWebView) Create(params map[string]any) error {
@@ -67,14 +68,14 @@ func (v *nativeWebView) handlePageFinished(url string) {
 }
 
 // handleError processes error events from native.
-func (v *nativeWebView) handleError(errMsg string) {
+func (v *nativeWebView) handleError(code, message string) {
 	v.mu.RLock()
 	cb := v.OnError
 	v.mu.RUnlock()
 
 	if cb != nil {
 		Dispatch(func() {
-			cb(errMsg)
+			cb(code, message)
 		})
 	}
 }

@@ -245,13 +245,23 @@ Errors are delivered through the `OnError` callback rather than as a playback st
 
 ## Error Codes
 
-Both players use canonical error codes that are consistent across Android and iOS:
+All media controllers use canonical error codes that are consistent across Android and iOS.
+
+### Audio and Video
 
 | Code | Constant | Description |
 |------|----------|-------------|
 | `"source_error"` | `platform.ErrCodeSourceError` | Media source could not be loaded (network failure, invalid URL, unsupported format) |
 | `"decoder_error"` | `platform.ErrCodeDecoderError` | Media could not be decoded or rendered (codec failure, DRM error) |
 | `"playback_failed"` | `platform.ErrCodePlaybackFailed` | General playback failure that does not fit a more specific category |
+
+### WebView
+
+| Code | Constant | Description |
+|------|----------|-------------|
+| `"network_error"` | `platform.ErrCodeNetworkError` | DNS resolution, connectivity, or timeout failure |
+| `"ssl_error"` | `platform.ErrCodeSSLError` | TLS/certificate failure (untrusted, expired) |
+| `"load_failed"` | `platform.ErrCodeLoadFailed` | General page load failure that does not fit a more specific category |
 
 Native implementations map platform-specific errors to these codes, so error handling behaves the same on Android and iOS.
 
