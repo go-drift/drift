@@ -12,20 +12,23 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     let viewId: Int
     let view: UIView
     private let playerVC: AVPlayerViewController
-    private let player: AVPlayer
+    private let player: AVQueuePlayer
     private var timeObserver: Any?
     private var statusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
+    private var endOfItemObserver: NSObjectProtocol?
+    private var playerLooper: AVPlayerLooper?
     private var playbackSpeed: Float = 1.0
     private var isLooping: Bool = false
+    private var hasReachedEnd: Bool = false
 
     init(viewId: Int, params: [String: Any]) {
         self.viewId = viewId
 
         DriftMediaSession.activate()
 
-        let player = AVPlayer()
+        let player = AVQueuePlayer()
         self.player = player
 
         let playerVC = AVPlayerViewController()
@@ -53,10 +56,9 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
             let state: Int
             switch player.timeControlStatus {
             case .paused:
-                // Check if playback completed
-                if let item = player.currentItem,
-                   item.duration.isNumeric,
-                   CMTimeCompare(player.currentTime(), item.duration) >= 0 {
+                if player.currentItem == nil {
+                    state = 0 // Idle
+                } else if self.hasReachedEnd {
                     state = 3 // Completed
                 } else {
                     state = 4 // Paused
@@ -110,45 +112,73 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
 
         // Load media if URL provided
         if let urlString = params["url"] as? String, let url = URL(string: urlString) {
-            let item = AVPlayerItem(url: url)
-            player.replaceCurrentItem(with: item)
-
-            // Observe item status for errors
-            itemStatusObservation = item.observe(\.status) { [weak self] item, _ in
-                guard let self = self else { return }
-                if item.status == .failed {
-                    let error = item.error
-                    PlatformChannelManager.shared.sendEvent(
-                        channel: "drift/platform_views",
-                        data: [
-                            "method": "onVideoError",
-                            "viewId": self.viewId,
-                            "code": Self.errorCode(for: error),
-                            "message": error?.localizedDescription ?? "Unknown playback error"
-                        ]
-                    )
-                }
-            }
+            loadItem(url: url)
 
             if autoPlay {
                 player.play()
             }
-
-            // Handle looping
-            if looping {
-                NotificationCenter.default.addObserver(
-                    self,
-                    selector: #selector(playerDidFinishPlaying),
-                    name: .AVPlayerItemDidPlayToEndTime,
-                    object: item
-                )
-            }
         }
     }
 
-    @objc private func playerDidFinishPlaying(_ notification: Notification) {
-        player.seek(to: .zero)
-        player.play()
+    /// Loads an AVPlayerItem from a URL, setting up observers and looping.
+    private func loadItem(url: URL) {
+        hasReachedEnd = false
+
+        // Disable existing looper before replacing the item
+        playerLooper?.disableLooping()
+        playerLooper = nil
+
+        // Remove previous end-of-item observer
+        if let observer = endOfItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endOfItemObserver = nil
+        }
+
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+
+        // Observe item status for errors
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = item.observe(\.status) { [weak self] item, _ in
+            guard let self = self else { return }
+            if item.status == .failed {
+                let error = item.error
+                PlatformChannelManager.shared.sendEvent(
+                    channel: "drift/platform_views",
+                    data: [
+                        "method": "onVideoError",
+                        "viewId": self.viewId,
+                        "code": Self.errorCode(for: error),
+                        "message": error?.localizedDescription ?? "Unknown playback error"
+                    ]
+                )
+            }
+        }
+
+        // Register end-of-item observer for completion detection.
+        // When AVPlayerLooper is active it prevents this notification from firing,
+        // so the observer and looper are naturally mutually exclusive.
+        endOfItemObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.hasReachedEnd = true
+            PlatformChannelManager.shared.sendEvent(
+                channel: "drift/platform_views",
+                data: [
+                    "method": "onPlaybackStateChanged",
+                    "viewId": self.viewId,
+                    "state": 3 // Completed
+                ]
+            )
+        }
+
+        // Create looper if looping is active
+        if isLooping {
+            playerLooper = AVPlayerLooper(player: player, templateItem: item)
+        }
     }
 
     /// Maps an AVPlayer error to a canonical Drift error code string.
@@ -188,7 +218,12 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
         timeControlObservation = nil
         itemStatusObservation?.invalidate()
         itemStatusObservation = nil
-        NotificationCenter.default.removeObserver(self)
+        if let observer = endOfItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endOfItemObserver = nil
+        }
+        playerLooper?.disableLooping()
+        playerLooper = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         view.removeFromSuperview()
@@ -197,6 +232,7 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     }
 
     func play() {
+        hasReachedEnd = false
         player.play()
         if playbackSpeed != 1.0 {
             player.rate = playbackSpeed
@@ -208,11 +244,26 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     }
 
     func stop() {
+        hasReachedEnd = false
+
+        // Disable looper before clearing the item
+        playerLooper?.disableLooping()
+        playerLooper = nil
+
+        // Remove item-specific observers
+        if let observer = endOfItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endOfItemObserver = nil
+        }
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
+
         player.pause()
-        player.seek(to: .zero)
+        player.replaceCurrentItem(with: nil)
     }
 
     func seekTo(positionMs: Int64) {
+        hasReachedEnd = false
         let time = CMTime(seconds: Double(positionMs) / 1000.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         player.seek(to: time)
     }
@@ -223,15 +274,13 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
 
     func setLooping(_ looping: Bool) {
         isLooping = looping
-        // Remove existing observer
-        NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
+
+        // Disable existing looper
+        playerLooper?.disableLooping()
+        playerLooper = nil
+
         if looping, let item = player.currentItem {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(playerDidFinishPlaying),
-                name: .AVPlayerItemDidPlayToEndTime,
-                object: item
-            )
+            playerLooper = AVPlayerLooper(player: player, templateItem: item)
         }
     }
 
@@ -244,36 +293,6 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
 
     func loadUrl(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        let item = AVPlayerItem(url: url)
-        player.replaceCurrentItem(with: item)
-
-        // Re-observe item status for errors
-        itemStatusObservation?.invalidate()
-        itemStatusObservation = item.observe(\.status) { [weak self] item, _ in
-            guard let self = self else { return }
-            if item.status == .failed {
-                let error = item.error
-                PlatformChannelManager.shared.sendEvent(
-                    channel: "drift/platform_views",
-                    data: [
-                        "method": "onVideoError",
-                        "viewId": self.viewId,
-                        "code": Self.errorCode(for: error),
-                        "message": error?.localizedDescription ?? "Unknown playback error"
-                    ]
-                )
-            }
-        }
-
-        // Re-attach loop observer to the new item if looping is active
-        if isLooping {
-            NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(playerDidFinishPlaying),
-                name: .AVPlayerItemDidPlayToEndTime,
-                object: item
-            )
-        }
+        loadItem(url: url)
     }
 }

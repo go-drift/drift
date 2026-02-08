@@ -9,20 +9,22 @@ import AVFoundation
 /// Per-instance audio player state.
 private class AudioPlayerInstance {
     let id: Int
-    let player: AVPlayer
+    let player: AVQueuePlayer
     private var timeObserver: Any?
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
-    private var loopObserver: NSObjectProtocol?
+    private var endOfItemObserver: NSObjectProtocol?
+    private var playerLooper: AVPlayerLooper?
     private var playbackSpeed: Float = 1.0
     private var isLooping: Bool = false
+    private var hasReachedEnd: Bool = false
 
     init(id: Int) {
         self.id = id
 
         DriftMediaSession.activate()
 
-        self.player = AVPlayer()
+        self.player = AVQueuePlayer()
 
         // Observe time control status for playback state
         timeControlObservation = player.observe(\.timeControlStatus) { [weak self] player, _ in
@@ -30,9 +32,9 @@ private class AudioPlayerInstance {
             let state: Int
             switch player.timeControlStatus {
             case .paused:
-                if let item = player.currentItem,
-                   item.duration.isNumeric,
-                   CMTimeCompare(player.currentTime(), item.duration) >= 0 {
+                if player.currentItem == nil {
+                    state = 0 // Idle
+                } else if self.hasReachedEnd {
                     state = 3 // Completed
                 } else {
                     state = 4 // Paused
@@ -68,7 +70,13 @@ private class AudioPlayerInstance {
             let playbackState: Int
             switch self.player.timeControlStatus {
             case .paused:
-                playbackState = 4
+                if self.player.currentItem == nil {
+                    playbackState = 0
+                } else if self.hasReachedEnd {
+                    playbackState = 3
+                } else {
+                    playbackState = 4
+                }
             case .waitingToPlayAtSpecifiedRate:
                 playbackState = 1
             case .playing:
@@ -118,6 +126,18 @@ private class AudioPlayerInstance {
     }
 
     func load(url: URL) {
+        hasReachedEnd = false
+
+        // Disable existing looper before replacing the item
+        playerLooper?.disableLooping()
+        playerLooper = nil
+
+        // Remove previous end-of-item observer
+        if let observer = endOfItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endOfItemObserver = nil
+        }
+
         let item = AVPlayerItem(url: url)
         player.replaceCurrentItem(with: item)
 
@@ -137,23 +157,27 @@ private class AudioPlayerInstance {
             }
         }
 
-        // Re-attach loop observer to the new item if looping is active
+        // Register end-of-item observer for completion detection.
+        // When AVPlayerLooper is active it prevents this notification from firing,
+        // so the observer and looper are naturally mutually exclusive.
+        endOfItemObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.hasReachedEnd = true
+            self.sendStateEvent(state: 3) // Completed
+        }
+
+        // Re-create looper if looping is active
         if isLooping {
-            if let observer = loopObserver {
-                NotificationCenter.default.removeObserver(observer)
-            }
-            loopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { [weak self] _ in
-                self?.player.seek(to: .zero)
-                self?.player.play()
-            }
+            playerLooper = AVPlayerLooper(player: player, templateItem: item)
         }
     }
 
     func play() {
+        hasReachedEnd = false
         player.play()
         if playbackSpeed != 1.0 {
             player.rate = playbackSpeed
@@ -165,11 +189,26 @@ private class AudioPlayerInstance {
     }
 
     func stop() {
+        hasReachedEnd = false
+
+        // Disable looper before clearing the item
+        playerLooper?.disableLooping()
+        playerLooper = nil
+
+        // Remove item-specific observers
+        if let observer = endOfItemObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endOfItemObserver = nil
+        }
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
+
         player.pause()
-        player.seek(to: .zero)
+        player.replaceCurrentItem(with: nil)
     }
 
     func seekTo(positionMs: Int64) {
+        hasReachedEnd = false
         let time = CMTime(seconds: Double(positionMs) / 1000.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         player.seek(to: time)
     }
@@ -181,21 +220,12 @@ private class AudioPlayerInstance {
     func setLooping(_ looping: Bool) {
         isLooping = looping
 
-        // Remove existing loop observer
-        if let observer = loopObserver {
-            NotificationCenter.default.removeObserver(observer)
-            loopObserver = nil
-        }
+        // Disable existing looper
+        playerLooper?.disableLooping()
+        playerLooper = nil
 
         if looping, let item = player.currentItem {
-            loopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { [weak self] _ in
-                self?.player.seek(to: .zero)
-                self?.player.play()
-            }
+            playerLooper = AVPlayerLooper(player: player, templateItem: item)
         }
     }
 
@@ -241,14 +271,17 @@ private class AudioPlayerInstance {
         timeControlObservation = nil
         itemStatusObservation?.invalidate()
         itemStatusObservation = nil
-        if let observer = loopObserver {
+        if let observer = endOfItemObserver {
             NotificationCenter.default.removeObserver(observer)
-            loopObserver = nil
+            endOfItemObserver = nil
         }
+        playerLooper?.disableLooping()
+        playerLooper = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         playbackSpeed = 1.0
         isLooping = false
+        hasReachedEnd = false
     }
 }
 
