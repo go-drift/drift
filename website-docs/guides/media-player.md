@@ -110,9 +110,9 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | `Pause() error` | Pause playback |
 | `Stop() error` | Stop playback and reset to idle |
 | `SeekTo(position time.Duration) error` | Seek to a position |
-| `SetVolume(volume float64) error` | Set volume (0.0 to 1.0) |
+| `SetVolume(volume float64) error` | Set volume (0.0 to 1.0). Values outside this range are clamped by the native player. |
 | `SetLooping(looping bool) error` | Enable or disable looping |
-| `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal) |
+| `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal). Must be positive; behavior for zero or negative values is platform-dependent. |
 | `State() PlaybackState` | Current playback state |
 | `Position() time.Duration` | Current playback position |
 | `Duration() time.Duration` | Total media duration |
@@ -184,9 +184,9 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | `Pause() error` | Pause playback |
 | `Stop() error` | Stop playback and reset to idle |
 | `SeekTo(position time.Duration) error` | Seek to a position |
-| `SetVolume(volume float64) error` | Set volume (0.0 to 1.0) |
+| `SetVolume(volume float64) error` | Set volume (0.0 to 1.0). Values outside this range are clamped by the native player. |
 | `SetLooping(looping bool) error` | Enable or disable looping |
-| `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal) |
+| `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal). Must be positive; behavior for zero or negative values is platform-dependent. |
 | `State() PlaybackState` | Current playback state |
 | `Position() time.Duration` | Current playback position |
 | `Duration() time.Duration` | Total media duration |

@@ -288,7 +288,8 @@ func (c *AudioPlayerController) SeekTo(position time.Duration) error {
 	return err
 }
 
-// SetVolume sets the playback volume (0.0 to 1.0).
+// SetVolume sets the playback volume (0.0 to 1.0). Values outside this range
+// are clamped by the native player.
 func (c *AudioPlayerController) SetVolume(volume float64) error {
 	c.mu.RLock()
 	id := c.id
@@ -318,7 +319,8 @@ func (c *AudioPlayerController) SetLooping(looping bool) error {
 	return err
 }
 
-// SetPlaybackSpeed sets the playback speed (1.0 = normal).
+// SetPlaybackSpeed sets the playback speed (1.0 = normal). The rate must be
+// positive. Behavior for zero or negative values is platform-dependent.
 func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
 	c.mu.RLock()
 	id := c.id
