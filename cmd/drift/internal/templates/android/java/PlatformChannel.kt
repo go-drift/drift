@@ -242,6 +242,11 @@ object PlatformChannelManager {
             AccessibilityHandler.handle(context, method, args)
         }
 
+        // Preferences channel
+        register("drift/preferences") { method, args ->
+            PreferencesHandler.handle(context, method, args)
+        }
+
         // Secure Storage channel
         register("drift/secure_storage") { method, args ->
             SecureStorageHandler.handle(context, method, args)

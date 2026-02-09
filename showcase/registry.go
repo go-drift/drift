@@ -79,6 +79,7 @@ var demos = []Demo{
 	{"/location", "Location", "GPS and location services", CategorySystem, "icon-location.svg", buildLocationPage},
 	{"/notifications", "Notifications", "Push and local notifications", CategorySystem, "icon-bell.svg", buildNotificationsPage},
 	{"/storage", "Storage", "File picker and directories", CategorySystem, "icon-folder.svg", buildStoragePage},
+	{"/preferences", "Preferences", "Simple key-value storage", CategorySystem, "icon-settings.svg", buildPreferencesPage},
 	{"/secure-storage", "Secure Storage", "Keychain and encrypted data", CategorySystem, "icon-lock.svg", buildSecureStoragePage},
 	{"/share", "Share", "Share content with other apps", CategorySystem, "icon-share.svg", buildSharePage},
 	{"/clipboard", "Clipboard", "Copy and paste text", CategorySystem, "icon-clipboard.svg", buildClipboardPage},

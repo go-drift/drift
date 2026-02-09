@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
-	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -180,15 +179,3 @@ func (s *notificationsState) scheduleLocal() {
 	s.receivedText.Set("Scheduled local notification.")
 }
 
-func statusCard(text string, colors theme.ColorScheme) core.Widget {
-	return widgets.Container{
-		Color:        colors.SurfaceVariant,
-		BorderRadius: 8,
-		Child: widgets.PaddingAll(12,
-			widgets.Text{Content: text, Style: graphics.TextStyle{
-				Color:    colors.OnSurfaceVariant,
-				FontSize: 14,
-			}},
-		),
-	}
-}

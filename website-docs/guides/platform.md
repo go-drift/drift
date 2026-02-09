@@ -601,6 +601,32 @@ go func() {
 }()
 ```
 
+## Preferences
+
+Store simple, unencrypted key-value data using platform-native storage (UserDefaults on iOS, SharedPreferences on Android). For sensitive data, use SecureStorage instead.
+
+```go
+import "github.com/go-drift/drift/pkg/platform"
+
+// Store a value
+err := platform.Preferences.Set("username", "alice")
+
+// Retrieve a value
+username, err := platform.Preferences.Get("username")
+
+// Check if a key exists (useful to distinguish missing keys from empty values)
+exists, err := platform.Preferences.Contains("username")
+
+// Delete a value
+err = platform.Preferences.Delete("username")
+
+// List all keys
+keys, err := platform.Preferences.GetAllKeys()
+
+// Delete all stored values
+err = platform.Preferences.DeleteAll()
+```
+
 ## Secure Storage
 
 Store sensitive data securely using platform-native encryption (iOS Keychain, Android EncryptedSharedPreferences):
