@@ -60,7 +60,17 @@
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
+{{- if eq .Orientation "portrait"}}
 		<string>UIInterfaceOrientationPortrait</string>
+{{- else if eq .Orientation "landscape"}}
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+{{- else}}
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+{{- end}}
 	</array>
 	<key>MinimumOSVersion</key>
 	<string>14.0</string>

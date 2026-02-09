@@ -12,6 +12,14 @@ import (
 //go:embed android ios bridge/* xcodeproj/* xtool/* init/*
 var FS embed.FS
 
+// TemplateInput holds the caller-provided values for template rendering.
+type TemplateInput struct {
+	AppName        string
+	AndroidPackage string
+	IOSBundleID    string
+	Orientation    string
+}
+
 // TemplateData contains the data for template substitution.
 type TemplateData struct {
 	AppName     string // e.g., "my_app"
@@ -20,17 +28,20 @@ type TemplateData struct {
 	PackagePath string // e.g., "com/example/my_app"
 	BundleID    string // e.g., "com.example.my_app"
 	URLScheme   string // e.g., "my-app"
+	Orientation string // "portrait", "landscape", or "all"
 }
 
-// NewTemplateData creates template data from app name and package identifiers.
-func NewTemplateData(appName, androidPackage, iosBundleID string) *TemplateData {
+// NewTemplateData creates template data from the given input, deriving
+// JNI-safe names, package paths, and URL schemes automatically.
+func NewTemplateData(in TemplateInput) *TemplateData {
 	return &TemplateData{
-		AppName:     appName,
-		PackageName: androidPackage,
-		JNIPackage:  strings.ReplaceAll(strings.ReplaceAll(androidPackage, "_", "_1"), ".", "_"),
-		PackagePath: strings.ReplaceAll(androidPackage, ".", "/"),
-		BundleID:    iosBundleID,
-		URLScheme:   sanitizeURLScheme(appName),
+		AppName:     in.AppName,
+		PackageName: in.AndroidPackage,
+		JNIPackage:  strings.ReplaceAll(strings.ReplaceAll(in.AndroidPackage, "_", "_1"), ".", "_"),
+		PackagePath: strings.ReplaceAll(in.AndroidPackage, ".", "/"),
+		BundleID:    in.IOSBundleID,
+		URLScheme:   sanitizeURLScheme(in.AppName),
+		Orientation: in.Orientation,
 	}
 }
 

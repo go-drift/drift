@@ -57,9 +57,10 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 	}
 
 	settings := scaffold.Settings{
-		AppName: cfg.AppName,
-		AppID:   cfg.AppID,
-		Bundle:  cfg.AppID,
+		AppName:     cfg.AppName,
+		AppID:       cfg.AppID,
+		Bundle:      cfg.AppID,
+		Orientation: cfg.Orientation,
 	}
 
 	switch platform {
@@ -117,7 +118,12 @@ func writeBridgeFiles(dir string, cfg *config.Resolved) error {
 		return fmt.Errorf("failed to list bridge templates: %w", err)
 	}
 
-	data := templates.NewTemplateData(cfg.AppName, cfg.AppID, cfg.AppID)
+	data := templates.NewTemplateData(templates.TemplateInput{
+		AppName:        cfg.AppName,
+		AndroidPackage: cfg.AppID,
+		IOSBundleID:    cfg.AppID,
+		Orientation:    cfg.Orientation,
+	})
 
 	for _, file := range bridgeFiles {
 		content, err := templates.ReadFile(file)

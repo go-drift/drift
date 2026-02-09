@@ -20,8 +20,9 @@ type Config struct {
 
 // AppConfig contains application metadata.
 type AppConfig struct {
-	Name string `yaml:"name,omitempty"`
-	ID   string `yaml:"id,omitempty"`
+	Name        string `yaml:"name,omitempty"`
+	ID          string `yaml:"id,omitempty"`
+	Orientation string `yaml:"orientation,omitempty"`
 }
 
 // EngineConfig contains engine settings.
@@ -35,6 +36,7 @@ type Resolved struct {
 	ModulePath    string
 	AppName       string
 	AppID         string
+	Orientation   string
 	EngineVersion string
 }
 
@@ -79,6 +81,14 @@ func Resolve(dir string) (*Resolved, error) {
 		appID = defaultAppID(modulePath, appName)
 	}
 
+	orientation := strings.TrimSpace(cfg.App.Orientation)
+	if orientation == "" {
+		orientation = "portrait"
+	}
+	if err := validateOrientation(orientation); err != nil {
+		return nil, err
+	}
+
 	engineVersion := strings.TrimSpace(cfg.Engine.Version)
 	if engineVersion == "" {
 		engineVersion = "latest"
@@ -93,6 +103,7 @@ func Resolve(dir string) (*Resolved, error) {
 		ModulePath:    modulePath,
 		AppName:       appName,
 		AppID:         appID,
+		Orientation:   orientation,
 		EngineVersion: engineVersion,
 	}, nil
 }
@@ -203,6 +214,15 @@ func sanitizeSegment(segment string, allowLeadingDigit bool) string {
 	}
 
 	return string(out)
+}
+
+func validateOrientation(orientation string) error {
+	switch orientation {
+	case "portrait", "landscape", "all":
+		return nil
+	default:
+		return fmt.Errorf("app.orientation must be \"portrait\", \"landscape\", or \"all\" (got %q)", orientation)
+	}
 }
 
 func validateAppID(appID string) error {

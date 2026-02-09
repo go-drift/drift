@@ -168,6 +168,7 @@ Create `drift.yaml` to customize your app:
 app:
   name: Hello Drift
   id: com.example.hellodrift
+  orientation: portrait
 
 engine:
   version: latest
@@ -177,6 +178,7 @@ engine:
 |-------|-------------|
 | `app.name` | Display name of your app |
 | `app.id` | Bundle/package identifier |
+| `app.orientation` | Supported orientations: `portrait` (default), `landscape`, or `all` |
 | `engine.version` | Drift engine version (`latest` or specific tag) |
 
 ## CLI Reference

@@ -14,11 +14,12 @@ func WriteIOS(root string, settings Settings) error {
 	iosDir := filepath.Join(root, "ios", "Runner")
 
 	// Create template data
-	tmplData := templates.NewTemplateData(
-		settings.AppName,
-		settings.AppID,
-		settings.Bundle,
-	)
+	tmplData := templates.NewTemplateData(templates.TemplateInput{
+		AppName:        settings.AppName,
+		AndroidPackage: settings.AppID,
+		IOSBundleID:    settings.Bundle,
+		Orientation:    settings.Orientation,
+	})
 
 	writeTemplateFile := func(templatePath, destPath string, perm os.FileMode) error {
 		content, err := templates.ReadFile(templatePath)
