@@ -140,93 +140,15 @@ func runBuild(args []string) error {
 func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 	fmt.Println("Building for Android...")
 
-	ndkHome := os.Getenv("ANDROID_NDK_HOME")
-	if ndkHome == "" {
-		ndkHome = os.Getenv("ANDROID_NDK_ROOT")
-	}
-	if ndkHome == "" {
-		return fmt.Errorf("ANDROID_NDK_HOME or ANDROID_NDK_ROOT must be set")
-	}
-
-	checkNDKVersion(ndkHome)
-
-	hostTag, err := detectNDKHostTag(ndkHome)
-	if err != nil {
-		return err
-	}
-
-	toolchain := filepath.Join(ndkHome, "toolchains", "llvm", "prebuilt", hostTag, "bin")
-	sysrootLib := filepath.Join(ndkHome, "toolchains", "llvm", "prebuilt", hostTag, "sysroot", "usr", "lib")
-
-	abis := []struct {
-		abi      string
-		goarch   string
-		goarm    string
-		cc       string
-		triple   string
-		skiaArch string
-	}{
-		{"arm64-v8a", "arm64", "", "aarch64-linux-android21-clang", "aarch64-linux-android", "arm64"},
-		{"armeabi-v7a", "arm", "7", "armv7a-linux-androideabi21-clang", "arm-linux-androideabi", "arm"},
-		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
-	}
-
 	jniLibsDir := workspace.JniLibsDir(ws.BuildDir, opts.ejected)
 
-	for _, abi := range abis {
-		fmt.Printf("  Compiling for %s...\n", abi.abi)
-
-		// Find Skia library for this architecture
-		_, skiaDir, err := findSkiaLib(ws.Root, "android", abi.skiaArch, opts.noFetch)
-		if err != nil {
-			return err
-		}
-
-		outDir := filepath.Join(jniLibsDir, abi.abi)
-		if err := os.MkdirAll(outDir, 0o755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
-		}
-
-		cmd := exec.Command("go", "build",
-			"-overlay", ws.Overlay,
-			"-buildmode=c-shared",
-			"-o", filepath.Join(outDir, "libdrift.so"),
-			".")
-		cmd.Dir = ws.Root
-		cmd.Env = append(os.Environ(),
-			"CGO_ENABLED=1",
-			"GOOS=android",
-			"GOARCH="+abi.goarch,
-			"CC="+filepath.Join(toolchain, abi.cc),
-			"CXX="+filepath.Join(toolchain, abi.cc+"++"),
-			"CGO_LDFLAGS="+androidSkiaLinkerFlags(skiaDir),
-		)
-		if abi.goarm != "" {
-			cmd.Env = append(cmd.Env, "GOARM="+abi.goarm)
-		}
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to build for %s: %w", abi.abi, err)
-		}
-
-		// Use libc++_shared.so from Skia cache (bundled with matching NDK)
-		cppShared := filepath.Join(skiaDir, "libc++_shared.so")
-		if _, err := os.Stat(cppShared); err != nil {
-			// Fallback to user's NDK (for custom DRIFT_SKIA_DIR or old cache)
-			cppShared = filepath.Join(sysrootLib, abi.triple, "libc++_shared.so")
-			if _, err := os.Stat(cppShared); err == nil {
-				fmt.Println("  Warning: using libc++_shared.so from local NDK (may cause ABI issues with older releases)")
-			}
-		}
-		if _, err := os.Stat(cppShared); err == nil {
-			if err := copyFile(cppShared, filepath.Join(outDir, "libc++_shared.so")); err != nil {
-				return fmt.Errorf("failed to copy libc++_shared.so: %w", err)
-			}
-		}
-
-		os.Remove(filepath.Join(outDir, "libdrift.h"))
+	if err := compileGoForAndroid(androidCompileConfig{
+		projectRoot: ws.Root,
+		overlayPath: ws.Overlay,
+		jniLibsDir:  jniLibsDir,
+		noFetch:     opts.noFetch,
+	}); err != nil {
+		return err
 	}
 
 	fmt.Println("  Building APK...")
@@ -280,21 +202,12 @@ func buildIOS(ws *workspace.Workspace, opts iosBuildOptions) error {
 		return fmt.Errorf("iOS builds require macOS")
 	}
 
+	arch := runtime.GOARCH
 	target := "iOS Simulator"
 	if opts.device {
 		target = "iOS Device"
-	}
-	fmt.Printf("Building for %s...\n", target)
-	fmt.Println("  Compiling Go code...")
-
-	// Select SDK and architecture based on target
-	var sdk, arch string
-	if opts.device {
-		sdk = "iphoneos"
-		arch = "arm64" // Physical iOS devices are always arm64
+		arch = "arm64"
 	} else {
-		sdk = "iphonesimulator"
-		arch = runtime.GOARCH
 		switch runtime.GOARCH {
 		case "amd64", "arm64":
 			// OK
@@ -303,87 +216,20 @@ func buildIOS(ws *workspace.Workspace, opts iosBuildOptions) error {
 		}
 	}
 
-	clangPath, err := xcrunToolPath(sdk, "clang")
-	if err != nil {
-		return fmt.Errorf("failed to locate clang for %s: %w", sdk, err)
-	}
-
-	clangXXPath, err := xcrunToolPath(sdk, "clang++")
-	if err != nil {
-		return fmt.Errorf("failed to locate clang++ for %s: %w", sdk, err)
-	}
-
-	sdkRoot, err := xcrunSDKPath(sdk)
-	if err != nil {
-		return fmt.Errorf("failed to locate %s SDK: %w", sdk, err)
-	}
+	fmt.Printf("Building for %s...\n", target)
+	fmt.Println("  Compiling Go code...")
 
 	iosDir := filepath.Join(ws.IOSDir, "Runner")
-	if err := os.MkdirAll(iosDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create build directory: %w", err)
-	}
 
-	// Different Skia builds are needed for simulator vs device
-	skiaPlatform := "ios-simulator"
-	if opts.device {
-		skiaPlatform = "ios"
-	}
-
-	skiaLib, skiaDir, err := findSkiaLib(ws.Root, skiaPlatform, arch, opts.noFetch)
-	if err != nil {
+	if err := compileGoForIOS(iosCompileConfig{
+		projectRoot: ws.Root,
+		overlayPath: ws.Overlay,
+		libDir:      iosDir,
+		device:      opts.device,
+		arch:        arch,
+		noFetch:     opts.noFetch,
+	}); err != nil {
 		return err
-	}
-
-	libPath := filepath.Join(iosDir, "libdrift.a")
-
-	// CGO needs explicit SDK flags for iOS cross-compilation
-	iosArch := "x86_64"
-	if arch == "arm64" {
-		iosArch = "arm64"
-	}
-
-	// Version min flag differs between simulator and device
-	versionMinFlag := "-mios-simulator-version-min=14.0"
-	if opts.device {
-		versionMinFlag = "-miphoneos-version-min=14.0"
-	}
-
-	cgoCflags := fmt.Sprintf("-isysroot %s -arch %s %s", sdkRoot, iosArch, versionMinFlag)
-	cgoCxxflags := fmt.Sprintf("-isysroot %s -arch %s %s -std=c++17 -x objective-c++", sdkRoot, iosArch, versionMinFlag)
-
-	cmd := exec.Command("go", "build",
-		"-overlay", ws.Overlay,
-		"-buildmode=c-archive",
-		"-o", libPath,
-		".")
-	cmd.Dir = ws.Root
-	cmd.Env = append(os.Environ(),
-		"CGO_ENABLED=1",
-		"GOOS=ios",
-		"GOARCH="+arch,
-		"CC="+clangPath,
-		"CXX="+clangXXPath,
-		"SDKROOT="+sdkRoot,
-		"CGO_CFLAGS="+cgoCflags,
-		"CGO_CXXFLAGS="+cgoCxxflags,
-		"CGO_LDFLAGS="+iosSkiaLinkerFlags(skiaDir),
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to build Go library: %w", err)
-	}
-
-	skiaVersion := cache.DriftSkiaVersion()
-	skiaVersionFile := filepath.Join(iosDir, ".drift-skia-version")
-	if needsSkiaCopy(skiaVersionFile, skiaVersion) {
-		if err := copyFile(skiaLib, filepath.Join(iosDir, "libdrift_skia.a")); err != nil {
-			return fmt.Errorf("failed to copy Skia library: %w", err)
-		}
-		if err := os.WriteFile(skiaVersionFile, []byte(skiaVersion), 0o644); err != nil {
-			return fmt.Errorf("failed to write Skia version marker: %w", err)
-		}
 	}
 
 	configuration := "Debug"
@@ -435,7 +281,7 @@ func buildIOS(ws *workspace.Workspace, opts iosBuildOptions) error {
 		buildArgs = append(buildArgs, "build")
 	}
 
-	cmd = exec.Command("xcodebuild", buildArgs...)
+	cmd := exec.Command("xcodebuild", buildArgs...)
 	cmd.Dir = ws.IOSDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

@@ -149,7 +149,7 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 		return fmt.Errorf("unknown platform %q", platform)
 	}
 
-	// Write driftw wrapper script
+	// Write driftw wrapper script (bash for macOS/Linux)
 	driftwPath := filepath.Join(platformDir, "driftw")
 	driftwContent, err := templates.ReadFile("driftw")
 	if err != nil {
@@ -159,14 +159,16 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 		return fmt.Errorf("failed to write driftw: %w", err)
 	}
 
-	// Write driftw.bat wrapper for Windows (Android Studio builds)
-	driftwBatPath := filepath.Join(platformDir, "driftw.bat")
-	driftwBatContent, err := templates.ReadFile("driftw.bat")
-	if err != nil {
-		return fmt.Errorf("failed to read driftw.bat template: %w", err)
-	}
-	if err := os.WriteFile(driftwBatPath, driftwBatContent, 0o644); err != nil {
-		return fmt.Errorf("failed to write driftw.bat: %w", err)
+	// Write driftw.bat for Android only (Windows Android Studio builds)
+	if platform == "android" {
+		driftwBatPath := filepath.Join(platformDir, "driftw.bat")
+		driftwBatContent, err := templates.ReadFile("driftw.bat")
+		if err != nil {
+			return fmt.Errorf("failed to read driftw.bat template: %w", err)
+		}
+		if err := os.WriteFile(driftwBatPath, driftwBatContent, 0o644); err != nil {
+			return fmt.Errorf("failed to write driftw.bat: %w", err)
+		}
 	}
 
 	// Write .drift.env with absolute path to drift binary (for IDE builds)
