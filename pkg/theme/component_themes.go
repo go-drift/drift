@@ -269,6 +269,31 @@ type BottomSheetThemeData struct {
 	HandleBottomPadding float64
 }
 
+// DividerThemeData defines default styling for Divider and VerticalDivider widgets.
+type DividerThemeData struct {
+	// Color is the line color.
+	Color graphics.Color
+	// Space is the default Height (Divider) or Width (VerticalDivider).
+	Space float64
+	// Thickness is the line thickness.
+	Thickness float64
+	// Indent is the leading inset (left for Divider, top for VerticalDivider).
+	Indent float64
+	// EndIndent is the trailing inset (right for Divider, bottom for VerticalDivider).
+	EndIndent float64
+}
+
+// DefaultDividerTheme returns DividerThemeData derived from a ColorScheme.
+func DefaultDividerTheme(colors ColorScheme) DividerThemeData {
+	return DividerThemeData{
+		Color:     colors.OutlineVariant,
+		Space:     16,
+		Thickness: 1,
+		Indent:    0,
+		EndIndent: 0,
+	}
+}
+
 // DefaultBottomSheetTheme returns BottomSheetThemeData derived from a ColorScheme.
 func DefaultBottomSheetTheme(colors ColorScheme) BottomSheetThemeData {
 	return BottomSheetThemeData{

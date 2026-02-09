@@ -195,6 +195,35 @@ widgets.PaddingAll(16,
 )
 ```
 
+### Settings List with Dividers
+
+```go
+widgets.Column{
+    CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
+    Children: []core.Widget{
+        settingsRow("Dark Mode", darkModeSwitch),
+        theme.DividerOf(ctx),
+        settingsRow("Notifications", notificationsSwitch),
+        theme.DividerOf(ctx),
+        settingsRow("Language", languageDropdown),
+    },
+}
+```
+
+### Horizontal Sections with Vertical Divider
+
+```go
+widgets.IntrinsicHeight{
+    Child: widgets.Row{
+        Children: []core.Widget{
+            leftSection,
+            theme.VerticalDividerOf(ctx),
+            rightSection,
+        },
+    },
+}
+```
+
 ### App Bar
 
 ```go

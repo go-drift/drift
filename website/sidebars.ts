@@ -63,6 +63,7 @@ const sidebars: SidebarsConfig = {
             'catalog/display/text',
             'catalog/display/icon',
             'catalog/display/image-svg',
+            'catalog/display/divider',
           ],
         },
         {

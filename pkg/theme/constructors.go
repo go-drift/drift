@@ -477,6 +477,62 @@ func CircularProgressIndicatorOf(ctx core.BuildContext, value *float64) widgets.
 	}
 }
 
+// DividerOf creates a [widgets.Divider] with visual properties filled from the
+// current theme's [DividerThemeData].
+//
+// This is the recommended way to create horizontal dividers that follow the
+// app's theme. The returned divider has:
+//   - Height set to DividerThemeData.Space
+//   - Thickness set to DividerThemeData.Thickness
+//   - Color set to DividerThemeData.Color
+//   - Indent set to DividerThemeData.Indent
+//   - EndIndent set to DividerThemeData.EndIndent
+//
+// For fully explicit dividers without theme styling, use [widgets.Divider]
+// struct literals.
+//
+// Example:
+//
+//	theme.DividerOf(ctx)
+func DividerOf(ctx core.BuildContext) widgets.Divider {
+	th := ThemeOf(ctx).DividerThemeOf()
+	return widgets.Divider{
+		Height:    th.Space,
+		Thickness: th.Thickness,
+		Color:     th.Color,
+		Indent:    th.Indent,
+		EndIndent: th.EndIndent,
+	}
+}
+
+// VerticalDividerOf creates a [widgets.VerticalDivider] with visual properties
+// filled from the current theme's [DividerThemeData].
+//
+// This is the recommended way to create vertical dividers that follow the
+// app's theme. The returned divider has:
+//   - Width set to DividerThemeData.Space
+//   - Thickness set to DividerThemeData.Thickness
+//   - Color set to DividerThemeData.Color
+//   - Indent set to DividerThemeData.Indent
+//   - EndIndent set to DividerThemeData.EndIndent
+//
+// For fully explicit vertical dividers without theme styling, use
+// [widgets.VerticalDivider] struct literals.
+//
+// Example:
+//
+//	theme.VerticalDividerOf(ctx)
+func VerticalDividerOf(ctx core.BuildContext) widgets.VerticalDivider {
+	th := ThemeOf(ctx).DividerThemeOf()
+	return widgets.VerticalDivider{
+		Width:     th.Space,
+		Thickness: th.Thickness,
+		Color:     th.Color,
+		Indent:    th.Indent,
+		EndIndent: th.EndIndent,
+	}
+}
+
 // LinearProgressIndicatorOf creates a [widgets.LinearProgressIndicator] with
 // visual properties filled from the current theme's colors.
 //

@@ -230,6 +230,8 @@ require you to set their colors, sizes, and text styles.
 | `theme.TimePickerOf(ctx, hour, minute, onChanged)` | `widgets.TimePicker` | `ColorScheme` |
 | `theme.IconOf(ctx, glyph)` | `widgets.Icon` | `ColorScheme` |
 | `theme.CircularProgressIndicatorOf(ctx, value)` | `widgets.CircularProgressIndicator` | `ColorScheme` |
+| `theme.DividerOf(ctx)` | `widgets.Divider` | `DividerThemeData` |
+| `theme.VerticalDividerOf(ctx)` | `widgets.VerticalDivider` | `DividerThemeData` |
 | `theme.LinearProgressIndicatorOf(ctx, value)` | `widgets.LinearProgressIndicator` | `ColorScheme` |
 
 ### Usage
@@ -249,6 +251,9 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
             }),
 
             widgets.VSpace(16),
+
+            // Themed divider between sections
+            theme.DividerOf(ctx),
 
             // Themed with override
             theme.ButtonOf(ctx, "Custom", s.onCustom).
