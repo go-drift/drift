@@ -119,6 +119,25 @@ Platform views (native text fields, switches, etc.) call `ctx.EmbedPlatformView(
 
 When a platform view is culled (scrolled off-screen), no `EmbedPlatformView` op is recorded. The framework detects unseen views after compositing and tells the native side to hide them. When the view scrolls back into view, it receives updated geometry and becomes visible again.
 
+## Responsive Layouts with LayoutBuilder
+
+Normally, widgets are built before layout runs, so they cannot observe constraints. `LayoutBuilder` defers child building to the layout phase, giving the builder function access to the resolved constraints:
+
+```go
+widgets.LayoutBuilder{
+    Builder: func(ctx core.BuildContext, c layout.Constraints) core.Widget {
+        if c.MaxWidth >= 600 {
+            return twoColumnLayout(ctx)
+        }
+        return singleColumnLayout(ctx)
+    },
+}
+```
+
+The builder is re-invoked whenever the constraints change (for example, when the window resizes) or when the widget is otherwise invalidated (inherited dependency update, widget replacement).
+
+See the [LayoutBuilder catalog page](/docs/catalog/layout/layout-builder) for more examples.
+
 ## Common Patterns
 
 ### Card Layout

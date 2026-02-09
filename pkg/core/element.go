@@ -14,6 +14,16 @@ type IndexedSlot struct {
 	PreviousSibling Element
 }
 
+// renderObjectHost is implemented by elements that own a render object and can
+// serve as a render parent for descendant render objects. Both RenderObjectElement
+// and LayoutBuilderElement implement this interface.
+type renderObjectHost interface {
+	RenderObject() layout.RenderObject
+	insertRenderObjectChild(child layout.RenderObject, slot any)
+	removeRenderObjectChild(child layout.RenderObject, slot any)
+	moveRenderObjectChild(child layout.RenderObject, oldSlot, newSlot any)
+}
+
 type elementBase struct {
 	widget       Widget
 	parent       Element
@@ -23,7 +33,7 @@ type elementBase struct {
 	dirty        bool
 	self         Element
 	mounted      bool
-	renderParent *RenderObjectElement // nearest ancestor that owns a render object
+	renderParent renderObjectHost // nearest ancestor that owns a render object
 }
 
 func (e *elementBase) Widget() Widget {
@@ -68,12 +78,12 @@ func (e *elementBase) isMounted() bool {
 	return e.mounted
 }
 
-// findRenderParent walks up the element tree to find the nearest RenderObjectElement.
-func (e *elementBase) findRenderParent() *RenderObjectElement {
+// findRenderParent walks up the element tree to find the nearest renderObjectHost.
+func (e *elementBase) findRenderParent() renderObjectHost {
 	current := e.parent
 	for current != nil {
-		if roElement, ok := current.(*RenderObjectElement); ok {
-			return roElement
+		if host, ok := current.(renderObjectHost); ok {
+			return host
 		}
 		if base, ok := current.(interface{ parentElement() Element }); ok {
 			current = base.parentElement()
