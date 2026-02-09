@@ -132,6 +132,24 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
     }
 
     /**
+     * Called when the view's dimensions change (e.g. device rotation).
+     *
+     * Wakes the frame loop so the engine re-renders at the new size.
+     * The GL thread's onSurfaceChanged already updates the viewport dimensions;
+     * this ensures the Choreographer loop runs to pick them up.
+     */
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w != oldw || h != oldh) {
+            // Push the new dimensions to the renderer immediately so the next
+            // onDrawFrame uses them, even if onSurfaceChanged hasn't run yet
+            // on the GL thread. The @Volatile fields ensure visibility.
+            renderer.updateSize(w, h)
+            wakeFrameLoop()
+        }
+    }
+
+    /**
      * Called when the view is attached to a window.
      *
      * Starts the render loop by registering the Choreographer callback.

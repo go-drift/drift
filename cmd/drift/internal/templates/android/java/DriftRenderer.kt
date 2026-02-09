@@ -18,11 +18,25 @@ import javax.microedition.khronos.opengles.GL10
  * OpenGL ES renderer that delegates drawing to the Go + Skia backend.
  */
 class DriftRenderer : GLSurfaceView.Renderer {
-    /** Current viewport width in pixels. */
-    private var width = 0
+    /** Current viewport width in pixels. Volatile for cross-thread visibility. */
+    @Volatile var width = 0
+        private set
 
-    /** Current viewport height in pixels. */
-    private var height = 0
+    /** Current viewport height in pixels. Volatile for cross-thread visibility. */
+    @Volatile var height = 0
+        private set
+
+    /**
+     * Updates the cached dimensions from the UI thread.
+     *
+     * Called by DriftSurfaceView.onSizeChanged() to push new dimensions
+     * immediately, avoiding a stale-size render before the GL thread's
+     * onSurfaceChanged() has run.
+     */
+    fun updateSize(w: Int, h: Int) {
+        width = w
+        height = h
+    }
 
     /** Whether the Skia backend initialized successfully. */
     private var skiaReady = false
@@ -44,19 +58,29 @@ class DriftRenderer : GLSurfaceView.Renderer {
         this.width = width
         this.height = height
         GLES20.glViewport(0, 0, width, height)
+        // Mark a frame as needed so the engine re-renders at the new size.
+        // GLSurfaceView calls onDrawFrame immediately after this on the GL thread,
+        // so the next frame will use the updated dimensions.
+        NativeBridge.requestFrame()
     }
 
     override fun onDrawFrame(gl: GL10?) {
-        if (!skiaReady || width <= 0 || height <= 0) {
+        val w = width
+        val h = height
+        if (!skiaReady || w <= 0 || h <= 0) {
             GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             return
         }
 
+        // Ensure the viewport matches the latest dimensions. updateSize() from
+        // the UI thread may have set new values before onSurfaceChanged() ran.
+        GLES20.glViewport(0, 0, w, h)
+
         // Always render - GLSurfaceView swaps buffers after onDrawFrame returns,
         // so skipping render causes flickering on physical devices with triple-buffering.
         // The Go engine has layer caching, so rendering unchanged content is efficient.
-        val result = NativeBridge.renderFrameSkia(width, height)
+        val result = NativeBridge.renderFrameSkia(w, h)
         if (result != 0) {
             GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)

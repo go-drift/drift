@@ -21,14 +21,16 @@ type TypeCount struct {
 // propagates from the root (or scheduled boundaries) down through all marked
 // nodes.
 type PipelineOwner struct {
-	dirtyLayout       []RenderObject        // boundaries needing layout, processed depth-first
-	dirtyLayoutSet    map[RenderObject]bool // O(1) dedup check
-	dirtyPaint        map[RenderObject]struct{}
-	needsLayout       bool
-	needsPaint        bool
-	dirtySemantics    []RenderObject        // semantics boundaries needing update
-	dirtySemanticsSet map[RenderObject]bool // O(1) dedup check for semantics
-	needsSemantics    bool
+	dirtyLayout         []RenderObject        // boundaries needing layout, processed depth-first
+	dirtyLayoutSet      map[RenderObject]bool // O(1) dedup check
+	dirtyPaint          map[RenderObject]struct{}
+	needsLayout         bool
+	needsPaint          bool
+	dirtySemantics      []RenderObject        // semantics boundaries needing update
+	dirtySemanticsSet   map[RenderObject]bool // O(1) dedup check for semantics
+	needsSemantics      bool
+	lastRootConstraints Constraints // previous root constraints for change detection
+	hasRootConstraints  bool        // true after the first FlushLayoutForRoot call
 }
 
 // ScheduleLayout marks a relayout boundary as needing layout.
@@ -104,7 +106,18 @@ func (p *PipelineOwner) DirtyPaintTypes(limit int) []TypeCount {
 // From there, layout propagates down. Nodes with needsLayout=true will run
 // PerformLayout; clean nodes with unchanged constraints skip layout entirely.
 func (p *PipelineOwner) FlushLayoutForRoot(root RenderObject, constraints Constraints) {
-	if !p.needsLayout || root == nil {
+	if root == nil {
+		return
+	}
+
+	// Detect root constraint changes (e.g. device rotation). The root must be
+	// re-laid-out when the screen size changes even if no render object called
+	// MarkNeedsLayout, because root.Layout short-circuits on unchanged constraints.
+	constraintsChanged := !p.hasRootConstraints || constraints != p.lastRootConstraints
+	p.lastRootConstraints = constraints
+	p.hasRootConstraints = true
+
+	if !p.needsLayout && !constraintsChanged {
 		return
 	}
 
