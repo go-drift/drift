@@ -318,8 +318,8 @@ func TestAudioPlayerController_PlayAfterStop(t *testing.T) {
 		t.Fatalf("Play: %v", err)
 	}
 	sendAudioEvent(t, c, 1, 0, 0, 0)         // Buffering
-	sendAudioEvent(t, c, 2, 0, 180000, 0)     // Playing
-	sendAudioEvent(t, c, 2, 5000, 180000, 0)  // still Playing, no state change
+	sendAudioEvent(t, c, 2, 0, 180000, 0)    // Playing
+	sendAudioEvent(t, c, 2, 5000, 180000, 0) // still Playing, no state change
 
 	// Stop resets to idle.
 	if err := c.Stop(); err != nil {
@@ -331,8 +331,8 @@ func TestAudioPlayerController_PlayAfterStop(t *testing.T) {
 	if err := c.Play(); err != nil {
 		t.Fatalf("Play (after stop): %v", err)
 	}
-	sendAudioEvent(t, c, 1, 0, 180000, 0)    // Buffering
-	sendAudioEvent(t, c, 2, 0, 180000, 0)    // Playing
+	sendAudioEvent(t, c, 1, 0, 180000, 0) // Buffering
+	sendAudioEvent(t, c, 2, 0, 180000, 0) // Playing
 
 	want := []PlaybackState{
 		PlaybackStateBuffering, // initial buffer

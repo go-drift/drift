@@ -203,4 +203,3 @@ func TestRunInit_NoArgs(t *testing.T) {
 		t.Fatal("expected error for no args, got nil")
 	}
 }
-

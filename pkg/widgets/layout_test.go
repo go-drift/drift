@@ -659,7 +659,7 @@ func (c *mockCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds graphics.Rect)       
 func (c *mockCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics.Rect, tint graphics.Color) {
 }
 func (c *mockCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {}
-func (c *mockCanvas) Size() graphics.Size { return graphics.Size{Width: 800, Height: 600} }
+func (c *mockCanvas) Size() graphics.Size                                { return graphics.Size{Width: 800, Height: 600} }
 
 // mockFlexFitChild implements FlexFactor and FlexFitProvider, with a preferred intrinsic size.
 type mockFlexFitChild struct {

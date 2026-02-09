@@ -277,18 +277,18 @@ type appRunner struct {
 	errorScreenMounted bool // true once we've transitioned to the error screen
 
 	// Diagnostics state
-	diagnosticsConfig  *DiagnosticsConfig
-	frameTiming        *FrameTimingBuffer
-	lastFrameStart     time.Time
-	hudRenderObject    layout.RenderObject // Reference to HUD for targeted repaints
-	showLayoutBounds   bool                // Debug overlay for widget bounds (independent of HUD)
-	frameTrace             *FrameTraceBuffer
-	frameTraceEnabled      bool
-	lastLifecycleState     platform.LifecycleState
-	runtimeSamples         *RuntimeSampleBuffer
-	treeCountFrame         int
-	cachedRenderNodeCount  int
-	cachedWidgetNodeCount  int
+	diagnosticsConfig     *DiagnosticsConfig
+	frameTiming           *FrameTimingBuffer
+	lastFrameStart        time.Time
+	hudRenderObject       layout.RenderObject // Reference to HUD for targeted repaints
+	showLayoutBounds      bool                // Debug overlay for widget bounds (independent of HUD)
+	frameTrace            *FrameTraceBuffer
+	frameTraceEnabled     bool
+	lastLifecycleState    platform.LifecycleState
+	runtimeSamples        *RuntimeSampleBuffer
+	treeCountFrame        int
+	cachedRenderNodeCount int
+	cachedWidgetNodeCount int
 }
 
 func init() {

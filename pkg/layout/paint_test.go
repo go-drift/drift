@@ -264,34 +264,34 @@ type nullPaintCanvas struct {
 	size graphics.Size
 }
 
-func (c *nullPaintCanvas) Save()                                            {}
-func (c *nullPaintCanvas) SaveLayerAlpha(bounds graphics.Rect, alpha float64) {}
-func (c *nullPaintCanvas) SaveLayer(bounds graphics.Rect, paint *graphics.Paint) {}
-func (c *nullPaintCanvas) Restore()                                         {}
-func (c *nullPaintCanvas) Translate(dx, dy float64)                         {}
-func (c *nullPaintCanvas) Scale(sx, sy float64)                             {}
-func (c *nullPaintCanvas) Rotate(radians float64)                           {}
-func (c *nullPaintCanvas) ClipRect(rect graphics.Rect)                      {}
-func (c *nullPaintCanvas) ClipRRect(rrect graphics.RRect)                   {}
-func (c *nullPaintCanvas) ClipPath(path *graphics.Path, op graphics.ClipOp, aa bool) {}
-func (c *nullPaintCanvas) Clear(color graphics.Color)                       {}
-func (c *nullPaintCanvas) DrawRect(rect graphics.Rect, paint graphics.Paint) {}
-func (c *nullPaintCanvas) DrawRRect(rrect graphics.RRect, paint graphics.Paint) {}
+func (c *nullPaintCanvas) Save()                                                                   {}
+func (c *nullPaintCanvas) SaveLayerAlpha(bounds graphics.Rect, alpha float64)                      {}
+func (c *nullPaintCanvas) SaveLayer(bounds graphics.Rect, paint *graphics.Paint)                   {}
+func (c *nullPaintCanvas) Restore()                                                                {}
+func (c *nullPaintCanvas) Translate(dx, dy float64)                                                {}
+func (c *nullPaintCanvas) Scale(sx, sy float64)                                                    {}
+func (c *nullPaintCanvas) Rotate(radians float64)                                                  {}
+func (c *nullPaintCanvas) ClipRect(rect graphics.Rect)                                             {}
+func (c *nullPaintCanvas) ClipRRect(rrect graphics.RRect)                                          {}
+func (c *nullPaintCanvas) ClipPath(path *graphics.Path, op graphics.ClipOp, aa bool)               {}
+func (c *nullPaintCanvas) Clear(color graphics.Color)                                              {}
+func (c *nullPaintCanvas) DrawRect(rect graphics.Rect, paint graphics.Paint)                       {}
+func (c *nullPaintCanvas) DrawRRect(rrect graphics.RRect, paint graphics.Paint)                    {}
 func (c *nullPaintCanvas) DrawCircle(center graphics.Offset, radius float64, paint graphics.Paint) {}
-func (c *nullPaintCanvas) DrawLine(start, end graphics.Offset, paint graphics.Paint) {}
-func (c *nullPaintCanvas) DrawText(layout *graphics.TextLayout, position graphics.Offset) {}
-func (c *nullPaintCanvas) DrawImage(img image.Image, position graphics.Offset) {}
+func (c *nullPaintCanvas) DrawLine(start, end graphics.Offset, paint graphics.Paint)               {}
+func (c *nullPaintCanvas) DrawText(layout *graphics.TextLayout, position graphics.Offset)          {}
+func (c *nullPaintCanvas) DrawImage(img image.Image, position graphics.Offset)                     {}
 func (c *nullPaintCanvas) DrawImageRect(img image.Image, srcRect, dstRect graphics.Rect, quality graphics.FilterQuality, cacheKey uintptr) {
 }
-func (c *nullPaintCanvas) DrawPath(path *graphics.Path, paint graphics.Paint) {}
-func (c *nullPaintCanvas) DrawRectShadow(rect graphics.Rect, shadow graphics.BoxShadow) {}
+func (c *nullPaintCanvas) DrawPath(path *graphics.Path, paint graphics.Paint)              {}
+func (c *nullPaintCanvas) DrawRectShadow(rect graphics.Rect, shadow graphics.BoxShadow)    {}
 func (c *nullPaintCanvas) DrawRRectShadow(rrect graphics.RRect, shadow graphics.BoxShadow) {}
-func (c *nullPaintCanvas) SaveLayerBlur(bounds graphics.Rect, sigmaX, sigmaY float64) {}
-func (c *nullPaintCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds graphics.Rect) {}
+func (c *nullPaintCanvas) SaveLayerBlur(bounds graphics.Rect, sigmaX, sigmaY float64)      {}
+func (c *nullPaintCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds graphics.Rect)             {}
 func (c *nullPaintCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics.Rect, tintColor graphics.Color) {
 }
 func (c *nullPaintCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {}
-func (c *nullPaintCanvas) Size() graphics.Size                              { return c.size }
+func (c *nullPaintCanvas) Size() graphics.Size                                { return c.size }
 
 func TestEmbedPlatformView_Recording(t *testing.T) {
 	recorder := &graphics.PictureRecorder{}

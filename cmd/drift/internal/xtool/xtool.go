@@ -206,4 +206,3 @@ func findClang(sdkPath string) (string, error) {
 
 	return "", fmt.Errorf("clang not found; install Swift toolchain from https://swift.org/download/ (includes clang with Objective-C support)")
 }
-
