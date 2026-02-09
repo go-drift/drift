@@ -18,6 +18,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 
 object NotificationHandler {
@@ -34,8 +35,25 @@ object NotificationHandler {
     private const val extraSource = "drift_notification_source"
     private const val TAG = "DriftNotifications"
     private var currentPushToken: String? = null
+    private var appContext: Context? = null
+
+    private fun isFirebaseAvailable(): Boolean {
+        val ctx = appContext ?: return false
+        return try {
+            FirebaseApp.getApps(ctx).isNotEmpty()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun firebaseNotConfiguredError(): Pair<Any?, Exception?> {
+        return Pair(null, IllegalStateException(
+            "Firebase is not configured. Add a google-services.json file to your Android app module to enable push notifications."
+        ))
+    }
 
     fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
+        if (appContext == null) appContext = context.applicationContext
         return when (method) {
             "getSettings" -> Pair(getSettings(context), null)
             "schedule" -> scheduleLocal(context, args)
@@ -93,6 +111,7 @@ object NotificationHandler {
     // region Push notification methods
 
     private fun registerForPush(): Pair<Any?, Exception?> {
+        if (!isFirebaseAvailable()) return firebaseNotConfiguredError()
         try {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (task.isSuccessful) {
@@ -107,7 +126,7 @@ object NotificationHandler {
             }
             return Pair(null, null)
         } catch (e: Exception) {
-            Log.e(TAG, "Firebase not configured", e)
+            Log.e(TAG, "Failed to register for push", e)
             return Pair(null, e)
         }
     }
@@ -116,6 +135,7 @@ object NotificationHandler {
         if (currentPushToken != null) {
             return Pair(mapOf("token" to currentPushToken), null)
         }
+        if (!isFirebaseAvailable()) return firebaseNotConfiguredError()
 
         var token: String? = null
         var error: Exception? = null
@@ -145,6 +165,7 @@ object NotificationHandler {
     }
 
     private fun subscribeToTopic(args: Any?): Pair<Any?, Exception?> {
+        if (!isFirebaseAvailable()) return firebaseNotConfiguredError()
         val argsMap = args as? Map<*, *>
             ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
         val topic = argsMap["topic"] as? String
@@ -174,6 +195,7 @@ object NotificationHandler {
     }
 
     private fun unsubscribeFromTopic(args: Any?): Pair<Any?, Exception?> {
+        if (!isFirebaseAvailable()) return firebaseNotConfiguredError()
         val argsMap = args as? Map<*, *>
             ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
         val topic = argsMap["topic"] as? String
@@ -203,6 +225,7 @@ object NotificationHandler {
     }
 
     private fun deletePushToken(): Pair<Any?, Exception?> {
+        if (!isFirebaseAvailable()) return firebaseNotConfiguredError()
         var error: Exception? = null
         val latch = java.util.concurrent.CountDownLatch(1)
 
