@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -101,14 +99,11 @@ func runCompile(args []string) error {
 			fmt.Fprintf(os.Stderr, "Warning: failed to update .drift.env: %v\n", err)
 		}
 	} else {
-		// Use managed build directory with hash (matches workspace.go)
-		moduleRoot, err := workspace.BuildRoot(cfg)
+		var err error
+		buildDir, err = workspace.ManagedBuildDir(root, cfg, platform)
 		if err != nil {
 			return err
 		}
-		hash := sha1.Sum([]byte(root))
-		shortHash := hex.EncodeToString(hash[:6])
-		buildDir = filepath.Join(moduleRoot, platform, shortHash)
 		if err := os.MkdirAll(buildDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create build directory: %w", err)
 		}

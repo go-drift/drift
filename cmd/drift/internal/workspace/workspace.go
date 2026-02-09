@@ -126,7 +126,7 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 		fmt.Printf("Using ejected %s project: %s\n", platform, buildDir)
 	} else {
 		var err error
-		buildDir, err = managedBuildDir(root, cfg, platform)
+		buildDir, err = ManagedBuildDir(root, cfg, platform)
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +204,9 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 	return ws, nil
 }
 
-func managedBuildDir(root string, cfg *config.Resolved, platform string) (string, error) {
+// ManagedBuildDir returns the managed build directory for a given project root
+// and platform, e.g. ~/.drift/build/<module>/<platform>/<hash>.
+func ManagedBuildDir(root string, cfg *config.Resolved, platform string) (string, error) {
 	moduleRoot, err := moduleBuildRoot(cfg)
 	if err != nil {
 		return "", err

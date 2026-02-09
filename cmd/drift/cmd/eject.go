@@ -210,8 +210,14 @@ func createBackup(dir string) (string, error) {
 	now := time.Now()
 	base := dir + ".backup." + now.Format("20060102-150405")
 
-	// Find unused backup name with counter
-	for i := 1; i <= 999; i++ {
+	// Try the unsuffixed name first, then add a counter on collision
+	if _, err := os.Stat(base); os.IsNotExist(err) {
+		if err := os.Rename(dir, base); err != nil {
+			return "", err
+		}
+		return base, nil
+	}
+	for i := 2; i <= 999; i++ {
 		backupDir := fmt.Sprintf("%s-%03d", base, i)
 		if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 			if err := os.Rename(dir, backupDir); err != nil {
