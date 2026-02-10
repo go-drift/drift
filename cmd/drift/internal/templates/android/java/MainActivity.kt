@@ -83,7 +83,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(container)
 
         PlatformChannelManager.setView(surfaceView)
-        PlatformChannelManager.setOnFrameNeeded { surfaceView.wakeFrameLoop() }
+        PlatformChannelManager.setOnFrameNeeded { surfaceView.scheduleFrame() }
 
         // Initialize platform view handler with the container and surface view
         PlatformViewHandler.init(this, container)
@@ -108,8 +108,8 @@ class MainActivity : AppCompatActivity() {
                     onBackPressedDispatcher.onBackPressed()
                     isEnabled = true
                 } else {
-                    // Go handled the back button - wake frame loop to render the change
-                    surfaceView.wakeFrameLoop()
+                    // Go handled the back button - render the navigation change
+                    surfaceView.renderNow()
                 }
             }
         })
@@ -123,7 +123,10 @@ class MainActivity : AppCompatActivity() {
         DeepLinkHandler.handleIntent(intent, "open")
         if (::surfaceView.isInitialized) {
             surfaceView.onResume()
-            surfaceView.wakeFrameLoop()
+            surfaceView.resumeScheduling()
+            // renderNow() adds an immediate GL render on top of the Choreographer
+            // callback from resumeScheduling(), giving lower latency for deep links.
+            surfaceView.renderNow()
         }
     }
 
@@ -151,8 +154,8 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
-        surfaceView.onResume()
-        surfaceView.wakeFrameLoop()
+        surfaceView.onResume()         // GLSurfaceView: resume GL thread
+        surfaceView.resumeScheduling() // Drift: enable Choreographer callbacks
     }
 
     /**
@@ -169,6 +172,7 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onPause() {
         super.onPause()
-        surfaceView.onPause()
+        surfaceView.pauseScheduling() // Drift: disable Choreographer callbacks
+        surfaceView.onPause()         // GLSurfaceView: pause GL thread
     }
 }

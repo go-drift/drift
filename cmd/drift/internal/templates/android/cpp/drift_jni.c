@@ -151,6 +151,12 @@ typedef int (*DriftNeedsFrameFn)(void);
 typedef void (*DriftGeometryAppliedFn)(void);
 
 /**
+ * Function pointer type for DriftSetScheduleFrameHandler.
+ * Registers a C callback that Go invokes when it needs a new frame.
+ */
+typedef void (*DriftSetScheduleFrameHandlerFn)(void (*handler)(void));
+
+/**
  * Function pointer type for DriftHitTestPlatformView.
  * Matches the signature exported by Go:
  *   func DriftHitTestPlatformView(viewID C.int64_t, x C.double, y C.double) C.int
@@ -182,6 +188,7 @@ static int drift_needs_frame_resolved = 0;
 static DriftGeometryAppliedFn drift_geometry_applied = NULL;
 static DriftHitTestPlatformViewFn drift_hit_test_platform_view = NULL;
 static int drift_hit_test_platform_view_resolved = 0;
+static DriftSetScheduleFrameHandlerFn drift_set_schedule_frame_handler = NULL;
 
 /* Handle to the loaded Go shared library. NULL until loaded. */
 static void *drift_handle = NULL;
@@ -191,6 +198,7 @@ static JavaVM *g_jvm = NULL;
 static jclass g_platform_channel_class = NULL;
 static jmethodID g_handle_method_call = NULL;
 static jmethodID g_consume_last_error = NULL;
+static jmethodID g_native_schedule_frame = NULL;
 static int g_native_handler_registered = 0;
 
 static char *json_error(const char *code, const char *message) {
@@ -203,6 +211,45 @@ static char *json_error(const char *code, const char *message) {
     }
     snprintf(buffer, len + 1, "{\"code\":\"%s\",\"message\":\"%s\"}", safe_code, safe_message);
     return buffer;
+}
+
+/**
+ * Schedule-frame callback invoked by Go when it needs a new frame.
+ * Attaches to the JVM, then calls PlatformChannelManager.nativeScheduleFrame()
+ * which posts a one-shot Choreographer callback on the main thread.
+ *
+ * Attach/detach cost is acceptable here: this fires once per state change
+ * (user tap, Dispatch callback), not per frame. Animation continuity is
+ * handled by DriftRenderer's post-render NeedsFrame() check on the
+ * already-attached GL thread.
+ */
+static void schedule_frame_handler(void) {
+    if (!g_jvm || !g_platform_channel_class || !g_native_schedule_frame) {
+        return;
+    }
+
+    JNIEnv *env = NULL;
+    int needs_detach = 0;
+
+    jint result = (*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6);
+    if (result == JNI_EDETACHED) {
+        if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) != 0) {
+            return;
+        }
+        needs_detach = 1;
+    } else if (result != JNI_OK) {
+        return;
+    }
+
+    (*env)->CallStaticVoidMethod(env, g_platform_channel_class, g_native_schedule_frame);
+
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+    }
+
+    if (needs_detach) {
+        (*g_jvm)->DetachCurrentThread(g_jvm);
+    }
 }
 
 /**
@@ -1333,10 +1380,34 @@ Java_{{.JNIPackage}}_NativeBridge_platformInit(
         return -1;
     }
 
+    /* Find the static method: nativeScheduleFrame() -> void */
+    g_native_schedule_frame = (*env)->GetStaticMethodID(
+        env, g_platform_channel_class,
+        "nativeScheduleFrame",
+        "()V"
+    );
+
+    if (!g_native_schedule_frame) {
+        __android_log_print(ANDROID_LOG_WARN, "DriftJNI", "nativeScheduleFrame method not found (on-demand scheduling disabled)");
+    }
+
     /* Register our native handler with Go */
     if (resolve_and_register_native_handler() != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to register native handler");
         return -1;
+    }
+
+    /* Register the schedule-frame handler with Go for on-demand rendering */
+    if (g_native_schedule_frame) {
+        if (!drift_set_schedule_frame_handler && drift_handle) {
+            drift_set_schedule_frame_handler = (DriftSetScheduleFrameHandlerFn)dlsym(
+                drift_handle, "DriftSetScheduleFrameHandler"
+            );
+        }
+        if (drift_set_schedule_frame_handler) {
+            drift_set_schedule_frame_handler(schedule_frame_handler);
+            __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Schedule-frame handler registered");
+        }
     }
 
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Platform channels initialized");

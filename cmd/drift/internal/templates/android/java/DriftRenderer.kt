@@ -5,6 +5,7 @@
  *   1. Initializes the Skia GL backend once the context is ready
  *   2. Calls into the Go engine to draw directly into the current framebuffer
  *   3. Relies on GLSurfaceView to swap buffers after each frame
+ *   4. After each render, checks NeedsFrame() and schedules a follow-up if needed
  */
 package {{.PackageName}}
 
@@ -16,8 +17,11 @@ import javax.microedition.khronos.opengles.GL10
 
 /**
  * OpenGL ES renderer that delegates drawing to the Go + Skia backend.
+ *
+ * @param surfaceView The DriftSurfaceView to call scheduleFrame() on after rendering,
+ *                    enabling animation continuity without a continuous polling loop.
  */
-class DriftRenderer : GLSurfaceView.Renderer {
+class DriftRenderer(private val surfaceView: DriftSurfaceView) : GLSurfaceView.Renderer {
     /** Current viewport width in pixels. Volatile for cross-thread visibility. */
     @Volatile var width = 0
         private set
@@ -84,6 +88,14 @@ class DriftRenderer : GLSurfaceView.Renderer {
         if (result != 0) {
             GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        }
+
+        // Post-render check: if the engine still has work (animations, ballistics,
+        // pending dispatch callbacks), schedule another frame. This handles the case
+        // where RequestFrame() was called mid-render and couldn't notify the platform
+        // due to lock contention.
+        if (NativeBridge.needsFrame() != 0) {
+            surfaceView.scheduleFrame()
         }
     }
 }

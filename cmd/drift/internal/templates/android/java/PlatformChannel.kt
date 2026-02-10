@@ -47,6 +47,7 @@ object PlatformChannelManager {
     private val handlers = mutableMapOf<String, MethodHandler>()
     private val codec = JsonCodec
     private var lastError: String? = null
+    @Volatile
     private var onFrameNeeded: (() -> Unit)? = null
 
     /**
@@ -111,6 +112,15 @@ object PlatformChannelManager {
         val error = lastError
         lastError = null
         return error
+    }
+
+    /**
+     * Called from native (JNI) when the Go engine needs a new frame.
+     * Invokes the onFrameNeeded callback which posts a one-shot Choreographer frame.
+     */
+    @JvmStatic
+    fun nativeScheduleFrame() {
+        onFrameNeeded?.invoke()
     }
 
     /**

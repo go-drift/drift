@@ -3,42 +3,51 @@
  *
  * This class extends GLSurfaceView to provide:
  *   1. An OpenGL ES 2.0 rendering context for displaying frames
- *   2. VSync-synchronized frame callbacks using Android's Choreographer
+ *   2. On-demand, one-shot frame scheduling via Choreographer
  *   3. Touch event handling that forwards input to the Go engine
  *
  * Rendering Pipeline:
  *
- *     Choreographer (vsync signal)
- *           │
- *           ▼
+ *     Go engine calls RequestFrame()
+ *           |
+ *           v  JNI callback
+ *     PlatformChannelManager.nativeScheduleFrame()
+ *           |
+ *           v
+ *     DriftSurfaceView.scheduleFrame()
+ *           |
+ *           v  one-shot Choreographer callback
  *     DriftSurfaceView.doFrame()
- *           │
- *           ▼ requestRender()
+ *           |
+ *           v  requestRender()
  *     DriftRenderer.onDrawFrame()
- *           │
- *           ▼ NativeBridge.renderFrameSkia()
+ *           |
+ *           v  NativeBridge.renderFrameSkia()
  *     Go Engine (Skia GPU render)
- *           │
- *           ▼ OpenGL (displays on screen)
  *
- * Frame Timing:
- *   Uses RENDERMODE_WHEN_DIRTY to avoid unnecessary CPU/GPU usage.
- *   The Choreographer callback requests a render at the display's refresh rate
- *   (typically 60Hz), ensuring smooth, tear-free animation.
+ * Frame Scheduling:
+ *   Uses on-demand, one-shot Choreographer callbacks instead of a continuous
+ *   polling loop. The Choreographer goes completely idle when no work is needed.
+ *   Two paths schedule frames:
+ *     1. Go-initiated: RequestFrame()/Dispatch() triggers a JNI callback
+ *     2. Post-render: DriftRenderer checks NeedsFrame() after each render
+ *   Input events call requestRender() directly for sub-vsync touch latency.
  *
  * Lifecycle:
- *   - Start: onAttachedToWindow() registers the Choreographer callback
- *   - Stop: onDetachedFromWindow() unregisters the callback
- *   - The parent Activity must call onResume()/onPause() appropriately
+ *   - Active: onAttachedToWindow()/resumeScheduling() enable scheduling
+ *   - Inactive: onDetachedFromWindow()/pauseScheduling() disable scheduling
  */
 package {{.PackageName}}
 
 import android.content.Context
 import android.opengl.GLSurfaceView
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.Choreographer
 import android.view.MotionEvent
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Custom GLSurfaceView that integrates the Drift engine with Android's display system.
@@ -60,29 +69,46 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
     private val activePointers = mutableMapOf<Long, Pair<Double, Double>>()
 
     /**
-     * Choreographer callback for vsync-synchronized frame rendering.
-     *
-     * The Choreographer provides callbacks aligned with the display's vsync signal,
-     * ensuring frames are rendered at the optimal time for smooth animation.
-     *
-     * This callback:
-     *   1. Requests a new render (which triggers DriftRenderer.onDrawFrame())
-     *   2. Re-registers itself for the next frame
-     *
-     * The self-re-registration pattern creates a continuous render loop that runs
-     * as long as the callback is registered (between onAttachedToWindow and onDetachedFromWindow).
+     * Whether the view is in an active lifecycle state (attached and resumed).
+     * When false, no Choreographer callbacks are posted.
+     * Volatile because scheduleFrame() reads this from GL and JNI threads.
      */
-    private val frameCallback = object : Choreographer.FrameCallback {
-        override fun doFrame(frameTimeNanos: Long) {
-            // Request the GL thread to call onDrawFrame() for the next render
-            requestRender()
+    @Volatile
+    private var active = false
 
-            // Continue the loop only while the engine reports pending work.
-            if (NativeBridge.needsFrame() != 0) {
-                Choreographer.getInstance().postFrameCallback(this)
-            } else {
-                frameLoopActive = false
-            }
+    /**
+     * Coalesces multiple scheduleFrame() calls into a single Choreographer callback.
+     * Set to true when a callback is pending, cleared in doFrame().
+     */
+    private val frameScheduled = AtomicBoolean(false)
+
+    /** Main-thread handler for posting Choreographer callbacks. */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Named Runnable for targeted removal via mainHandler.removeCallbacks(). */
+    private val postFrameRunnable = Runnable {
+        if (active) {
+            Choreographer.getInstance().postFrameCallback(frameCallback)
+        } else {
+            frameScheduled.set(false)
+        }
+    }
+
+    /**
+     * One-shot Choreographer callback for vsync-synchronized rendering.
+     *
+     * Unlike a continuous loop, this callback does not re-register itself.
+     * A new callback is posted only when scheduleFrame() is called again
+     * (from Go-initiated requests or the post-render NeedsFrame() check).
+     *
+     * A no-op here (needsFrame returns 0) is safe: either the work was
+     * already rendered by a direct requestRender(), or Go will call
+     * notifyPlatform() on its next scheduling attempt, posting a fresh callback.
+     */
+    private val frameCallback = Choreographer.FrameCallback {
+        frameScheduled.set(false)
+        if (active && NativeBridge.needsFrame() != 0) {
+            requestRender()
         }
     }
 
@@ -104,77 +130,95 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
         }
         setEGLContextClientVersion(glesVersion)
 
-        // Create and set the renderer that will handle drawing
-        renderer = DriftRenderer()
+        // Create and set the renderer, passing this view for post-render scheduling
+        renderer = DriftRenderer(this)
         setRenderer(renderer)
 
         // Only render when explicitly requested via requestRender()
-        // The Choreographer callback handles the render timing
         renderMode = RENDERMODE_WHEN_DIRTY
 
         // Send the device scale to the Go engine for consistent sizing.
         updateDeviceScale()
     }
 
-    private var frameLoopActive = false
-
-    fun startFrameLoop() {
-        if (!frameLoopActive) {
-            frameLoopActive = true
-            Choreographer.getInstance().postFrameCallback(frameCallback)
+    /**
+     * Schedules a one-shot Choreographer callback if one is not already pending.
+     * Safe to call from any thread. The callback runs on the main thread.
+     */
+    fun scheduleFrame() {
+        if (active && frameScheduled.compareAndSet(false, true)) {
+            mainHandler.post(postFrameRunnable)
         }
     }
 
-    fun wakeFrameLoop() {
+    /**
+     * Marks the engine dirty, queues an immediate GL render for low-latency
+     * response, and schedules a Choreographer callback for follow-up work.
+     */
+    fun renderNow() {
         NativeBridge.requestFrame()
         requestRender()
-        startFrameLoop()
+        scheduleFrame()
     }
 
     /**
      * Called when the view's dimensions change (e.g. device rotation).
      *
-     * Wakes the frame loop so the engine re-renders at the new size.
+     * Schedules a frame so the engine re-renders at the new size.
      * The GL thread's onSurfaceChanged already updates the viewport dimensions;
-     * this ensures the Choreographer loop runs to pick them up.
+     * this ensures the Choreographer runs to pick them up.
      */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w != oldw || h != oldh) {
-            // Push the new dimensions to the renderer immediately so the next
-            // onDrawFrame uses them, even if onSurfaceChanged hasn't run yet
-            // on the GL thread. The @Volatile fields ensure visibility.
             renderer.updateSize(w, h)
-            wakeFrameLoop()
+            renderNow()
         }
     }
 
     /**
      * Called when the view is attached to a window.
      *
-     * Starts the render loop by registering the Choreographer callback.
-     * From this point, doFrame() will be called at the display's refresh rate.
+     * Enables frame scheduling and posts an initial frame.
      */
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        // Start receiving vsync callbacks to drive the render loop
-        startFrameLoop()
-
-        // Refresh scale in case configuration changed while detached.
+        active = true
+        scheduleFrame()
         updateDeviceScale()
     }
 
     /**
      * Called when the view is detached from its window.
      *
-     * Stops the render loop by removing the Choreographer callback.
-     * This prevents unnecessary work when the view is not visible.
+     * Disables frame scheduling and removes any pending callback.
      */
     override fun onDetachedFromWindow() {
-        // Stop receiving vsync callbacks
+        active = false
+        mainHandler.removeCallbacks(postFrameRunnable)
         Choreographer.getInstance().removeFrameCallback(frameCallback)
-        frameLoopActive = false
+        frameScheduled.set(false)
         super.onDetachedFromWindow()
+    }
+
+    /**
+     * Disables frame scheduling and clears pending callbacks.
+     * Called from MainActivity.onPause().
+     */
+    fun pauseScheduling() {
+        active = false
+        mainHandler.removeCallbacks(postFrameRunnable)
+        Choreographer.getInstance().removeFrameCallback(frameCallback)
+        frameScheduled.set(false)
+    }
+
+    /**
+     * Enables frame scheduling and posts an initial Choreographer callback.
+     * Called from MainActivity.onResume().
+     */
+    fun resumeScheduling() {
+        active = true
+        scheduleFrame()
     }
 
     /**
@@ -182,10 +226,8 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
      * When touch exploration is enabled, single taps should focus elements.
      */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        // In touch exploration, a tap should only move accessibility focus.
-        // Consume handled taps so app touch handlers don't fire.
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            wakeFrameLoop()
+            renderNow()
             if (AccessibilityHandler.handleExploreByTouch(event.x, event.y)) {
                 return true
             }
@@ -197,7 +239,7 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
      * Handle generic motion events including hover events.
      */
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        wakeFrameLoop()
+        renderNow()
         return super.dispatchGenericMotionEvent(event)
     }
 
@@ -220,7 +262,7 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
      *   For CANCEL, all tracked pointers are cancelled using their last known positions.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        wakeFrameLoop()
+        renderNow()
         when (event.actionMasked) {
             // Touch began (first finger or additional fingers)
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {

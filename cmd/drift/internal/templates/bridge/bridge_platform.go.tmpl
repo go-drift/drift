@@ -44,6 +44,20 @@ package main
 //     }
 //     return -1; // No handler
 // }
+//
+// // Callback for Go->Native frame scheduling (on-demand rendering)
+// typedef void (*DriftScheduleFrameHandler)(void);
+// static DriftScheduleFrameHandler scheduleFrameHandler = NULL;
+//
+// static inline void setScheduleFrameHandler(DriftScheduleFrameHandler handler) {
+//     scheduleFrameHandler = handler;
+// }
+//
+// static inline void callScheduleFrame(void) {
+//     if (scheduleFrameHandler) {
+//         scheduleFrameHandler();
+//     }
+// }
 import "C"
 
 import (
@@ -52,6 +66,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/go-drift/drift/pkg/engine"
 	"github.com/go-drift/drift/pkg/platform"
 )
 
@@ -231,6 +246,19 @@ func DriftPlatformIsStreamActive(channelPtr *C.char) C.int {
 //export DriftGeometryApplied
 func DriftGeometryApplied() {
 	platform.GetPlatformViewRegistry().SignalGeometryApplied()
+}
+
+// DriftSetScheduleFrameHandler registers a native callback that Go invokes
+// when it needs the platform to schedule a new frame. The native side (e.g.,
+// Android JNI) provides a C function pointer; this bridges it into Go's
+// engine.SetPlatformScheduleFrame mechanism.
+//
+//export DriftSetScheduleFrameHandler
+func DriftSetScheduleFrameHandler(handler C.DriftScheduleFrameHandler) {
+	C.setScheduleFrameHandler(handler)
+	engine.SetPlatformScheduleFrame(func() {
+		C.callScheduleFrame()
+	})
 }
 
 // DriftPlatformFree frees memory allocated by Go for native code.

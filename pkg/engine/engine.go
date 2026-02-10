@@ -22,6 +22,24 @@ import (
 // backgroundColor uses atomic access to avoid deadlock when called from InitState/Build.
 var backgroundColor atomic.Uint32
 
+// platformScheduleFrame is set once during init under frameLock; read under frameLock.
+var platformScheduleFrame func()
+
+// SetPlatformScheduleFrame registers a callback the engine invokes when a new
+// frame is needed, enabling on-demand scheduling instead of continuous polling.
+func SetPlatformScheduleFrame(fn func()) {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+	platformScheduleFrame = fn
+}
+
+// notifyPlatform calls the platform schedule-frame callback if one is registered.
+func notifyPlatform() {
+	if fn := platformScheduleFrame; fn != nil {
+		fn()
+	}
+}
+
 // semanticsDeferralTimeout is the maximum time we defer semantics flushes during animations.
 // After this timeout, we force a flush even if animations are still active to ensure
 // screen readers receive updates for accessibility compliance.
@@ -42,6 +60,7 @@ func RequestFrame() {
 	if frameLock.TryLock() {
 		defer frameLock.Unlock()
 		app.requestFrameLocked()
+		notifyPlatform()
 		return
 	}
 	app.pendingFrameRequest.Store(true)
