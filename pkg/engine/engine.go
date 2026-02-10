@@ -22,20 +22,22 @@ import (
 // backgroundColor uses atomic access to avoid deadlock when called from InitState/Build.
 var backgroundColor atomic.Uint32
 
-// platformScheduleFrame is set once during init under frameLock; read under frameLock.
-var platformScheduleFrame func()
+// platformScheduleFrameVal holds the platform schedule-frame callback.
+// Stored as an atomic.Value for lock-free access from notifyPlatform().
+var platformScheduleFrameVal atomic.Value // stores func()
 
 // SetPlatformScheduleFrame registers a callback the engine invokes when a new
 // frame is needed, enabling on-demand scheduling instead of continuous polling.
 func SetPlatformScheduleFrame(fn func()) {
-	frameLock.Lock()
-	defer frameLock.Unlock()
-	platformScheduleFrame = fn
+	if fn == nil {
+		return
+	}
+	platformScheduleFrameVal.Store(fn)
 }
 
 // notifyPlatform calls the platform schedule-frame callback if one is registered.
 func notifyPlatform() {
-	if fn := platformScheduleFrame; fn != nil {
+	if fn, ok := platformScheduleFrameVal.Load().(func()); ok && fn != nil {
 		fn()
 	}
 }
@@ -64,12 +66,21 @@ func RequestFrame() {
 		return
 	}
 	app.pendingFrameRequest.Store(true)
+	notifyPlatform()
 }
 
 // NeedsFrame returns true if a new frame should be rendered.
 // Call this before acquiring a drawable to skip unnecessary render cycles.
+// Uses TryLock to avoid blocking the platform main thread when Paint() holds
+// the lock. If the lock is held, a frame is actively being processed so we
+// return true to keep the render loop alive.
 func NeedsFrame() bool {
-	frameLock.Lock()
+	if !frameLock.TryLock() {
+		// The lock is held (typically by Paint()), so return true rather
+		// than blocking the caller. At worst this schedules one extra
+		// no-op frame; the alternative is stalling the platform main thread.
+		return true
+	}
 	defer frameLock.Unlock()
 	return app.needsFrameLocked()
 }

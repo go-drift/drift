@@ -97,18 +97,20 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
     /**
      * One-shot Choreographer callback for vsync-synchronized rendering.
      *
-     * Unlike a continuous loop, this callback does not re-register itself.
-     * A new callback is posted only when scheduleFrame() is called again
-     * (from Go-initiated requests or the post-render NeedsFrame() check).
+     * When work is needed, this callback re-registers itself immediately
+     * via scheduleFrame() so the next vsync fires without waiting for
+     * the GL thread's post-render check. This eliminates a
+     * GL-to-main-to-Choreographer round-trip during active animations.
      *
-     * A no-op here (needsFrame returns 0) is safe: either the work was
-     * already rendered by a direct requestRender(), or Go will call
-     * notifyPlatform() on its next scheduling attempt, posting a fresh callback.
+     * The post-render NeedsFrame() check in DriftRenderer.onDrawFrame()
+     * remains as a safety net for edge cases where a frame request
+     * arrives mid-render.
      */
     private val frameCallback = Choreographer.FrameCallback {
         frameScheduled.set(false)
         if (active && NativeBridge.needsFrame() != 0) {
             requestRender()
+            scheduleFrame()
         }
     }
 
