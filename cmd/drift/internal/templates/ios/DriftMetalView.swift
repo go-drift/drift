@@ -70,9 +70,16 @@ var driftScheduleFrameCallback: (() -> Void)?
 
 /// C-callable function registered with Go via DriftSetScheduleFrameHandler.
 /// Dispatches to the main thread since CADisplayLink must be controlled from there.
+/// When already on the main thread (the common case for touch-initiated requests),
+/// unpauses the display link synchronously so the very next vsync fires without
+/// waiting for the async dispatch to run.
 func nativeScheduleFrame() {
-    DispatchQueue.main.async {
+    if Thread.isMainThread {
         driftScheduleFrameCallback?()
+    } else {
+        DispatchQueue.main.async {
+            driftScheduleFrameCallback?()
+        }
     }
 }
 
@@ -361,9 +368,10 @@ final class DriftMetalView: UIView {
             touchToPointerID.removeAll()
         }
 
-        // Render immediately rather than waiting for the next display link
-        // callback, matching the Android embedder's renderNow() pattern.
+        // Mark the engine dirty so the display link renders at the next vsync.
+        // Unlike Android (where requestRender queues async GL work), iOS renders
+        // synchronously on the main thread, so calling renderFrame() here would
+        // double-render when the display link also fires within this vsync.
         DriftRequestFrame()
-        renderFrame()
     }
 }
