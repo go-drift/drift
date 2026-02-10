@@ -58,8 +58,11 @@ func (b ModalBarrier) Build(ctx core.BuildContext) core.Widget {
 			Container: true,
 			Child:     result,
 		}
-		// Only expose OnDismiss to screen readers if barrier is dismissible
+		// Only expose dismiss actions to screen readers if barrier is dismissible.
+		// OnTap handles TalkBack double-tap (ACTION_CLICK), OnDismiss handles
+		// the escape gesture (ACTION_DISMISS).
 		if b.Dismissible {
+			sem.OnTap = b.OnDismiss
 			sem.OnDismiss = b.OnDismiss
 		}
 		return sem

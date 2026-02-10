@@ -262,17 +262,16 @@ func (r *renderSwitch) DescribeSemanticsConfiguration(config *semantics.Semantic
 	}
 	config.Properties.Flags = flags
 
-	// Set value description
+	// Value is needed because HasToggledState isn't mapped to
+	// isCheckable on Android, so TalkBack won't auto-announce state.
 	if r.state != nil && r.state.value {
 		config.Properties.Value = "On"
 	} else {
 		config.Properties.Value = "Off"
 	}
 
-	// Set hint
-	if !r.disabled {
-		config.Properties.Hint = "Double tap to toggle"
-	}
+	// No explicit Hint: TalkBack auto-generates "double tap to activate"
+	// for clickable items, so a custom hint would duplicate it.
 
 	// Set action
 	if !r.disabled && r.state != nil {

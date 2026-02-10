@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // DropdownItem represents a selectable value for a dropdown.
@@ -342,12 +344,40 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		triggerBox = Opacity{Opacity: 0.5, Child: triggerBox}
 	}
 
+	// Wrap trigger with semantics
+	triggerFlags := semantics.SemanticsHasEnabledState | semantics.SemanticsHasExpandedState
+	if enabled {
+		triggerFlags = triggerFlags.Set(semantics.SemanticsIsEnabled)
+	}
+	if s.expanded {
+		triggerFlags = triggerFlags.Set(semantics.SemanticsIsExpanded)
+	}
+	triggerValue := selectedLabel
+	if triggerValue == "" {
+		triggerValue = w.Hint
+	}
+	triggerHint := "Double tap to open"
+	if s.expanded {
+		triggerHint = "Double tap to close"
+	}
+	triggerBox = Semantics{
+		Role:             semantics.SemanticsRolePopup,
+		Flags:            triggerFlags,
+		Value:            triggerValue,
+		Hint:             triggerHint,
+		Container:        true,
+		MergeDescendants: true,
+		OnTap:            toggle,
+		Child:            triggerBox,
+	}
+
 	if !s.expanded {
 		return dropdownScope{owner: s, child: triggerBox}
 	}
 
 	menuItems := make([]core.Widget, 0, len(w.Items))
-	for _, item := range w.Items {
+	itemCount := len(w.Items)
+	for i, item := range w.Items {
 		itemEnabled := enabled && !item.Disabled
 		itemLabel := item.Label
 		itemChild := item.Child
@@ -355,35 +385,54 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 			itemChild = Text{Content: itemLabel, Style: textStyle}
 		}
 		itemBackground := graphics.ColorTransparent
-		if reflect.DeepEqual(item.Value, w.Value) {
+		isSelected := reflect.DeepEqual(item.Value, w.Value)
+		if isSelected {
 			itemBackground = selectedItemColor
 		}
-		menuItems = append(menuItems, GestureDetector{
-			OnTap: func(value T, enabled bool) func() {
-				return func() {
-					if !enabled {
-						return
-					}
-					s.SetState(func() {
-						s.setExpanded(false)
-					})
-					s.requestParentLayout()
-					if w.OnChanged != nil {
-						w.OnChanged(value)
-					}
+		onItemTap := func(value T, enabled bool) func() {
+			return func() {
+				if !enabled {
+					return
 				}
-			}(item.Value, itemEnabled),
-			Child: Container{
-				Color: itemBackground,
-				Child: SizedBox{
-					Width:  width,
-					Height: itemHeight,
-					Child: RowOf(
-						MainAxisAlignmentStart,
-						CrossAxisAlignmentCenter,
-						MainAxisSizeMax,
-						Padding{Padding: contentPadding, Child: itemChild},
-					),
+				s.SetState(func() {
+					s.setExpanded(false)
+				})
+				s.requestParentLayout()
+				if w.OnChanged != nil {
+					w.OnChanged(value)
+				}
+			}
+		}(item.Value, itemEnabled)
+
+		itemFlags := semantics.SemanticsHasSelectedState | semantics.SemanticsHasEnabledState
+		if isSelected {
+			itemFlags = itemFlags.Set(semantics.SemanticsIsSelected)
+		}
+		if itemEnabled {
+			itemFlags = itemFlags.Set(semantics.SemanticsIsEnabled)
+		}
+
+		menuItems = append(menuItems, Semantics{
+			Role:             semantics.SemanticsRoleMenuItem,
+			Flags:            itemFlags,
+			Hint:             fmt.Sprintf("Item %d of %d", i+1, itemCount),
+			Container:        true,
+			MergeDescendants: true,
+			OnTap:            onItemTap,
+			Child: GestureDetector{
+				OnTap: onItemTap,
+				Child: Container{
+					Color: itemBackground,
+					Child: SizedBox{
+						Width:  width,
+						Height: itemHeight,
+						Child: RowOf(
+							MainAxisAlignmentStart,
+							CrossAxisAlignmentCenter,
+							MainAxisSizeMax,
+							Padding{Padding: contentPadding, Child: itemChild},
+						),
+					},
 				},
 			},
 		})
@@ -515,6 +564,12 @@ func (r *renderDropdownScope) SetChild(child layout.RenderObject) {
 	setParentOnChild(r.child, nil)
 	r.child = setChildFromRenderObject(child)
 	setParentOnChild(r.child, r)
+}
+
+func (r *renderDropdownScope) VisitChildren(visitor func(layout.RenderObject)) {
+	if r.child != nil {
+		visitor(r.child)
+	}
 }
 
 func (r *renderDropdownScope) PerformLayout() {

@@ -54,6 +54,9 @@ final class AccessibilityBridge {
     static let flagIsHidden: UInt64 = 1 << 18
     static let flagIsHeader: UInt64 = 1 << 19
     static let flagIsImage: UInt64 = 1 << 20
+    static let flagNamesRoute: UInt64 = 1 << 21
+    static let flagScopesRoute: UInt64 = 1 << 22
+    static let flagIsInMutuallyExclusiveGroup: UInt64 = 1 << 23
     static let flagHasExpandedState: UInt64 = 1 << 24
     static let flagIsExpanded: UInt64 = 1 << 25
 
@@ -138,13 +141,12 @@ final class AccessibilityBridge {
             }
         }
 
-        // Update rootId based on the synthetic root (node 0) or first available node
-        // This mirrors Android's logic for consistent behavior
-        if let syntheticRoot = nodes[0], !syntheticRoot.childIds.isEmpty {
-            rootId = syntheticRoot.childIds[0]
+        // Use the synthetic root (node 0) as the accessibility root so all its
+        // children (e.g., barrier + sheet in overlays) are reachable by VoiceOver.
+        if nodes[0] != nil {
+            rootId = 0
         } else {
-            // Fallback: find first node that's not the synthetic root
-            rootId = nodes.keys.filter { $0 != 0 }.min() ?? -1
+            rootId = nodes.keys.min() ?? -1
         }
 
         // Clear cached elements if tree is empty to avoid VoiceOver focusing stale elements

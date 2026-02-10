@@ -78,6 +78,9 @@ class AccessibilityBridge(private val hostView: View) : AccessibilityNodeProvide
         const val FLAG_IS_HIDDEN = 1L shl 18
         const val FLAG_IS_HEADER = 1L shl 19
         const val FLAG_IS_IMAGE = 1L shl 20
+        const val FLAG_NAMES_ROUTE = 1L shl 21
+        const val FLAG_SCOPES_ROUTE = 1L shl 22
+        const val FLAG_IS_IN_MUTUALLY_EXCLUSIVE_GROUP = 1L shl 23
         const val FLAG_HAS_EXPANDED_STATE = 1L shl 24
         const val FLAG_IS_EXPANDED = 1L shl 25
 
@@ -109,13 +112,12 @@ class AccessibilityBridge(private val hostView: View) : AccessibilityNodeProvide
             nodes[node.id] = node
         }
 
-        // Update rootId based on the synthetic root (node 0) or first available node
-        val syntheticRoot = nodes[0L]
-        val newRootId = if (syntheticRoot != null && syntheticRoot.childIds.isNotEmpty()) {
-            syntheticRoot.childIds[0]
+        // Use the synthetic root (node 0) as the accessibility root so all its
+        // children (e.g., barrier + sheet in overlays) are reachable by TalkBack.
+        val newRootId = if (nodes.containsKey(0L)) {
+            0L
         } else {
-            // Fallback: find first node that's not the synthetic root
-            nodes.keys.filter { it != 0L }.minOrNull() ?: -1L
+            nodes.keys.minOrNull() ?: -1L
         }
 
         if (newRootId != rootId) {

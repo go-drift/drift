@@ -127,11 +127,10 @@ func (r *BottomSheetRoute) insertEntries() {
 		}
 
 		return overlay.ModalBarrier{
-			Color:       barrierColor,
-			Dismissible: r.BarrierDismissible,
-			// Barrier tap triggers animated dismiss via controller
-			OnDismiss:     func() { r.controller.Close(nil) },
+			Color:         barrierColor,
+			Dismissible:   r.BarrierDismissible,
 			SemanticLabel: "Dismiss bottom sheet",
+			OnDismiss:     func() { r.controller.Close(nil) },
 		}
 	})
 	r.barrierEntry.Opaque = false // Don't block hit testing everywhere

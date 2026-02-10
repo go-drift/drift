@@ -340,17 +340,9 @@ func (r *renderCheckbox) DescribeSemanticsConfiguration(config *semantics.Semant
 	}
 	config.Properties.Flags = flags
 
-	// Set value description
-	if r.value {
-		config.Properties.Value = "Checked"
-	} else {
-		config.Properties.Value = "Not checked"
-	}
-
-	// Set hint
-	if r.enabled {
-		config.Properties.Hint = "Double tap to toggle"
-	}
+	// No explicit Value or Hint: TalkBack/VoiceOver derive "checked"/
+	// "not checked" from HasCheckedState and "double tap to toggle"
+	// from the clickable+checkable combination automatically.
 
 	// Set action
 	if r.enabled && r.onChanged != nil {

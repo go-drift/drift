@@ -101,6 +101,18 @@ func (r *renderOverlay) VisitChildren(visitor func(layout.RenderObject)) {
 	}
 }
 
+// VisitChildrenForSemantics provides a filtered child list for accessibility.
+// When an opaque entry exists, page content is excluded from the semantics tree
+// so screen readers only see the overlay entries (barrier + sheet).
+func (r *renderOverlay) VisitChildrenForSemantics(visitor func(layout.RenderObject)) {
+	if r.opaqueIndex < 0 && r.child != nil {
+		visitor(r.child)
+	}
+	for _, entry := range r.entries {
+		visitor(entry)
+	}
+}
+
 // PerformLayout computes the size of the overlay and positions children.
 // Child gets passed constraints directly (fills overlay).
 // Entries get loose constraints (can be smaller than overlay).

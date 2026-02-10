@@ -7,6 +7,7 @@ import (
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // Radio renders a single radio button that is part of a mutually exclusive group.
@@ -261,4 +262,34 @@ func (r *renderRadio[T]) HandlePointer(event gestures.PointerEvent) {
 	} else {
 		r.tap.HandleEvent(event)
 	}
+}
+
+// DescribeSemanticsConfiguration implements SemanticsDescriber for accessibility.
+func (r *renderRadio[T]) DescribeSemanticsConfiguration(config *semantics.SemanticsConfiguration) bool {
+	config.IsSemanticBoundary = true
+	config.Properties.Role = semantics.SemanticsRoleRadio
+
+	flags := semantics.SemanticsHasCheckedState |
+		semantics.SemanticsHasEnabledState |
+		semantics.SemanticsIsInMutuallyExclusiveGroup
+	if r.selected {
+		flags = flags.Set(semantics.SemanticsIsChecked)
+	}
+	if r.enabled {
+		flags = flags.Set(semantics.SemanticsIsEnabled)
+	}
+	config.Properties.Flags = flags
+
+	// No explicit Value or Hint: TalkBack/VoiceOver derive "checked"/
+	// "not checked" from HasCheckedState and "double tap to toggle"
+	// from the clickable+checkable combination automatically.
+
+	if r.enabled && r.onChanged != nil {
+		config.Actions = semantics.NewSemanticsActions()
+		config.Actions.SetHandler(semantics.SemanticsActionTap, func(args any) {
+			r.onChanged(r.value)
+		})
+	}
+
+	return true
 }

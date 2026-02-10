@@ -11,6 +11,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // SnapPoint defines a height position where a bottom sheet can snap.
@@ -498,7 +499,7 @@ func (s *bottomSheetState) Build(ctx core.BuildContext) core.Widget {
 
 	var handleWidget core.Widget = SizedBox{}
 	if s.showHandle {
-		handleWidget = s.buildHandle()
+		handleWidget = SemanticLabel("Drag handle", s.buildHandle())
 	}
 
 	dragMode := s.resolveDragMode()
@@ -538,12 +539,24 @@ func (s *bottomSheetState) Build(ctx core.BuildContext) core.Widget {
 		}
 	}
 
+	sheetSemantics := Semantics{
+		Label:     "Bottom sheet",
+		Role:      semantics.SemanticsRolePopup,
+		Flags:     semantics.SemanticsScopesRoute,
+		Container: true,
+		Child:     sheet,
+	}
+	if s.onDismiss != nil {
+		sheetSemantics.Hint = "Dismiss with escape gesture"
+		sheetSemantics.OnDismiss = func() { s.requestDismiss(nil) }
+	}
+
 	return bottomSheetPositioner{
 		Extent:       s.currentExtent,
 		TopInset:     topInset,
 		BottomInset:  bottomInset,
 		ContentSized: s.contentSized,
-		Child:        sheet,
+		Child:        sheetSemantics,
 		OnMetrics:    s.onMetrics,
 	}
 }

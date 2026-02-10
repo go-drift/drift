@@ -38,6 +38,13 @@ type ChildVisitor interface {
 	VisitChildren(visitor func(RenderObject))
 }
 
+// SemanticsChildVisitor is implemented by render objects that need to provide
+// a different set of children for semantics traversal than for painting/layout.
+// When present, the accessibility service uses this instead of ChildVisitor.
+type SemanticsChildVisitor interface {
+	VisitChildrenForSemantics(visitor func(RenderObject))
+}
+
 // RepaintBoundaryNode is implemented by render objects that are repaint boundaries.
 type RepaintBoundaryNode interface {
 	IsRepaintBoundary() bool

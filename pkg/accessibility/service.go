@@ -230,8 +230,12 @@ func (s *Service) buildFromRender(renderObj layout.RenderObject, parent *semanti
 		childOffset.Y -= scrollOffset.Y
 	}
 
-	// Visit children
-	if visitor, ok := renderObj.(layout.ChildVisitor); ok {
+	// Visit children - prefer semantics-specific visitor over general visitor
+	if semVisitor, ok := renderObj.(layout.SemanticsChildVisitor); ok {
+		semVisitor.VisitChildrenForSemantics(func(child layout.RenderObject) {
+			s.buildFromRender(child, nodeForChildren, childOffset, deviceScale)
+		})
+	} else if visitor, ok := renderObj.(layout.ChildVisitor); ok {
 		visitor.VisitChildren(func(child layout.RenderObject) {
 			s.buildFromRender(child, nodeForChildren, childOffset, deviceScale)
 		})
@@ -264,12 +268,17 @@ func (s *Service) mergeDescendantLabels(renderObj layout.RenderObject, node *sem
 func (s *Service) collectLabels(renderObj layout.RenderObject) []string {
 	var labels []string
 
-	visitor, ok := renderObj.(layout.ChildVisitor)
-	if !ok {
+	var visitFn func(func(layout.RenderObject))
+	if semVisitor, ok := renderObj.(layout.SemanticsChildVisitor); ok {
+		visitFn = semVisitor.VisitChildrenForSemantics
+	} else if visitor, ok := renderObj.(layout.ChildVisitor); ok {
+		visitFn = visitor.VisitChildren
+	}
+	if visitFn == nil {
 		return labels
 	}
 
-	visitor.VisitChildren(func(child layout.RenderObject) {
+	visitFn(func(child layout.RenderObject) {
 		if describer, ok := child.(layout.SemanticsDescriber); ok {
 			var config semantics.SemanticsConfiguration
 			describer.DescribeSemanticsConfiguration(&config)
