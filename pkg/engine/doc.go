@@ -11,7 +11,7 @@
 //     input types used by platform embedders to deliver native pointer events.
 //     These are intentionally separate from [gestures.PointerEvent], which uses
 //     logical coordinates and includes delta tracking for gesture recognizers.
-//     Conversion between the two happens in [HandlePointer], which applies
+//     Conversion between the two happens in [HandlePointerEvent], which applies
 //     device pixel ratio scaling and computes deltas.
 //
 //   - App-facing types: [DiagnosticsConfig], [DiagnosticsPosition], and

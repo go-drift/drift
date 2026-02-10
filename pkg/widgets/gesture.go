@@ -31,8 +31,8 @@ import (
 //	    Child:       draggableItem,
 //	}
 //
-// For simple tap handling on buttons, prefer [Button] or [InkWell] which
-// provide visual feedback. GestureDetector is best for custom gestures.
+// For simple tap handling on buttons, prefer [Button] which provides
+// visual feedback. GestureDetector is best for custom gestures.
 type GestureDetector struct {
 	Child       core.Widget
 	OnTap       func()

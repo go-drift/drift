@@ -11,7 +11,7 @@
 //   - [Tween]: Interpolates between begin and end values of any type using the
 //     controller's current value. Generic tweens support float64, Color, Offset, etc.
 //
-//   - [Curves]: Easing functions that transform linear progress into natural-feeling
+//   - Curves: Easing functions that transform linear progress into natural-feeling
 //     motion. Includes standard curves like [EaseIn], [EaseOut], [EaseInOut].
 //
 //   - [SpringSimulation]: Physics-based spring animation for natural bounce effects,
