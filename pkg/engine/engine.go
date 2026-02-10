@@ -290,6 +290,7 @@ type appRunner struct {
 	// Semantics deferral state for animation optimization
 	semanticsDeferred   bool      // true if we skipped a semantics flush
 	semanticsDeferredAt time.Time // when we first started deferring
+	semanticsForceFlush bool      // true when accessibility was just enabled and needs initial build
 
 	// Error recovery state (atomic for safe access from HandlePointer without lock)
 	capturedError      atomic.Pointer[errors.BoundaryError]
@@ -387,8 +388,8 @@ func (a *appRunner) requestFrameLocked() {
 func (a *appRunner) flushSemanticsIfNeeded(pipeline *layout.PipelineOwner, scale float64) {
 	animationActive := animation.HasActiveTickers() || widgets.HasActiveBallistics()
 
-	// Quick exit if nothing needs updating and nothing deferred
-	if !pipeline.NeedsSemantics() && !a.semanticsDeferred {
+	// Quick exit if nothing needs updating, nothing deferred, and no forced flush
+	if !pipeline.NeedsSemantics() && !a.semanticsDeferred && !a.semanticsForceFlush {
 		return
 	}
 
@@ -406,6 +407,7 @@ func (a *appRunner) flushSemanticsIfNeeded(pipeline *layout.PipelineOwner, scale
 		flushSemanticsWithScale(a.rootRender, scale, dirtySemantics)
 		a.semanticsDeferred = false
 		a.semanticsDeferredAt = time.Time{}
+		a.semanticsForceFlush = false
 	} else if !a.semanticsDeferred {
 		// Start deferring
 		a.semanticsDeferred = true

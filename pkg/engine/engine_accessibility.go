@@ -5,6 +5,7 @@ package engine
 import (
 	"github.com/go-drift/drift/pkg/accessibility"
 	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/semantics"
 )
 
 // accessibilityService is the engine's accessibility service instance.
@@ -15,6 +16,19 @@ var accessibilityService = accessibility.NewService()
 // Called once when the first frame is rendered.
 func initializeAccessibility() {
 	accessibilityService.Initialize()
+
+	// When accessibility is enabled after the initial frame, request a frame
+	// so the semantics tree gets built. Without this, on-demand scheduling
+	// keeps the display link paused and flushSemanticsIfNeeded never runs.
+	binding := semantics.GetSemanticsBinding()
+	binding.SetOnEnabledChanged(func(enabled bool) {
+		if enabled {
+			Dispatch(func() {
+				app.semanticsForceFlush = true
+			})
+			RequestFrame()
+		}
+	})
 }
 
 // flushSemanticsWithScale rebuilds and sends the semantics tree.

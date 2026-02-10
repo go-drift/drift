@@ -187,6 +187,9 @@ func (b *SemanticsBinding) SetSendFunction(fn func(SemanticsUpdate) error) {}
 func (b *SemanticsBinding) SetActionCallback(fn func(nodeID int64, action SemanticsAction, args any) bool) {
 }
 
+// SetOnEnabledChanged registers a callback invoked when accessibility is enabled or disabled.
+func (b *SemanticsBinding) SetOnEnabledChanged(fn func(bool)) {}
+
 // HandleAction handles an action request from the platform.
 func (b *SemanticsBinding) HandleAction(nodeID int64, action SemanticsAction, args any) bool {
 	return false

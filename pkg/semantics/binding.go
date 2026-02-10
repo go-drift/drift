@@ -33,11 +33,12 @@ import "sync"
 // across packages. The current approach is simpler and the global is isolated
 // to this package.
 type SemanticsBinding struct {
-	owner    *SemanticsOwner
-	enabled  bool
-	sendFn   func(SemanticsUpdate) error
-	actionFn func(nodeID int64, action SemanticsAction, args any) bool
-	mu       sync.RWMutex
+	owner            *SemanticsOwner
+	enabled          bool
+	sendFn           func(SemanticsUpdate) error
+	actionFn         func(nodeID int64, action SemanticsAction, args any) bool
+	onEnabledChanged func(bool)
+	mu               sync.RWMutex
 }
 
 // binding is the global semantics binding instance.
@@ -80,12 +81,26 @@ func (b *SemanticsBinding) SetEnabled(enabled bool) {
 	wasEnabled := b.enabled
 	b.enabled = enabled
 	owner := b.owner
+	callback := b.onEnabledChanged
 	b.mu.Unlock()
+
+	if enabled != wasEnabled && callback != nil {
+		callback(enabled)
+	}
 
 	// If enabling and we have an owner, send full update
 	if enabled && !wasEnabled && owner != nil {
 		owner.SendFullUpdate()
 	}
+}
+
+// SetOnEnabledChanged registers a callback invoked when accessibility is
+// enabled or disabled. The engine uses this to request a frame so the
+// semantics tree gets built under on-demand scheduling.
+func (b *SemanticsBinding) SetOnEnabledChanged(fn func(bool)) {
+	b.mu.Lock()
+	b.onEnabledChanged = fn
+	b.mu.Unlock()
 }
 
 // IsEnabled reports whether accessibility is enabled.
