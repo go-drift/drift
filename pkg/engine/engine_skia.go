@@ -116,17 +116,10 @@ func RenderSkiaGL(width, height int) error {
 	defer surface.Destroy()
 
 	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
-	// GL default framebuffer origin differs from our top-left coordinate system.
-	// Flip both axes to correct the 180° rotation observed on emulators.
-	canvas.Translate(0, float64(height))
-	canvas.Scale(1, -1)
 	if err := app.Paint(canvas, graphics.Size{Width: float64(width), Height: float64(height)}); err != nil {
 		return skiaState.setError(err)
 	}
 	surface.Flush()
-	// Wait for native to confirm geometry applied (no-op if no platform views).
-	// GPU work is already submitted above and runs in parallel with this wait.
-	platform.GetPlatformViewRegistry().WaitGeometryApplied(platformGeometryTimeout)
 	skiaState.clearError()
 	return nil
 }

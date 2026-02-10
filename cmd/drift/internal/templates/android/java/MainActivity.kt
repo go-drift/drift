@@ -8,17 +8,17 @@
  * Architecture:
  *
  *     Android System
- *           │
- *           ▼ Activity lifecycle
+ *           |
+ *           v Activity lifecycle
  *     MainActivity
- *           │
- *           ▼ setContentView()
- *     DriftSurfaceView (GLSurfaceView)
- *           │
- *           ▼ OpenGL rendering
+ *           |
+ *           v setContentView()
+ *     DriftSurfaceView (SurfaceView + SurfaceControl)
+ *           |
+ *           v render thread
  *     DriftRenderer
- *           │
- *           ▼ JNI calls
+ *           |
+ *           v JNI calls
  *     Go Engine
  *
  * Lifecycle Management:
@@ -129,9 +129,9 @@ class MainActivity : AppCompatActivity() {
         NotificationHandler.handleNotificationOpen(intent)
         DeepLinkHandler.handleIntent(intent, "open")
         if (::surfaceView.isInitialized) {
-            surfaceView.onResume()
+            surfaceView.resumeRendering()
             surfaceView.resumeScheduling()
-            // renderNow() adds an immediate GL render on top of the Choreographer
+            // renderNow() adds an immediate render on top of the Choreographer
             // callback from resumeScheduling(), giving lower latency for deep links.
             surfaceView.renderNow()
         }
@@ -152,34 +152,29 @@ class MainActivity : AppCompatActivity() {
     /**
      * Called when the activity becomes visible and interactive.
      *
-     * Resumes the OpenGL rendering thread. This is important because:
-     *   - onPause() stops the GL thread to save battery
-     *   - The GL thread needs to be explicitly resumed when returning
-     *
-     * GLSurfaceView manages its own thread, but we must call onResume()
-     * to restart it after it was paused.
+     * Resumes the render thread and re-enables Choreographer callbacks.
      */
     override fun onResume() {
         super.onResume()
-        surfaceView.onResume()         // GLSurfaceView: resume GL thread
-        surfaceView.resumeScheduling() // Drift: enable Choreographer callbacks
+        surfaceView.resumeRendering()  // Resume render thread
+        surfaceView.resumeScheduling() // Enable Choreographer callbacks
     }
 
     /**
      * Called when the activity is no longer in the foreground.
      *
-     * Pauses the OpenGL rendering thread to conserve battery and CPU.
+     * Pauses the render thread to conserve battery and CPU.
      * This is called when:
      *   - The user presses Home or switches to another app
      *   - A dialog or other activity appears on top
      *   - The screen turns off
      *
-     * The GL context is preserved, so rendering will resume seamlessly
+     * The EGL context is preserved, so rendering will resume seamlessly
      * when onResume() is called.
      */
     override fun onPause() {
         super.onPause()
-        surfaceView.pauseScheduling() // Drift: disable Choreographer callbacks
-        surfaceView.onPause()         // GLSurfaceView: pause GL thread
+        surfaceView.pauseScheduling() // Disable Choreographer callbacks
+        surfaceView.pauseRendering()  // Pause render thread
     }
 }
