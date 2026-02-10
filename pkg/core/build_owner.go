@@ -12,6 +12,12 @@ type BuildOwner struct {
 	dirty    []Element
 	pipeline *layout.PipelineOwner
 	mu       sync.Mutex
+
+	// OnNeedsFrame is called when a new element is scheduled for rebuild,
+	// signalling the platform that a frame should be rendered. This is
+	// necessary for on-demand frame scheduling where the display link is
+	// paused until explicitly requested.
+	OnNeedsFrame func()
 }
 
 // NewBuildOwner creates a new BuildOwner.
@@ -35,6 +41,10 @@ func (b *BuildOwner) ScheduleBuild(element Element) {
 		return
 	}
 	b.dirty = append(b.dirty, element)
+
+	if b.OnNeedsFrame != nil {
+		b.OnNeedsFrame()
+	}
 }
 
 // NeedsWork returns true if there are dirty elements or pending layout/paint.

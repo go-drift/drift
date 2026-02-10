@@ -329,6 +329,8 @@ func init() {
 	platform.RegisterDispatch(Dispatch)
 	// Register RestartApp for error widget
 	widgets.RegisterRestartAppFn(RestartApp)
+	// Wire up frame scheduling so SetState triggers a render under on-demand scheduling
+	app.buildOwner.OnNeedsFrame = RequestFrame
 }
 
 func newAppRunner() *appRunner {
