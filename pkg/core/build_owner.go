@@ -34,15 +34,17 @@ func (b *BuildOwner) Pipeline() *layout.PipelineOwner {
 
 // ScheduleBuild marks an element as needing rebuild.
 func (b *BuildOwner) ScheduleBuild(element Element) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	added := func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if slices.Contains(b.dirty, element) {
+			return false
+		}
+		b.dirty = append(b.dirty, element)
+		return true
+	}()
 
-	if slices.Contains(b.dirty, element) {
-		return
-	}
-	b.dirty = append(b.dirty, element)
-
-	if b.OnNeedsFrame != nil {
+	if added && b.OnNeedsFrame != nil {
 		b.OnNeedsFrame()
 	}
 }
