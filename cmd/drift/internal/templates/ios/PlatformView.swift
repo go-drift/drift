@@ -147,6 +147,10 @@ class TouchInterceptorView: UIView {
             let pointerID = TouchPointerIDManager.shared.getID(for: touch)
             DriftPointerEvent(pointerID, phase, Double(point.x * scale), Double(point.y * scale))
         }
+        // Render immediately so the engine processes the touch and updates
+        // the UI (e.g. dismissing an overlay) without waiting for a scheduled
+        // display link tick. Matches DriftMetalView.handleTouch's pattern.
+        DriftRequestFrame()
     }
 
     /// Forward a specific local point to the engine (used by ScrollForwardingRecognizer).
@@ -156,6 +160,7 @@ class TouchInterceptorView: UIView {
         let point = convert(localPoint, to: hostView)
         let pointerID = TouchPointerIDManager.shared.getID(for: touch)
         DriftPointerEvent(pointerID, phase, Double(point.x * scale), Double(point.y * scale))
+        DriftRequestFrame()
     }
 
     fileprivate func cleanupPointerID(for touch: UITouch) {
