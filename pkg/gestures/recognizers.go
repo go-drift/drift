@@ -346,8 +346,22 @@ func (d *axisDragRecognizer) handleMove(event PointerEvent) {
 	delta := graphics.Offset{X: event.Position.X - d.last.X, Y: event.Position.Y - d.last.Y}
 	primaryDelta := d.primaryOffset(delta)
 	if dt > 0 {
-		inst := primaryDelta / dt
-		d.velocity = d.velocity*0.8 + inst*0.2
+		// Ignore extremely small dt samples and clamp instantaneous velocity spikes.
+		// This makes fling handoff stable when event cadence is irregular.
+		const minVelocityDt = 1.0 / 240.0
+		const maxInstantVelocity = 12000.0
+		if dt >= minVelocityDt {
+			inst := primaryDelta / dt
+			if inst > maxInstantVelocity {
+				inst = maxInstantVelocity
+			} else if inst < -maxInstantVelocity {
+				inst = -maxInstantVelocity
+			}
+			// Time-based EMA keeps smoothing consistent across frame rates.
+			const smoothingTau = 0.06
+			alpha := dt / (smoothingTau + dt)
+			d.velocity = d.velocity*(1-alpha) + inst*alpha
+		}
 	}
 
 	if d.accepted {

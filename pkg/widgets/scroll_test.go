@@ -95,7 +95,7 @@ func TestScrollView_VerticalScrollAcceptsVertical(t *testing.T) {
 	// Move vertically
 	move := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 50},
+		Position:  graphics.Offset{X: 100, Y: 100 - gestures.DefaultTouchSlop - 50},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move)
@@ -103,14 +103,14 @@ func TestScrollView_VerticalScrollAcceptsVertical(t *testing.T) {
 	// Continue moving
 	move2 := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 100},
+		Position:  graphics.Offset{X: 100, Y: 100 - gestures.DefaultTouchSlop - 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move2)
 
 	up := gestures.PointerEvent{
 		PointerID: 11,
-		Position:  graphics.Offset{X: 100, Y: 100 + gestures.DefaultTouchSlop + 100},
+		Position:  graphics.Offset{X: 100, Y: 100 - gestures.DefaultTouchSlop - 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	scroll.HandlePointer(up)
@@ -209,7 +209,7 @@ func TestScrollView_HorizontalScrollAcceptsHorizontal(t *testing.T) {
 	// Move horizontally
 	move := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 50, Y: 100},
+		Position:  graphics.Offset{X: 100 - gestures.DefaultTouchSlop - 50, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move)
@@ -217,14 +217,14 @@ func TestScrollView_HorizontalScrollAcceptsHorizontal(t *testing.T) {
 	// Continue moving
 	move2 := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 100, Y: 100},
+		Position:  graphics.Offset{X: 100 - gestures.DefaultTouchSlop - 100, Y: 100},
 		Phase:     gestures.PointerPhaseMove,
 	}
 	scroll.HandlePointer(move2)
 
 	up := gestures.PointerEvent{
 		PointerID: 13,
-		Position:  graphics.Offset{X: 100 + gestures.DefaultTouchSlop + 100, Y: 100},
+		Position:  graphics.Offset{X: 100 - gestures.DefaultTouchSlop - 100, Y: 100},
 		Phase:     gestures.PointerPhaseUp,
 	}
 	scroll.HandlePointer(up)

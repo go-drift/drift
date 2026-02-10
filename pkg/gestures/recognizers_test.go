@@ -2,6 +2,7 @@ package gestures
 
 import (
 	"testing"
+	"time"
 
 	"github.com/go-drift/drift/pkg/graphics"
 )
@@ -206,6 +207,7 @@ func TestDrag_VelocityCalculation(t *testing.T) {
 
 	// Multiple rapid moves to build velocity
 	for i := 0; i < 5; i++ {
+		time.Sleep(5 * time.Millisecond)
 		recognizer.HandleEvent(PointerEvent{
 			PointerID: 1,
 			Position:  graphics.Offset{X: 100 + DefaultTouchSlop + 10 + float64(i+1)*50, Y: 100},

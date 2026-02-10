@@ -630,6 +630,7 @@ func (p *ScrollPosition) ApplyUserOffset(delta float64) {
 // StartBallistic begins inertial scrolling with the provided velocity.
 func (p *ScrollPosition) StartBallistic(velocity float64) {
 	p.StopBallistic()
+	velocity = p.normalizeBallisticVelocity(velocity)
 	// Always animate back when overscrolled (iOS-style spring)
 	if isOverscrolled(p) {
 		p.ballistic = newBallisticState(p, velocity)
@@ -643,6 +644,16 @@ func (p *ScrollPosition) StartBallistic(velocity float64) {
 	p.ballistic = newBallisticState(p, velocity)
 	registerBallistic(p)
 	p.notify()
+}
+
+func (p *ScrollPosition) normalizeBallisticVelocity(velocity float64) float64 {
+	if math.IsNaN(velocity) || math.IsInf(velocity, 0) {
+		return 0
+	}
+	velocity *= 0.9
+	viewport := viewportExtentForPosition(p)
+	maxAbs := clamp(viewport*5.4, 1080, 4500)
+	return clamp(velocity, -maxAbs, maxAbs)
 }
 
 // StopBallistic halts any ongoing inertial scroll.
@@ -693,7 +704,20 @@ type BouncingScrollPhysics struct{}
 // ApplyPhysicsToUserOffset reduces delta when overscrolling.
 func (BouncingScrollPhysics) ApplyPhysicsToUserOffset(position *ScrollPosition, offset float64) float64 {
 	if (position.offset <= position.min && offset < 0) || (position.offset >= position.max && offset > 0) {
-		return offset * 0.5
+		overscroll := 0.0
+		if position.offset < position.min {
+			overscroll = position.min - position.offset
+		} else if position.offset > position.max {
+			overscroll = position.offset - position.max
+		}
+		viewport := viewportExtentForPosition(position)
+		fraction := overscroll / viewport
+		// Progressive resistance near edges to better match iOS rubber-band feel.
+		resistance := 1.0 / (1.0 + 2.4*fraction)
+		if resistance < 0.12 {
+			resistance = 0.12
+		}
+		return offset * resistance
 	}
 	return offset
 }
@@ -717,8 +741,15 @@ func (p *ScrollPosition) clampOffset(value float64, allowOverscroll bool) float6
 	if !allowOverscroll {
 		return clamp(value, p.min, p.max)
 	}
-	limit := 120.0
+	limit := clamp(viewportExtentForPosition(p)*0.35, 80, 220)
 	return clamp(value, p.min-limit, p.max+limit)
+}
+
+func viewportExtentForPosition(p *ScrollPosition) float64 {
+	if p != nil && p.controller != nil && p.controller.viewportExtent > 0 {
+		return p.controller.viewportExtent
+	}
+	return 600
 }
 
 func isBouncing(physics ScrollPhysics) bool {
@@ -818,7 +849,7 @@ func (b *ballisticState) advance(dt float64) bool {
 	}
 
 	// Normal deceleration when not overscrolled
-	const decel = 2400.0
+	decel := 2200.0 + 0.385*math.Abs(velocity)
 	if velocity > 0 {
 		velocity -= decel * dt
 		if velocity < 0 {
