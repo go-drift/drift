@@ -242,13 +242,9 @@ final class DriftMetalView: UIView {
         renderFrame()
     }
 
-    /// Enables synchronous drawable presentation for the duration of a
-    /// rotation animation. When true, each presented frame is synchronized
-    /// with the Core Animation transaction so content matches the animated
-    /// bounds and does not skew.
-    func setPresentsWithTransaction(_ enabled: Bool) {
-        metalLayer.presentsWithTransaction = enabled
-    }
+    /// Set by the view controller during rotation transitions to force
+    /// synchronous presentation regardless of platform view state.
+    var syncPresentationForRotation = false
 
     /// Renders a single frame to the Metal layer.
     ///
@@ -264,12 +260,17 @@ final class DriftMetalView: UIView {
         guard DriftNeedsFrame() != 0 else { return false }
 
         // Synchronize Metal presentation with Core Animation when platform
-        // views are active. Without this, the Metal drawable and UIKit view
-        // position updates present on independent schedules, causing native
-        // views to visibly drift from GPU-rendered content during scrolling.
-        // The offset grows with scroll velocity (same time gap, larger pixel
-        // displacement). With synchronization, both present atomically.
-        let syncPresentation = PlatformViewHandler.hasPlatformViews
+        // views are active or during rotation. Without this, the Metal
+        // drawable and UIKit view position updates present on independent
+        // schedules, causing native views to visibly drift from GPU-rendered
+        // content during scrolling. During rotation, synchronous presentation
+        // prevents Core Animation from distorting a stale snapshot.
+        //
+        // This is set every frame because the condition can change at any
+        // time (platform views appearing/disappearing, rotation starting/
+        // ending). The cost of the property write is negligible compared to
+        // the drawable acquisition that follows.
+        let syncPresentation = PlatformViewHandler.hasPlatformViews || syncPresentationForRotation
         metalLayer.presentsWithTransaction = syncPresentation
 
         // Get the next available drawable from the layer.

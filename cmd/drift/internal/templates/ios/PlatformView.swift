@@ -593,8 +593,12 @@ enum PlatformViewHandler {
         clipRight: CGFloat?, clipBottom: CGFloat?
     ) {
         // Suppress implicit animations on frame/isHidden/mask changes.
-        // Uses the implicit transaction to avoid deadlocking with
-        // presentsWithTransaction on the Metal layer.
+        // Without this, Core Animation's default 0.25s animations on
+        // these properties deadlock with presentsWithTransaction on the
+        // Metal layer. This modifies the implicit CATransaction (no
+        // explicit begin/commit needed) which is valid because this
+        // method always runs on the main thread within a run loop
+        // iteration that will commit the transaction automatically.
         CATransaction.setDisableActions(true)
 
         // No clip provided - clear any existing mask, but don't change visibility
@@ -667,8 +671,10 @@ enum PlatformViewHandler {
 
         let applyGeometries = {
             // Suppress implicit animations on frame/isHidden/mask changes.
-            // Uses the implicit transaction to avoid deadlocking with
-            // presentsWithTransaction on the Metal layer.
+            // Without this, Core Animation's default 0.25s animations
+            // deadlock with presentsWithTransaction on the Metal layer.
+            // Modifies the implicit CATransaction (no begin/commit needed)
+            // since this closure is dispatched to the main thread.
             CATransaction.setDisableActions(true)
 
             for geom in geometries {

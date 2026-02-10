@@ -132,14 +132,13 @@ final class DriftViewController: UIViewController {
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
 
-        // Enable synchronous drawable presentation so each frame is
-        // synchronized with the rotation animation. Without this, Core
+        // Force synchronous drawable presentation during rotation so each
+        // frame is synchronized with the animation. Without this, Core
         // Animation distorts a stale snapshot of the old content.
-        metalView.setPresentsWithTransaction(true)
+        metalView.syncPresentationForRotation = true
 
         coordinator.animate(alongsideTransition: nil, completion: { [weak self] _ in
-            // Restore async presentation for normal low-latency rendering.
-            self?.metalView.setPresentsWithTransaction(false)
+            self?.metalView.syncPresentationForRotation = false
         })
     }
 

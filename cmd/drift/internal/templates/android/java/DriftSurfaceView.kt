@@ -229,6 +229,11 @@ class DriftSurfaceView(context: Context) : GLSurfaceView(context) {
      */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            // Flush a frame before the accessibility hit-test so the
+            // semantics tree reflects the current layout. This may cause
+            // a benign double-render with onTouchEvent's renderNow() on
+            // the same ACTION_DOWN, but the second call is a no-op when
+            // NeedsFrame() returns false.
             renderNow()
             if (AccessibilityHandler.handleExploreByTouch(event.x, event.y)) {
                 return true
