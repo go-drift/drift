@@ -1434,9 +1434,39 @@ void drift_skia_canvas_draw_rect_shadow(
         }
         frameBuilder.addRect(insetRect, SkPathDirection::kCCW);
         sk_canvas->drawPath(frameBuilder.detach(), paint);
+    } else if (blur_style == 0) {
+        // Outer: draw with smooth Normal blur to a temp layer, then erase
+        // the box interior via DstOut blending. kOuter_SkBlurStyle creates a
+        // hard edge at the shape boundary, and AA difference clips produce
+        // visible seam artifacts; this approach avoids both.
+        SkRect origRect = SkRect::MakeLTRB(l, t, r, b);
+        float pad = sigma > 0 ? sigma * 3 : 0;
+        SkRect layerBounds = SkRect::MakeLTRB(
+            l + std::min(0.0f, dx) - spread - pad,
+            t + std::min(0.0f, dy) - spread - pad,
+            r + std::max(0.0f, dx) + spread + pad,
+            b + std::max(0.0f, dy) + spread + pad
+        );
+        sk_canvas->saveLayer(&layerBounds, nullptr);
+
+        sk_canvas->translate(dx, dy);
+        SkRect rect = SkRect::MakeLTRB(l - spread, t - spread, r + spread, b + spread);
+        if (sigma > 0) {
+            paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma));
+        }
+        sk_canvas->drawRect(rect, paint);
+
+        sk_canvas->translate(-dx, -dy);
+        SkPaint erasePaint;
+        erasePaint.setAntiAlias(true);
+        erasePaint.setBlendMode(SkBlendMode::kDstOut);
+        erasePaint.setColor(SK_ColorBLACK);
+        sk_canvas->drawRect(origRect, erasePaint);
+
+        sk_canvas->restore();
     } else {
-        // External styles (Outer=0, Normal=1, Solid=2) - clip out the original box
-        // bounds so shadow never appears inside the box area.
+        // Normal (1) / Solid (2): clip out the original box bounds so
+        // shadow never appears inside the box area.
         SkRect origRect = SkRect::MakeLTRB(l, t, r, b);
         sk_canvas->clipRect(origRect, SkClipOp::kDifference, true);
         sk_canvas->translate(dx, dy);
@@ -1445,9 +1475,8 @@ void drift_skia_canvas_draw_rect_shadow(
         if (sigma > 0) {
             SkBlurStyle skStyle;
             switch (blur_style) {
-                case 1: skStyle = kNormal_SkBlurStyle; break;
                 case 2: skStyle = kSolid_SkBlurStyle; break;
-                default: skStyle = kOuter_SkBlurStyle; break;
+                default: skStyle = kNormal_SkBlurStyle; break;
             }
             paint.setMaskFilter(SkMaskFilter::MakeBlur(skStyle, sigma));
         }
@@ -1523,9 +1552,51 @@ void drift_skia_canvas_draw_rrect_shadow(
         }
         frameBuilder.addRRect(insetRRect, SkPathDirection::kCCW);
         sk_canvas->drawPath(frameBuilder.detach(), paint);
+    } else if (blur_style == 0) {
+        // Outer: draw with smooth Normal blur to a temp layer, then erase
+        // the box interior via DstOut blending. kOuter_SkBlurStyle creates a
+        // hard edge at the shape boundary, and AA difference clips produce
+        // visible seam artifacts; this approach avoids both.
+        SkRect origRect = SkRect::MakeLTRB(l, t, r, b);
+        SkVector origRadii[4] = {{rx1, ry1}, {rx2, ry2}, {rx3, ry3}, {rx4, ry4}};
+        SkRRect origRRect;
+        origRRect.setRectRadii(origRect, origRadii);
+
+        float pad = sigma > 0 ? sigma * 3 : 0;
+        SkRect layerBounds = SkRect::MakeLTRB(
+            l + std::min(0.0f, dx) - spread - pad,
+            t + std::min(0.0f, dy) - spread - pad,
+            r + std::max(0.0f, dx) + spread + pad,
+            b + std::max(0.0f, dy) + spread + pad
+        );
+        sk_canvas->saveLayer(&layerBounds, nullptr);
+
+        sk_canvas->translate(dx, dy);
+        SkRect rect = SkRect::MakeLTRB(l - spread, t - spread, r + spread, b + spread);
+        SkVector radii[4] = {
+            {rx1 + spread, ry1 + spread},
+            {rx2 + spread, ry2 + spread},
+            {rx3 + spread, ry3 + spread},
+            {rx4 + spread, ry4 + spread}
+        };
+        SkRRect rrect;
+        rrect.setRectRadii(rect, radii);
+        if (sigma > 0) {
+            paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma));
+        }
+        sk_canvas->drawRRect(rrect, paint);
+
+        sk_canvas->translate(-dx, -dy);
+        SkPaint erasePaint;
+        erasePaint.setAntiAlias(true);
+        erasePaint.setBlendMode(SkBlendMode::kDstOut);
+        erasePaint.setColor(SK_ColorBLACK);
+        sk_canvas->drawRRect(origRRect, erasePaint);
+
+        sk_canvas->restore();
     } else {
-        // External styles (Outer=0, Normal=1, Solid=2) - clip out the original box
-        // bounds so shadow never appears inside the box area.
+        // Normal (1) / Solid (2): clip out the original box bounds so
+        // shadow never appears inside the box area.
         SkRect origRect = SkRect::MakeLTRB(l, t, r, b);
         SkVector origRadii[4] = {{rx1, ry1}, {rx2, ry2}, {rx3, ry3}, {rx4, ry4}};
         SkRRect origRRect;
@@ -1546,9 +1617,8 @@ void drift_skia_canvas_draw_rrect_shadow(
         if (sigma > 0) {
             SkBlurStyle skStyle;
             switch (blur_style) {
-                case 1: skStyle = kNormal_SkBlurStyle; break;
                 case 2: skStyle = kSolid_SkBlurStyle; break;
-                default: skStyle = kOuter_SkBlurStyle; break;
+                default: skStyle = kNormal_SkBlurStyle; break;
             }
             paint.setMaskFilter(SkMaskFilter::MakeBlur(skStyle, sigma));
         }
