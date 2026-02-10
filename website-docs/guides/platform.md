@@ -557,6 +557,45 @@ result, err := platform.Share.ShareURLWithText("https://example.com", "Check out
 result, err := platform.Share.ShareFile("/path/to/file.pdf", "application/pdf")
 ```
 
+## URL Launcher
+
+Open URLs in the system browser or check whether the device can handle a given URL scheme:
+
+```go
+import "github.com/go-drift/drift/pkg/platform"
+
+// Open a URL in the system browser
+err := platform.URLLauncher.OpenURL("https://example.com")
+
+// Check if the system can open a URL
+canOpen, err := platform.URLLauncher.CanOpenURL("https://example.com")
+
+// Open other URL schemes
+platform.URLLauncher.OpenURL("mailto:hello@example.com")
+platform.URLLauncher.OpenURL("tel:+1234567890")
+```
+
+### Example: External Link Button
+
+```go
+theme.ButtonOf(ctx, "Visit Website", func() {
+    if err := platform.URLLauncher.OpenURL("https://example.com"); err != nil {
+        showToast("Could not open link")
+    }
+})
+```
+
+### Supported Schemes
+
+Both platform templates include `http`, `https`, `mailto`, `tel`, and `sms` by default. To query or open custom URL schemes, update the platform manifests:
+
+- **iOS**: Add schemes to `LSApplicationQueriesSchemes` in Info.plist
+- **Android**: Add schemes to the `<queries>` block in AndroidManifest.xml
+
+:::note
+`CanOpenURL` only reports schemes declared in the app's manifest. URLs with undeclared schemes return `false` even if another app on the device can handle them.
+:::
+
 ## File Storage
 
 Access files and directories:
