@@ -98,6 +98,12 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        // Push initial insets eagerly so the first Go layout has correct safe area
+        // values. The listener above only fires when the system dispatches insets,
+        // which may happen after the first frame. Posting defers the call until
+        // the view is attached and getRootWindowInsets() returns non-null.
+        container.post { SafeAreaHandler.sendInsetsUpdate() }
+
         // Handle back button presses via the Go navigation system
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {

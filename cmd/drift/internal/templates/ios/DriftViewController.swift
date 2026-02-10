@@ -86,6 +86,20 @@ final class DriftViewController: UIViewController {
         startDisplayLink()
     }
 
+    /// Tracks whether the initial safe area insets have been sent to the Go side.
+    private var didSendInitialInsets = false
+
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        // Push initial insets before the first layout. At this point the view is
+        // in the window hierarchy and safeAreaInsets are populated, unlike
+        // viewDidLoad (too early) or viewDidAppear (too late, frames already drawn).
+        if !didSendInitialInsets {
+            didSendInitialInsets = true
+            SafeAreaHandler.sendInsetsUpdate()
+        }
+    }
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         // Restart the render loop when view becomes visible again

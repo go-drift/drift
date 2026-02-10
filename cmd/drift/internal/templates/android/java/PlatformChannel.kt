@@ -599,6 +599,9 @@ object SystemUIHandler {
         activity.runOnUiThread {
             val window = activity.window
             WindowCompat.setDecorFitsSystemWindows(window, !transparent)
+            // Force the system to re-dispatch insets immediately so the Go
+            // safe-area values update before the next frame.
+            window.decorView.requestApplyInsets()
 
             val controller = WindowInsetsControllerCompat(window, window.decorView)
             if (statusBarHidden) {
