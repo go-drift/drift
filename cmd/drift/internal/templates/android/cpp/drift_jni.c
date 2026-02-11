@@ -39,7 +39,6 @@
 
 /* AHardwareBuffer / EGL for synchronized rendering */
 #include <android/hardware_buffer.h>
-#include <android/hardware_buffer_jni.h>
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <EGL/egl.h>
@@ -1638,20 +1637,6 @@ Java_{{.JNIPackage}}_NativeBridge_acquireBuffer(
     glBindFramebuffer(GL_FRAMEBUFFER, pool->slots[pool->current].fbo);
     glViewport(0, 0, pool->width, pool->height);
     return pool->current;
-}
-
-/**
- * JNI: getHardwareBuffer(pool, index) -> HardwareBuffer jobject
- */
-JNIEXPORT jobject JNICALL
-Java_{{.JNIPackage}}_NativeBridge_getHardwareBuffer(
-    JNIEnv *env, jclass clazz, jlong poolPtr, jint index
-) {
-    (void)clazz;
-    BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool || index < 0 || index >= pool->count) return NULL;
-
-    return AHardwareBuffer_toHardwareBuffer(env, pool->slots[index].buffer);
 }
 
 /**

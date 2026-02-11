@@ -250,15 +250,6 @@ object NativeBridge {
     external fun acquireBuffer(pool: Long): Int
 
     /**
-     * Gets the HardwareBuffer for the given pool index.
-     *
-     * @param pool  Native pool pointer.
-     * @param index Buffer index from acquireBuffer().
-     * @return HardwareBuffer instance, or null on failure.
-     */
-    external fun getHardwareBuffer(pool: Long, index: Int): android.hardware.HardwareBuffer?
-
-    /**
      * Resizes a buffer pool by destroying and recreating all buffers.
      * Must be called on the render thread.
      *
