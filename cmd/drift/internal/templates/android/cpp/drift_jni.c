@@ -1655,18 +1655,18 @@ Java_{{.JNIPackage}}_NativeBridge_getHardwareBuffer(
 }
 
 /**
- * JNI: resizeBufferPool(pool, width, height)
+ * JNI: resizeBufferPool(pool, width, height) -> 0 on success, -1 on failure
  *
  * Destroys existing slots and recreates them at the new dimensions.
  */
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_{{.JNIPackage}}_NativeBridge_resizeBufferPool(
     JNIEnv *env, jclass clazz, jlong poolPtr, jint width, jint height
 ) {
     (void)env; (void)clazz;
     BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool) return;
-    if (pool->width == width && pool->height == height) return;
+    if (!pool) return -1;
+    if (pool->width == width && pool->height == height) return 0;
 
     /* Ensure all GPU work targeting old FBOs completes before destroying them. */
     glFinish();
@@ -1682,13 +1682,15 @@ Java_{{.JNIPackage}}_NativeBridge_resizeBufferPool(
     for (int i = 0; i < pool->count; i++) {
         if (init_slot(&pool->slots[i], width, height) != 0) {
             __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "resizeBufferPool: init_slot %d failed", i);
-            /* Mark pool as empty on failure */
+            /* Clean up any slots that were successfully initialized. */
+            for (int j = 0; j < i; j++) destroy_slot(&pool->slots[j]);
             pool->count = 0;
-            return;
+            return -1;
         }
     }
 
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Buffer pool resized: %dx%d", width, height);
+    return 0;
 }
 
 /**

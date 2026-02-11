@@ -265,8 +265,9 @@ object NativeBridge {
      * @param pool   Native pool pointer.
      * @param width  New buffer width in pixels.
      * @param height New buffer height in pixels.
+     * @return 0 on success, -1 on failure (pool is destroyed).
      */
-    external fun resizeBufferPool(pool: Long, width: Int, height: Int)
+    external fun resizeBufferPool(pool: Long, width: Int, height: Int): Int
 
     // GPU fence
 
