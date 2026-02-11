@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -61,7 +60,7 @@ func logAndroid(appID string) error {
 	fmt.Println("Streaming Android logs (Ctrl+C to stop)...")
 	fmt.Println()
 
-	adb := findADBForLog()
+	adb := findADB()
 
 	// Clear existing logs first
 	clearCmd := exec.Command(adb, "logcat", "-c")
@@ -183,15 +182,4 @@ func logIOS(appID string) error {
 	}
 
 	return nil
-}
-
-// findADB locates the adb executable (duplicated for simplicity).
-func findADBForLog() string {
-	if sdkRoot := os.Getenv("ANDROID_SDK_ROOT"); sdkRoot != "" {
-		return filepath.Join(sdkRoot, "platform-tools", "adb")
-	}
-	if androidHome := os.Getenv("ANDROID_HOME"); androidHome != "" {
-		return filepath.Join(androidHome, "platform-tools", "adb")
-	}
-	return "adb"
 }
