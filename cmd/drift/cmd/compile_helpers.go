@@ -119,6 +119,7 @@ type androidCompileConfig struct {
 	overlayPath string
 	jniLibsDir  string
 	noFetch     bool
+	targetABI   string // when set, compile only this ABI (e.g. "arm64-v8a")
 }
 
 // compileGoForAndroid compiles Go code to shared libraries for all Android ABIs.
@@ -155,6 +156,9 @@ func compileGoForAndroid(cfg androidCompileConfig) error {
 	}
 
 	for _, abi := range abis {
+		if cfg.targetABI != "" && abi.abi != cfg.targetABI {
+			continue
+		}
 		fmt.Printf("  Compiling for %s...\n", abi.abi)
 
 		_, skiaDir, err := findSkiaLib(cfg.projectRoot, "android", abi.skiaArch, cfg.noFetch)

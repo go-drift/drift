@@ -207,6 +207,16 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 	return ws, nil
 }
 
+// Refresh regenerates bridge files and the overlay without touching the
+// scaffold or clearing the build directory. This preserves platform build
+// caches (Gradle, DerivedData) for incremental rebuilds during watch mode.
+func (ws *Workspace) Refresh() error {
+	if err := WriteBridgeFiles(ws.BridgeDir, ws.Config); err != nil {
+		return err
+	}
+	return WriteOverlay(ws.Overlay, ws.BridgeDir, ws.Root)
+}
+
 // ManagedBuildDir returns the managed build directory for a given project root
 // and platform, e.g. ~/.drift/build/<module>/<platform>/<hash>.
 func ManagedBuildDir(root string, cfg *config.Resolved, platform string) (string, error) {

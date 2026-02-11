@@ -69,7 +69,8 @@ type xtoolBuildOptions struct {
 
 type androidBuildOptions struct {
 	buildOptions
-	release bool
+	release   bool
+	targetABI string // when set, compile only this ABI (e.g. "arm64-v8a")
 }
 
 func runBuild(args []string) error {
@@ -147,6 +148,7 @@ func buildAndroid(ws *workspace.Workspace, opts androidBuildOptions) error {
 		overlayPath: ws.Overlay,
 		jniLibsDir:  jniLibsDir,
 		noFetch:     opts.noFetch,
+		targetABI:   opts.targetABI,
 	}); err != nil {
 		return err
 	}
