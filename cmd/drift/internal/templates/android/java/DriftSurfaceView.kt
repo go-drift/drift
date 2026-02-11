@@ -217,6 +217,9 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
                 NativeBridge.closeFenceFd(fenceFd)
                 return
             }
+            // This frame is being presented immediately, so any queued geometry-synced
+            // frames up to this sequence can never be presented without rollback.
+            dropPendingPresentsUpTo(frameSeq)
             presentFrameInternal(present)
             latestPresentedSeq = frameSeq
             return
@@ -266,6 +269,12 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
             pendingPresents.remove(entry.key)
         }
 
+        // A newer frame has already been shown; never roll back to an older sequence.
+        if (chosenSeq <= latestPresentedSeq) {
+            NativeBridge.closeFenceFd(chosen.fenceFd)
+            return
+        }
+
         if (chosen.generation != renderGeneration) {
             NativeBridge.closeFenceFd(chosen.fenceFd)
             return
@@ -282,6 +291,14 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
             bufferIndex = frame.bufferIndex,
             fenceFd = frame.fenceFd,
         )
+    }
+
+    private fun dropPendingPresentsUpTo(frameSeq: Long) {
+        val staleEntries = pendingPresents.headMap(frameSeq, true).entries.toList()
+        for (entry in staleEntries) {
+            NativeBridge.closeFenceFd(entry.value.fenceFd)
+            pendingPresents.remove(entry.key)
+        }
     }
 
     private fun clearPendingPresents() {
