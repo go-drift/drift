@@ -33,6 +33,7 @@ import android.util.Log
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 
 /**
  * Main activity that hosts the Drift rendering surface.
@@ -82,6 +83,8 @@ class MainActivity : AppCompatActivity() {
         ))
 
         setContentView(container)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.decorView.requestApplyInsets()
 
         PlatformChannelManager.setView(surfaceView)
         PlatformChannelManager.setOnFrameNeeded { surfaceView.scheduleFrame() }

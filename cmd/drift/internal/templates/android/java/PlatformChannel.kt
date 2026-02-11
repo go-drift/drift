@@ -26,7 +26,6 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
@@ -603,10 +602,6 @@ object SystemUIHandler {
 
         activity.runOnUiThread {
             val window = activity.window
-            WindowCompat.setDecorFitsSystemWindows(window, !transparent)
-            // Force the system to re-dispatch insets immediately so the Go
-            // safe-area values update before the next frame.
-            window.decorView.requestApplyInsets()
 
             val controller = WindowInsetsControllerCompat(window, window.decorView)
             if (statusBarHidden) {
