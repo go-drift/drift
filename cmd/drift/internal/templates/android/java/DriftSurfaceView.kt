@@ -79,7 +79,8 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
         val scHandle = NativeBridge.createSurfaceControl(holder.surface)
         surfaceControlHandle = scHandle
         if (scHandle == 0L) {
-            Log.w("DriftSurfaceView", "SurfaceControl unavailable; using direct window-surface fallback")
+            Log.e("DriftSurfaceView", "Failed to create SurfaceControl")
+            return
         }
 
         clearPendingPresents()
@@ -88,7 +89,6 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
 
         val r = DriftRenderer(
             surfaceView = this,
-            renderSurface = holder.surface,
             surfaceControlHandle = scHandle,
             renderGeneration = generation,
         )
