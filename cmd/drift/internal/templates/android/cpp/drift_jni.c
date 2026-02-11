@@ -214,7 +214,6 @@ typedef int (*DriftBackButtonFn)(void);
 
 typedef void (*DriftRequestFrameFn)(void);
 typedef int (*DriftNeedsFrameFn)(void);
-typedef void (*DriftGeometryAppliedFn)(void);
 typedef uint64_t (*DriftPlatformCurrentFrameSeqFn)(void);
 typedef int (*DriftPlatformGeometryPendingFn)(void);
 
@@ -253,7 +252,6 @@ static DriftBackButtonFn drift_back_button = NULL;
 static DriftRequestFrameFn drift_request_frame = NULL;
 static DriftNeedsFrameFn drift_needs_frame = NULL;
 static int drift_needs_frame_resolved = 0;
-static DriftGeometryAppliedFn drift_geometry_applied = NULL;
 static DriftPlatformCurrentFrameSeqFn drift_platform_current_frame_seq = NULL;
 static DriftPlatformGeometryPendingFn drift_platform_geometry_pending = NULL;
 static DriftHitTestPlatformViewFn drift_hit_test_platform_view = NULL;
@@ -1094,36 +1092,6 @@ static int resolve_drift_needs_frame(void) {
     return drift_needs_frame ? 0 : 1;
 }
 
-/**
- * Resolves the DriftGeometryApplied function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_geometry_applied(void) {
-    if (drift_geometry_applied) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_geometry_applied = (DriftGeometryAppliedFn)dlsym(drift_handle, "DriftGeometryApplied");
-    } else {
-        drift_geometry_applied = (DriftGeometryAppliedFn)dlsym(RTLD_DEFAULT, "DriftGeometryApplied");
-    }
-
-    if (!drift_geometry_applied) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftGeometryApplied not found: %s", dlerror());
-    }
-
-    return drift_geometry_applied ? 0 : 1;
-}
-
 static int resolve_drift_platform_current_frame_seq(void) {
     if (drift_platform_current_frame_seq) {
         return 0;
@@ -1172,25 +1140,6 @@ static int resolve_drift_platform_geometry_pending(void) {
     }
 
     return drift_platform_geometry_pending ? 0 : 1;
-}
-
-/**
- * JNI implementation for NativeBridge.geometryApplied().
- *
- * Called from Kotlin after platform view geometry has been applied on the main thread.
- * Signals the Go render thread to proceed with surface presentation.
- */
-JNIEXPORT void JNICALL
-Java_{{.JNIPackage}}_NativeBridge_geometryApplied(
-    JNIEnv *env,
-    jclass clazz
-) {
-    (void)env;
-    (void)clazz;
-
-    if (resolve_drift_geometry_applied() == 0) {
-        drift_geometry_applied();
-    }
 }
 
 JNIEXPORT jlong JNICALL

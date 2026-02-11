@@ -210,14 +210,6 @@ object NativeBridge {
     external fun hitTestPlatformView(viewID: Long, x: Double, y: Double): Int
 
     /**
-     * Signals the Go render thread that platform view geometry has been applied.
-     *
-     * Called from the main thread after applying geometry updates so the
-     * render thread can proceed with surface presentation (eglSwapBuffers).
-     */
-    external fun geometryApplied()
-
-    /**
      * Returns the current platform-view frame sequence for the active frame.
      */
     external fun currentFrameSeq(): Long
