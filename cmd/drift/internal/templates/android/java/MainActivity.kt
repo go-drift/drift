@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
      * @param savedInstanceState Previously saved state (unused in this app)
      */
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
 
         PlatformChannelManager.init(applicationContext)

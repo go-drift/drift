@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-drift/drift/cmd/drift/internal/icongen"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 )
 
@@ -90,70 +91,30 @@ func WriteAndroid(root string, settings Settings) error {
 		return err
 	}
 
-	// FileProvider paths
-	xmlDir := filepath.Join(resDir, "xml")
-	if err := os.MkdirAll(xmlDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create res/xml: %w", err)
+	// Write res/ subdirectory files (drawable, xml)
+	if err := templates.CopyTree("android/res", resDir, tmplData, nil); err != nil {
+		return err
 	}
 
-	if err := writeTemplateFile("android/res/xml/file_paths.xml.tmpl", filepath.Join(xmlDir, "file_paths.xml"), 0o644); err != nil {
-		return err
+	// Generate icon assets
+	iconSrc, err := icongen.LoadSource(settings.ProjectRoot, settings.Icon)
+	if err != nil {
+		return fmt.Errorf("failed to load icon: %w", err)
+	}
+	if err := iconSrc.GenerateAndroid(resDir, settings.IconBackground); err != nil {
+		return fmt.Errorf("failed to generate android icons: %w", err)
 	}
 
 	// Write Kotlin files from templates
 	kotlinPkg := strings.ReplaceAll(settings.AppID, ".", "/")
 	kotlinDir := filepath.Join(srcDir, "java", kotlinPkg)
-	if err := os.MkdirAll(kotlinDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create kotlin directory: %w", err)
-	}
-
-	javaFiles, err := templates.GetAndroidJavaFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list java templates: %w", err)
-	}
-
-	for _, file := range javaFiles {
-		content, err := templates.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to read template %s: %w", file, err)
-		}
-
-		processed, err := templates.ProcessTemplate(string(content), tmplData)
-		if err != nil {
-			return fmt.Errorf("failed to process template %s: %w", file, err)
-		}
-
-		destFile := filepath.Join(kotlinDir, templates.FileName(file))
-		if err := os.WriteFile(destFile, []byte(processed), 0o644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", destFile, err)
-		}
+	if err := templates.CopyTree("android/java", kotlinDir, tmplData, nil); err != nil {
+		return err
 	}
 
 	// Write C/C++ files from templates
-	if err := os.MkdirAll(cppDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create cpp directory: %w", err)
-	}
-
-	cppFiles, err := templates.GetAndroidCPPFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list cpp templates: %w", err)
-	}
-
-	for _, file := range cppFiles {
-		content, err := templates.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to read template %s: %w", file, err)
-		}
-
-		processed, err := templates.ProcessTemplate(string(content), tmplData)
-		if err != nil {
-			return fmt.Errorf("failed to process template %s: %w", file, err)
-		}
-
-		destFile := filepath.Join(cppDir, templates.FileName(file))
-		if err := os.WriteFile(destFile, []byte(processed), 0o644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", destFile, err)
-		}
+	if err := templates.CopyTree("android/cpp", cppDir, tmplData, nil); err != nil {
+		return err
 	}
 
 	// Create jniLibs directory structure

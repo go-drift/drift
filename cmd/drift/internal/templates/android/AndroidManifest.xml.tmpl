@@ -66,6 +66,7 @@
 
     <application
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
         android:label="{{.AppName}}"
         {{- if .AllowHTTP}}
         android:usesCleartextTraffic="true"
@@ -84,6 +85,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:theme="@style/LaunchTheme"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:screenOrientation="{{if eq .Orientation "all"}}fullSensor{{else if eq .Orientation "landscape"}}sensorLandscape{{else}}portrait{{end}}">
             <intent-filter>

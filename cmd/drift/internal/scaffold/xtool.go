@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-drift/drift/cmd/drift/internal/icongen"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 )
 
@@ -25,15 +26,7 @@ func WriteXtool(root string, settings Settings) error {
 	cskiaDir := filepath.Join(xtoolDir, "Libraries", "CSkia")
 
 	// Create directory structure
-	dirs := []string{
-		xtoolDir,
-		sourcesDir,
-		resourcesDir,
-		cdriftDir,
-		cskiaDir,
-	}
-
-	for _, dir := range dirs {
+	for _, dir := range []string{xtoolDir, sourcesDir, resourcesDir, cdriftDir, cskiaDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
@@ -48,105 +41,49 @@ func WriteXtool(root string, settings Settings) error {
 		AllowHTTP:      settings.AllowHTTP,
 	})
 
-	// Helper to write template file
-	writeTemplateFile := func(templatePath, destPath string) error {
-		content, err := templates.ReadFile(templatePath)
-		if err != nil {
-			return fmt.Errorf("failed to read template %s: %w", templatePath, err)
-		}
-
-		processed, err := templates.ProcessTemplate(string(content), tmplData)
-		if err != nil {
-			return fmt.Errorf("failed to process template %s: %w", templatePath, err)
-		}
-
-		if err := os.WriteFile(destPath, []byte(processed), 0o644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", destPath, err)
-		}
-
-		return nil
+	// Write Package.swift and xtool.yml
+	isProjectFile := func(name string) bool {
+		return name == "Package.swift.tmpl" || name == "xtool.yml.tmpl"
 	}
-
-	// Write Package.swift
-	if err := writeTemplateFile("xtool/Package.swift.tmpl", filepath.Join(xtoolDir, "Package.swift")); err != nil {
+	if err := templates.CopyTree("xtool", xtoolDir, tmplData, isProjectFile); err != nil {
 		return err
 	}
 
-	// Write xtool.yml (required by xtool for iOS app configuration)
-	if err := writeTemplateFile("xtool/xtool.yml.tmpl", filepath.Join(xtoolDir, "xtool.yml")); err != nil {
+	// Write shared Swift files from ios/ (skip AppDelegate, xtool has its own)
+	isSwiftFile := func(name string) bool {
+		return name != "AppDelegate.swift" &&
+			(strings.HasSuffix(name, ".swift") || strings.HasSuffix(name, ".swift.tmpl"))
+	}
+	if err := templates.CopyTree("ios", sourcesDir, tmplData, isSwiftFile); err != nil {
 		return err
 	}
 
-	// Write Swift files from ios templates (xtool handles app entry point)
-	iosFiles, err := templates.GetIOSFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list ios templates: %w", err)
-	}
-
-	for _, file := range iosFiles {
-		baseName := templates.FileName(file)
-
-		// Skip AppDelegate - we use the xtool-specific version
-		if baseName == "AppDelegate.swift" {
-			continue
-		}
-
-		// Handle Swift files
-		if strings.HasSuffix(baseName, ".swift") || strings.HasSuffix(baseName, ".swift.tmpl") {
-			content, err := templates.ReadFile(file)
-			if err != nil {
-				return fmt.Errorf("failed to read template %s: %w", file, err)
-			}
-
-			processed, err := templates.ProcessTemplate(string(content), tmplData)
-			if err != nil {
-				return fmt.Errorf("failed to process template %s: %w", file, err)
-			}
-
-			destName := baseName
-			if strings.HasSuffix(destName, ".tmpl") {
-				destName = strings.TrimSuffix(destName, ".tmpl")
-			}
-			destFile := filepath.Join(sourcesDir, destName)
-			if err := os.WriteFile(destFile, []byte(processed), 0o644); err != nil {
-				return fmt.Errorf("failed to write %s: %w", destFile, err)
-			}
-		}
-
-		// Handle storyboard
-		if baseName == "LaunchScreen.storyboard" {
-			content, err := templates.ReadFile(file)
-			if err != nil {
-				return fmt.Errorf("failed to read template %s: %w", file, err)
-			}
-			destFile := filepath.Join(resourcesDir, baseName)
-			if err := os.WriteFile(destFile, content, 0o644); err != nil {
-				return fmt.Errorf("failed to write %s: %w", destFile, err)
-			}
-		}
-	}
-
-	// Write Info.plist from xtool template (customized for SwiftPM)
-	if err := writeTemplateFile("xtool/Info.plist.tmpl", filepath.Join(resourcesDir, "Info.plist")); err != nil {
+	// Write LaunchScreen.storyboard to resources
+	if err := templates.CopyTree("ios", resourcesDir, tmplData, func(name string) bool {
+		return name == "LaunchScreen.storyboard"
+	}); err != nil {
 		return err
 	}
 
-	// Write xtool-specific AppDelegate.swift (without @main attribute for library target)
-	appDelegateContent, err := templates.ReadFile("xtool/AppDelegate.swift")
+	// Generate app icon (xtool uses iconPath in xtool.yml, not Assets.xcassets)
+	iconSrc, err := icongen.LoadSource(settings.ProjectRoot, settings.Icon)
 	if err != nil {
-		return fmt.Errorf("failed to read xtool AppDelegate template: %w", err)
+		return fmt.Errorf("failed to load icon: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(sourcesDir, "AppDelegate.swift"), appDelegateContent, 0o644); err != nil {
-		return fmt.Errorf("failed to write AppDelegate.swift: %w", err)
+	if err := iconSrc.GenerateIconPNG(filepath.Join(resourcesDir, "AppIcon.png")); err != nil {
+		return fmt.Errorf("failed to generate app icon: %w", err)
 	}
 
-	// Write DriftApp.swift (SwiftUI entry point that wraps UIKit)
-	driftAppContent, err := templates.ReadFile("xtool/DriftApp.swift")
-	if err != nil {
-		return fmt.Errorf("failed to read xtool DriftApp.swift template: %w", err)
+	// Write xtool-specific files to their destinations
+	if err := templates.CopyTree("xtool", resourcesDir, tmplData, func(name string) bool {
+		return name == "Info.plist.tmpl"
+	}); err != nil {
+		return err
 	}
-	if err := os.WriteFile(filepath.Join(sourcesDir, "DriftApp.swift"), driftAppContent, 0o644); err != nil {
-		return fmt.Errorf("failed to write DriftApp.swift: %w", err)
+	if err := templates.CopyTree("xtool", sourcesDir, tmplData, func(name string) bool {
+		return strings.HasSuffix(name, ".swift")
+	}); err != nil {
+		return err
 	}
 
 	// Write module maps for C libraries

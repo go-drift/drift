@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
+	"github.com/go-drift/drift/cmd/drift/internal/icongen"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
@@ -138,11 +139,11 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 	// Write platform files
 	switch platform {
 	case "ios":
-		if err := ejectIOS(platformDir, tmplData); err != nil {
+		if err := ejectIOS(platformDir, tmplData, root, cfg.Icon); err != nil {
 			return err
 		}
 	case "android":
-		if err := ejectAndroid(platformDir, tmplData); err != nil {
+		if err := ejectAndroid(platformDir, tmplData, root, cfg.Icon, cfg.IconBackground); err != nil {
 			return err
 		}
 	default:
@@ -230,77 +231,49 @@ func createBackup(dir string) (string, error) {
 	return "", fmt.Errorf("too many backups exist for %s", dir)
 }
 
-func ejectIOS(platformDir string, data *templates.TemplateData) error {
+func ejectIOS(platformDir string, data *templates.TemplateData, projectRoot, iconPath string) error {
 	runnerDir := filepath.Join(platformDir, "Runner")
-	xcodeprojDir := filepath.Join(platformDir, "Runner.xcodeproj")
 
-	if err := os.MkdirAll(runnerDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create Runner directory: %w", err)
+	// Write iOS template files (Info.plist, Swift sources, LaunchScreen.storyboard)
+	isIOSFile := func(name string) bool {
+		return strings.HasSuffix(name, ".swift") ||
+			strings.HasSuffix(name, ".swift.tmpl") ||
+			name == "LaunchScreen.storyboard" ||
+			name == "Info.plist.tmpl"
 	}
-	if err := os.MkdirAll(xcodeprojDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create xcodeproj directory: %w", err)
-	}
-
-	// Write Info.plist
-	if err := writeTemplateFile("ios/Info.plist.tmpl", filepath.Join(runnerDir, "Info.plist"), data, 0o644); err != nil {
+	if err := templates.CopyTree("ios", runnerDir, data, isIOSFile); err != nil {
 		return err
 	}
 
-	// Write Swift files
-	iosFiles, err := templates.GetIOSFiles()
+	// Generate app icon assets
+	assetDir := filepath.Join(runnerDir, "Assets.xcassets")
+	iconSrc, err := icongen.LoadSource(projectRoot, iconPath)
 	if err != nil {
-		return fmt.Errorf("failed to list ios templates: %w", err)
+		return fmt.Errorf("failed to load icon: %w", err)
 	}
-
-	for _, file := range iosFiles {
-		baseName := templates.FileName(file)
-		if strings.HasSuffix(baseName, ".swift") || strings.HasSuffix(baseName, ".swift.tmpl") {
-			destName := strings.TrimSuffix(baseName, ".tmpl")
-			if err := writeTemplateFile(file, filepath.Join(runnerDir, destName), data, 0o644); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Write LaunchScreen.storyboard
-	if err := writeTemplateFile("ios/LaunchScreen.storyboard", filepath.Join(runnerDir, "LaunchScreen.storyboard"), data, 0o644); err != nil {
-		return err
+	if err := iconSrc.GenerateIOS(assetDir); err != nil {
+		return fmt.Errorf("failed to generate iOS icons: %w", err)
 	}
 
 	// Write Xcode project files
-	xcodeFiles, err := templates.GetXcodeProjectFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list xcode templates: %w", err)
-	}
-
-	for _, file := range xcodeFiles {
-		baseName := templates.FileName(file)
-		destName := strings.TrimSuffix(baseName, ".tmpl")
-		if err := writeTemplateFile(file, filepath.Join(xcodeprojDir, destName), data, 0o644); err != nil {
-			return err
-		}
+	xcodeprojDir := filepath.Join(platformDir, "Runner.xcodeproj")
+	if err := templates.CopyTree("xcodeproj", xcodeprojDir, data, nil); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func ejectAndroid(platformDir string, data *templates.TemplateData) error {
+func ejectAndroid(platformDir string, data *templates.TemplateData, projectRoot, iconPath, iconBackground string) error {
 	appDir := filepath.Join(platformDir, "app")
 	srcDir := filepath.Join(appDir, "src", "main")
 	cppDir := filepath.Join(srcDir, "cpp")
 	resDir := filepath.Join(srcDir, "res")
 	kotlinDir := filepath.Join(srcDir, "java", data.PackagePath)
 
-	// Create directory structure
-	dirs := []string{
-		srcDir,
-		cppDir,
-		filepath.Join(resDir, "values"),
-		filepath.Join(resDir, "xml"),
-		kotlinDir,
-		filepath.Join(platformDir, "gradle", "wrapper"),
-	}
-	for _, dir := range dirs {
+	// Create directory structure (CopyTree handles subdirectories for java, cpp,
+	// and res; values/ is needed here because styles.xml is written separately)
+	for _, dir := range []string{srcDir, filepath.Join(resDir, "values"), filepath.Join(platformDir, "gradle", "wrapper")} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create %s: %w", dir, err)
 		}
@@ -332,35 +305,28 @@ func ejectAndroid(platformDir string, data *templates.TemplateData) error {
 		return err
 	}
 
-	// Write file_paths.xml
-	if err := writeTemplateFile("android/res/xml/file_paths.xml.tmpl", filepath.Join(resDir, "xml", "file_paths.xml"), data, 0o644); err != nil {
+	// Write res/ subdirectory files (drawable, xml)
+	if err := templates.CopyTree("android/res", resDir, data, nil); err != nil {
 		return err
 	}
 
-	// Write Kotlin files
-	javaFiles, err := templates.GetAndroidJavaFiles()
+	// Generate icon assets
+	iconSrc, err := icongen.LoadSource(projectRoot, iconPath)
 	if err != nil {
-		return fmt.Errorf("failed to list java templates: %w", err)
+		return fmt.Errorf("failed to load icon: %w", err)
+	}
+	if err := iconSrc.GenerateAndroid(resDir, iconBackground); err != nil {
+		return fmt.Errorf("failed to generate android icons: %w", err)
 	}
 
-	for _, file := range javaFiles {
-		baseName := templates.FileName(file)
-		if err := writeTemplateFile(file, filepath.Join(kotlinDir, baseName), data, 0o644); err != nil {
-			return err
-		}
+	// Write Kotlin files
+	if err := templates.CopyTree("android/java", kotlinDir, data, nil); err != nil {
+		return err
 	}
 
 	// Write C++ files
-	cppFiles, err := templates.GetAndroidCPPFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list cpp templates: %w", err)
-	}
-
-	for _, file := range cppFiles {
-		baseName := templates.FileName(file)
-		if err := writeTemplateFile(file, filepath.Join(cppDir, baseName), data, 0o644); err != nil {
-			return err
-		}
+	if err := templates.CopyTree("android/cpp", cppDir, data, nil); err != nil {
+		return err
 	}
 
 	// Write gradle wrapper files

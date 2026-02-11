@@ -168,12 +168,15 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 	}
 
 	settings := scaffold.Settings{
-		AppName:     cfg.AppName,
-		AppID:       cfg.AppID,
-		Bundle:      cfg.AppID,
-		Orientation: cfg.Orientation,
-		AllowHTTP:   cfg.AllowHTTP,
-		Ejected:     ejected,
+		AppName:        cfg.AppName,
+		AppID:          cfg.AppID,
+		Bundle:         cfg.AppID,
+		Orientation:    cfg.Orientation,
+		AllowHTTP:      cfg.AllowHTTP,
+		Ejected:        ejected,
+		ProjectRoot:    root,
+		Icon:           cfg.Icon,
+		IconBackground: cfg.IconBackground,
 	}
 
 	switch platform {

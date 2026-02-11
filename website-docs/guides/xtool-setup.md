@@ -56,6 +56,8 @@ For more options, see the [Skia Build](/docs/guides/skia) guide.
 
 ## Usage
 
+App icons are configured via `app.icon` and `app.icon_background` in `drift.yaml`, the same as other platforms. See the [Configuration](/docs/guides/getting-started#configuration-optional) section for details.
+
 ### Building
 
 ```bash

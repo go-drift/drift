@@ -169,6 +169,8 @@ app:
   name: Hello Drift
   id: com.example.hellodrift
   orientation: portrait
+  icon: assets/icon.png
+  icon_background: "#FFFFFF"
 
 engine:
   version: latest
@@ -180,6 +182,8 @@ engine:
 | `app.id` | Bundle/package identifier |
 | `app.orientation` | Supported orientations: `portrait` (default), `landscape`, or `all` |
 | `app.allow_http` | Allow cleartext HTTP traffic (`true`/`false`, default `false`) |
+| `app.icon` | Path to a square PNG (minimum 1024x1024). If omitted, a default icon is used. |
+| `app.icon_background` | Hex color for the Android adaptive icon background (`#RGB` or `#RRGGBB`, default `#FFFFFF`). |
 | `engine.version` | Drift engine version (`latest` or specific tag) |
 
 ## CLI Reference

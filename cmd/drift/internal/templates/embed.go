@@ -3,7 +3,9 @@ package templates
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -108,44 +110,66 @@ func ListFiles(path string) ([]string, error) {
 	return files, err
 }
 
+// CopyTree copies all files from srcDir in the embedded filesystem to destDir,
+// processing each as a Go template with the given data. Files ending in .tmpl
+// have that suffix stripped from the destination filename. Subdirectory
+// structure under srcDir is preserved in destDir.
+//
+// If filter is non-nil, only files where filter returns true for the base
+// filename are copied. Pass nil to copy all files.
+func CopyTree(srcDir, destDir string, data *TemplateData, filter func(name string) bool) error {
+	return fs.WalkDir(FS, srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		name := filepath.Base(path)
+		if filter != nil && !filter(name) {
+			return nil
+		}
+
+		content, err := FS.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", path, err)
+		}
+
+		processed, err := ProcessTemplate(string(content), data)
+		if err != nil {
+			return fmt.Errorf("failed to process %s: %w", path, err)
+		}
+
+		destName := name
+		if strings.HasSuffix(destName, ".tmpl") {
+			destName = strings.TrimSuffix(destName, ".tmpl")
+		}
+
+		// Preserve subdirectory structure relative to srcDir
+		rel, _ := filepath.Rel(srcDir, filepath.Dir(path))
+		dest := filepath.Join(destDir, rel, destName)
+
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return fmt.Errorf("failed to create directory for %s: %w", dest, err)
+		}
+
+		if err := os.WriteFile(dest, []byte(processed), 0o644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", dest, err)
+		}
+
+		return nil
+	})
+}
+
 // ReadFile reads a file from the embedded filesystem.
 func ReadFile(path string) ([]byte, error) {
 	return FS.ReadFile(path)
 }
 
-// GetAndroidJavaFiles returns the list of Java/Kotlin template files.
-func GetAndroidJavaFiles() ([]string, error) {
-	return ListFiles("android/java")
-}
-
-// GetAndroidCPPFiles returns the list of C/C++ template files.
-func GetAndroidCPPFiles() ([]string, error) {
-	return ListFiles("android/cpp")
-}
-
-// GetIOSFiles returns the list of iOS Swift template files.
-func GetIOSFiles() ([]string, error) {
-	return ListFiles("ios")
-}
-
 // GetBridgeFiles returns the list of bridge template files.
 func GetBridgeFiles() ([]string, error) {
 	return ListFiles("bridge")
-}
-
-// GetXcodeProjectFiles returns the list of Xcode project template files.
-func GetXcodeProjectFiles() ([]string, error) {
-	return ListFiles("xcodeproj")
-}
-
-// GetXtoolFiles returns the list of xtool SwiftPM template files.
-func GetXtoolFiles() ([]string, error) {
-	return ListFiles("xtool")
-}
-
-// GetInitFiles returns the list of init template files.
-func GetInitFiles() ([]string, error) {
-	return ListFiles("init")
 }
 
 // FileName returns just the filename from a path.

@@ -20,10 +20,12 @@ type Config struct {
 
 // AppConfig contains application metadata.
 type AppConfig struct {
-	Name        string `yaml:"name,omitempty"`
-	ID          string `yaml:"id,omitempty"`
-	Orientation string `yaml:"orientation,omitempty"`
-	AllowHTTP   bool   `yaml:"allow_http,omitempty"`
+	Name           string `yaml:"name,omitempty"`
+	ID             string `yaml:"id,omitempty"`
+	Orientation    string `yaml:"orientation,omitempty"`
+	AllowHTTP      bool   `yaml:"allow_http,omitempty"`
+	Icon           string `yaml:"icon,omitempty"`
+	IconBackground string `yaml:"icon_background,omitempty"`
 }
 
 // EngineConfig contains engine settings.
@@ -33,13 +35,15 @@ type EngineConfig struct {
 
 // Resolved contains resolved configuration values.
 type Resolved struct {
-	Root          string
-	ModulePath    string
-	AppName       string
-	AppID         string
-	Orientation   string
-	AllowHTTP     bool
-	EngineVersion string
+	Root           string
+	ModulePath     string
+	AppName        string
+	AppID          string
+	Orientation    string
+	AllowHTTP      bool
+	EngineVersion  string
+	Icon           string
+	IconBackground string
 }
 
 // LoadOptional reads drift.yaml if present.
@@ -101,13 +105,15 @@ func Resolve(dir string) (*Resolved, error) {
 	}
 
 	return &Resolved{
-		Root:          dir,
-		ModulePath:    modulePath,
-		AppName:       appName,
-		AppID:         appID,
-		Orientation:   orientation,
-		AllowHTTP:     cfg.App.AllowHTTP,
-		EngineVersion: engineVersion,
+		Root:           dir,
+		ModulePath:     modulePath,
+		AppName:        appName,
+		AppID:          appID,
+		Orientation:    orientation,
+		AllowHTTP:      cfg.App.AllowHTTP,
+		EngineVersion:  engineVersion,
+		Icon:           strings.TrimSpace(cfg.App.Icon),
+		IconBackground: strings.TrimSpace(cfg.App.IconBackground),
 	}, nil
 }
 

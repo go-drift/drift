@@ -18,7 +18,7 @@ let package = Package(
             name: "{{.AppName}}",
             dependencies: ["CDrift", "CSkia"],
             path: "Sources/Runner",
-            exclude: ["Resources/Info.plist"],
+            exclude: ["Resources/Info.plist", "Resources/AppIcon.png"],
             resources: [.process("Resources/LaunchScreen.storyboard")],
             linkerSettings: [
                 .linkedFramework("Metal"),

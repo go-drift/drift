@@ -37,7 +37,8 @@ myapp/
     ├── ios/                      # Real Xcode project
     │   ├── Runner/
     │   │   ├── Info.plist
-    │   │   └── AppDelegate.swift
+    │   │   ├── AppDelegate.swift
+    │   │   └── Assets.xcassets/  # App icon and launch images
     │   ├── Runner.xcodeproj/
     │   ├── bridge/               # Drift-managed, regenerated on build
     │   └── driftw                # Wrapper script for IDE builds
@@ -46,8 +47,13 @@ myapp/
         │   ├── build.gradle
         │   └── src/main/
         │       ├── AndroidManifest.xml
-        │       └── java/com/example/myapp/
-        │           └── MainActivity.kt
+        │       ├── java/com/example/myapp/
+        │       │   └── MainActivity.kt
+        │       └── res/
+        │           ├── drawable/           # Launch screen background
+        │           ├── mipmap-*/           # App icon PNGs per density
+        │           ├── mipmap-anydpi-v26/  # Adaptive icon XML
+        │           └── values/             # Styles (launch theme)
         ├── settings.gradle
         ├── bridge/               # Drift-managed, regenerated on build
         └── driftw                # Wrapper script for IDE builds
@@ -84,6 +90,10 @@ Platforms:
 
 Values from `drift.yaml` (app name, bundle ID) are substituted at eject time. After ejecting, changes to `drift.yaml` will not affect the ejected platform. Edit the native project files directly instead.
 
+:::note[App Icons]
+The `app.icon` and `app.icon_background` fields in `drift.yaml` are applied at eject time. To change icons after ejecting, replace the images directly in `Runner/Assets.xcassets/` (iOS) or `app/src/main/res/mipmap-*/` (Android).
+:::
+
 ## Building After Ejecting
 
 Both `drift build` and `drift run` continue to work after ejecting. The only difference is that they build in `./platform/<platform>/` instead of `~/.drift/build/`, and your customizations are preserved.
@@ -112,6 +122,7 @@ After ejecting, some files belong to you and some are managed by Drift. Drift ne
 | Path | Owner |
 |------|-------|
 | `Runner/` (Swift files, Info.plist) | You |
+| `Runner/Assets.xcassets/` | You |
 | `Runner.xcodeproj/` | You |
 | `bridge/` | Drift (regenerated on build) |
 | `Runner/libdrift.a` | Drift (regenerated on build) |
@@ -122,6 +133,7 @@ After ejecting, some files belong to you and some are managed by Drift. Drift ne
 | Path | Owner |
 |------|-------|
 | `app/` (Kotlin, manifests, Gradle config) | You |
+| `app/src/main/res/` (icons, drawables, styles) | You |
 | `settings.gradle`, `gradle.properties`, `gradle/` | You |
 | `bridge/` | Drift (regenerated on build) |
 | `app/src/main/jniLibs/` | Drift (overwritten on build) |

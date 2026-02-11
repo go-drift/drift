@@ -27,4 +27,3 @@ func TestIOSPlatformView_OnViewCreatedSentAfterInterceptorAttach(t *testing.T) {
 		t.Fatalf("onViewCreated appears before interceptor attachment (onViewCreated=%d, addSubview=%d)", onCreatedIdx, addSubviewIdx)
 	}
 }
-
