@@ -476,9 +476,12 @@ func (r *PlatformViewRegistry) CurrentFrameSeq() uint64 {
 	return r.frameSeq
 }
 
-// GeometryPending reports whether the latest batch is awaiting native apply.
+// GeometryPending reports whether the latest batch is awaiting native apply
+// and atomically clears the flag. This is used by the Android render thread
+// (which polls rather than blocking via WaitGeometryApplied) to capture the
+// pending state for the current frame without leaving it stuck true.
 func (r *PlatformViewRegistry) GeometryPending() bool {
-	return r.geometryPending.Load()
+	return r.geometryPending.Swap(false)
 }
 
 // resendGeometry replays the cached geometry for a view.
