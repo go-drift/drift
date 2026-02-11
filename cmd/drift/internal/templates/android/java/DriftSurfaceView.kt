@@ -137,6 +137,9 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         active = true
+        PlatformViewHandler.setOnGeometryAppliedListener { frameSeq ->
+            onGeometryApplied(frameSeq)
+        }
         scheduleFrame()
         updateDeviceScale()
     }

@@ -46,7 +46,20 @@ class DriftSurface(width: Int, height: Int) {
      * On failure, destroys the old pool and creates a fresh one.
      */
     fun resize(width: Int, height: Int) {
-        if (poolPtr == 0L || (width == currentWidth && height == currentHeight)) return
+        if (width <= 0 || height <= 0) return
+        if (width == currentWidth && height == currentHeight && poolPtr != 0L) return
+
+        if (poolPtr == 0L) {
+            // Pool was never created (zero-size start) or a previous failure
+            // left it destroyed. Create fresh.
+            poolPtr = NativeBridge.createBufferPool(width, height, BUFFER_COUNT)
+            if (poolPtr != 0L) {
+                currentWidth = width
+                currentHeight = height
+            }
+            return
+        }
+
         if (NativeBridge.resizeBufferPool(poolPtr, width, height) == 0) {
             currentWidth = width
             currentHeight = height
