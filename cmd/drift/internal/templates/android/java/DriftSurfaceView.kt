@@ -79,7 +79,8 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
         val scHandle = NativeBridge.createSurfaceControl(holder.surface)
         surfaceControlHandle = scHandle
         if (scHandle == 0L) {
-            Log.e("DriftSurfaceView", "Failed to create SurfaceControl")
+            Log.e("DriftSurfaceView", "Failed to create SurfaceControl; rendering disabled")
+            post { setBackgroundColor(android.graphics.Color.RED) }
             return
         }
 
@@ -146,6 +147,7 @@ class DriftSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.C
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         frameScheduled.set(false)
         clearPendingPresents()
+        PlatformViewHandler.setOnGeometryAppliedListener(null)
         super.onDetachedFromWindow()
     }
 

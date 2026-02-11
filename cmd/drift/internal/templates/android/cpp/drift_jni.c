@@ -1844,6 +1844,11 @@ Java_{{.JNIPackage}}_NativeBridge_platformInit(
 ) {
     (void)clazz;
 
+    /* Already initialized — JNI refs and Go handler are still valid. */
+    if (g_platform_channel_class && g_handle_method_call) {
+        return 0;
+    }
+
     /* Find the PlatformChannelManager class and method */
     jclass localClass = (*env)->FindClass(env, "{{.PackagePath}}/PlatformChannelManager");
     if (!localClass) {
