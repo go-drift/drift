@@ -18,9 +18,8 @@ class DriftSurface(width: Int, height: Int) {
     private var currentHeight = height
 
     init {
-        poolPtr = NativeBridge.createBufferPool(width, height, BUFFER_COUNT)
-        if (poolPtr == 0L) {
-            throw RuntimeException("Failed to create AHardwareBuffer pool (${width}x${height})")
+        if (width > 0 && height > 0) {
+            poolPtr = NativeBridge.createBufferPool(width, height, BUFFER_COUNT)
         }
     }
 

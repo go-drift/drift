@@ -1762,6 +1762,11 @@ Java_{{.JNIPackage}}_NativeBridge_createSurfaceControl(
 
     /* Make the child surface visible */
     ASurfaceTransaction *txn = sc_createTransaction();
+    if (!txn) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "ASurfaceTransaction_create failed");
+        sc_release(surfaceControl);
+        return (jlong)0;
+    }
     sc_setVisibility(txn, surfaceControl, 1);
     sc_apply(txn);
     sc_deleteTransaction(txn);
@@ -1805,6 +1810,10 @@ Java_{{.JNIPackage}}_NativeBridge_presentBuffer(
     }
 
     ASurfaceTransaction *txn = sc_createTransaction();
+    if (!txn) {
+        if (fenceFd >= 0) close(fenceFd);
+        return;
+    }
     sc_setBuffer(txn, surfaceControl, pool->slots[bufferIndex].buffer, fenceFd);
     sc_apply(txn);
     sc_deleteTransaction(txn);
