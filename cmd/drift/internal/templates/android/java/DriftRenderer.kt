@@ -1,15 +1,9 @@
 /**
  * DriftRenderer implements the Skia GPU rendering pipeline for Android.
  *
- * This renderer manages its own EGL context and render thread. It renders
- * Skia content into AHardwareBuffer-backed FBOs (via DriftSurface), then
- * posts the buffer to the main thread for presentation via SurfaceControl
- * transactions.
- *
- * The render thread blocks on a condition variable and wakes when:
- *   1. requestRender() is called (new frame needed)
- *   2. onSurfaceChanged() is called (size change)
- *   3. stop() is called (shutdown)
+ * Primary mode uses SurfaceControl + AHardwareBuffer for synchronized
+ * presentation with platform views. Fallback mode renders directly into the
+ * SurfaceView window surface with eglSwapBuffers.
  */
 package {{.PackageName}}
 
@@ -21,20 +15,24 @@ import android.opengl.EGLExt
 import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import java.util.concurrent.CountDownLatch
+import android.view.Surface
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class DriftRenderer(private val surfaceView: DriftSurfaceView) {
+class DriftRenderer(
+    private val surfaceView: DriftSurfaceView,
+    private val renderSurface: Surface,
+    private val surfaceControlHandle: Long,
+    private val renderGeneration: Int,
+) {
     @Volatile var width = 0
         private set
     @Volatile var height = 0
         private set
 
     private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
+    private var eglConfig: EGLConfig? = null
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var surface: DriftSurface? = null
@@ -48,9 +46,7 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
     @Volatile private var sizeChanged = false
 
     private var thread: Thread? = null
-    private var skiaReady = false
-
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private var useSurfaceControlMode = surfaceControlHandle != 0L
 
     /** Whether the Skia backend initialized successfully. */
     private var initialized = false
@@ -65,13 +61,26 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
         needsRender = true
 
         thread = Thread({
-            initEGL()
+            if (!initEGL(useSurfaceControlMode)) {
+                return@Thread
+            }
             if (!initSkia()) {
                 releaseEGL()
                 return@Thread
             }
             initialized = true
-            surface = DriftSurface(width, height)
+
+            if (useSurfaceControlMode) {
+                try {
+                    surface = DriftSurface(width, height)
+                } catch (t: Throwable) {
+                    Log.e("DriftRenderer", "AHardwareBuffer pool init failed; falling back to window surface", t)
+                    if (!switchToDirectSurfaceMode()) {
+                        releaseEGL()
+                        return@Thread
+                    }
+                }
+            }
 
             renderLoop()
 
@@ -132,10 +141,13 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
         requestRender()
     }
 
-    private fun initEGL() {
+    private fun initEGL(surfaceControlMode: Boolean): Boolean {
         eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         val version = IntArray(2)
-        EGL14.eglInitialize(eglDisplay, version, 0, version, 1)
+        if (!EGL14.eglInitialize(eglDisplay, version, 0, version, 1)) {
+            Log.e("DriftRenderer", "eglInitialize failed")
+            return false
+        }
 
         // Prefer ES 3 on devices, ES 2 on emulators
         val isEmulator = Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu")
@@ -152,32 +164,74 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
             EGL14.EGL_DEPTH_SIZE, 0,
             EGL14.EGL_STENCIL_SIZE, 0,
             EGL14.EGL_RENDERABLE_TYPE, if (glesVersion == 3) EGLExt.EGL_OPENGL_ES3_BIT_KHR else EGL14.EGL_OPENGL_ES2_BIT,
-            EGL14.EGL_NONE
+            EGL14.EGL_NONE,
         )
         val configs = arrayOfNulls<EGLConfig>(1)
         val numConfigs = IntArray(1)
         EGL14.eglChooseConfig(eglDisplay, configAttribs, 0, configs, 0, 1, numConfigs, 0)
 
-        if (numConfigs[0] == 0) {
+        if (numConfigs[0] == 0 || configs[0] == null) {
             Log.e("DriftRenderer", "No EGL config found")
-            return
+            return false
         }
+        eglConfig = configs[0]
 
         val contextAttribs = intArrayOf(
             EGL14.EGL_CONTEXT_CLIENT_VERSION, glesVersion,
-            EGL14.EGL_NONE
+            EGL14.EGL_NONE,
         )
-        eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT, contextAttribs, 0)
+        eglContext = EGL14.eglCreateContext(eglDisplay, eglConfig, EGL14.EGL_NO_CONTEXT, contextAttribs, 0)
+        if (eglContext == EGL14.EGL_NO_CONTEXT) {
+            Log.e("DriftRenderer", "eglCreateContext failed")
+            return false
+        }
 
-        // Create 1x1 pbuffer surface (needed for eglMakeCurrent; we render to FBOs)
-        val pbufferAttribs = intArrayOf(
-            EGL14.EGL_WIDTH, 1,
-            EGL14.EGL_HEIGHT, 1,
-            EGL14.EGL_NONE
-        )
-        eglSurface = EGL14.eglCreatePbufferSurface(eglDisplay, configs[0], pbufferAttribs, 0)
+        eglSurface = if (surfaceControlMode) {
+            val pbufferAttribs = intArrayOf(
+                EGL14.EGL_WIDTH, 1,
+                EGL14.EGL_HEIGHT, 1,
+                EGL14.EGL_NONE,
+            )
+            EGL14.eglCreatePbufferSurface(eglDisplay, eglConfig, pbufferAttribs, 0)
+        } else {
+            EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, renderSurface, intArrayOf(EGL14.EGL_NONE), 0)
+        }
+        if (eglSurface == EGL14.EGL_NO_SURFACE) {
+            Log.e("DriftRenderer", "eglCreateSurface failed")
+            return false
+        }
 
-        EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
+        if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
+            Log.e("DriftRenderer", "eglMakeCurrent failed")
+            return false
+        }
+        return true
+    }
+
+    private fun switchToDirectSurfaceMode(): Boolean {
+        useSurfaceControlMode = false
+        surface?.destroy()
+        surface = null
+
+        if (eglSurface != EGL14.EGL_NO_SURFACE) {
+            EGL14.eglDestroySurface(eglDisplay, eglSurface)
+            eglSurface = EGL14.EGL_NO_SURFACE
+        }
+
+        val config = eglConfig ?: return false
+        eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, config, renderSurface, intArrayOf(EGL14.EGL_NONE), 0)
+        if (eglSurface == EGL14.EGL_NO_SURFACE) {
+            Log.e("DriftRenderer", "Fallback eglCreateWindowSurface failed")
+            return false
+        }
+
+        if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) {
+            Log.e("DriftRenderer", "Fallback eglMakeCurrent failed")
+            return false
+        }
+
+        Log.w("DriftRenderer", "Running in direct window-surface fallback mode")
+        return true
     }
 
     private fun initSkia(): Boolean {
@@ -185,8 +239,7 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
             Log.e("DriftRenderer", "Failed to initialize Drift app")
             return false
         }
-        skiaReady = NativeBridge.initSkiaGL() == 0
-        if (!skiaReady) {
+        if (NativeBridge.initSkiaGL() != 0) {
             Log.e("DriftRenderer", "Failed to initialize Skia GL backend")
             return false
         }
@@ -199,7 +252,6 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
 
     private fun renderLoop() {
         while (running) {
-            // Wait for render request or shutdown
             lock.withLock {
                 while (running && !needsRender) {
                     renderRequested.await()
@@ -213,42 +265,54 @@ class DriftRenderer(private val surfaceView: DriftSurfaceView) {
 
             needsRender = false
 
-            // Handle resize: drain pending main-thread presents before destroying buffers
             if (sizeChanged) {
                 sizeChanged = false
-                val latch = CountDownLatch(1)
-                mainHandler.post { latch.countDown() }
-                latch.await()
-                surface?.resize(width, height)
-                NativeBridge.requestFrame()
+                if (useSurfaceControlMode) {
+                    surface?.resize(width, height)
+                    NativeBridge.requestFrame()
+                }
             }
 
             val w = width
             val h = height
             if (w <= 0 || h <= 0) continue
 
-            val surf = surface ?: continue
+            if (useSurfaceControlMode) {
+                val surf = surface ?: continue
+                val bufferIndex = surf.acquireBuffer()
+                if (bufferIndex < 0) continue
 
-            // Acquire buffer and render
-            val bufferIndex = surf.acquireBuffer()
-            if (bufferIndex < 0) continue
+                val result = NativeBridge.renderFrameSkia(w, h)
+                if (result != 0) {
+                    GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                }
 
-            val result = NativeBridge.renderFrameSkia(w, h)
-            if (result != 0) {
-                GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)
-                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                val fenceFd = surf.createFence()
+                val frameSeq = NativeBridge.currentFrameSeq()
+                val geometryPending = NativeBridge.geometryPending() != 0
+                val poolPtr = surf.poolPtr
+
+                surfaceView.enqueueRenderedFrame(
+                    generation = renderGeneration,
+                    frameSeq = frameSeq,
+                    requiresGeometrySync = geometryPending,
+                    poolPtr = poolPtr,
+                    surfaceControlHandle = surfaceControlHandle,
+                    bufferIndex = bufferIndex,
+                    fenceFd = fenceFd,
+                )
+            } else {
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+                GLES20.glViewport(0, 0, w, h)
+                val result = NativeBridge.renderFrameSkia(w, h)
+                if (result != 0) {
+                    GLES20.glClearColor(0.8f, 0.1f, 0.1f, 1f)
+                    GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+                }
+                EGL14.eglSwapBuffers(eglDisplay, eglSurface)
             }
 
-            // Create GPU fence and present via SurfaceControl transaction
-            val fenceFd = surf.createFence()
-            val poolPtr = surf.poolPtr
-
-            // Post frame to main thread for SurfaceControl presentation
-            mainHandler.post {
-                surfaceView.presentFrame(poolPtr, bufferIndex, fenceFd)
-            }
-
-            // Post-render check: schedule another frame if engine has more work
             if (NativeBridge.needsFrame() != 0) {
                 surfaceView.scheduleFrame()
             }

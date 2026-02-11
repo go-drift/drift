@@ -217,6 +217,16 @@ object NativeBridge {
      */
     external fun geometryApplied()
 
+    /**
+     * Returns the current platform-view frame sequence for the active frame.
+     */
+    external fun currentFrameSeq(): Long
+
+    /**
+     * Returns 1 when native platform-view geometry is still pending apply.
+     */
+    external fun geometryPending(): Int
+
     // AHardwareBuffer pool management
 
     /**
@@ -282,18 +292,16 @@ object NativeBridge {
 
     /**
      * Creates a child SurfaceControl from the given Surface via NDK.
-     * The child surface control is stored globally in native code and used
-     * for buffer presentation via presentBuffer().
      *
      * @param surface The Surface from the SurfaceView.
-     * @return true on success, false on failure.
+     * @return Native ASurfaceControl pointer (as Long), or 0 on failure.
      */
-    external fun createSurfaceControl(surface: android.view.Surface): Boolean
+    external fun createSurfaceControl(surface: android.view.Surface): Long
 
     /**
-     * Releases the global child SurfaceControl created by createSurfaceControl().
+     * Releases a SurfaceControl handle created by createSurfaceControl().
      */
-    external fun destroySurfaceControl()
+    external fun destroySurfaceControl(surfaceControl: Long)
 
     /**
      * Presents a buffer from the pool via a SurfaceControl transaction.
@@ -301,8 +309,14 @@ object NativeBridge {
      * The fence FD is consumed by this call (caller must not close it).
      *
      * @param pool        Native pool pointer from createBufferPool().
+     * @param surfaceControl Native surface control pointer from createSurfaceControl().
      * @param bufferIndex Buffer index from acquireBuffer().
      * @param fenceFd     Native fence FD from createFence(), or -1.
      */
-    external fun presentBuffer(pool: Long, bufferIndex: Int, fenceFd: Int)
+    external fun presentBuffer(pool: Long, surfaceControl: Long, bufferIndex: Int, fenceFd: Int)
+
+    /**
+     * Closes a native file descriptor.
+     */
+    external fun closeFenceFd(fd: Int)
 }

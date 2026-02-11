@@ -469,6 +469,18 @@ func (r *PlatformViewRegistry) SignalGeometryApplied() {
 	}
 }
 
+// CurrentFrameSeq returns the sequence number assigned in BeginGeometryBatch.
+func (r *PlatformViewRegistry) CurrentFrameSeq() uint64 {
+	r.batchMu.Lock()
+	defer r.batchMu.Unlock()
+	return r.frameSeq
+}
+
+// GeometryPending reports whether the latest batch is awaiting native apply.
+func (r *PlatformViewRegistry) GeometryPending() bool {
+	return r.geometryPending.Load()
+}
+
 // resendGeometry replays the cached geometry for a view.
 // Called when a native view finishes creation and needs its position.
 func (r *PlatformViewRegistry) resendGeometry(viewID int64) {

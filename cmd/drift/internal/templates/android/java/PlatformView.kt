@@ -27,6 +27,7 @@ object PlatformViewHandler {
     private var context: Context? = null
     private var hostView: ViewGroup? = null
     private var surfaceView: View? = null
+    private var onGeometryAppliedListener: ((Long) -> Unit)? = null
 
     // Frame sequence tracking for geometry batches
     private var lastAppliedSeq: Long = 0
@@ -56,6 +57,12 @@ object PlatformViewHandler {
     fun setSurfaceView(view: View) {
         this.surfaceView = view
     }
+
+    fun setOnGeometryAppliedListener(listener: ((Long) -> Unit)?) {
+        this.onGeometryAppliedListener = listener
+    }
+
+    fun lastAppliedGeometrySeq(): Long = lastAppliedSeq
 
     fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
         val argsMap = args as? Map<*, *>
@@ -403,6 +410,7 @@ object PlatformViewHandler {
                 applyClipBounds(targetView, x, y, width, height, clipLeft, clipTop, clipRight, clipBottom, density)
             }
             lastAppliedSeq = frameSeq
+            onGeometryAppliedListener?.invoke(frameSeq)
         }
 
         // If already on main thread, apply directly.

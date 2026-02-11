@@ -248,6 +248,23 @@ func DriftGeometryApplied() {
 	platform.GetPlatformViewRegistry().SignalGeometryApplied()
 }
 
+// DriftPlatformCurrentFrameSeq returns the current platform-view frame sequence.
+//
+//export DriftPlatformCurrentFrameSeq
+func DriftPlatformCurrentFrameSeq() C.ulonglong {
+	return C.ulonglong(platform.GetPlatformViewRegistry().CurrentFrameSeq())
+}
+
+// DriftPlatformGeometryPending returns 1 when geometry apply is pending.
+//
+//export DriftPlatformGeometryPending
+func DriftPlatformGeometryPending() C.int {
+	if platform.GetPlatformViewRegistry().GeometryPending() {
+		return 1
+	}
+	return 0
+}
+
 // DriftSetScheduleFrameHandler registers a native callback that Go invokes
 // when it needs the platform to schedule a new frame. The native side (e.g.,
 // Android JNI) provides a C function pointer; this bridges it into Go's

@@ -75,9 +75,6 @@ static pf_ASurfaceTransaction_setBuffer sc_setBuffer = NULL;
 static pf_ASurfaceTransaction_setVisibility sc_setVisibility = NULL;
 static pf_ASurfaceTransaction_apply sc_apply = NULL;
 
-/* Global child surface control for presenting Drift content */
-static ASurfaceControl *g_surfaceControl = NULL;
-
 static int resolve_surface_control(void) {
     if (sc_createFromWindow) return 0; /* already resolved */
 
@@ -218,6 +215,8 @@ typedef int (*DriftBackButtonFn)(void);
 typedef void (*DriftRequestFrameFn)(void);
 typedef int (*DriftNeedsFrameFn)(void);
 typedef void (*DriftGeometryAppliedFn)(void);
+typedef uint64_t (*DriftPlatformCurrentFrameSeqFn)(void);
+typedef int (*DriftPlatformGeometryPendingFn)(void);
 
 /**
  * Function pointer type for DriftSetScheduleFrameHandler.
@@ -255,6 +254,8 @@ static DriftRequestFrameFn drift_request_frame = NULL;
 static DriftNeedsFrameFn drift_needs_frame = NULL;
 static int drift_needs_frame_resolved = 0;
 static DriftGeometryAppliedFn drift_geometry_applied = NULL;
+static DriftPlatformCurrentFrameSeqFn drift_platform_current_frame_seq = NULL;
+static DriftPlatformGeometryPendingFn drift_platform_geometry_pending = NULL;
 static DriftHitTestPlatformViewFn drift_hit_test_platform_view = NULL;
 static int drift_hit_test_platform_view_resolved = 0;
 static DriftSetScheduleFrameHandlerFn drift_set_schedule_frame_handler = NULL;
@@ -1123,6 +1124,56 @@ static int resolve_drift_geometry_applied(void) {
     return drift_geometry_applied ? 0 : 1;
 }
 
+static int resolve_drift_platform_current_frame_seq(void) {
+    if (drift_platform_current_frame_seq) {
+        return 0;
+    }
+
+    if (!drift_handle) {
+        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
+        if (!drift_handle) {
+            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
+        }
+    }
+
+    if (drift_handle) {
+        drift_platform_current_frame_seq = (DriftPlatformCurrentFrameSeqFn)dlsym(drift_handle, "DriftPlatformCurrentFrameSeq");
+    } else {
+        drift_platform_current_frame_seq = (DriftPlatformCurrentFrameSeqFn)dlsym(RTLD_DEFAULT, "DriftPlatformCurrentFrameSeq");
+    }
+
+    if (!drift_platform_current_frame_seq) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPlatformCurrentFrameSeq not found: %s", dlerror());
+    }
+
+    return drift_platform_current_frame_seq ? 0 : 1;
+}
+
+static int resolve_drift_platform_geometry_pending(void) {
+    if (drift_platform_geometry_pending) {
+        return 0;
+    }
+
+    if (!drift_handle) {
+        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
+        if (!drift_handle) {
+            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
+        }
+    }
+
+    if (drift_handle) {
+        drift_platform_geometry_pending = (DriftPlatformGeometryPendingFn)dlsym(drift_handle, "DriftPlatformGeometryPending");
+    } else {
+        drift_platform_geometry_pending = (DriftPlatformGeometryPendingFn)dlsym(RTLD_DEFAULT, "DriftPlatformGeometryPending");
+    }
+
+    if (!drift_platform_geometry_pending) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPlatformGeometryPending not found: %s", dlerror());
+    }
+
+    return drift_platform_geometry_pending ? 0 : 1;
+}
+
 /**
  * JNI implementation for NativeBridge.geometryApplied().
  *
@@ -1140,6 +1191,34 @@ Java_{{.JNIPackage}}_NativeBridge_geometryApplied(
     if (resolve_drift_geometry_applied() == 0) {
         drift_geometry_applied();
     }
+}
+
+JNIEXPORT jlong JNICALL
+Java_{{.JNIPackage}}_NativeBridge_currentFrameSeq(
+    JNIEnv *env,
+    jclass clazz
+) {
+    (void)env;
+    (void)clazz;
+
+    if (resolve_drift_platform_current_frame_seq() != 0) {
+        return (jlong)0;
+    }
+    return (jlong)drift_platform_current_frame_seq();
+}
+
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_geometryPending(
+    JNIEnv *env,
+    jclass clazz
+) {
+    (void)env;
+    (void)clazz;
+
+    if (resolve_drift_platform_geometry_pending() != 0) {
+        return (jint)0;
+    }
+    return (jint)drift_platform_geometry_pending();
 }
 
 /**
@@ -1604,7 +1683,7 @@ Java_{{.JNIPackage}}_NativeBridge_acquireBuffer(
 ) {
     (void)env; (void)clazz;
     BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool) return -1;
+    if (!pool || pool->count <= 0) return -1;
 
     pool->current = (pool->current + 1) % pool->count;
     glBindFramebuffer(GL_FRAMEBUFFER, pool->slots[pool->current].fbo);
@@ -1704,64 +1783,53 @@ Java_{{.JNIPackage}}_NativeBridge_createFence(
 }
 
 /**
- * JNI: createSurfaceControl(surface)
+ * JNI: createSurfaceControl(surface) -> ASurfaceControl* as jlong
  *
  * Creates a child ASurfaceControl from the given Surface's ANativeWindow.
- * The child surface control is stored globally and used for buffer presentation.
  */
-JNIEXPORT jboolean JNICALL
+JNIEXPORT jlong JNICALL
 Java_{{.JNIPackage}}_NativeBridge_createSurfaceControl(
     JNIEnv *env, jclass clazz, jobject surface
 ) {
     (void)clazz;
 
-    if (resolve_surface_control() != 0) return JNI_FALSE;
+    if (resolve_surface_control() != 0) return (jlong)0;
 
     ANativeWindow *window = ANativeWindow_fromSurface(env, surface);
     if (!window) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "ANativeWindow_fromSurface failed");
-        return JNI_FALSE;
+        return (jlong)0;
     }
 
-    /* Release any existing surface control */
-    if (g_surfaceControl) {
-        sc_release(g_surfaceControl);
-        g_surfaceControl = NULL;
-    }
-
-    g_surfaceControl = sc_createFromWindow(window, "DriftContent");
+    ASurfaceControl *surfaceControl = sc_createFromWindow(window, "DriftContent");
     ANativeWindow_release(window);
 
-    if (!g_surfaceControl) {
+    if (!surfaceControl) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "ASurfaceControl_createFromWindow failed");
-        return JNI_FALSE;
+        return (jlong)0;
     }
 
     /* Make the child surface visible */
     ASurfaceTransaction *txn = sc_createTransaction();
-    sc_setVisibility(txn, g_surfaceControl, 1);
+    sc_setVisibility(txn, surfaceControl, 1);
     sc_apply(txn);
     sc_deleteTransaction(txn);
 
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "SurfaceControl created");
-    return JNI_TRUE;
+    return (jlong)(uintptr_t)surfaceControl;
 }
 
 /**
- * JNI: destroySurfaceControl()
- *
- * Releases the global child ASurfaceControl.
+ * JNI: destroySurfaceControl(surfaceControlPtr)
  */
 JNIEXPORT void JNICALL
 Java_{{.JNIPackage}}_NativeBridge_destroySurfaceControl(
-    JNIEnv *env, jclass clazz
+    JNIEnv *env, jclass clazz, jlong surfaceControlPtr
 ) {
     (void)env; (void)clazz;
-
-    if (g_surfaceControl) {
-        sc_release(g_surfaceControl);
-        g_surfaceControl = NULL;
-    }
+    ASurfaceControl *surfaceControl = (ASurfaceControl *)(uintptr_t)surfaceControlPtr;
+    if (!surfaceControl) return;
+    sc_release(surfaceControl);
 }
 
 /**
@@ -1773,21 +1841,32 @@ Java_{{.JNIPackage}}_NativeBridge_destroySurfaceControl(
 JNIEXPORT void JNICALL
 Java_{{.JNIPackage}}_NativeBridge_presentBuffer(
     JNIEnv *env, jclass clazz,
-    jlong poolPtr, jint bufferIndex, jint fenceFd
+    jlong poolPtr, jlong surfaceControlPtr, jint bufferIndex, jint fenceFd
 ) {
     (void)env; (void)clazz;
 
     BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool || !g_surfaceControl || !sc_createTransaction ||
+    ASurfaceControl *surfaceControl = (ASurfaceControl *)(uintptr_t)surfaceControlPtr;
+    if (!pool || !surfaceControl || !sc_createTransaction ||
         bufferIndex < 0 || bufferIndex >= pool->count) {
         if (fenceFd >= 0) close(fenceFd);
         return;
     }
 
     ASurfaceTransaction *txn = sc_createTransaction();
-    sc_setBuffer(txn, g_surfaceControl, pool->slots[bufferIndex].buffer, fenceFd);
+    sc_setBuffer(txn, surfaceControl, pool->slots[bufferIndex].buffer, fenceFd);
     sc_apply(txn);
     sc_deleteTransaction(txn);
+}
+
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_closeFenceFd(
+    JNIEnv *env, jclass clazz, jint fd
+) {
+    (void)env; (void)clazz;
+    if (fd >= 0) {
+        close(fd);
+    }
 }
 
 /**
