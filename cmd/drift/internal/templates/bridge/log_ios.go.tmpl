@@ -1,0 +1,99 @@
+//go:build ios
+
+package main
+
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework Foundation
+#include <os/log.h>
+#include <stdlib.h>
+#import <Foundation/Foundation.h>
+
+static os_log_t drift_logger = nil;
+
+static void driftIOSLog(const char* s) {
+	@autoreleasepool {
+		if (drift_logger == nil) {
+			NSString *subsystem = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.drift";
+			drift_logger = os_log_create([subsystem UTF8String], "Go");
+		}
+		os_log_with_type(drift_logger, OS_LOG_TYPE_INFO, "%{public}s", s);
+	}
+}
+*/
+import "C"
+
+import (
+	"bufio"
+	"errors"
+	"io"
+	"log"
+	"os"
+	"strings"
+	"sync"
+	"unsafe"
+)
+
+type iosPlatformWriter struct{}
+
+var iosLogSetupOnce sync.Once
+
+func emitIOSLogLine(s string) {
+	if s == "" {
+		return
+	}
+	cs := C.CString(s)
+	C.driftIOSLog(cs)
+	C.free(unsafe.Pointer(cs))
+}
+
+func (iosPlatformWriter) Write(p []byte) (int, error) {
+	parts := strings.Split(string(p), "\n")
+	for _, part := range parts {
+		part = strings.TrimSuffix(part, "\r")
+		emitIOSLogLine(part)
+	}
+	return len(p), nil
+}
+
+func streamIOSPipeToLog(r *os.File) {
+	reader := bufio.NewReader(r)
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+			emitIOSLogLine(line)
+		}
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				emitIOSLogLine("log bridge read error: " + err.Error())
+			}
+			return
+		}
+	}
+}
+
+func initIOSLogging() {
+	r, w, err := os.Pipe()
+	if err != nil {
+		// Pipe failed; redirect log.* output only. Direct writes to
+		// os.Stdout/os.Stderr (e.g. fmt.Println) remain unredirected
+		// because os.Stdout is *os.File and cannot be replaced with an
+		// io.Writer without a working pipe.
+		log.SetOutput(iosPlatformWriter{})
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		return
+	}
+
+	os.Stdout = w
+	os.Stderr = w
+	log.SetOutput(w)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	go streamIOSPipeToLog(r)
+}
+
+func init() {
+	iosLogSetupOnce.Do(initIOSLogging)
+}

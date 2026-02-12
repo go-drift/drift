@@ -1,0 +1,86 @@
+//go:build android
+
+package main
+
+/*
+#cgo LDFLAGS: -llog
+#include <android/log.h>
+#include <stdlib.h>
+static void driftGoLog(const char* s) { __android_log_write(ANDROID_LOG_INFO, "Go", s); }
+*/
+import "C"
+
+import (
+	"bufio"
+	"errors"
+	"io"
+	"log"
+	"os"
+	"strings"
+	"sync"
+	"unsafe"
+)
+
+type androidPlatformWriter struct{}
+
+var androidLogSetupOnce sync.Once
+
+func emitAndroidLogLine(s string) {
+	if s == "" {
+		return
+	}
+	cs := C.CString(s)
+	C.driftGoLog(cs)
+	C.free(unsafe.Pointer(cs))
+}
+
+func (androidPlatformWriter) Write(p []byte) (int, error) {
+	parts := strings.Split(string(p), "\n")
+	for _, part := range parts {
+		part = strings.TrimSuffix(part, "\r")
+		emitAndroidLogLine(part)
+	}
+	return len(p), nil
+}
+
+func streamAndroidPipeToLog(r *os.File) {
+	reader := bufio.NewReader(r)
+	for {
+		line, err := reader.ReadString('\n')
+		if len(line) > 0 {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+			emitAndroidLogLine(line)
+		}
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				emitAndroidLogLine("log bridge read error: " + err.Error())
+			}
+			return
+		}
+	}
+}
+
+func initAndroidLogging() {
+	r, w, err := os.Pipe()
+	if err != nil {
+		// Pipe failed; redirect log.* output only. Direct writes to
+		// os.Stdout/os.Stderr (e.g. fmt.Println) remain unredirected
+		// because os.Stdout is *os.File and cannot be replaced with an
+		// io.Writer without a working pipe.
+		log.SetOutput(androidPlatformWriter{})
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		return
+	}
+
+	os.Stdout = w
+	os.Stderr = w
+	log.SetOutput(w)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	go streamAndroidPipeToLog(r)
+}
+
+func init() {
+	androidLogSetupOnce.Do(initAndroidLogging)
+}
