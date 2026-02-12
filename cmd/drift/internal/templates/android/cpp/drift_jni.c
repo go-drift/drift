@@ -37,71 +37,6 @@
 #include <stdlib.h>    /* malloc, free */
 #include <stdio.h>     /* snprintf */
 
-/* AHardwareBuffer / EGL for synchronized rendering */
-#include <android/hardware_buffer.h>
-#include <android/native_window.h>
-#include <android/native_window_jni.h>
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#include <unistd.h>    /* close() for fence FDs */
-
-/*
- * SurfaceControl types and function pointers.
- *
- * The NDK header <android/surface_control.h> uses C++ syntax (default arguments,
- * references) and cannot be included from a C file. Instead, we forward-declare
- * the opaque types and resolve functions at runtime via dlsym from libandroid.so.
- * All functions used here are available from API 29.
- */
-typedef struct ASurfaceControl ASurfaceControl;
-typedef struct ASurfaceTransaction ASurfaceTransaction;
-
-typedef ASurfaceControl* (*pf_ASurfaceControl_createFromWindow)(ANativeWindow*, const char*);
-typedef void (*pf_ASurfaceControl_release)(ASurfaceControl*);
-typedef ASurfaceTransaction* (*pf_ASurfaceTransaction_create)(void);
-typedef void (*pf_ASurfaceTransaction_delete)(ASurfaceTransaction*);
-typedef void (*pf_ASurfaceTransaction_setBuffer)(ASurfaceTransaction*, ASurfaceControl*, AHardwareBuffer*, int);
-typedef void (*pf_ASurfaceTransaction_setVisibility)(ASurfaceTransaction*, ASurfaceControl*, int8_t);
-typedef void (*pf_ASurfaceTransaction_apply)(ASurfaceTransaction*);
-
-static pf_ASurfaceControl_createFromWindow sc_createFromWindow = NULL;
-static pf_ASurfaceControl_release sc_release = NULL;
-static pf_ASurfaceTransaction_create sc_createTransaction = NULL;
-static pf_ASurfaceTransaction_delete sc_deleteTransaction = NULL;
-static pf_ASurfaceTransaction_setBuffer sc_setBuffer = NULL;
-static pf_ASurfaceTransaction_setVisibility sc_setVisibility = NULL;
-static pf_ASurfaceTransaction_apply sc_apply = NULL;
-
-static int resolve_surface_control(void) {
-    if (sc_createFromWindow) return 0; /* already resolved */
-
-    void *lib = dlopen("libandroid.so", RTLD_NOW);
-    if (!lib) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libandroid.so failed: %s", dlerror());
-        return -1;
-    }
-
-    sc_createFromWindow = (pf_ASurfaceControl_createFromWindow)dlsym(lib, "ASurfaceControl_createFromWindow");
-    sc_release = (pf_ASurfaceControl_release)dlsym(lib, "ASurfaceControl_release");
-    sc_createTransaction = (pf_ASurfaceTransaction_create)dlsym(lib, "ASurfaceTransaction_create");
-    sc_deleteTransaction = (pf_ASurfaceTransaction_delete)dlsym(lib, "ASurfaceTransaction_delete");
-    sc_setBuffer = (pf_ASurfaceTransaction_setBuffer)dlsym(lib, "ASurfaceTransaction_setBuffer");
-    sc_setVisibility = (pf_ASurfaceTransaction_setVisibility)dlsym(lib, "ASurfaceTransaction_setVisibility");
-    sc_apply = (pf_ASurfaceTransaction_apply)dlsym(lib, "ASurfaceTransaction_apply");
-
-    if (!sc_createFromWindow || !sc_release || !sc_createTransaction ||
-        !sc_deleteTransaction || !sc_setBuffer || !sc_setVisibility || !sc_apply) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "SurfaceControl NDK functions unavailable");
-        sc_createFromWindow = NULL; /* mark as unresolved */
-        return -1;
-    }
-
-    /* Keep lib open (functions remain valid) */
-    return 0;
-}
-
 /**
  * Function pointer type for DriftRenderFrame.
  * Matches the signature exported by Go:
@@ -213,8 +148,7 @@ typedef int (*DriftBackButtonFn)(void);
 
 typedef void (*DriftRequestFrameFn)(void);
 typedef int (*DriftNeedsFrameFn)(void);
-typedef uint64_t (*DriftPlatformCurrentFrameSeqFn)(void);
-typedef int (*DriftPlatformGeometryPendingFn)(void);
+typedef void (*DriftGeometryAppliedFn)(void);
 
 /**
  * Function pointer type for DriftSetScheduleFrameHandler.
@@ -251,8 +185,7 @@ static DriftBackButtonFn drift_back_button = NULL;
 static DriftRequestFrameFn drift_request_frame = NULL;
 static DriftNeedsFrameFn drift_needs_frame = NULL;
 static int drift_needs_frame_resolved = 0;
-static DriftPlatformCurrentFrameSeqFn drift_platform_current_frame_seq = NULL;
-static DriftPlatformGeometryPendingFn drift_platform_geometry_pending = NULL;
+static DriftGeometryAppliedFn drift_geometry_applied = NULL;
 static DriftHitTestPlatformViewFn drift_hit_test_platform_view = NULL;
 static int drift_hit_test_platform_view_resolved = 0;
 static DriftSetScheduleFrameHandlerFn drift_set_schedule_frame_handler = NULL;
@@ -1091,8 +1024,13 @@ static int resolve_drift_needs_frame(void) {
     return drift_needs_frame ? 0 : 1;
 }
 
-static int resolve_drift_platform_current_frame_seq(void) {
-    if (drift_platform_current_frame_seq) {
+/**
+ * Resolves the DriftGeometryApplied function from the Go shared library.
+ *
+ * @return 0 if the function was successfully resolved, 1 on failure.
+ */
+static int resolve_drift_geometry_applied(void) {
+    if (drift_geometry_applied) {
         return 0;
     }
 
@@ -1104,69 +1042,35 @@ static int resolve_drift_platform_current_frame_seq(void) {
     }
 
     if (drift_handle) {
-        drift_platform_current_frame_seq = (DriftPlatformCurrentFrameSeqFn)dlsym(drift_handle, "DriftPlatformCurrentFrameSeq");
+        drift_geometry_applied = (DriftGeometryAppliedFn)dlsym(drift_handle, "DriftGeometryApplied");
     } else {
-        drift_platform_current_frame_seq = (DriftPlatformCurrentFrameSeqFn)dlsym(RTLD_DEFAULT, "DriftPlatformCurrentFrameSeq");
+        drift_geometry_applied = (DriftGeometryAppliedFn)dlsym(RTLD_DEFAULT, "DriftGeometryApplied");
     }
 
-    if (!drift_platform_current_frame_seq) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPlatformCurrentFrameSeq not found: %s", dlerror());
+    if (!drift_geometry_applied) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftGeometryApplied not found: %s", dlerror());
     }
 
-    return drift_platform_current_frame_seq ? 0 : 1;
+    return drift_geometry_applied ? 0 : 1;
 }
 
-static int resolve_drift_platform_geometry_pending(void) {
-    if (drift_platform_geometry_pending) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_platform_geometry_pending = (DriftPlatformGeometryPendingFn)dlsym(drift_handle, "DriftPlatformGeometryPending");
-    } else {
-        drift_platform_geometry_pending = (DriftPlatformGeometryPendingFn)dlsym(RTLD_DEFAULT, "DriftPlatformGeometryPending");
-    }
-
-    if (!drift_platform_geometry_pending) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPlatformGeometryPending not found: %s", dlerror());
-    }
-
-    return drift_platform_geometry_pending ? 0 : 1;
-}
-
-JNIEXPORT jlong JNICALL
-Java_{{.JNIPackage}}_NativeBridge_currentFrameSeq(
+/**
+ * JNI implementation for NativeBridge.geometryApplied().
+ *
+ * Called from Kotlin after platform view geometry has been applied on the main thread.
+ * Signals the Go render thread to proceed with surface presentation.
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_geometryApplied(
     JNIEnv *env,
     jclass clazz
 ) {
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_platform_current_frame_seq() != 0) {
-        return (jlong)0;
+    if (resolve_drift_geometry_applied() == 0) {
+        drift_geometry_applied();
     }
-    return (jlong)drift_platform_current_frame_seq();
-}
-
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_geometryPending(
-    JNIEnv *env,
-    jclass clazz
-) {
-    (void)env;
-    (void)clazz;
-
-    if (resolve_drift_platform_geometry_pending() != 0) {
-        return (jint)0;
-    }
-    return (jint)drift_platform_geometry_pending();
 }
 
 /**
@@ -1417,403 +1321,6 @@ Java_{{.JNIPackage}}_NativeBridge_hitTestPlatformView(
     return (jint)drift_hit_test_platform_view((int64_t)viewID, x, y);
 }
 
-/* =========================================================================
- * AHardwareBuffer pool for SurfaceControl-based rendering.
- *
- * Each slot holds an AHardwareBuffer, an EGL image wrapping it, a GL texture
- * backed by that image, and an FBO targeting the texture. acquireBuffer()
- * round-robins through the pool and binds the next FBO so that subsequent
- * GL rendering (Skia) targets the AHardwareBuffer.
- * ========================================================================= */
-
-#define MAX_BUFFER_COUNT 4
-
-typedef struct {
-    AHardwareBuffer *buffer;
-    EGLImageKHR image;
-    GLuint texture;
-    GLuint fbo;
-    GLuint depthStencil;
-} BufferSlot;
-
-typedef struct {
-    BufferSlot slots[MAX_BUFFER_COUNT];
-    int count;
-    int width;
-    int height;
-    int current; /* index of most recently acquired slot */
-    int hasFenceSupport; /* 1 if EGL_ANDROID_native_fence_sync is available */
-} BufferPool;
-
-/* EGL function pointers resolved at pool creation. */
-static PFNEGLCREATEIMAGEKHRPROC egl_createImageKHR = NULL;
-static PFNEGLDESTROYIMAGEKHRPROC egl_destroyImageKHR = NULL;
-static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC gl_imageTargetTexture2DOES = NULL;
-static PFNEGLCREATESYNCKHRPROC egl_createSyncKHR = NULL;
-static PFNEGLDESTROYSYNCKHRPROC egl_destroySyncKHR = NULL;
-static PFNEGLDUPNATIVEFENCEFDANDROIDPROC egl_dupNativeFenceFD = NULL;
-
-/* eglGetNativeClientBufferANDROID: wraps AHardwareBuffer as EGLClientBuffer */
-typedef EGLClientBuffer (EGLAPIENTRYP PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC)(const AHardwareBuffer *);
-static PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC egl_getNativeClientBuffer = NULL;
-
-static int resolve_egl_extensions(void) {
-    if (egl_createImageKHR) return 0; /* already resolved */
-
-    egl_createImageKHR = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
-    egl_destroyImageKHR = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
-    gl_imageTargetTexture2DOES = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
-    egl_getNativeClientBuffer = (PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC)eglGetProcAddress("eglGetNativeClientBufferANDROID");
-
-    if (!egl_createImageKHR || !egl_destroyImageKHR || !gl_imageTargetTexture2DOES || !egl_getNativeClientBuffer) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Required EGL image extensions unavailable");
-        return -1;
-    }
-
-    /* Fence extensions are optional; fall back to glFinish(). */
-    egl_createSyncKHR = (PFNEGLCREATESYNCKHRPROC)eglGetProcAddress("eglCreateSyncKHR");
-    egl_destroySyncKHR = (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress("eglDestroySyncKHR");
-    egl_dupNativeFenceFD = (PFNEGLDUPNATIVEFENCEFDANDROIDPROC)eglGetProcAddress("eglDupNativeFenceFDANDROID");
-
-    return 0;
-}
-
-static void destroy_slot(BufferSlot *slot) {
-    EGLDisplay display = eglGetCurrentDisplay();
-
-    if (slot->fbo) { glDeleteFramebuffers(1, &slot->fbo); slot->fbo = 0; }
-    if (slot->depthStencil) { glDeleteRenderbuffers(1, &slot->depthStencil); slot->depthStencil = 0; }
-    if (slot->texture) { glDeleteTextures(1, &slot->texture); slot->texture = 0; }
-    if (slot->image != EGL_NO_IMAGE_KHR && egl_destroyImageKHR) {
-        egl_destroyImageKHR(display, slot->image);
-        slot->image = EGL_NO_IMAGE_KHR;
-    }
-    if (slot->buffer) { AHardwareBuffer_release(slot->buffer); slot->buffer = NULL; }
-}
-
-static int init_slot(BufferSlot *slot, int width, int height) {
-    EGLDisplay display = eglGetCurrentDisplay();
-
-    /* Allocate AHardwareBuffer */
-    AHardwareBuffer_Desc desc = {
-        .width = (uint32_t)width,
-        .height = (uint32_t)height,
-        .layers = 1,
-        .format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
-        .usage = AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT |
-                 AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE |
-                 AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY,
-        .stride = 0,
-        .rfu0 = 0,
-        .rfu1 = 0,
-    };
-    if (AHardwareBuffer_allocate(&desc, &slot->buffer) != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "AHardwareBuffer_allocate failed");
-        return -1;
-    }
-
-    /* Wrap in EGL image */
-    EGLClientBuffer clientBuffer = egl_getNativeClientBuffer(slot->buffer);
-    if (!clientBuffer) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglGetNativeClientBufferANDROID failed");
-        destroy_slot(slot);
-        return -1;
-    }
-    EGLint imageAttribs[] = { EGL_NONE };
-    slot->image = egl_createImageKHR(display, EGL_NO_CONTEXT,
-        EGL_NATIVE_BUFFER_ANDROID, clientBuffer, imageAttribs);
-    if (slot->image == EGL_NO_IMAGE_KHR) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglCreateImageKHR failed");
-        destroy_slot(slot);
-        return -1;
-    }
-
-    /* Create GL texture backed by the EGL image */
-    glGenTextures(1, &slot->texture);
-    glBindTexture(GL_TEXTURE_2D, slot->texture);
-    gl_imageTargetTexture2DOES(GL_TEXTURE_2D, (GLeglImageOES)slot->image);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    /* Create FBO */
-    glGenFramebuffers(1, &slot->fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, slot->fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, slot->texture, 0);
-
-    /* Create depth/stencil renderbuffer (Skia needs stencil for complex paths) */
-    glGenRenderbuffers(1, &slot->depthStencil);
-    glBindRenderbuffer(GL_RENDERBUFFER, slot->depthStencil);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8_OES, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, slot->depthStencil);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, slot->depthStencil);
-
-    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "FBO incomplete: 0x%x", status);
-        destroy_slot(slot);
-        return -1;
-    }
-
-    return 0;
-}
-
-/**
- * JNI: createBufferPool(width, height, count) -> pool pointer (as jlong)
- */
-JNIEXPORT jlong JNICALL
-Java_{{.JNIPackage}}_NativeBridge_createBufferPool(
-    JNIEnv *env, jclass clazz,
-    jint width, jint height, jint count
-) {
-    (void)env; (void)clazz;
-
-    if (resolve_egl_extensions() != 0) return 0;
-    if (count < 1 || count > MAX_BUFFER_COUNT) count = 3;
-
-    BufferPool *pool = (BufferPool *)calloc(1, sizeof(BufferPool));
-    if (!pool) return 0;
-
-    pool->width = width;
-    pool->height = height;
-    pool->count = count;
-    pool->current = -1;
-
-    /* Check fence support */
-    pool->hasFenceSupport = (egl_createSyncKHR && egl_destroySyncKHR && egl_dupNativeFenceFD) ? 1 : 0;
-    if (!pool->hasFenceSupport) {
-        __android_log_print(ANDROID_LOG_WARN, "DriftJNI",
-            "EGL_ANDROID_native_fence_sync unavailable; using glFinish fallback");
-    }
-
-    for (int i = 0; i < count; i++) {
-        if (init_slot(&pool->slots[i], width, height) != 0) {
-            /* Clean up already-initialized slots */
-            for (int j = 0; j < i; j++) destroy_slot(&pool->slots[j]);
-            free(pool);
-            return 0;
-        }
-    }
-
-    __android_log_print(ANDROID_LOG_INFO, "DriftJNI",
-        "Buffer pool created: %dx%d, %d buffers, fence=%d", width, height, count, pool->hasFenceSupport);
-    return (jlong)(uintptr_t)pool;
-}
-
-/**
- * JNI: destroyBufferPool(pool)
- */
-JNIEXPORT void JNICALL
-Java_{{.JNIPackage}}_NativeBridge_destroyBufferPool(
-    JNIEnv *env, jclass clazz, jlong poolPtr
-) {
-    (void)env; (void)clazz;
-    BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool) return;
-
-    for (int i = 0; i < pool->count; i++) {
-        destroy_slot(&pool->slots[i]);
-    }
-    free(pool);
-}
-
-/**
- * JNI: acquireBuffer(pool) -> buffer index
- *
- * Round-robins through the pool and binds the FBO for the next slot.
- */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_acquireBuffer(
-    JNIEnv *env, jclass clazz, jlong poolPtr
-) {
-    (void)env; (void)clazz;
-    BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool || pool->count <= 0) return -1;
-
-    pool->current = (pool->current + 1) % pool->count;
-    glBindFramebuffer(GL_FRAMEBUFFER, pool->slots[pool->current].fbo);
-    glViewport(0, 0, pool->width, pool->height);
-    return pool->current;
-}
-
-/**
- * JNI: resizeBufferPool(pool, width, height) -> 0 on success, -1 on failure
- *
- * Destroys existing slots and recreates them at the new dimensions.
- */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_resizeBufferPool(
-    JNIEnv *env, jclass clazz, jlong poolPtr, jint width, jint height
-) {
-    (void)env; (void)clazz;
-    BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    if (!pool) return -1;
-    if (pool->width == width && pool->height == height) return 0;
-
-    /* Ensure all GPU work targeting old FBOs completes before destroying them. */
-    glFinish();
-
-    for (int i = 0; i < pool->count; i++) {
-        destroy_slot(&pool->slots[i]);
-    }
-
-    pool->width = width;
-    pool->height = height;
-    pool->current = -1;
-
-    for (int i = 0; i < pool->count; i++) {
-        if (init_slot(&pool->slots[i], width, height) != 0) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "resizeBufferPool: init_slot %d failed", i);
-            /* Clean up any slots that were successfully initialized. */
-            for (int j = 0; j < i; j++) destroy_slot(&pool->slots[j]);
-            pool->count = 0;
-            return -1;
-        }
-    }
-
-    __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Buffer pool resized: %dx%d", width, height);
-    return 0;
-}
-
-/**
- * JNI: createFence() -> native fence FD
- *
- * Creates an EGL sync fence and extracts its native FD. If fence extensions
- * are unavailable, falls back to glFinish() and returns -1 (no fence).
- */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_createFence(
-    JNIEnv *env, jclass clazz, jlong poolPtr
-) {
-    (void)env; (void)clazz;
-    BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-
-    if (!pool || !pool->hasFenceSupport) {
-        glFinish();
-        return -1;
-    }
-
-    EGLDisplay display = eglGetCurrentDisplay();
-    EGLint attribs[] = { EGL_SYNC_NATIVE_FENCE_FD_ANDROID, EGL_NO_NATIVE_FENCE_FD_ANDROID, EGL_NONE };
-    EGLSyncKHR sync = egl_createSyncKHR(display, EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
-    if (sync == EGL_NO_SYNC_KHR) {
-        glFinish();
-        return -1;
-    }
-
-    /* Flush to ensure the fence is enqueued in the GPU command stream */
-    glFlush();
-
-    int fd = egl_dupNativeFenceFD(display, sync);
-    egl_destroySyncKHR(display, sync);
-
-    if (fd < 0) {
-        glFinish();
-        return -1;
-    }
-
-    return fd;
-}
-
-/**
- * JNI: createSurfaceControl(surface) -> ASurfaceControl* as jlong
- *
- * Creates a child ASurfaceControl from the given Surface's ANativeWindow.
- */
-JNIEXPORT jlong JNICALL
-Java_{{.JNIPackage}}_NativeBridge_createSurfaceControl(
-    JNIEnv *env, jclass clazz, jobject surface
-) {
-    (void)clazz;
-
-    if (resolve_surface_control() != 0) return (jlong)0;
-
-    ANativeWindow *window = ANativeWindow_fromSurface(env, surface);
-    if (!window) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "ANativeWindow_fromSurface failed");
-        return (jlong)0;
-    }
-
-    ASurfaceControl *surfaceControl = sc_createFromWindow(window, "DriftContent");
-    ANativeWindow_release(window);
-
-    if (!surfaceControl) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "ASurfaceControl_createFromWindow failed");
-        return (jlong)0;
-    }
-
-    /* Make the child surface visible */
-    ASurfaceTransaction *txn = sc_createTransaction();
-    if (!txn) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "ASurfaceTransaction_create failed");
-        sc_release(surfaceControl);
-        return (jlong)0;
-    }
-    sc_setVisibility(txn, surfaceControl, 1);
-    sc_apply(txn);
-    sc_deleteTransaction(txn);
-
-    __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "SurfaceControl created");
-    return (jlong)(uintptr_t)surfaceControl;
-}
-
-/**
- * JNI: destroySurfaceControl(surfaceControlPtr)
- */
-JNIEXPORT void JNICALL
-Java_{{.JNIPackage}}_NativeBridge_destroySurfaceControl(
-    JNIEnv *env, jclass clazz, jlong surfaceControlPtr
-) {
-    (void)env; (void)clazz;
-    ASurfaceControl *surfaceControl = (ASurfaceControl *)(uintptr_t)surfaceControlPtr;
-    if (!surfaceControl) return;
-    sc_release(surfaceControl);
-}
-
-/**
- * JNI: presentBuffer(pool, bufferIndex, fenceFd)
- *
- * Creates a SurfaceControl transaction, sets the buffer from the pool,
- * and applies it. The fence FD is consumed (caller must not close it).
- */
-JNIEXPORT void JNICALL
-Java_{{.JNIPackage}}_NativeBridge_presentBuffer(
-    JNIEnv *env, jclass clazz,
-    jlong poolPtr, jlong surfaceControlPtr, jint bufferIndex, jint fenceFd
-) {
-    (void)env; (void)clazz;
-
-    BufferPool *pool = (BufferPool *)(uintptr_t)poolPtr;
-    ASurfaceControl *surfaceControl = (ASurfaceControl *)(uintptr_t)surfaceControlPtr;
-    if (!pool || !surfaceControl || !sc_createTransaction ||
-        bufferIndex < 0 || bufferIndex >= pool->count) {
-        if (fenceFd >= 0) close(fenceFd);
-        return;
-    }
-
-    ASurfaceTransaction *txn = sc_createTransaction();
-    if (!txn) {
-        if (fenceFd >= 0) close(fenceFd);
-        return;
-    }
-    sc_setBuffer(txn, surfaceControl, pool->slots[bufferIndex].buffer, fenceFd);
-    sc_apply(txn);
-    sc_deleteTransaction(txn);
-}
-
-JNIEXPORT void JNICALL
-Java_{{.JNIPackage}}_NativeBridge_closeFenceFd(
-    JNIEnv *env, jclass clazz, jint fd
-) {
-    (void)env; (void)clazz;
-    if (fd >= 0) {
-        close(fd);
-    }
-}
-
 /**
  * JNI_OnLoad is called when the native library is loaded.
  * We save the JavaVM reference for later use in callbacks.
@@ -1837,11 +1344,6 @@ Java_{{.JNIPackage}}_NativeBridge_platformInit(
     jclass clazz
 ) {
     (void)clazz;
-
-    /* Already initialized — JNI refs and Go handler are still valid. */
-    if (g_platform_channel_class && g_handle_method_call) {
-        return 0;
-    }
 
     /* Find the PlatformChannelManager class and method */
     jclass localClass = (*env)->FindClass(env, "{{.PackagePath}}/PlatformChannelManager");

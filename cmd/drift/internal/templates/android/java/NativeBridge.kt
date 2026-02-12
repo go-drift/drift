@@ -210,97 +210,10 @@ object NativeBridge {
     external fun hitTestPlatformView(viewID: Long, x: Double, y: Double): Int
 
     /**
-     * Returns the current platform-view frame sequence for the active frame.
-     */
-    external fun currentFrameSeq(): Long
-
-    /**
-     * Returns 1 when native platform-view geometry is still pending apply.
-     */
-    external fun geometryPending(): Int
-
-    // AHardwareBuffer pool management
-
-    /**
-     * Creates a pool of AHardwareBuffers with EGL image-backed FBOs.
-     * Must be called on the render thread with an active EGL context.
+     * Signals the Go render thread that platform view geometry has been applied.
      *
-     * @param width  Buffer width in pixels.
-     * @param height Buffer height in pixels.
-     * @param count  Number of buffers in the pool (typically 3 for triple buffering).
-     * @return Native pool pointer (as Long), or 0 on failure.
+     * Called from the main thread after applying geometry updates so the
+     * render thread can proceed with surface presentation (eglSwapBuffers).
      */
-    external fun createBufferPool(width: Int, height: Int, count: Int): Long
-
-    /**
-     * Destroys a buffer pool and releases all native resources.
-     * Must be called on the render thread.
-     *
-     * @param pool Native pool pointer from createBufferPool().
-     */
-    external fun destroyBufferPool(pool: Long)
-
-    /**
-     * Acquires the next buffer in the pool and binds its FBO as the render target.
-     * Must be called on the render thread.
-     *
-     * @param pool Native pool pointer.
-     * @return Buffer index (0-based), or -1 on failure.
-     */
-    external fun acquireBuffer(pool: Long): Int
-
-    /**
-     * Resizes a buffer pool by destroying and recreating all buffers.
-     * Must be called on the render thread.
-     *
-     * @param pool   Native pool pointer.
-     * @param width  New buffer width in pixels.
-     * @param height New buffer height in pixels.
-     * @return 0 on success, -1 on failure (pool is destroyed).
-     */
-    external fun resizeBufferPool(pool: Long, width: Int, height: Int): Int
-
-    // GPU fence
-
-    /**
-     * Creates a GPU fence and returns its native fence FD.
-     * Falls back to glFinish() and returns -1 if fence extensions are unavailable.
-     * Must be called on the render thread.
-     *
-     * @param pool Native pool pointer (used to check fence support).
-     * @return Native fence FD, or -1 if fences are not supported.
-     */
-    external fun createFence(pool: Long): Int
-
-    // SurfaceControl management
-
-    /**
-     * Creates a child SurfaceControl from the given Surface via NDK.
-     *
-     * @param surface The Surface from the SurfaceView.
-     * @return Native ASurfaceControl pointer (as Long), or 0 on failure.
-     */
-    external fun createSurfaceControl(surface: android.view.Surface): Long
-
-    /**
-     * Releases a SurfaceControl handle created by createSurfaceControl().
-     */
-    external fun destroySurfaceControl(surfaceControl: Long)
-
-    /**
-     * Presents a buffer from the pool via a SurfaceControl transaction.
-     * Creates a native transaction, sets the buffer, and applies it.
-     * The fence FD is consumed by this call (caller must not close it).
-     *
-     * @param pool        Native pool pointer from createBufferPool().
-     * @param surfaceControl Native surface control pointer from createSurfaceControl().
-     * @param bufferIndex Buffer index from acquireBuffer().
-     * @param fenceFd     Native fence FD from createFence(), or -1.
-     */
-    external fun presentBuffer(pool: Long, surfaceControl: Long, bufferIndex: Int, fenceFd: Int)
-
-    /**
-     * Closes a native file descriptor.
-     */
-    external fun closeFenceFd(fd: Int)
+    external fun geometryApplied()
 }

@@ -469,21 +469,6 @@ func (r *PlatformViewRegistry) SignalGeometryApplied() {
 	}
 }
 
-// CurrentFrameSeq returns the sequence number assigned in BeginGeometryBatch.
-func (r *PlatformViewRegistry) CurrentFrameSeq() uint64 {
-	r.batchMu.Lock()
-	defer r.batchMu.Unlock()
-	return r.frameSeq
-}
-
-// GeometryPending reports whether the latest batch is awaiting native apply
-// and atomically clears the flag. This is used by the Android render thread
-// (which polls rather than blocking via WaitGeometryApplied) to capture the
-// pending state for the current frame without leaving it stuck true.
-func (r *PlatformViewRegistry) GeometryPending() bool {
-	return r.geometryPending.Swap(false)
-}
-
 // resendGeometry replays the cached geometry for a view.
 // Called when a native view finishes creation and needs its position.
 func (r *PlatformViewRegistry) resendGeometry(viewID int64) {
