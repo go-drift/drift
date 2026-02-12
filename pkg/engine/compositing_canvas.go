@@ -14,20 +14,14 @@ type PlatformViewSink interface {
 
 // CompositingCanvas wraps an inner canvas and tracks transform + clip state
 // so that EmbedPlatformView can resolve platform view geometry in global coordinates.
+// Used in tests; production geometry resolution uses GeometryCanvas in StepFrame.
 //
 // Scale/Rotate are forwarded to inner but not tracked - platform views operate
 // in logical coordinates (device scale is applied on the raw Skia canvas before wrapping).
 type CompositingCanvas struct {
-	inner     graphics.Canvas
-	transform graphics.Offset // accumulated translation
-	saveStack []saveState
-	clips     []graphics.Rect // intersection-reduced clip stack
-	sink      PlatformViewSink
-}
-
-type saveState struct {
-	transform graphics.Offset
-	clipDepth int
+	inner   graphics.Canvas
+	tracker transformTracker
+	sink    PlatformViewSink
 }
 
 // NewCompositingCanvas creates a compositing canvas that wraps inner and reports
@@ -40,42 +34,27 @@ func NewCompositingCanvas(inner graphics.Canvas, sink PlatformViewSink) *Composi
 }
 
 func (c *CompositingCanvas) Save() {
-	c.saveStack = append(c.saveStack, saveState{
-		transform: c.transform,
-		clipDepth: len(c.clips),
-	})
+	c.tracker.save()
 	c.inner.Save()
 }
 
 func (c *CompositingCanvas) SaveLayerAlpha(bounds graphics.Rect, alpha float64) {
-	c.saveStack = append(c.saveStack, saveState{
-		transform: c.transform,
-		clipDepth: len(c.clips),
-	})
+	c.tracker.save()
 	c.inner.SaveLayerAlpha(bounds, alpha)
 }
 
 func (c *CompositingCanvas) SaveLayer(bounds graphics.Rect, paint *graphics.Paint) {
-	c.saveStack = append(c.saveStack, saveState{
-		transform: c.transform,
-		clipDepth: len(c.clips),
-	})
+	c.tracker.save()
 	c.inner.SaveLayer(bounds, paint)
 }
 
 func (c *CompositingCanvas) Restore() {
-	if len(c.saveStack) > 0 {
-		state := c.saveStack[len(c.saveStack)-1]
-		c.saveStack = c.saveStack[:len(c.saveStack)-1]
-		c.transform = state.transform
-		c.clips = c.clips[:state.clipDepth]
-	}
+	c.tracker.restore()
 	c.inner.Restore()
 }
 
 func (c *CompositingCanvas) Translate(dx, dy float64) {
-	c.transform.X += dx
-	c.transform.Y += dy
+	c.tracker.translate(dx, dy)
 	c.inner.Translate(dx, dy)
 }
 
@@ -93,25 +72,12 @@ func (c *CompositingCanvas) Rotate(radians float64) {
 }
 
 func (c *CompositingCanvas) ClipRect(rect graphics.Rect) {
-	// Transform to global coordinates
-	globalRect := rect.Translate(c.transform.X, c.transform.Y)
-
-	// Intersect with current clip if any
-	if len(c.clips) > 0 {
-		globalRect = c.clips[len(c.clips)-1].Intersect(globalRect)
-	}
-
-	c.clips = append(c.clips, globalRect)
+	c.tracker.clipRect(rect)
 	c.inner.ClipRect(rect)
 }
 
 func (c *CompositingCanvas) ClipRRect(rrect graphics.RRect) {
-	// Approximate as rect clip for platform view geometry tracking
-	globalRect := rrect.Rect.Translate(c.transform.X, c.transform.Y)
-	if len(c.clips) > 0 {
-		globalRect = c.clips[len(c.clips)-1].Intersect(globalRect)
-	}
-	c.clips = append(c.clips, globalRect)
+	c.tracker.clipRRect(rrect)
 	c.inner.ClipRRect(rrect)
 }
 
@@ -166,10 +132,7 @@ func (c *CompositingCanvas) DrawRRectShadow(rrect graphics.RRect, shadow graphic
 }
 
 func (c *CompositingCanvas) SaveLayerBlur(bounds graphics.Rect, sigmaX, sigmaY float64) {
-	c.saveStack = append(c.saveStack, saveState{
-		transform: c.transform,
-		clipDepth: len(c.clips),
-	})
+	c.tracker.save()
 	c.inner.SaveLayerBlur(bounds, sigmaX, sigmaY)
 }
 
@@ -182,22 +145,7 @@ func (c *CompositingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics
 }
 
 func (c *CompositingCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
-	if c.sink == nil {
-		return
-	}
-
-	// Compute global offset from accumulated transform
-	offset := c.transform
-
-	// Compute clip bounds if any clips are active.
-	// Even fully-clipped (empty) rects are sent so the sink can hide the view.
-	var clipBounds *graphics.Rect
-	if len(c.clips) > 0 {
-		clip := c.clips[len(c.clips)-1]
-		clipBounds = &clip
-	}
-
-	c.sink.UpdateViewGeometry(viewID, offset, size, clipBounds)
+	c.tracker.embedPlatformView(c.sink, viewID, size)
 }
 
 func (c *CompositingCanvas) Size() graphics.Size {

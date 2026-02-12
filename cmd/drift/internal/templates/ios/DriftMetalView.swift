@@ -6,16 +6,18 @@
 ///   2. Touch event handling that forwards input to the Go engine
 ///   3. Integration with DriftRenderer for actual rendering
 ///
-/// Rendering Architecture:
+/// Rendering Architecture (split pipeline):
 ///
 ///     DriftViewController
-///         │
-///         ▼ renderFrame()
+///         |
+///         v renderFrame()
 ///     DriftMetalView (this file)
-///         │
-///         ├─► DriftRenderer.draw()  (GPU rendering)
-///         │
-///         └─► DriftPointerEvent()   (touch input via FFI)
+///         |
+///         1. DriftRenderer.stepAndSnapshot()  (layout + record)
+///         2. PlatformViewHandler.applySnapshot()  (sync geometry)
+///         3. DriftRenderer.renderSync()  (composite + present)
+///         |
+///         DriftPointerEvent()  (touch input via FFI)
 ///
 /// CAMetalLayer:
 ///   Unlike regular CALayer, CAMetalLayer provides direct access to Metal
@@ -246,43 +248,45 @@ final class DriftMetalView: UIView {
     /// synchronous presentation regardless of platform view state.
     var syncPresentationForRotation = false
 
-    /// Renders a single frame to the Metal layer.
+    /// Renders a single frame to the Metal layer using the split pipeline.
     ///
     /// Called by DriftViewController on each display link callback.
-    /// Gets a drawable from the layer and delegates rendering to DriftRenderer.
+    /// The split pipeline separates layout from compositing:
+    ///   1. stepAndSnapshot: runs build/layout/record, returns platform view geometry
+    ///   2. applySnapshot: positions native views synchronously on the main thread
+    ///   3. renderSync: composites display lists into the Metal texture
+    ///
+    /// This eliminates the async geometry round-trip.
     ///
     /// - Returns: true if a frame was rendered, false if skipped.
     @discardableResult
     func renderFrame() -> Bool {
-        // Check if a new frame is needed before acquiring a drawable.
-        // This avoids unnecessary GPU work and prevents flickering from
-        // presenting stale drawable content when nothing has changed.
         guard DriftNeedsFrame() != 0 else { return false }
 
+        let width = Int32(bounds.width * contentScaleFactor)
+        let height = Int32(bounds.height * contentScaleFactor)
+        guard width > 0, height > 0 else { return false }
+
+        // Step 1: Run the engine pipeline and capture platform view geometry.
+        let snapshot = renderer.stepAndSnapshot(width: width, height: height)
+
+        // Step 2: Apply geometry synchronously before compositing.
+        if let views = snapshot?.views, !views.isEmpty {
+            PlatformViewHandler.applySnapshot(views)
+        }
+
         // Synchronize Metal presentation with Core Animation when platform
-        // views are active or during rotation. Without this, the Metal
-        // drawable and UIKit view position updates present on independent
-        // schedules, causing native views to visibly drift from GPU-rendered
-        // content during scrolling. During rotation, synchronous presentation
-        // prevents Core Animation from distorting a stale snapshot.
-        //
-        // This is set every frame because the condition can change at any
-        // time (platform views appearing/disappearing, rotation starting/
-        // ending). The cost of the property write is negligible compared to
-        // the drawable acquisition that follows.
+        // views are active or during rotation.
         let syncPresentation = PlatformViewHandler.hasPlatformViews || syncPresentationForRotation
         metalLayer.presentsWithTransaction = syncPresentation
 
-        // Get the next available drawable from the layer.
-        // This may block briefly if all drawables are in use.
-        // Returns nil if the layer is not configured or the app is backgrounded.
+        // Step 3: Acquire drawable and composite into it.
         guard let drawable = metalLayer.nextDrawable() else { return false }
 
-        // Delegate rendering to the DriftRenderer.
-        renderer.draw(
+        renderer.renderSync(
             to: drawable,
-            size: bounds.size,
-            scale: contentScaleFactor,
+            width: width,
+            height: height,
             synchronous: syncPresentation
         )
         return true
@@ -379,9 +383,8 @@ final class DriftMetalView: UIView {
         }
 
         // Mark the engine dirty so the display link renders at the next vsync.
-        // Unlike Android (where requestRender queues async GL work), iOS renders
-        // synchronously on the main thread, so calling renderFrame() here would
-        // double-render when the display link also fires within this vsync.
+        // Calling renderFrame() here would double-render when the display link
+        // also fires within this vsync.
         DriftRequestFrame()
     }
 }

@@ -334,10 +334,9 @@ func ResetForTest() {
 		platformViewRegistry.mu.Unlock()
 		platformViewRegistry.nextID.Store(0)
 		platformViewRegistry.batchMu.Lock()
-		platformViewRegistry.geometryCache = make(map[int64]viewGeometryCache)
+		platformViewRegistry.geometryCache = make(map[int64]CapturedViewGeometry)
 		platformViewRegistry.viewsSeenThisFrame = make(map[int64]struct{})
 		platformViewRegistry.batchUpdates = nil
-		platformViewRegistry.batchMode = false
 		platformViewRegistry.batchMu.Unlock()
 	}
 

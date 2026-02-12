@@ -4,7 +4,7 @@
  *
  * This file provides the native implementation for the NativeBridge Kotlin object.
  * It dynamically loads the Go shared library (libdrift.so) at runtime and resolves
- * the exported Go functions (DriftRenderFrame and DriftPointerEvent).
+ * the exported Go functions (DriftPointerEvent, DriftStepAndSnapshot, etc.).
  *
  * Architecture:
  *
@@ -37,18 +37,12 @@
 #include <stdlib.h>    /* malloc, free */
 #include <stdio.h>     /* snprintf */
 
-/**
- * Function pointer type for DriftRenderFrame.
- * Matches the signature exported by Go:
- *   func DriftRenderFrame(width C.int, height C.int, buffer unsafe.Pointer, bufferLen C.int) C.int
- *
- * @param width      Width of the render target in pixels
- * @param height     Height of the render target in pixels
- * @param buffer     Pointer to the RGBA buffer (4 bytes per pixel)
- * @param bufferLen  Total size of the buffer in bytes
- * @return           0 on success, non-zero on error
- */
-typedef int (*DriftRenderFn)(int width, int height, void *buffer, int bufferLen);
+#include <android/hardware_buffer.h>
+#include <android/hardware_buffer_jni.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES3/gl3.h>
+#include <GLES2/gl2ext.h>
 
 /**
  * Function pointer type for DriftPointerEvent.
@@ -126,18 +120,6 @@ typedef int (*DriftSkiaInitFn)(void);
 typedef int (*DriftAppInitFn)(void);
 
 /**
- * Function pointer type for DriftSkiaRenderGL.
- * Matches the signature exported by Go:
- *   func DriftSkiaRenderGL(width C.int, height C.int) C.int
- *
- * @param width  Width of the render target in pixels
- * @param height Height of the render target in pixels
- * @return 0 on success, non-zero on failure
- */
-typedef int (*DriftSkiaRenderFn)(int width, int height);
-typedef const char* (*DriftSkiaErrorFn)(void);
-
-/**
  * Function pointer type for DriftBackButtonPressed.
  * Matches the signature exported by Go:
  *   func DriftBackButtonPressed() C.int
@@ -148,8 +130,6 @@ typedef int (*DriftBackButtonFn)(void);
 
 typedef void (*DriftRequestFrameFn)(void);
 typedef int (*DriftNeedsFrameFn)(void);
-typedef void (*DriftGeometryAppliedFn)(void);
-
 /**
  * Function pointer type for DriftSetScheduleFrameHandler.
  * Registers a C callback that Go invokes when it needs a new frame.
@@ -169,13 +149,10 @@ typedef void (*DriftSetScheduleFrameHandlerFn)(void (*handler)(void));
 typedef int (*DriftHitTestPlatformViewFn)(int64_t viewID, double x, double y);
 
 /* Cached function pointers. NULL until resolved. */
-static DriftRenderFn drift_render_frame = NULL;
 static DriftPointerFn drift_pointer_event = NULL;
 static DriftSetScaleFn drift_set_scale = NULL;
 static DriftAppInitFn drift_app_init = NULL;
 static DriftSkiaInitFn drift_skia_init = NULL;
-static DriftSkiaRenderFn drift_skia_render = NULL;
-static DriftSkiaErrorFn drift_skia_error = NULL;
 static DriftPlatformHandleEventFn drift_platform_event = NULL;
 static DriftPlatformHandleEventErrorFn drift_platform_event_error = NULL;
 static DriftPlatformHandleEventDoneFn drift_platform_event_done = NULL;
@@ -184,14 +161,70 @@ static DriftPlatformSetNativeHandlerFn drift_platform_set_handler = NULL;
 static DriftBackButtonFn drift_back_button = NULL;
 static DriftRequestFrameFn drift_request_frame = NULL;
 static DriftNeedsFrameFn drift_needs_frame = NULL;
-static int drift_needs_frame_resolved = 0;
-static DriftGeometryAppliedFn drift_geometry_applied = NULL;
 static DriftHitTestPlatformViewFn drift_hit_test_platform_view = NULL;
-static int drift_hit_test_platform_view_resolved = 0;
 static DriftSetScheduleFrameHandlerFn drift_set_schedule_frame_handler = NULL;
+
+/* Function pointer types for unified orchestrator */
+typedef int (*DriftStepAndSnapshotFn)(int width, int height, char **outData, int *outLen);
+typedef int (*DriftSkiaRenderFrameSyncFn)(int width, int height);
+typedef void (*DriftSkiaPurgeResourcesFn)(void);
+
+static DriftStepAndSnapshotFn drift_step_and_snapshot = NULL;
+static DriftSkiaRenderFrameSyncFn drift_skia_render_frame_sync = NULL;
+static DriftSkiaPurgeResourcesFn drift_skia_purge_resources = NULL;
 
 /* Handle to the loaded Go shared library. NULL until loaded. */
 static void *drift_handle = NULL;
+
+/**
+ * Generic symbol resolver. Opens libdrift.so if needed, then looks up the
+ * named symbol via dlsym. The resolved pointer is written to *out and cached
+ * across calls (caller passes the address of a static function pointer).
+ *
+ * @param name Symbol name to resolve (e.g. "DriftPointerEvent")
+ * @param out  Address of the cached function pointer
+ * @return 0 on success, 1 if the symbol could not be found
+ */
+static int resolve_symbol(const char *name, void **out) {
+    if (*out) return 0;
+    if (!drift_handle) {
+        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
+        if (!drift_handle) {
+            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
+        }
+    }
+    if (drift_handle) {
+        *out = dlsym(drift_handle, name);
+    } else {
+        *out = dlsym(RTLD_DEFAULT, name);
+    }
+    if (!*out) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "%s not found: %s", name, dlerror());
+    }
+    return *out ? 0 : 1;
+}
+
+/* ─── EGL state ─── */
+static EGLDisplay g_egl_display = EGL_NO_DISPLAY;
+static EGLContext g_egl_context = EGL_NO_CONTEXT;
+static EGLSurface g_egl_surface = EGL_NO_SURFACE; /* 1x1 pbuffer */
+
+/* ─── HardwareBuffer FBO state ─── */
+static AHardwareBuffer *g_hwb = NULL;
+static EGLImageKHR g_egl_image = EGL_NO_IMAGE_KHR;
+static GLuint g_hwb_texture = 0;
+static GLuint g_hwb_fbo = 0;
+static GLuint g_hwb_stencil_rb = 0;
+static int g_hwb_width = 0;
+static int g_hwb_height = 0;
+
+/* ─── EGL extension function pointers ─── */
+static PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR_fn = NULL;
+static PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR_fn = NULL;
+static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES_fn = NULL;
+
+typedef EGLClientBuffer (EGLAPIENTRYP PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC)(const AHardwareBuffer *buffer);
+static PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC eglGetNativeClientBufferANDROID_fn = NULL;
 
 /* Global JVM reference for callbacks from Go to Kotlin */
 static JavaVM *g_jvm = NULL;
@@ -220,8 +253,8 @@ static char *json_error(const char *code, const char *message) {
  *
  * Attach/detach cost is acceptable here: this fires once per state change
  * (user tap, Dispatch callback), not per frame. Animation continuity is
- * handled by DriftRenderer's post-render NeedsFrame() check on the
- * already-attached GL thread.
+ * handled by UnifiedFrameOrchestrator's post-render NeedsFrame() check on
+ * the UI thread.
  */
 static void schedule_frame_handler(void) {
     if (!g_jvm || !g_platform_channel_class || !g_native_schedule_frame) {
@@ -373,22 +406,8 @@ static int resolve_and_register_native_handler(void) {
         return 0;
     }
 
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen failed: %s", dlerror());
-            return -1;
-        }
-    }
-
-    if (!drift_platform_set_handler) {
-        drift_platform_set_handler = (DriftPlatformSetNativeHandlerFn)dlsym(
-            drift_handle, "DriftPlatformSetNativeHandler"
-        );
-        if (!drift_platform_set_handler) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPlatformSetNativeHandler not found");
-            return -1;
-        }
+    if (resolve_symbol("DriftPlatformSetNativeHandler", (void **)&drift_platform_set_handler) != 0) {
+        return -1;
     }
 
     /* Register our native method handler with Go */
@@ -399,301 +418,6 @@ static int resolve_and_register_native_handler(void) {
     return 0;
 }
 
-/**
- * Resolves the DriftRenderFrame function from the Go shared library.
- *
- * This function uses lazy loading: the library is loaded on first call,
- * and the function pointer is cached for subsequent calls.
- *
- * Loading Strategy:
- *   1. First try dlopen("libdrift.so") with RTLD_NOW | RTLD_GLOBAL
- *      - RTLD_NOW: Resolve all symbols immediately (fail fast if missing)
- *      - RTLD_GLOBAL: Make symbols available for other libraries
- *   2. If that succeeds, use dlsym on that handle
- *   3. If dlopen fails, try RTLD_DEFAULT (search already-loaded libraries)
- *      This can work if the library was loaded differently
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_render(void) {
-    /* Return immediately if already resolved */
-    if (drift_render_frame) {
-        return 0;
-    }
-
-    /* Try to load the Go shared library if not already loaded */
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            /* Log the error from dlopen for debugging */
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    /* Look up the DriftRenderFrame symbol */
-    if (drift_handle) {
-        /* Library loaded successfully, look up in that library */
-        drift_render_frame = (DriftRenderFn)dlsym(drift_handle, "DriftRenderFrame");
-    } else {
-        /* Fallback: search in already-loaded libraries */
-        drift_render_frame = (DriftRenderFn)dlsym(RTLD_DEFAULT, "DriftRenderFrame");
-    }
-
-    /* Log if the symbol wasn't found */
-    if (!drift_render_frame) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftRenderFrame not found: %s", dlerror());
-    }
-
-    return drift_render_frame ? 0 : 1;
-}
-
-/**
- * Resolves the DriftPointerEvent function from the Go shared library.
- *
- * Uses the same lazy loading strategy as resolve_drift_render().
- * See that function's documentation for details on the loading strategy.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_pointer(void) {
-    /* Return immediately if already resolved */
-    if (drift_pointer_event) {
-        return 0;
-    }
-
-    /* Try to load the Go shared library if not already loaded */
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            /* Log the error from dlopen for debugging */
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    /* Look up the DriftPointerEvent symbol */
-    if (drift_handle) {
-        /* Library loaded successfully, look up in that library */
-        drift_pointer_event = (DriftPointerFn)dlsym(drift_handle, "DriftPointerEvent");
-    } else {
-        /* Fallback: search in already-loaded libraries */
-        drift_pointer_event = (DriftPointerFn)dlsym(RTLD_DEFAULT, "DriftPointerEvent");
-    }
-
-    /* Log if the symbol wasn't found */
-    if (!drift_pointer_event) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPointerEvent not found: %s", dlerror());
-    }
-
-    return drift_pointer_event ? 0 : 1;
-}
-
-/**
- * Resolves the DriftSetDeviceScale function from the Go shared library.
- *
- * Uses the same lazy loading strategy as resolve_drift_render().
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_scale(void) {
-    /* Return immediately if already resolved */
-    if (drift_set_scale) {
-        return 0;
-    }
-
-    /* Try to load the Go shared library if not already loaded */
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    /* Look up the DriftSetDeviceScale symbol */
-    if (drift_handle) {
-        drift_set_scale = (DriftSetScaleFn)dlsym(drift_handle, "DriftSetDeviceScale");
-    } else {
-        drift_set_scale = (DriftSetScaleFn)dlsym(RTLD_DEFAULT, "DriftSetDeviceScale");
-    }
-
-    /* Log if the symbol wasn't found */
-    if (!drift_set_scale) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftSetDeviceScale not found: %s", dlerror());
-    }
-
-    return drift_set_scale ? 0 : 1;
-}
-
-/**
- * Resolves the DriftAppInit function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_app_init(void) {
-    if (drift_app_init) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_app_init = (DriftAppInitFn)dlsym(drift_handle, "DriftAppInit");
-    } else {
-        drift_app_init = (DriftAppInitFn)dlsym(RTLD_DEFAULT, "DriftAppInit");
-    }
-
-    if (!drift_app_init) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftAppInit not found: %s", dlerror());
-    }
-
-    return drift_app_init ? 0 : 1;
-}
-
-/**
- * Resolves the DriftSkiaInitGL function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_skia_init(void) {
-    if (drift_skia_init) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_skia_init = (DriftSkiaInitFn)dlsym(drift_handle, "DriftSkiaInitGL");
-    } else {
-        drift_skia_init = (DriftSkiaInitFn)dlsym(RTLD_DEFAULT, "DriftSkiaInitGL");
-    }
-
-    if (!drift_skia_init) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftSkiaInitGL not found: %s", dlerror());
-    }
-
-    return drift_skia_init ? 0 : 1;
-}
-
-/**
- * Resolves the DriftSkiaRenderGL function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_skia_render(void) {
-    if (drift_skia_render) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_skia_render = (DriftSkiaRenderFn)dlsym(drift_handle, "DriftSkiaRenderGL");
-    } else {
-        drift_skia_render = (DriftSkiaRenderFn)dlsym(RTLD_DEFAULT, "DriftSkiaRenderGL");
-    }
-
-    if (!drift_skia_render) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftSkiaRenderGL not found: %s", dlerror());
-    }
-
-    return drift_skia_render ? 0 : 1;
-}
-
-static int resolve_drift_skia_error(void) {
-    if (drift_skia_error) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_skia_error = (DriftSkiaErrorFn)dlsym(drift_handle, "DriftSkiaLastError");
-    } else {
-        drift_skia_error = (DriftSkiaErrorFn)dlsym(RTLD_DEFAULT, "DriftSkiaLastError");
-    }
-
-    if (!drift_skia_error) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftSkiaLastError not found: %s", dlerror());
-    }
-
-    return drift_skia_error ? 0 : 1;
-}
-
-/**
- * JNI implementation for NativeBridge.renderFrame().
- *
- * Called from DriftRenderer.onDrawFrame() each frame to render the scene.
- * This function:
- *   1. Resolves the Go function if not already cached
- *   2. Extracts the direct buffer address from the Java ByteBuffer
- *   3. Calls the Go render function to fill the buffer with RGBA pixels
- *
- * @param env       JNI environment pointer (provides JNI functions)
- * @param clazz     Reference to the NativeBridge class (unused, static method)
- * @param width     Width of the render target in pixels
- * @param height    Height of the render target in pixels
- * @param buffer    Direct ByteBuffer allocated by Java (must be direct!)
- * @param bufferLen Size of the buffer in bytes (should be width * height * 4)
- * @return          0 on success, 1 on failure
- *
- * Note: The buffer MUST be a direct ByteBuffer (allocated with allocateDirect).
- *       Regular heap ByteBuffers do not have a stable native address.
- */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_renderFrame(
-    JNIEnv *env,
-    jclass clazz,
-    jint width,
-    jint height,
-    jobject buffer,
-    jint bufferLen
-) {
-    /* Ensure the Go render function is available */
-    if (resolve_drift_render() != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftRenderFrame");
-        return 1;
-    }
-
-    /*
-     * Get the native pointer from the direct ByteBuffer.
-     * This only works for direct buffers (allocateDirect).
-     * For heap buffers, this returns NULL.
-     */
-    void *ptr = (*env)->GetDirectBufferAddress(env, buffer);
-    if (!ptr) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Direct buffer address is null");
-        return 1;
-    }
-
-    /* Call the Go render function to fill the buffer with pixels */
-    int result = drift_render_frame(width, height, ptr, bufferLen);
-
-    /* Log any render failures for debugging */
-    if (result != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Render failed width=%d height=%d len=%d", width, height, bufferLen);
-    }
-
-    return (jint)result;
-}
 
 /**
  * JNI implementation for NativeBridge.appInit().
@@ -708,7 +432,7 @@ Java_{{.JNIPackage}}_NativeBridge_appInit(
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_app_init() != 0) {
+    if (resolve_symbol("DriftAppInit", (void **)&drift_app_init) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftAppInit");
         return 1;
     }
@@ -729,7 +453,7 @@ Java_{{.JNIPackage}}_NativeBridge_initSkiaGL(
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_skia_init() != 0) {
+    if (resolve_symbol("DriftSkiaInitGL", (void **)&drift_skia_init) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftSkiaInitGL");
         return 1;
     }
@@ -738,49 +462,16 @@ Java_{{.JNIPackage}}_NativeBridge_initSkiaGL(
 }
 
 /**
- * JNI implementation for NativeBridge.renderFrameSkia().
- *
- * Renders a frame directly to the current framebuffer using Skia.
- */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_renderFrameSkia(
-    JNIEnv *env,
-    jclass clazz,
-    jint width,
-    jint height
-) {
-    (void)env;
-    (void)clazz;
-
-    if (resolve_drift_skia_render() != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftSkiaRenderGL");
-        return 1;
-    }
-
-    int result = drift_skia_render(width, height);
-    if (result != 0 && resolve_drift_skia_error() == 0) {
-        const char *err = drift_skia_error();
-        if (err && err[0]) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Skia render error: %s", err);
-        }
-        if (err) {
-            free((void *)err);
-        }
-    }
-    return (jint)result;
-}
-
-/**
  * JNI implementation for NativeBridge.pointerEvent().
  *
- * Called from DriftSurfaceView.onTouchEvent() when the user touches the screen.
+ * Called from SkiaHostView.onTouchEvent() when the user touches the screen.
  * This function forwards touch events to the Go engine for processing.
  *
  * @param env       JNI environment pointer (provides JNI functions)
  * @param clazz     Reference to the NativeBridge class (unused, static method)
  * @param pointerID Unique identifier for this pointer/touch (from MotionEvent.getPointerId())
  * @param phase     Touch phase: 0=Down, 1=Move, 2=Up, 3=Cancel
- *                  Maps from Android MotionEvent actions in DriftSurfaceView
+ *                  Maps from Android MotionEvent actions in SkiaHostView
  * @param x         X coordinate of the touch in pixels (from MotionEvent.getX())
  * @param y         Y coordinate of the touch in pixels (from MotionEvent.getY())
  *
@@ -797,7 +488,7 @@ Java_{{.JNIPackage}}_NativeBridge_pointerEvent(
     jdouble y
 ) {
     /* Ensure the Go pointer function is available */
-    if (resolve_drift_pointer() != 0) {
+    if (resolve_symbol("DriftPointerEvent", (void **)&drift_pointer_event) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftPointerEvent");
         return;
     }
@@ -823,7 +514,7 @@ Java_{{.JNIPackage}}_NativeBridge_setDeviceScale(
     jdouble scale
 ) {
     /* Ensure the Go scale function is available */
-    if (resolve_drift_scale() != 0) {
+    if (resolve_symbol("DriftSetDeviceScale", (void **)&drift_set_scale) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftSetDeviceScale");
         return;
     }
@@ -832,246 +523,6 @@ Java_{{.JNIPackage}}_NativeBridge_setDeviceScale(
     drift_set_scale(scale);
 }
 
-/**
- * Resolves the DriftPlatformHandleEvent function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_platform_event(void) {
-    if (drift_platform_event) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_platform_event = (DriftPlatformHandleEventFn)dlsym(drift_handle, "DriftPlatformHandleEvent");
-    } else {
-        drift_platform_event = (DriftPlatformHandleEventFn)dlsym(RTLD_DEFAULT, "DriftPlatformHandleEvent");
-    }
-
-    if (!drift_platform_event) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftPlatformHandleEvent not found: %s", dlerror());
-    }
-
-    return drift_platform_event ? 0 : 1;
-}
-
-/**
- * Resolves the DriftPlatformHandleEventError function from the Go shared library.
- */
-static int resolve_drift_platform_event_error(void) {
-    if (drift_platform_event_error) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-    }
-
-    if (drift_handle) {
-        drift_platform_event_error = (DriftPlatformHandleEventErrorFn)dlsym(drift_handle, "DriftPlatformHandleEventError");
-    } else {
-        drift_platform_event_error = (DriftPlatformHandleEventErrorFn)dlsym(RTLD_DEFAULT, "DriftPlatformHandleEventError");
-    }
-
-    return drift_platform_event_error ? 0 : 1;
-}
-
-/**
- * Resolves the DriftPlatformHandleEventDone function from the Go shared library.
- */
-static int resolve_drift_platform_event_done(void) {
-    if (drift_platform_event_done) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-    }
-
-    if (drift_handle) {
-        drift_platform_event_done = (DriftPlatformHandleEventDoneFn)dlsym(drift_handle, "DriftPlatformHandleEventDone");
-    } else {
-        drift_platform_event_done = (DriftPlatformHandleEventDoneFn)dlsym(RTLD_DEFAULT, "DriftPlatformHandleEventDone");
-    }
-
-    return drift_platform_event_done ? 0 : 1;
-}
-
-/**
- * Resolves the DriftPlatformIsStreamActive function from the Go shared library.
- */
-static int resolve_drift_platform_stream_active(void) {
-    if (drift_platform_stream_active) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-    }
-
-    if (drift_handle) {
-        drift_platform_stream_active = (DriftPlatformIsStreamActiveFn)dlsym(drift_handle, "DriftPlatformIsStreamActive");
-    } else {
-        drift_platform_stream_active = (DriftPlatformIsStreamActiveFn)dlsym(RTLD_DEFAULT, "DriftPlatformIsStreamActive");
-    }
-
-    return drift_platform_stream_active ? 0 : 1;
-}
-
-/**
- * Resolves the DriftBackButtonPressed function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_back_button(void) {
-    if (drift_back_button) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_back_button = (DriftBackButtonFn)dlsym(drift_handle, "DriftBackButtonPressed");
-    } else {
-        drift_back_button = (DriftBackButtonFn)dlsym(RTLD_DEFAULT, "DriftBackButtonPressed");
-    }
-
-    if (!drift_back_button) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftBackButtonPressed not found: %s", dlerror());
-    }
-
-    return drift_back_button ? 0 : 1;
-}
-
-/**
- * Resolves the DriftRequestFrame function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_request_frame(void) {
-    if (drift_request_frame) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_request_frame = (DriftRequestFrameFn)dlsym(drift_handle, "DriftRequestFrame");
-    } else {
-        drift_request_frame = (DriftRequestFrameFn)dlsym(RTLD_DEFAULT, "DriftRequestFrame");
-    }
-
-    if (!drift_request_frame) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftRequestFrame not found: %s", dlerror());
-    }
-
-    return drift_request_frame ? 0 : 1;
-}
-
-/**
- * Resolves the DriftNeedsFrame function from the Go shared library.
- *
- * Uses a "resolved" flag to ensure we only attempt resolution once,
- * avoiding log spam and repeated dlsym calls if the symbol is missing.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_needs_frame(void) {
-    if (drift_needs_frame) {
-        return 0;
-    }
-
-    /* Only attempt resolution once to avoid log spam on every frame */
-    if (drift_needs_frame_resolved) {
-        return 1;
-    }
-    drift_needs_frame_resolved = 1;
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_needs_frame = (DriftNeedsFrameFn)dlsym(drift_handle, "DriftNeedsFrame");
-    } else {
-        drift_needs_frame = (DriftNeedsFrameFn)dlsym(RTLD_DEFAULT, "DriftNeedsFrame");
-    }
-
-    if (!drift_needs_frame) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftNeedsFrame not found: %s", dlerror());
-    }
-
-    return drift_needs_frame ? 0 : 1;
-}
-
-/**
- * Resolves the DriftGeometryApplied function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_geometry_applied(void) {
-    if (drift_geometry_applied) {
-        return 0;
-    }
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_geometry_applied = (DriftGeometryAppliedFn)dlsym(drift_handle, "DriftGeometryApplied");
-    } else {
-        drift_geometry_applied = (DriftGeometryAppliedFn)dlsym(RTLD_DEFAULT, "DriftGeometryApplied");
-    }
-
-    if (!drift_geometry_applied) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftGeometryApplied not found: %s", dlerror());
-    }
-
-    return drift_geometry_applied ? 0 : 1;
-}
-
-/**
- * JNI implementation for NativeBridge.geometryApplied().
- *
- * Called from Kotlin after platform view geometry has been applied on the main thread.
- * Signals the Go render thread to proceed with surface presentation.
- */
-JNIEXPORT void JNICALL
-Java_{{.JNIPackage}}_NativeBridge_geometryApplied(
-    JNIEnv *env,
-    jclass clazz
-) {
-    (void)env;
-    (void)clazz;
-
-    if (resolve_drift_geometry_applied() == 0) {
-        drift_geometry_applied();
-    }
-}
 
 /**
  * JNI implementation for NativeBridge.platformHandleEvent().
@@ -1088,7 +539,7 @@ Java_{{.JNIPackage}}_NativeBridge_platformHandleEvent(
 ) {
     (void)clazz;
 
-    if (resolve_drift_platform_event() != 0) {
+    if (resolve_symbol("DriftPlatformHandleEvent", (void **)&drift_platform_event) != 0) {
         return;
     }
 
@@ -1123,7 +574,7 @@ Java_{{.JNIPackage}}_NativeBridge_platformHandleEventError(
 ) {
     (void)clazz;
 
-    if (resolve_drift_platform_event_error() != 0) {
+    if (resolve_symbol("DriftPlatformHandleEventError", (void **)&drift_platform_event_error) != 0) {
         return;
     }
 
@@ -1153,7 +604,7 @@ Java_{{.JNIPackage}}_NativeBridge_platformHandleEventDone(
 ) {
     (void)clazz;
 
-    if (resolve_drift_platform_event_done() != 0) {
+    if (resolve_symbol("DriftPlatformHandleEventDone", (void **)&drift_platform_event_done) != 0) {
         return;
     }
 
@@ -1177,7 +628,7 @@ Java_{{.JNIPackage}}_NativeBridge_platformIsStreamActive(
 ) {
     (void)clazz;
 
-    if (resolve_drift_platform_stream_active() != 0) {
+    if (resolve_symbol("DriftPlatformIsStreamActive", (void **)&drift_platform_stream_active) != 0) {
         return 0;
     }
 
@@ -1205,7 +656,7 @@ Java_{{.JNIPackage}}_NativeBridge_backButtonPressed(
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_back_button() != 0) {
+    if (resolve_symbol("DriftBackButtonPressed", (void **)&drift_back_button) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftBackButtonPressed");
         return 0;
     }
@@ -1226,7 +677,7 @@ Java_{{.JNIPackage}}_NativeBridge_requestFrame(
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_request_frame() != 0) {
+    if (resolve_symbol("DriftRequestFrame", (void **)&drift_request_frame) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftRequestFrame");
         return;
     }
@@ -1248,48 +699,11 @@ Java_{{.JNIPackage}}_NativeBridge_needsFrame(
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_needs_frame() != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftNeedsFrame");
+    if (resolve_symbol("DriftNeedsFrame", (void **)&drift_needs_frame) != 0) {
         return 1;  /* Fail-safe: render if we can't check */
     }
 
     return (jint)drift_needs_frame();
-}
-
-/**
- * Resolves the DriftHitTestPlatformView function from the Go shared library.
- *
- * @return 0 if the function was successfully resolved, 1 on failure.
- */
-static int resolve_drift_hit_test_platform_view(void) {
-    if (drift_hit_test_platform_view) {
-        return 0;
-    }
-
-    /* Only attempt resolution once to avoid log spam */
-    if (drift_hit_test_platform_view_resolved) {
-        return 1;
-    }
-    drift_hit_test_platform_view_resolved = 1;
-
-    if (!drift_handle) {
-        drift_handle = dlopen("libdrift.so", RTLD_NOW | RTLD_GLOBAL);
-        if (!drift_handle) {
-            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "dlopen libdrift.so failed: %s", dlerror());
-        }
-    }
-
-    if (drift_handle) {
-        drift_hit_test_platform_view = (DriftHitTestPlatformViewFn)dlsym(drift_handle, "DriftHitTestPlatformView");
-    } else {
-        drift_hit_test_platform_view = (DriftHitTestPlatformViewFn)dlsym(RTLD_DEFAULT, "DriftHitTestPlatformView");
-    }
-
-    if (!drift_hit_test_platform_view) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "DriftHitTestPlatformView not found: %s", dlerror());
-    }
-
-    return drift_hit_test_platform_view ? 0 : 1;
 }
 
 /**
@@ -1314,7 +728,7 @@ Java_{{.JNIPackage}}_NativeBridge_hitTestPlatformView(
     (void)env;
     (void)clazz;
 
-    if (resolve_drift_hit_test_platform_view() != 0) {
+    if (resolve_symbol("DriftHitTestPlatformView", (void **)&drift_hit_test_platform_view) != 0) {
         return 1; /* Fail-safe: allow touch if we can't check */
     }
 
@@ -1412,4 +826,326 @@ Java_{{.JNIPackage}}_NativeBridge_platformInit(
 
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Platform channels initialized");
     return 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Unified Frame Orchestrator: EGL, HardwareBuffer, new JNI
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Cleans up EGL context and display. Call on init failure to avoid leaking
+ * resources allocated before the error.
+ */
+static void cleanup_egl(void) {
+    if (g_egl_context != EGL_NO_CONTEXT) {
+        eglDestroyContext(g_egl_display, g_egl_context);
+        g_egl_context = EGL_NO_CONTEXT;
+    }
+    if (g_egl_display != EGL_NO_DISPLAY) {
+        eglTerminate(g_egl_display);
+        g_egl_display = EGL_NO_DISPLAY;
+    }
+}
+
+static void resolve_egl_extensions(void) {
+    if (!eglCreateImageKHR_fn) {
+        eglCreateImageKHR_fn = (PFNEGLCREATEIMAGEKHRPROC)eglGetProcAddress("eglCreateImageKHR");
+    }
+    if (!eglDestroyImageKHR_fn) {
+        eglDestroyImageKHR_fn = (PFNEGLDESTROYIMAGEKHRPROC)eglGetProcAddress("eglDestroyImageKHR");
+    }
+    if (!glEGLImageTargetTexture2DOES_fn) {
+        glEGLImageTargetTexture2DOES_fn = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC)eglGetProcAddress("glEGLImageTargetTexture2DOES");
+    }
+    if (!eglGetNativeClientBufferANDROID_fn) {
+        eglGetNativeClientBufferANDROID_fn = (PFNEGLGETNATIVECLIENTBUFFERANDROIDPROC)eglGetProcAddress("eglGetNativeClientBufferANDROID");
+    }
+}
+
+/**
+ * JNI: NativeBridge.initEGL()
+ * Creates an EGL display, context, and 1x1 pbuffer surface.
+ */
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_initEGL(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+
+    g_egl_display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (g_egl_display == EGL_NO_DISPLAY) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglGetDisplay failed");
+        return -1;
+    }
+
+    EGLint major, minor;
+    if (!eglInitialize(g_egl_display, &major, &minor)) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglInitialize failed");
+        return -1;
+    }
+
+    /* Choose config with GLES3 + RGBA8 */
+    EGLint configAttribs[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, 8,
+        EGL_STENCIL_SIZE, 8,
+        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+        EGL_NONE
+    };
+    EGLConfig config;
+    EGLint numConfigs;
+    if (!eglChooseConfig(g_egl_display, configAttribs, &config, 1, &numConfigs) || numConfigs == 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglChooseConfig failed");
+        return -1;
+    }
+
+    /* Create GLES3 context */
+    EGLint ctxAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
+    g_egl_context = eglCreateContext(g_egl_display, config, EGL_NO_CONTEXT, ctxAttribs);
+    if (g_egl_context == EGL_NO_CONTEXT) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglCreateContext failed");
+        cleanup_egl();
+        return -1;
+    }
+
+    /* Create 1x1 pbuffer (context needs a surface to be current) */
+    EGLint pbufAttribs[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
+    g_egl_surface = eglCreatePbufferSurface(g_egl_display, config, pbufAttribs);
+    if (g_egl_surface == EGL_NO_SURFACE) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglCreatePbufferSurface failed");
+        cleanup_egl();
+        return -1;
+    }
+
+    resolve_egl_extensions();
+
+    __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "EGL initialized: %d.%d", major, minor);
+    return 0;
+}
+
+/**
+ * JNI: NativeBridge.createHwbFBO(width, height)
+ * Allocates AHardwareBuffer, creates EGLImage, GL texture, stencil RB, FBO.
+ */
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_createHwbFBO(JNIEnv *env, jclass clazz, jint width, jint height) {
+    (void)env; (void)clazz;
+
+    if (!eglGetNativeClientBufferANDROID_fn || !eglCreateImageKHR_fn || !glEGLImageTargetTexture2DOES_fn) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "EGL extensions not available for HWB");
+        return -1;
+    }
+
+    /* Allocate AHardwareBuffer */
+    AHardwareBuffer_Desc desc = {
+        .width = (uint32_t)width,
+        .height = (uint32_t)height,
+        .layers = 1,
+        .format = AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
+        .usage = AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER |
+                 AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE |
+                 AHARDWAREBUFFER_USAGE_COMPOSER_OVERLAY,
+        .stride = 0,
+        .rfu0 = 0,
+        .rfu1 = 0,
+    };
+    if (AHardwareBuffer_allocate(&desc, &g_hwb) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "AHardwareBuffer_allocate failed");
+        return -1;
+    }
+
+    /* Create EGLImage from HWB */
+    EGLClientBuffer clientBuf = eglGetNativeClientBufferANDROID_fn(g_hwb);
+    if (!clientBuf) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglGetNativeClientBufferANDROID failed");
+        AHardwareBuffer_release(g_hwb);
+        g_hwb = NULL;
+        return -1;
+    }
+
+    EGLint imageAttribs[] = { EGL_NONE };
+    g_egl_image = eglCreateImageKHR_fn(g_egl_display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuf, imageAttribs);
+    if (g_egl_image == EGL_NO_IMAGE_KHR) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "eglCreateImageKHR failed");
+        AHardwareBuffer_release(g_hwb);
+        g_hwb = NULL;
+        return -1;
+    }
+
+    /* Create GL texture backed by EGLImage */
+    glGenTextures(1, &g_hwb_texture);
+    glBindTexture(GL_TEXTURE_2D, g_hwb_texture);
+    glEGLImageTargetTexture2DOES_fn(GL_TEXTURE_2D, (GLeglImageOES)g_egl_image);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    /* Create stencil renderbuffer */
+    glGenRenderbuffers(1, &g_hwb_stencil_rb);
+    glBindRenderbuffer(GL_RENDERBUFFER, g_hwb_stencil_rb);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, width, height);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    /* Create FBO */
+    glGenFramebuffers(1, &g_hwb_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, g_hwb_fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_hwb_texture, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_hwb_stencil_rb);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "FBO incomplete: 0x%x", status);
+        glDeleteFramebuffers(1, &g_hwb_fbo); g_hwb_fbo = 0;
+        glDeleteRenderbuffers(1, &g_hwb_stencil_rb); g_hwb_stencil_rb = 0;
+        glDeleteTextures(1, &g_hwb_texture); g_hwb_texture = 0;
+        eglDestroyImageKHR_fn(g_egl_display, g_egl_image); g_egl_image = EGL_NO_IMAGE_KHR;
+        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        return -1;
+    }
+
+    g_hwb_width = width;
+    g_hwb_height = height;
+
+    __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "HWB FBO created: %dx%d fbo=%u", width, height, g_hwb_fbo);
+    return 0;
+}
+
+/**
+ * JNI: NativeBridge.destroyHwbFBO()
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_destroyHwbFBO(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+
+    if (g_hwb_fbo) { glDeleteFramebuffers(1, &g_hwb_fbo); g_hwb_fbo = 0; }
+    if (g_hwb_stencil_rb) { glDeleteRenderbuffers(1, &g_hwb_stencil_rb); g_hwb_stencil_rb = 0; }
+    if (g_hwb_texture) { glDeleteTextures(1, &g_hwb_texture); g_hwb_texture = 0; }
+    if (g_egl_image != EGL_NO_IMAGE_KHR && eglDestroyImageKHR_fn) {
+        eglDestroyImageKHR_fn(g_egl_display, g_egl_image);
+        g_egl_image = EGL_NO_IMAGE_KHR;
+    }
+    if (g_hwb) { AHardwareBuffer_release(g_hwb); g_hwb = NULL; }
+    g_hwb_width = 0;
+    g_hwb_height = 0;
+}
+
+/**
+ * JNI: NativeBridge.bindHwbFBO()
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_bindHwbFBO(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    glBindFramebuffer(GL_FRAMEBUFFER, g_hwb_fbo);
+    glViewport(0, 0, g_hwb_width, g_hwb_height);
+}
+
+/**
+ * JNI: NativeBridge.unbindHwbFBO()
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_unbindHwbFBO(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+/**
+ * JNI: NativeBridge.makeCurrent()
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_makeCurrent(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    if (g_egl_display != EGL_NO_DISPLAY && g_egl_context != EGL_NO_CONTEXT) {
+        eglMakeCurrent(g_egl_display, g_egl_surface, g_egl_surface, g_egl_context);
+    }
+}
+
+/**
+ * JNI: NativeBridge.releaseContext()
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_releaseContext(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+    if (g_egl_display != EGL_NO_DISPLAY) {
+        eglMakeCurrent(g_egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    }
+}
+
+/**
+ * JNI: NativeBridge.getHardwareBuffer()
+ * Returns the current AHardwareBuffer as a Java HardwareBuffer object.
+ * Used by SkiaHostView to wrap as a Bitmap for HWUI onDraw().
+ */
+JNIEXPORT jobject JNICALL
+Java_{{.JNIPackage}}_NativeBridge_getHardwareBuffer(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    if (!g_hwb) return NULL;
+    return AHardwareBuffer_toHardwareBuffer(env, g_hwb);
+}
+
+
+/**
+ * JNI: NativeBridge.stepAndSnapshot(width, height) -> ByteArray?
+ * Calls Go DriftStepAndSnapshot and returns the JSON snapshot bytes.
+ */
+JNIEXPORT jbyteArray JNICALL
+Java_{{.JNIPackage}}_NativeBridge_stepAndSnapshot(JNIEnv *env, jclass clazz, jint width, jint height) {
+    (void)clazz;
+
+    if (resolve_symbol("DriftStepAndSnapshot", (void **)&drift_step_and_snapshot) != 0) {
+        return NULL;
+    }
+
+    char *outData = NULL;
+    int outLen = 0;
+    int result = drift_step_and_snapshot(width, height, &outData, &outLen);
+    if (result != 0) {
+        if (outData) free(outData);
+        return NULL;
+    }
+
+    if (!outData || outLen <= 0) {
+        if (outData) free(outData);
+        return NULL;
+    }
+
+    jbyteArray jdata = (*env)->NewByteArray(env, outLen);
+    if (jdata) {
+        (*env)->SetByteArrayRegion(env, jdata, 0, outLen, (const jbyte *)outData);
+    }
+    free(outData);
+    return jdata;
+}
+
+/**
+ * JNI: NativeBridge.renderFrameSync(width, height)
+ * Calls Go DriftSkiaRenderFrameSync (split pipeline render after StepAndSnapshot).
+ */
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_renderFrameSync(JNIEnv *env, jclass clazz, jint width, jint height) {
+    (void)env; (void)clazz;
+
+    if (resolve_symbol("DriftSkiaRenderFrameSync", (void **)&drift_skia_render_frame_sync) != 0) {
+        return -1;
+    }
+
+    return (jint)drift_skia_render_frame_sync(width, height);
+}
+
+/**
+ * JNI: NativeBridge.purgeResources()
+ * Resets GL state tracking and releases all cached GPU resources.
+ * Call after sleep/wake or surface recreation.
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_purgeResources(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+
+    if (resolve_symbol("DriftSkiaPurgeResources", (void **)&drift_skia_purge_resources) != 0) {
+        return;
+    }
+
+    drift_skia_purge_resources();
 }

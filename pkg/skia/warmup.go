@@ -9,8 +9,8 @@ import (
 
 // WarmupShaders pre-compiles common GPU shaders by drawing primitives to an
 // offscreen surface. This eliminates shader compilation jank during the first
-// visible frames. Should be called during context initialization on the
-// render thread.
+// visible frames. Should be called during context initialization while the
+// GL/Metal context is current.
 func (c *Context) WarmupShaders(backend string) error {
 	if c == nil || c.ptr == nil {
 		return errors.New("skia: nil context")

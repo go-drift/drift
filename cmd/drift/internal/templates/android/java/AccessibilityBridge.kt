@@ -370,7 +370,7 @@ class AccessibilityBridge(private val hostView: View) : AccessibilityNodeProvide
 
     override fun performAction(virtualViewId: Int, action: Int, arguments: Bundle?): Boolean {
         if (virtualViewId == View.NO_ID) {
-            // Handle host view actions - don't delegate to the view since GLSurfaceView doesn't support them
+            // Handle host view actions directly
             when (action) {
                 AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS -> {
                     // Focus the first accessible child (the root of our semantic tree)

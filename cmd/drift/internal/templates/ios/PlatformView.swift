@@ -3,13 +3,6 @@
 
 import UIKit
 
-// MARK: - Geometry Applied Signal
-
-/// FFI declaration for the Go-exported DriftGeometryApplied function.
-/// Called after applying platform view geometry to signal the render thread.
-@_silgen_name("DriftGeometryApplied")
-func DriftGeometryApplied()
-
 /// FFI declaration for DriftHitTestPlatformView.
 /// Returns 1 if the platform view is the topmost target, 0 if obscured.
 @_silgen_name("DriftHitTestPlatformView")
@@ -290,14 +283,48 @@ enum PlatformViewHandler {
 
     private static var views: [Int: PlatformViewContainer] = [:]
     private static var interceptors: [Int: TouchInterceptorView] = [:]
+    private static var maskLayers: [Int: CAShapeLayer] = [:]
     private static weak var hostView: UIView?
-
-    /// Frame sequence tracking for geometry batches
-    private static var lastAppliedSeq: UInt64 = 0
 
     /// Sets the host view where platform views will be added.
     static func setHostView(_ view: UIView) {
         hostView = view
+    }
+
+    /// Applies platform view geometry from a frame snapshot synchronously.
+    /// Called on the main thread between StepAndSnapshot and RenderSync to
+    /// ensure native views are positioned before the GPU frame is composited.
+    static func applySnapshot(_ views: [ViewSnapshot]) {
+        CATransaction.setDisableActions(true)
+
+        for snap in views {
+            guard let container = self.views[snap.viewId] else { continue }
+            let targetView = interceptors[snap.viewId] ?? container.view
+
+            if !snap.visible {
+                targetView.isHidden = true
+                continue
+            }
+
+            targetView.frame = CGRect(
+                x: snap.x, y: snap.y,
+                width: snap.width, height: snap.height
+            )
+            // Show the view before applying clip bounds, since applyClipBounds
+            // may hide it again if the clip area is zero.
+            targetView.isHidden = false
+            applyClipBounds(
+                viewId: snap.viewId,
+                view: targetView,
+                viewX: CGFloat(snap.x), viewY: CGFloat(snap.y),
+                viewWidth: CGFloat(snap.width), viewHeight: CGFloat(snap.height),
+                clipLeft: snap.clipLeft.map { CGFloat($0) },
+                clipTop: snap.clipTop.map { CGFloat($0) },
+                clipRight: snap.clipRight.map { CGFloat($0) },
+                clipBottom: snap.clipBottom.map { CGFloat($0) }
+            )
+            container.onGeometryChanged()
+        }
     }
 
     static func handle(method: String, args: Any?) -> (Any?, Error?) {
@@ -310,10 +337,6 @@ enum PlatformViewHandler {
             return create(args: dict)
         case "dispose":
             return dispose(args: dict)
-        case "setGeometry":
-            return setGeometry(args: dict)
-        case "batchSetGeometry":
-            return batchSetGeometry(args: dict)
         case "setVisible":
             return setVisible(args: dict)
         case "setEnabled":
@@ -541,6 +564,7 @@ enum PlatformViewHandler {
 
         if let container = views[viewId] {
             let interceptor = interceptors.removeValue(forKey: viewId)
+            maskLayers.removeValue(forKey: viewId)
             DispatchQueue.main.async {
                 container.dispose()
                 interceptor?.removeFromSuperview()
@@ -551,55 +575,17 @@ enum PlatformViewHandler {
         return (nil, nil)
     }
 
-    private static func setGeometry(args: [String: Any]) -> (Any?, Error?) {
-        guard let viewId = args["viewId"] as? Int,
-              let container = views[viewId] else {
-            return (nil, nil)
-        }
-
-        let x = args["x"] as? Double ?? 0
-        let y = args["y"] as? Double ?? 0
-        let width = args["width"] as? Double ?? 0
-        let height = args["height"] as? Double ?? 0
-        let clipLeft = args["clipLeft"] as? Double
-        let clipTop = args["clipTop"] as? Double
-        let clipRight = args["clipRight"] as? Double
-        let clipBottom = args["clipBottom"] as? Double
-
-        DispatchQueue.main.async {
-            let targetView = interceptors[viewId] ?? container.view
-            targetView.frame = CGRect(x: x, y: y, width: width, height: height)
-            applyClipBounds(
-                view: targetView,
-                viewX: CGFloat(x), viewY: CGFloat(y),
-                viewWidth: CGFloat(width), viewHeight: CGFloat(height),
-                clipLeft: clipLeft.map { CGFloat($0) },
-                clipTop: clipTop.map { CGFloat($0) },
-                clipRight: clipRight.map { CGFloat($0) },
-                clipBottom: clipBottom.map { CGFloat($0) }
-            )
-            container.onGeometryChanged()
-        }
-
-        return (nil, nil)
-    }
-
     /// Apply clip bounds to a view using CALayer masking.
     /// Clip bounds are in logical points (no density conversion needed on iOS).
+    /// Disables implicit CALayer animations internally.
     private static func applyClipBounds(
+        viewId: Int,
         view: UIView,
         viewX: CGFloat, viewY: CGFloat,
         viewWidth: CGFloat, viewHeight: CGFloat,
         clipLeft: CGFloat?, clipTop: CGFloat?,
         clipRight: CGFloat?, clipBottom: CGFloat?
     ) {
-        // Suppress implicit animations on frame/isHidden/mask changes.
-        // Without this, Core Animation's default 0.25s animations on
-        // these properties deadlock with presentsWithTransaction on the
-        // Metal layer. This modifies the implicit CATransaction (no
-        // explicit begin/commit needed) which is valid because this
-        // method always runs on the main thread within a run loop
-        // iteration that will commit the transaction automatically.
         CATransaction.setDisableActions(true)
 
         // No clip provided - clear any existing mask, but don't change visibility
@@ -640,91 +626,18 @@ enum PlatformViewHandler {
             return
         }
 
-        // Partial clip - apply mask
-        // Note: Allocates a new CAShapeLayer each update. If scroll performance degrades,
-        // consider reusing a mask layer per view.
+        // Partial clip - reuse cached mask layer to avoid per-frame allocation
         let maskPath = UIBezierPath(rect: CGRect(x: left, y: top, width: right - left, height: bottom - top))
-        let maskLayer = CAShapeLayer()
+        let maskLayer: CAShapeLayer
+        if let cached = maskLayers[viewId] {
+            maskLayer = cached
+        } else {
+            maskLayer = CAShapeLayer()
+            maskLayers[viewId] = maskLayer
+        }
         maskLayer.path = maskPath.cgPath
         view.layer.mask = maskLayer
         view.isHidden = false
-    }
-
-    /// Batch geometry update. Posts geometry changes to the main thread and returns
-    /// immediately. The frameSeq mechanism ensures stale batches are skipped if the
-    /// main thread falls behind.
-    private static func batchSetGeometry(args: [String: Any]) -> (Any?, Error?) {
-        guard let frameSeq = args["frameSeq"] as? UInt64,
-              let geometries = args["geometries"] as? [[String: Any]] else {
-            return (nil, nil)
-        }
-
-        if geometries.isEmpty {
-            return (nil, nil)
-        }
-
-        // Skip stale batches (older than last applied).
-        // Still signal geometry applied so the render thread doesn't timeout.
-        if frameSeq <= lastAppliedSeq {
-            DriftGeometryApplied()
-            return (nil, nil)
-        }
-
-        let applyGeometries = {
-            // Suppress implicit animations on frame/isHidden/mask changes.
-            // Without this, Core Animation's default 0.25s animations
-            // deadlock with presentsWithTransaction on the Metal layer.
-            // Modifies the implicit CATransaction (no begin/commit needed)
-            // since this closure is dispatched to the main thread.
-            CATransaction.setDisableActions(true)
-
-            for geom in geometries {
-                guard let viewId = geom["viewId"] as? Int,
-                      let container = views[viewId] else {
-                    continue
-                }
-
-                let x = geom["x"] as? Double ?? 0
-                let y = geom["y"] as? Double ?? 0
-                let width = geom["width"] as? Double ?? 0
-                let height = geom["height"] as? Double ?? 0
-                let clipLeft = geom["clipLeft"] as? Double
-                let clipTop = geom["clipTop"] as? Double
-                let clipRight = geom["clipRight"] as? Double
-                let clipBottom = geom["clipBottom"] as? Double
-
-                let targetView = interceptors[viewId] ?? container.view
-                targetView.frame = CGRect(x: x, y: y, width: width, height: height)
-                applyClipBounds(
-                    view: targetView,
-                    viewX: CGFloat(x), viewY: CGFloat(y),
-                    viewWidth: CGFloat(width), viewHeight: CGFloat(height),
-                    clipLeft: clipLeft.map { CGFloat($0) },
-                    clipTop: clipTop.map { CGFloat($0) },
-                    clipRight: clipRight.map { CGFloat($0) },
-                    clipBottom: clipBottom.map { CGFloat($0) }
-                )
-                container.onGeometryChanged()
-            }
-            lastAppliedSeq = frameSeq
-        }
-
-        // If already on main thread, apply directly and signal immediately.
-        if Thread.isMainThread {
-            applyGeometries()
-            DriftGeometryApplied()
-            return (nil, nil)
-        }
-
-        // Post to main thread and return immediately.
-        // frameSeq ensures stale batches are skipped if main thread falls behind.
-        // Signal geometry applied after the closure runs so the render thread
-        // can defer surface presentation until geometry lands.
-        DispatchQueue.main.async {
-            applyGeometries()
-            DriftGeometryApplied()
-        }
-        return (nil, nil)
     }
 
     private static func setVisible(args: [String: Any]) -> (Any?, Error?) {

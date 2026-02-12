@@ -21,8 +21,7 @@ type FramePhaseTimings struct {
 	LayoutMs        float64 `json:"layoutMs"`
 	SemanticsMs     float64 `json:"semanticsMs"`
 	RecordMs        float64 `json:"recordMs"`
-	CompositeMs     float64 `json:"compositeMs"`
-	PlatformFlushMs float64 `json:"platformFlushMs"`
+	GeometryMs      float64 `json:"geometryMs"`
 	TraceOverheadMs float64 `json:"traceOverheadMs"`
 }
 

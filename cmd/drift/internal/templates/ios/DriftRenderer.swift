@@ -4,7 +4,6 @@
 /// This renderer initializes a Skia Metal context and asks the Go engine to draw
 /// directly into the CAMetalDrawable's texture.
 
-import CoreGraphics
 import Metal
 import QuartzCore
 
@@ -19,13 +18,43 @@ func DriftSkiaInitMetal(
     _ queue: UInt
 ) -> Int32
 
-/// FFI declaration for the Go Skia render function.
-@_silgen_name("DriftSkiaRenderMetal")
-func DriftSkiaRenderMetal(
+/// FFI declaration for the split pipeline render function (composite only).
+@_silgen_name("DriftSkiaRenderMetalSync")
+func DriftSkiaRenderMetalSync(
     _ width: Int32,
     _ height: Int32,
     _ texture: UInt
 ) -> Int32
+
+/// FFI declaration for running the engine pipeline and returning geometry snapshot.
+@_silgen_name("DriftStepAndSnapshot")
+func DriftStepAndSnapshot(
+    _ width: Int32,
+    _ height: Int32,
+    _ outData: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>,
+    _ outLen: UnsafeMutablePointer<Int32>
+) -> Int32
+
+// MARK: - Frame Snapshot Types
+
+/// Platform view geometry from a single frame, decoded from JSON.
+struct FrameSnapshot: Decodable {
+    let views: [ViewSnapshot]
+}
+
+/// Geometry for a single platform view within a frame snapshot.
+struct ViewSnapshot: Decodable {
+    let viewId: Int
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+    let clipLeft: Double?
+    let clipTop: Double?
+    let clipRight: Double?
+    let clipBottom: Double?
+    let visible: Bool
+}
 
 /// Metal renderer that bridges Go engine output to the iOS display.
 final class DriftRenderer {
@@ -35,9 +64,6 @@ final class DriftRenderer {
 
     /// The command queue for presenting drawables.
     private let commandQueue: MTLCommandQueue
-
-    /// Whether Skia successfully initialized.
-    private var skiaReady = false
 
     /// Initializes the renderer with the default Metal device.
     init() {
@@ -58,37 +84,42 @@ final class DriftRenderer {
 
         let devicePtr = UInt(bitPattern: Unmanaged.passUnretained(device).toOpaque())
         let queuePtr = UInt(bitPattern: Unmanaged.passUnretained(queue).toOpaque())
-        skiaReady = (DriftSkiaInitMetal(devicePtr, queuePtr) == 0)
+        if DriftSkiaInitMetal(devicePtr, queuePtr) != 0 {
+            fatalError("Failed to initialize Skia Metal backend")
+        }
     }
 
-    /// Renders a frame and presents it to the drawable.
-    ///
-    /// When `synchronous` is true (during rotation), the drawable is presented
-    /// within the current Core Animation transaction so the content matches
-    /// the animated bounds. This requires waiting for the GPU command to be
-    /// scheduled before presenting, which adds a small amount of latency.
-    func draw(to drawable: CAMetalDrawable, size: CGSize, scale: CGFloat, synchronous: Bool = false) {
-        guard skiaReady else { return }
+    /// Runs the engine pipeline (build, layout, record) and returns the platform
+    /// view geometry snapshot. This is the first half of the split pipeline.
+    func stepAndSnapshot(width: Int32, height: Int32) -> FrameSnapshot? {
+        var outData: UnsafeMutablePointer<CChar>? = nil
+        var outLen: Int32 = 0
+        let result = DriftStepAndSnapshot(width, height, &outData, &outLen)
+        guard result == 0 else { return nil }
+        guard let data = outData, outLen > 0 else { return nil }
+        defer { free(data) }
+        let jsonData = Data(bytes: data, count: Int(outLen))
+        return try? JSONDecoder().decode(FrameSnapshot.self, from: jsonData)
+    }
 
-        let width = Int(size.width * scale)
-        let height = Int(size.height * scale)
+    /// Composites the recorded display lists into the Metal texture and presents
+    /// the drawable. This is the second half of the split pipeline.
+    func renderSync(to drawable: CAMetalDrawable, width: Int32, height: Int32, synchronous: Bool = false) {
         guard width > 0, height > 0 else { return }
 
         let texturePtr = UInt(bitPattern: Unmanaged.passUnretained(drawable.texture).toOpaque())
-        let result = DriftSkiaRenderMetal(Int32(width), Int32(height), texturePtr)
+        let result = DriftSkiaRenderMetalSync(width, height, texturePtr)
         guard result == 0 else { return }
 
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
         if synchronous {
-            // Present within the current CATransaction so the frame is
-            // synchronized with the rotation animation.
             commandBuffer.commit()
             commandBuffer.waitUntilScheduled()
             drawable.present()
         } else {
-            // Normal async presentation for lowest latency.
             commandBuffer.present(drawable)
             commandBuffer.commit()
         }
     }
+
 }

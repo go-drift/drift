@@ -240,14 +240,6 @@ func DriftPlatformIsStreamActive(channelPtr *C.char) C.int {
 	return 0
 }
 
-// DriftGeometryApplied is called by native after applying platform view geometry.
-// This signals the render thread to proceed with surface presentation.
-//
-//export DriftGeometryApplied
-func DriftGeometryApplied() {
-	platform.GetPlatformViewRegistry().SignalGeometryApplied()
-}
-
 // DriftSetScheduleFrameHandler registers a native callback that Go invokes
 // when it needs the platform to schedule a new frame. The native side (e.g.,
 // Android JNI) provides a C function pointer; this bridges it into Go's

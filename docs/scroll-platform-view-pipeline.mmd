@@ -1,0 +1,109 @@
+---
+title: "Drift: Drag to Platform View Coordinate Update Pipeline"
+---
+
+sequenceDiagram
+    participant MT as Android Main Thread
+    participant Go as Go Engine (via JNI)
+    participant GL as GL Thread
+    participant GPU as GPU / RenderThread
+
+    Note over MT: MotionEvent.ACTION_MOVE arrives
+
+    MT->>Go: NativeBridge.pointerEvent(id, MOVE, x, y)<br/>DriftSurfaceView.kt:295
+    activate Go
+
+    Note over Go: HandlePointer()<br/>engine.go:669<br/>position = {x/scale, y/scale}
+
+    Go->>Go: Hit test + dispatch to gesture handlers<br/>engine.go:747
+    Go->>Go: axisDragRecognizer.handleMove()<br/>recognizers.go:310<br/>primaryDelta = event.Y - last.Y
+    Go->>Go: OnUpdate callback<br/>scroll.go:300<br/>position.ApplyUserOffset(-primaryDelta)
+    Go->>Go: ScrollPosition.SetOffset(newValue)<br/>scroll.go:596<br/>p.offset = clamped
+    Go->>Go: notify() calls onUpdate callback<br/>scroll.go:603 calls scroll.go:118<br/>scroll.MarkNeedsPaint()
+
+    Go-->>MT: JNI returns
+    deactivate Go
+
+    MT->>GL: renderNow(): requestRender()<br/>DriftSurfaceView.kt:320
+
+    activate GL
+    Note over GL: DriftRenderer.onDrawFrame()<br/>DriftRenderer.kt:71
+
+    GL->>Go: NativeBridge.renderFrameSkia(w, h)
+    activate Go
+
+    Note over Go: app.Paint(canvas, size)<br/>engine.go:431
+
+    rect rgb(230, 240, 255)
+        Note over Go: LAYOUT PHASE<br/>engine.go:584<br/>(usually clean during scroll)
+    end
+
+    rect rgb(230, 255, 230)
+        Note over Go: BEGIN GEOMETRY BATCH<br/>engine.go:600<br/>batchMode=true, frameSeq++
+    end
+
+    rect rgb(255, 245, 220)
+        Note over Go: RECORD PHASE<br/>engine.go:616-622
+
+        Go->>Go: renderScrollView.Paint()<br/>scroll.go:208
+        Go->>Go: Canvas.ClipRect(viewport)<br/>scroll.go:216<br/>records opClipRect
+        Go->>Go: Canvas.Translate(0, -offset)<br/>scroll.go:226<br/>records opTranslate{0, -350.7}
+        Go->>Go: PushTranslation(0, -offset)<br/>scroll.go:227<br/>PaintContext.transform.Y -= 350.7
+        Go->>Go: child.Paint(ctx)<br/>scroll.go:231<br/>records opEmbedPlatformView{id, size}
+        Go->>Go: layer.SetContent(displayList)<br/>engine.go:1032
+    end
+
+    rect rgb(255, 230, 230)
+        Note over Go: COMPOSITE PHASE<br/>engine.go:630-635
+
+        Go->>Go: canvas.Scale(scale, scale)
+        Go->>Go: CompositingCanvas wraps Skia canvas<br/>compositing_canvas.go
+
+        Note over Go: Replay display list ops:
+
+        Go->>Go: opTranslate.execute(comp)<br/>comp.transform.Y += -350.7<br/>comp.inner.Translate(0, -350.7)<br/>Skia canvas shifts by -350.7
+
+        Go->>Go: opEmbedPlatformView.execute(comp)<br/>compositing_canvas.go:190<br/>offset = comp.transform (Y=-350.7)<br/>sink.UpdateViewGeometry(id, offset, size, clip)<br/>platform_view.go:282<br/>Queued in batchUpdates
+    end
+
+    rect rgb(240, 230, 255)
+        Note over Go: FLUSH GEOMETRY BATCH<br/>engine.go:647
+
+        Go->>Go: FlushGeometryBatch()<br/>platform_view.go:356<br/>Encode batch as JSON
+
+        Go->>MT: channel.Invoke("batchSetGeometry")<br/>platform_view.go:431<br/>JNI call runs on GL thread
+        Note over MT: handleMethodCallNative()<br/>PlatformChannel.kt:98<br/>Called ON GL THREAD via JNI
+
+        MT->>MT: batchSetGeometry()<br/>PlatformView.kt:371<br/>Looper != MainLooper (GL thread)<br/>geometryHandler.postAtFrontOfQueue(closure)
+        MT-->>Go: JNI returns immediately
+    end
+
+    Go->>GPU: surface.Flush()<br/>engine_skia.go:126<br/>GPU commands submitted
+    activate GPU
+
+    Go->>Go: WaitGeometryApplied(8ms)<br/>engine_skia.go:129<br/>Blocks GL thread
+
+    Note over MT: Main thread Looper<br/>picks up posted closure
+
+    MT->>MT: applyGeometries()<br/>PlatformView.kt:390
+    MT->>MT: view.translationX = x * density<br/>view.translationY = y * density<br/>PlatformView.kt:306-307<br/>(RenderNode properties)
+    MT->>MT: view.clipBounds = Rect(...)<br/>PlatformView.kt:362
+
+    MT->>Go: NativeBridge.geometryApplied()<br/>PlatformView.kt:423<br/>SignalGeometryApplied()<br/>platform_view.go:465
+    Note over Go: WaitGeometryApplied unblocks
+
+    Go-->>GL: Paint() returns
+    deactivate Go
+
+    Note over GL: onDrawFrame() returns<br/>GLSurfaceView swaps buffers<br/>Skia content visible
+
+    deactivate GL
+
+    MT->>GPU: RenderThread picks up<br/>new translationX/Y<br/>composites View at new position
+    deactivate GPU
+
+    Note over MT,GPU: SurfaceFlinger composites<br/>GL surface + View surface
+
+    rect rgb(255, 200, 200)
+        Note over MT,GPU: LAG OCCURS IF:<br/>1. Main thread too busy to run closure within 8ms<br/>2. layoutParams assignment triggers measure/layout pass<br/>3. SurfaceFlinger composites surfaces at different times
+    end

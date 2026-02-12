@@ -603,7 +603,7 @@ func (c *SkiaCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor
 }
 
 func (c *SkiaCanvas) EmbedPlatformView(viewID int64, size Size) {
-	// No-op: platform view geometry is resolved by CompositingCanvas wrapper
+	// No-op: platform view geometry is resolved by GeometryCanvas in StepFrame
 }
 
 func (c *SkiaCanvas) Size() Size {

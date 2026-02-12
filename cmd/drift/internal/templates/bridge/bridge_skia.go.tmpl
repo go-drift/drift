@@ -22,31 +22,11 @@ func DriftSkiaInitGL() C.int {
 	return 0
 }
 
-// DriftSkiaRenderGL renders a frame using the Skia GL backend.
-//
-//export DriftSkiaRenderGL
-func DriftSkiaRenderGL(width C.int, height C.int) C.int {
-	if err := engine.RenderSkiaGL(int(width), int(height)); err != nil {
-		return 1
-	}
-	return 0
-}
-
 // DriftSkiaInitMetal initializes a Skia Metal context.
 //
 //export DriftSkiaInitMetal
 func DriftSkiaInitMetal(device C.uintptr_t, queue C.uintptr_t) C.int {
 	if err := engine.InitSkiaMetal(unsafe.Pointer(uintptr(device)), unsafe.Pointer(uintptr(queue))); err != nil {
-		return 1
-	}
-	return 0
-}
-
-// DriftSkiaRenderMetal renders a frame using the Skia Metal backend.
-//
-//export DriftSkiaRenderMetal
-func DriftSkiaRenderMetal(width C.int, height C.int, texture C.uintptr_t) C.int {
-	if err := engine.RenderSkiaMetal(int(width), int(height), unsafe.Pointer(uintptr(texture))); err != nil {
 		return 1
 	}
 	return 0
@@ -73,4 +53,54 @@ func DriftSkiaLastError() *C.char {
 		return nil
 	}
 	return C.CString(err)
+}
+
+// DriftStepAndSnapshot runs the engine pipeline and returns platform view
+// geometry as JSON. The caller must free *outData with C.free().
+//
+//export DriftStepAndSnapshot
+func DriftStepAndSnapshot(width, height C.int, outData **C.char, outLen *C.int) C.int {
+	data, err := engine.StepAndSnapshot(int(width), int(height))
+	if err != nil {
+		return 1
+	}
+	if len(data) == 0 {
+		*outData = nil
+		*outLen = 0
+		return 0
+	}
+	cData := C.CBytes(data)
+	*outData = (*C.char)(cData)
+	*outLen = C.int(len(data))
+	return 0
+}
+
+// DriftSkiaRenderFrameSync renders a frame using the split pipeline (after StepAndSnapshot).
+// Geometry was already captured; this only composites into the GPU canvas.
+//
+//export DriftSkiaRenderFrameSync
+func DriftSkiaRenderFrameSync(width, height C.int) C.int {
+	if err := engine.RenderSkiaGLSync(int(width), int(height)); err != nil {
+		return 1
+	}
+	return 0
+}
+
+// DriftSkiaRenderMetalSync renders a frame using the split pipeline (after StepAndSnapshot).
+// Geometry was already captured; this only composites into the Metal texture.
+//
+//export DriftSkiaRenderMetalSync
+func DriftSkiaRenderMetalSync(width, height C.int, texture C.uintptr_t) C.int {
+	if err := engine.RenderSkiaMetalSync(int(width), int(height), unsafe.Pointer(uintptr(texture))); err != nil {
+		return 1
+	}
+	return 0
+}
+
+// DriftSkiaPurgeResources resets GL state tracking and releases all cached GPU
+// resources. Call after sleep/wake or surface recreation to prevent stale textures.
+//
+//export DriftSkiaPurgeResources
+func DriftSkiaPurgeResources() {
+	engine.PurgeSkiaGLResources()
 }

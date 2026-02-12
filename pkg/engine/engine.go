@@ -1,9 +1,8 @@
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,14 +70,14 @@ func RequestFrame() {
 
 // NeedsFrame returns true if a new frame should be rendered.
 // Call this before acquiring a drawable to skip unnecessary render cycles.
-// Uses TryLock to avoid blocking the platform main thread when Paint() holds
-// the lock. If the lock is held, a frame is actively being processed so we
-// return true to keep the render loop alive.
+// Uses TryLock to avoid blocking the platform main thread when StepFrame or
+// RenderFrame holds the lock. If the lock is held, a frame is actively being
+// processed so we return true to keep the render loop alive.
 func NeedsFrame() bool {
 	if !frameLock.TryLock() {
-		// The lock is held (typically by Paint()), so return true rather
-		// than blocking the caller. At worst this schedules one extra
-		// no-op frame; the alternative is stalling the platform main thread.
+		// The lock is held (typically by StepFrame/RenderFrame), so return
+		// true rather than blocking the caller. At worst this schedules one
+		// extra no-op frame; the alternative is stalling the platform main thread.
 		return true
 	}
 	defer frameLock.Unlock()
@@ -265,7 +264,7 @@ func (d *diagnosticsDataSource) RegisterRenderObject(ro layout.RenderObject) {
 // Use this for recovery from catastrophic errors. All state will be lost.
 // This is safe to call from any goroutine.
 func RestartApp() {
-	// Dispatch runs inside Paint() which already holds frameLock,
+	// Dispatch runs inside StepFrame() which already holds frameLock,
 	// so we don't need to acquire it here.
 	Dispatch(func() {
 		// Clear captured error and reset error screen state
@@ -428,41 +427,17 @@ func (a *appRunner) flushSemanticsIfNeeded(pipeline *layout.PipelineOwner, scale
 	}
 }
 
-func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error) {
-	frameLock.Lock()
-	defer frameLock.Unlock()
+// runPipeline executes the shared engine pipeline phases: error handling, frame
+// timing, dispatch, animate, root mounting, build, layout, semantics, geometry
+// batch setup, and dirty layer recording. Must be called with frameLock held.
+//
+// If traceSample is non-nil, per-phase timing is recorded into it.
+//
+// Returns false if the render tree is not yet available.
+func (a *appRunner) runPipeline(size graphics.Size, traceSample *FrameSample) bool {
+	tracing := traceSample != nil
 
-	// In debug mode, recover panics and show error screen
-	// In prod mode, let panics crash the app (unless user adds ErrorBoundary)
-	// Note: This defer is set up after Lock(), so it runs before Unlock()
-	if core.DebugMode {
-		defer func() {
-			if r := recover(); r != nil {
-				err := &errors.BoundaryError{
-					Phase:      "frame",
-					Recovered:  r,
-					StackTrace: errors.CaptureStack(),
-					Timestamp:  time.Now(),
-				}
-				a.capturedError.Store(err)
-				errors.ReportBoundaryError(err)
-				// Unmount broken tree
-				if a.root != nil {
-					a.root.Unmount()
-					a.root = nil
-				}
-				a.rootRender = nil
-				// Request new frame to render error screen
-				a.pendingFrameRequest.Store(true)
-			}
-		}()
-	}
-
-	// If an error was captured (e.g., from HandlePointer) and we still have the OLD tree,
-	// unmount it. HandlePointer can't safely unmount due to lock concerns, so we do it here.
-	// Note: We only unmount if the tree still exists AND we have an error. Once we've
-	// remounted with the error screen (root becomes non-nil again), we don't unmount again.
-	// The errorScreenMounted flag tracks whether we've already transitioned to the error screen.
+	// Handle captured errors (e.g. from HandlePointer)
 	if a.capturedError.Load() != nil && a.root != nil && !a.errorScreenMounted {
 		a.root.Unmount()
 		a.root = nil
@@ -470,33 +445,19 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		a.errorScreenMounted = true
 	}
 
+	// Frame timing
 	frameStart := time.Now()
 	frameInterval := time.Duration(0)
 	if !a.lastFrameStart.IsZero() {
 		frameInterval = frameStart.Sub(a.lastFrameStart)
 	}
-
-	// Track frame timing for diagnostics
 	if a.frameTiming != nil && frameInterval > 0 {
 		a.frameTiming.Add(frameInterval)
-		// Mark only the HUD for repaint (not the whole tree)
 		if a.hudRenderObject != nil {
 			a.hudRenderObject.MarkNeedsPaint()
 		}
 	}
 	a.lastFrameStart = frameStart
-
-	traceEnabled := a.frameTraceEnabled && a.frameTrace != nil
-	var traceSample FrameSample
-	var frameWorkStart time.Time
-	if traceEnabled {
-		frameWorkStart = frameStart
-		traceSample.Timestamp = frameStart.UnixMilli()
-		currentState := platform.Lifecycle.State()
-		traceSample.Flags.LifecycleState = string(currentState)
-		traceSample.Flags.ResumedThisFrame = a.lastLifecycleState != platform.LifecycleStateResumed && currentState == platform.LifecycleStateResumed
-		a.lastLifecycleState = currentState
-	}
 
 	scale := a.deviceScale
 	logicalSize := graphics.Size{
@@ -504,11 +465,11 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 		Height: size.Height / scale,
 	}
 
-	var dispatchStart time.Time
-	if traceEnabled {
-		dispatchStart = time.Now()
+	// Dispatch
+	var phaseStart time.Time
+	if tracing {
+		phaseStart = time.Now()
 	}
-
 	callbacks := a.drainDispatchQueue()
 	for _, callback := range callbacks {
 		callback()
@@ -516,23 +477,22 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 	if a.consumePendingFrameRequest() {
 		a.requestFrameLocked()
 	}
-
-	if traceEnabled {
-		traceSample.Phases.DispatchMs = durationToMillis(time.Since(dispatchStart))
+	if tracing {
+		traceSample.Phases.DispatchMs = durationToMillis(time.Since(phaseStart))
 	}
 
-	var animateStart time.Time
-	if traceEnabled {
-		animateStart = time.Now()
+	// Animate
+	if tracing {
+		phaseStart = time.Now()
 	}
-
 	widgets.StepBallistics()
 	animation.StepTickers()
-
-	if traceEnabled {
-		traceSample.Phases.AnimateMs = durationToMillis(time.Since(animateStart))
+	if tracing {
+		traceSample.Phases.AnimateMs = durationToMillis(time.Since(phaseStart))
 	}
 	a.updateFPS()
+
+	// Mount root
 	if a.root == nil {
 		rootWidget := widgets.Root(engineApp{runner: a})
 		a.root = core.MountRoot(rootWidget, a.buildOwner)
@@ -544,126 +504,102 @@ func (a *appRunner) Paint(canvas graphics.Canvas, size graphics.Size) (err error
 			pipeline.ScheduleLayout(a.rootRender)
 			pipeline.SchedulePaint(a.rootRender)
 		}
-		// Initialize accessibility system on first frame
 		initializeAccessibility()
 	}
 
-	var buildStart time.Time
-	if traceEnabled {
-		buildStart = time.Now()
+	// Build
+	if tracing {
+		phaseStart = time.Now()
 	}
 	a.buildOwner.FlushBuild()
-	if traceEnabled {
-		traceSample.Phases.BuildMs = durationToMillis(time.Since(buildStart))
+	if tracing {
+		traceSample.Phases.BuildMs = durationToMillis(time.Since(phaseStart))
 	}
 
-	if a.rootRender != nil {
-		pipeline := a.buildOwner.Pipeline()
-		if traceEnabled {
-			traceOverheadStart := time.Now()
-			traceSample.Counts.DirtyLayout = pipeline.DirtyLayoutCount()
-			traceSample.Counts.DirtyPaintBoundaries = pipeline.DirtyPaintCount()
-			traceSample.Counts.DirtySemantics = pipeline.DirtySemanticsCount()
-			if a.treeCountFrame%10 == 0 {
-				a.cachedRenderNodeCount = countRenderTree(a.rootRender)
-				a.cachedWidgetNodeCount = countWidgetTree(a.root)
+	if a.rootRender == nil {
+		return false
+	}
+
+	pipeline := a.buildOwner.Pipeline()
+
+	// Trace overhead (counts, dirty types)
+	if tracing {
+		traceOverheadStart := time.Now()
+		traceSample.Counts.DirtyLayout = pipeline.DirtyLayoutCount()
+		traceSample.Counts.DirtyPaintBoundaries = pipeline.DirtyPaintCount()
+		traceSample.Counts.DirtySemantics = pipeline.DirtySemanticsCount()
+		if a.treeCountFrame%10 == 0 {
+			a.cachedRenderNodeCount = countRenderTree(a.rootRender)
+			a.cachedWidgetNodeCount = countWidgetTree(a.root)
+		}
+		a.treeCountFrame++
+		traceSample.Counts.RenderNodeCount = a.cachedRenderNodeCount
+		traceSample.Counts.WidgetNodeCount = a.cachedWidgetNodeCount
+		traceSample.Counts.PlatformViewCount = platform.GetPlatformViewRegistry().ViewCount()
+		traceSample.DirtyTypes.Layout = pipeline.DirtyLayoutTypes(5)
+		traceSample.DirtyTypes.Semantics = pipeline.DirtySemanticsTypes(5)
+		traceSample.Phases.TraceOverheadMs = durationToMillis(time.Since(traceOverheadStart))
+	}
+
+	// Layout
+	if tracing {
+		phaseStart = time.Now()
+	}
+	pipeline.FlushLayoutForRoot(a.rootRender, layout.Tight(logicalSize))
+	if tracing {
+		traceSample.Phases.LayoutMs = durationToMillis(time.Since(phaseStart))
+	}
+
+	// Semantics
+	if tracing {
+		phaseStart = time.Now()
+	}
+	a.flushSemanticsIfNeeded(pipeline, scale)
+	if tracing {
+		traceSample.Phases.SemanticsMs = durationToMillis(time.Since(phaseStart))
+	}
+
+	// Record dirty layers
+	showLayoutBounds := a.showLayoutBounds
+	debugStrokeWidth := 1.0
+	if showLayoutBounds {
+		debugStrokeWidth = 1.0 / scale
+	}
+	if tracing {
+		phaseStart = time.Now()
+		traceSample.DirtyTypes.Paint = pipeline.DirtyPaintTypes(5)
+	}
+	dirtyBoundaries := pipeline.FlushPaint()
+	recordDirtyLayers(dirtyBoundaries, showLayoutBounds, debugStrokeWidth)
+	if tracing {
+		traceSample.Phases.RecordMs = durationToMillis(time.Since(phaseStart))
+		traceSample.Counts.DirtyPaintBoundaries = len(dirtyBoundaries)
+	}
+
+	return true
+}
+
+// recoverFromFramePanic returns a deferred function that catches panics during
+// frame processing (StepFrame) and transitions to the error screen.
+func (a *appRunner) recoverFromFramePanic() func() {
+	return func() {
+		if r := recover(); r != nil {
+			err := &errors.BoundaryError{
+				Phase:      "frame",
+				Recovered:  r,
+				StackTrace: errors.CaptureStack(),
+				Timestamp:  time.Now(),
 			}
-			a.treeCountFrame++
-			traceSample.Counts.RenderNodeCount = a.cachedRenderNodeCount
-			traceSample.Counts.WidgetNodeCount = a.cachedWidgetNodeCount
-			traceSample.Counts.PlatformViewCount = platform.GetPlatformViewRegistry().ViewCount()
-			traceSample.DirtyTypes.Layout = pipeline.DirtyLayoutTypes(5)
-			traceSample.DirtyTypes.Semantics = pipeline.DirtySemanticsTypes(5)
-			traceSample.Phases.TraceOverheadMs = durationToMillis(time.Since(traceOverheadStart))
-		}
-
-		var layoutStart time.Time
-		if traceEnabled {
-			layoutStart = time.Now()
-		}
-		pipeline.FlushLayoutForRoot(a.rootRender, layout.Tight(logicalSize))
-		if traceEnabled {
-			traceSample.Phases.LayoutMs = durationToMillis(time.Since(layoutStart))
-		}
-
-		// Flush semantics after layout, with deferral during animations
-		var semanticsStart time.Time
-		if traceEnabled {
-			semanticsStart = time.Now()
-		}
-		a.flushSemanticsIfNeeded(pipeline, scale)
-		if traceEnabled {
-			traceSample.Phases.SemanticsMs = durationToMillis(time.Since(semanticsStart))
-		}
-
-		// Begin collecting platform view geometry updates for synchronized batch apply
-		platform.GetPlatformViewRegistry().BeginGeometryBatch()
-
-		// Process dirty repaint boundaries
-		showLayoutBounds := a.showLayoutBounds
-		debugStrokeWidth := 1.0
-		if showLayoutBounds {
-			debugStrokeWidth = 1.0 / scale // Scale-independent 1px stroke
-		}
-
-		var recordStart time.Time
-		if traceEnabled {
-			recordStart = time.Now()
-			traceSample.DirtyTypes.Paint = pipeline.DirtyPaintTypes(5)
-		}
-
-		// Phase B: Record dirty layers
-		dirtyBoundaries := pipeline.FlushPaint()
-		recordDirtyLayers(dirtyBoundaries, showLayoutBounds, debugStrokeWidth)
-
-		if traceEnabled {
-			traceSample.Phases.RecordMs = durationToMillis(time.Since(recordStart))
-			traceSample.Counts.DirtyPaintBoundaries = len(dirtyBoundaries)
-		}
-
-		var compositeStart time.Time
-		if traceEnabled {
-			compositeStart = time.Now()
-		}
-
-		// Phase C: Composite layer tree via CompositingCanvas
-		canvas.Clear(graphics.Color(backgroundColor.Load()))
-		canvas.Save()
-		canvas.Scale(scale, scale)
-		compCanvas := NewCompositingCanvas(canvas, platform.GetPlatformViewRegistry())
-		compositeLayerTree(compCanvas, a.rootRender)
-		canvas.Restore()
-
-		if traceEnabled {
-			traceSample.Phases.CompositeMs = durationToMillis(time.Since(compositeStart))
-		}
-
-		// Flush geometry batch to native. Native applies asynchronously on its
-		// main thread; frameSeq ensures stale batches are skipped.
-		var platformFlushStart time.Time
-		if traceEnabled {
-			platformFlushStart = time.Now()
-		}
-		platform.GetPlatformViewRegistry().FlushGeometryBatch()
-		if traceEnabled {
-			traceSample.Phases.PlatformFlushMs = durationToMillis(time.Since(platformFlushStart))
-		}
-	}
-
-	if traceEnabled {
-		traceSample.Flags.SemanticsDeferred = a.semanticsDeferred
-		frameWorkDuration := time.Since(frameWorkStart)
-		traceSample.FrameMs = durationToMillis(frameWorkDuration)
-		a.frameTrace.Add(traceSample, frameWorkDuration)
-
-		threshold := a.frameTrace.Threshold()
-		if frameWorkDuration > threshold {
-			if jsonBytes, err := json.Marshal(traceSample); err == nil {
-				log.Printf("jank frame: %s", jsonBytes)
+			a.capturedError.Store(err)
+			errors.ReportBoundaryError(err)
+			if a.root != nil {
+				a.root.Unmount()
+				a.root = nil
 			}
+			a.rootRender = nil
+			a.pendingFrameRequest.Store(true)
 		}
 	}
-	return nil
 }
 
 func (a *appRunner) HandlePointer(event PointerEvent) {
@@ -770,7 +706,7 @@ func (a *appRunner) updateFPS() {
 		return
 	}
 	fps := float64(time.Second) / float64(elapsed)
-	label := "FPS: " + itoa(int(fps+0.5))
+	label := "FPS: " + strconv.Itoa(int(fps+0.5))
 	if label != a.fpsLabel {
 		a.fpsLabel = label
 	}
@@ -982,29 +918,6 @@ func (d defaultPlaceholder) Build(ctx core.BuildContext) core.Widget {
 	}
 }
 
-func itoa(value int) string {
-	if value == 0 {
-		return "0"
-	}
-	neg := false
-	if value < 0 {
-		neg = true
-		value = -value
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for value > 0 {
-		i--
-		buf[i] = byte('0' + value%10)
-		value /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
-}
-
 // recordLayerContent records a boundary's content into its layer.
 func recordLayerContent(boundary layout.RenderObject, showLayoutBounds bool, strokeWidth float64) {
 	layerGetter, ok := boundary.(interface{ EnsureLayer() *graphics.Layer })
@@ -1095,4 +1008,107 @@ func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject) {
 	}
 
 	layer.Composite(canvas)
+}
+
+// StepFrame runs the engine pipeline (dispatch, animate, build, layout,
+// semantics, record dirty layers) and composites through a geometry-only canvas
+// to extract platform view positions. Returns a FrameSnapshot with the geometry.
+//
+// After StepFrame, call RenderFrame to composite into the actual GPU canvas.
+// This split allows the Android UI thread to position platform views synchronously
+// between StepFrame and RenderFrame, eliminating visual lag.
+func (a *appRunner) StepFrame(size graphics.Size) (*FrameSnapshot, error) {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+
+	if core.DebugMode {
+		defer a.recoverFromFramePanic()()
+	}
+
+	traceEnabled := a.frameTraceEnabled && a.frameTrace != nil
+	var traceSample FrameSample
+	var frameWorkStart time.Time
+	if traceEnabled {
+		frameWorkStart = time.Now()
+		traceSample.Timestamp = frameWorkStart.UnixMilli()
+		currentState := platform.Lifecycle.State()
+		traceSample.Flags.LifecycleState = string(currentState)
+		traceSample.Flags.ResumedThisFrame = a.lastLifecycleState != platform.LifecycleStateResumed && currentState == platform.LifecycleStateResumed
+		a.lastLifecycleState = currentState
+	}
+
+	var ts *FrameSample
+	if traceEnabled {
+		ts = &traceSample
+	}
+
+	hasRenderTree := a.runPipeline(size, ts)
+
+	snapshot := &FrameSnapshot{
+		FrameID: frameCounter.Add(1),
+	}
+
+	if hasRenderTree {
+		reg := platform.GetPlatformViewRegistry()
+
+		// Begin/Flush geometry batch brackets the compositing pass.
+		// Both calls live in StepFrame so the batch is always paired,
+		// even when runPipeline returns nil on an earlier frame.
+		reg.BeginGeometryBatch()
+
+		// Composite through geometry canvas to extract platform view positions.
+		// GeometryCanvas feeds into the registry's batch system via PlatformViewSink.
+		// Geometry is in logical coordinates; the consumer (Android UI thread)
+		// applies device density scaling.
+		var compositeStart time.Time
+		if traceEnabled {
+			compositeStart = time.Now()
+		}
+		geoCanvas := NewGeometryCanvas(size, reg)
+		compositeLayerTree(geoCanvas, a.rootRender)
+		if traceEnabled {
+			traceSample.Phases.GeometryMs = durationToMillis(time.Since(compositeStart))
+		}
+
+		// FlushGeometryBatch collects both visible views (from compositing
+		// above) and hidden views (unseen, with empty clips).
+		reg.FlushGeometryBatch()
+		captured := reg.TakeCapturedSnapshot()
+
+		for _, cv := range captured {
+			snapshot.Views = append(snapshot.Views, viewSnapshotFromCapture(cv))
+		}
+	}
+
+	if traceEnabled {
+		traceSample.Flags.SemanticsDeferred = a.semanticsDeferred
+		frameWorkDuration := time.Since(frameWorkStart)
+		traceSample.FrameMs = durationToMillis(frameWorkDuration)
+		a.frameTrace.Add(traceSample, frameWorkDuration)
+	}
+
+	return snapshot, nil
+}
+
+// RenderFrame composites the layer tree into the provided canvas.
+// Must be called after a successful StepFrame.
+func (a *appRunner) RenderFrame(canvas graphics.Canvas) error {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+
+	if a.rootRender == nil {
+		return fmt.Errorf("RenderFrame called before root render tree is available")
+	}
+
+	scale := a.deviceScale
+
+	canvas.Clear(graphics.Color(backgroundColor.Load()))
+	canvas.Save()
+	canvas.Scale(scale, scale)
+
+	// Geometry was already captured in StepFrame; composite directly.
+	compositeLayerTree(canvas, a.rootRender)
+
+	canvas.Restore()
+	return nil
 }

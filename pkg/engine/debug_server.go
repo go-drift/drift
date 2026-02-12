@@ -359,14 +359,11 @@ func applyFrameFilters(r *http.Request, resp *FrameTimeline) {
 	if v := parseFloatQuery(r, "record_ms"); v > 0 {
 		filters = append(filters, func(s FrameSample) bool { return s.Phases.RecordMs >= v })
 	}
-	if v := parseFloatQuery(r, "composite_ms"); v > 0 {
-		filters = append(filters, func(s FrameSample) bool { return s.Phases.CompositeMs >= v })
+	if v := parseFloatQuery(r, "geometry_ms"); v > 0 {
+		filters = append(filters, func(s FrameSample) bool { return s.Phases.GeometryMs >= v })
 	}
 	if v := parseFloatQuery(r, "semantics_ms"); v > 0 {
 		filters = append(filters, func(s FrameSample) bool { return s.Phases.SemanticsMs >= v })
-	}
-	if v := parseFloatQuery(r, "flush_ms"); v > 0 {
-		filters = append(filters, func(s FrameSample) bool { return s.Phases.PlatformFlushMs >= v })
 	}
 	if v := parseFloatQuery(r, "trace_overhead_ms"); v > 0 {
 		filters = append(filters, func(s FrameSample) bool { return s.Phases.TraceOverheadMs >= v })

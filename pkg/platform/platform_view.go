@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -9,35 +8,13 @@ import (
 	"github.com/go-drift/drift/pkg/graphics"
 )
 
-// geometryUpdate represents a pending geometry change for a platform view.
-type geometryUpdate struct {
-	viewID     int64
-	offset     graphics.Offset
-	size       graphics.Size
-	clipBounds *graphics.Rect // nil = no clipping
-}
-
-// viewGeometryCache tracks the last sent geometry to avoid redundant updates.
-type viewGeometryCache struct {
-	offset     graphics.Offset
-	size       graphics.Size
-	clipBounds *graphics.Rect
-}
-
-// rectsEqual compares two clip bounds with tolerance (handles nil).
-// Uses epsilon to avoid defeating dedupe due to sub-pixel drift from animation/scroll.
-func rectsEqual(a, b *graphics.Rect) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	const epsilon = 0.0001 // Same as geometry.go
-	return math.Abs(a.Left-b.Left) <= epsilon &&
-		math.Abs(a.Top-b.Top) <= epsilon &&
-		math.Abs(a.Right-b.Right) <= epsilon &&
-		math.Abs(a.Bottom-b.Bottom) <= epsilon
+// CapturedViewGeometry holds the resolved geometry for one platform view,
+// captured during a StepFrame pass for synchronous application on the UI thread.
+type CapturedViewGeometry struct {
+	ViewID     int64
+	Offset     graphics.Offset
+	Size       graphics.Size
+	ClipBounds *graphics.Rect
 }
 
 // PlatformView represents a native view embedded in Drift UI.
@@ -53,15 +30,6 @@ type PlatformView interface {
 
 	// Dispose cleans up the native view.
 	Dispose()
-
-	// SetSize updates the view size in logical pixels.
-	SetSize(size graphics.Size)
-
-	// SetOffset updates the view position in logical pixels.
-	SetOffset(offset graphics.Offset)
-
-	// SetVisible shows or hides the native view.
-	SetVisible(visible bool)
 }
 
 // PlatformViewFactory creates platform views of a specific type.
@@ -83,27 +51,16 @@ type PlatformViewRegistry struct {
 
 	// Geometry batching for synchronized updates.
 	// BeginGeometryBatch/FlushGeometryBatch bracket each frame. Updates are
-	// queued during compositing and sent to native as a single batch.
-	batchMu       sync.Mutex
-	batchMode     bool
-	batchUpdates  []geometryUpdate
-	frameSeq      uint64
-	geometryCache map[int64]viewGeometryCache
+	// queued during compositing and collected into capturedViews.
+	batchMu      sync.Mutex
+	batchUpdates []CapturedViewGeometry
+	// geometryCache stores the last geometry for each view, used by
+	// resendGeometry to replay position when a native view finishes creating.
+	geometryCache map[int64]CapturedViewGeometry
 	// viewsSeenThisFrame tracks which views received geometry updates this frame.
-	// Views NOT seen are sent empty clip bounds in FlushGeometryBatch, causing the
-	// native side to hide them. This prevents culled (off-screen) platform views
-	// from staying visible at stale positions.
+	// Views NOT seen get empty clip bounds in FlushGeometryBatch, signaling hidden.
 	viewsSeenThisFrame map[int64]struct{}
-
-	// Geometry-applied signal: native signals after applying geometry so
-	// the render thread can defer surface presentation until both Skia
-	// content and native view geometry land before the same vsync.
-	geometryPending atomic.Bool
-	geometrySignal  chan struct{} // buffered, size 1
-	geometryTimer   *time.Timer   // reusable timer for WaitGeometryApplied (render thread only)
-
-	// Stats for monitoring
-	BatchTimeouts atomic.Uint64
+	capturedViews      []CapturedViewGeometry
 }
 
 var platformViewRegistry *PlatformViewRegistry
@@ -117,17 +74,12 @@ func GetPlatformViewRegistry() *PlatformViewRegistry {
 }
 
 func newPlatformViewRegistry() *PlatformViewRegistry {
-	timer := time.NewTimer(0)
-	<-timer.C // drain initial fire so the timer is ready for Reset
-
 	r := &PlatformViewRegistry{
 		factories:          make(map[string]PlatformViewFactory),
 		views:              make(map[int64]PlatformView),
 		channel:            NewMethodChannel("drift/platform_views"),
-		geometryCache:      make(map[int64]viewGeometryCache),
+		geometryCache:      make(map[int64]CapturedViewGeometry),
 		viewsSeenThisFrame: make(map[int64]struct{}),
-		geometrySignal:     make(chan struct{}, 1),
-		geometryTimer:      timer,
 	}
 
 	// Handle incoming calls from native
@@ -263,14 +215,6 @@ func (r *PlatformViewRegistry) GetView(viewID int64) PlatformView {
 	return view
 }
 
-// HasViews returns true if any platform views are registered.
-func (r *PlatformViewRegistry) HasViews() bool {
-	r.mu.RLock()
-	hasViews := len(r.views) > 0
-	r.mu.RUnlock()
-	return hasViews
-}
-
 // ViewCount returns the number of active platform views.
 func (r *PlatformViewRegistry) ViewCount() int {
 	r.mu.RLock()
@@ -279,8 +223,8 @@ func (r *PlatformViewRegistry) ViewCount() int {
 	return count
 }
 
-// UpdateViewGeometry notifies native of a view's position, size, and clip bounds.
-// If batching is active, the update is queued; otherwise sent immediately.
+// UpdateViewGeometry queues a geometry update for a platform view.
+// Updates are collected during compositing and flushed via FlushGeometryBatch.
 // Gracefully ignores disposed or unknown viewIDs.
 func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) error {
 	// Guard: ignore disposed/unknown views
@@ -291,61 +235,33 @@ func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.
 		return nil
 	}
 
+	entry := CapturedViewGeometry{
+		ViewID:     viewID,
+		Offset:     offset,
+		Size:       size,
+		ClipBounds: clipBounds,
+	}
+
 	r.batchMu.Lock()
 
-	// Mark as seen this frame (before dedup check, so culled-then-visible
+	// Mark as seen this frame (before queuing, so culled-then-visible
 	// views don't get hidden even if geometry hasn't changed)
 	r.viewsSeenThisFrame[viewID] = struct{}{}
 
-	// Check if geometry has actually changed (deduplication)
-	if cached, ok := r.geometryCache[viewID]; ok {
-		if cached.offset == offset && cached.size == size && rectsEqual(cached.clipBounds, clipBounds) {
-			r.batchMu.Unlock()
-			return nil // No change, skip update
-		}
-	}
+	// Update cache for resendGeometry
+	r.geometryCache[viewID] = entry
 
-	// Update cache
-	r.geometryCache[viewID] = viewGeometryCache{offset: offset, size: size, clipBounds: clipBounds}
-
-	if r.batchMode {
-		// Queue for batch send
-		r.batchUpdates = append(r.batchUpdates, geometryUpdate{
-			viewID:     viewID,
-			offset:     offset,
-			size:       size,
-			clipBounds: clipBounds,
-		})
-		r.batchMu.Unlock()
-		return nil
-	}
+	// Queue for batch send (geometry is always batched in the split pipeline)
+	r.batchUpdates = append(r.batchUpdates, entry)
 	r.batchMu.Unlock()
-
-	// Not batching, send immediately (fallback for non-frame updates)
-	args := map[string]any{
-		"viewId": viewID,
-		"x":      offset.X,
-		"y":      offset.Y,
-		"width":  size.Width,
-		"height": size.Height,
-	}
-	if clipBounds != nil {
-		args["clipLeft"] = clipBounds.Left
-		args["clipTop"] = clipBounds.Top
-		args["clipRight"] = clipBounds.Right
-		args["clipBottom"] = clipBounds.Bottom
-	}
-	_, err := r.channel.Invoke("setGeometry", args)
-	return err
+	return nil
 }
 
 // BeginGeometryBatch starts collecting geometry updates for batch processing.
-// Call this at the start of each frame before paint.
+// Call this at the start of each frame before the geometry compositing pass.
 func (r *PlatformViewRegistry) BeginGeometryBatch() {
 	r.batchMu.Lock()
-	r.batchMode = true
 	r.batchUpdates = r.batchUpdates[:0] // Reset slice, keep capacity
-	r.frameSeq++
 	// Clear seen set (reuse map to avoid allocation)
 	for k := range r.viewsSeenThisFrame {
 		delete(r.viewsSeenThisFrame, k)
@@ -353,120 +269,53 @@ func (r *PlatformViewRegistry) BeginGeometryBatch() {
 	r.batchMu.Unlock()
 }
 
-// FlushGeometryBatch sends all queued geometry updates to native code.
-// Native applies updates asynchronously on its main thread — this call
-// returns as soon as the message is delivered. The frameSeq mechanism
-// ensures stale batches are skipped if native falls behind.
+// FlushGeometryBatch collects all queued geometry updates (including hide
+// entries for unseen views) into the captured snapshot. The caller retrieves
+// the result via TakeCapturedSnapshot.
 func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	r.batchMu.Lock()
-	updates := r.batchUpdates
-	frameSeq := r.frameSeq
-	r.batchMode = false
-	r.batchUpdates = nil
-
-	// Snapshot the seen set under batchMu
+	// Move batch updates directly into captured views
+	r.capturedViews = append(r.capturedViews, r.batchUpdates...)
 	viewsSeen := r.viewsSeenThisFrame
+	r.batchUpdates = nil
 	r.batchMu.Unlock()
 
-	// Hide unseen views by sending empty clip bounds.
+	// Hide unseen views by adding empty clip bounds.
 	// This ensures culled platform views (scrolled off-screen) don't remain
 	// visible at their last-known position.
 	r.mu.RLock()
+	var hidden []CapturedViewGeometry
 	for viewID := range r.views {
 		if _, seen := viewsSeen[viewID]; !seen {
-			emptyClip := graphics.Rect{} // 0,0,0,0 → empty → native hides the view
-			updates = append(updates, geometryUpdate{
-				viewID:     viewID,
-				clipBounds: &emptyClip,
+			emptyClip := graphics.Rect{} // 0,0,0,0 signals hidden
+			hidden = append(hidden, CapturedViewGeometry{
+				ViewID:     viewID,
+				ClipBounds: &emptyClip,
 			})
 		}
 	}
 	r.mu.RUnlock()
 
-	// Update geometry cache for hidden views so that when the view scrolls
-	// back into view, the real geometry will differ from cached hidden state
-	// and the dedup check will allow the update through.
+	if len(hidden) > 0 {
+		r.batchMu.Lock()
+		for _, h := range hidden {
+			// Update geometry cache for hidden views so that when the view scrolls
+			// back into view, the real geometry will differ from cached hidden state.
+			r.geometryCache[h.ViewID] = h
+		}
+		r.capturedViews = append(r.capturedViews, hidden...)
+		r.batchMu.Unlock()
+	}
+}
+
+// TakeCapturedSnapshot returns the geometry captured during the last frame
+// and resets the capture buffer.
+func (r *PlatformViewRegistry) TakeCapturedSnapshot() []CapturedViewGeometry {
 	r.batchMu.Lock()
-	for _, u := range updates {
-		if _, seen := viewsSeen[u.viewID]; !seen {
-			r.geometryCache[u.viewID] = viewGeometryCache{
-				clipBounds: u.clipBounds,
-			}
-		}
-	}
+	result := r.capturedViews
+	r.capturedViews = nil
 	r.batchMu.Unlock()
-
-	if len(updates) == 0 {
-		return
-	}
-
-	// Convert to format for native
-	batch := make([]map[string]any, len(updates))
-	for i, u := range updates {
-		entry := map[string]any{
-			"viewId": u.viewID,
-			"x":      u.offset.X,
-			"y":      u.offset.Y,
-			"width":  u.size.Width,
-			"height": u.size.Height,
-		}
-		if u.clipBounds != nil {
-			entry["clipLeft"] = u.clipBounds.Left
-			entry["clipTop"] = u.clipBounds.Top
-			entry["clipRight"] = u.clipBounds.Right
-			entry["clipBottom"] = u.clipBounds.Bottom
-		}
-		batch[i] = entry
-	}
-
-	// Signal infrastructure: mark pending and drain any stale signal before sending.
-	r.geometryPending.Store(true)
-	select {
-	case <-r.geometrySignal:
-	default:
-	}
-
-	// Send batch to native. Native posts to its main thread and returns immediately.
-	// The frameSeq allows native to skip stale batches.
-	_, err := r.channel.Invoke("batchSetGeometry", map[string]any{
-		"frameSeq":   frameSeq,
-		"geometries": batch,
-	})
-	if err != nil {
-		r.geometryPending.Store(false) // no signal will come — don't wait 8ms
-		r.BatchTimeouts.Add(1)
-	}
-}
-
-// WaitGeometryApplied blocks until native confirms geometry has been applied,
-// or until timeout expires. No-op if no geometry batch was sent this frame.
-// GPU work (surface.Flush) is already submitted and pipelines with this wait.
-func (r *PlatformViewRegistry) WaitGeometryApplied(timeout time.Duration) {
-	if !r.geometryPending.Load() {
-		return
-	}
-	r.geometryTimer.Reset(timeout)
-	select {
-	case <-r.geometrySignal:
-	case <-r.geometryTimer.C:
-	}
-	// Stop + drain to leave the timer in a clean state for next frame.
-	if !r.geometryTimer.Stop() {
-		select {
-		case <-r.geometryTimer.C:
-		default:
-		}
-	}
-	r.geometryPending.Store(false)
-}
-
-// SignalGeometryApplied is called by native (via DriftGeometryApplied CGo export)
-// after geometry has been applied on the native main thread.
-func (r *PlatformViewRegistry) SignalGeometryApplied() {
-	select {
-	case r.geometrySignal <- struct{}{}:
-	default:
-	}
+	return result
 }
 
 // resendGeometry replays the cached geometry for a view.
@@ -478,9 +327,7 @@ func (r *PlatformViewRegistry) resendGeometry(viewID int64) {
 	if !ok {
 		return
 	}
-	// Clear cache first so the next UpdateViewGeometry actually sends
-	r.ClearGeometryCache(viewID)
-	r.UpdateViewGeometry(viewID, cached.offset, cached.size, cached.clipBounds)
+	r.UpdateViewGeometry(viewID, cached.Offset, cached.Size, cached.ClipBounds)
 }
 
 // ClearGeometryCache removes cached geometry for a view (call on dispose).
@@ -730,9 +577,6 @@ func (r *PlatformViewRegistry) handleWebViewError(args map[string]any) (any, err
 type basePlatformView struct {
 	viewID   int64
 	viewType string
-	offset   graphics.Offset
-	size     graphics.Size
-	visible  bool
 }
 
 func (v *basePlatformView) ViewID() int64 {
@@ -741,28 +585,6 @@ func (v *basePlatformView) ViewID() int64 {
 
 func (v *basePlatformView) ViewType() string {
 	return v.viewType
-}
-
-func (v *basePlatformView) SetSize(size graphics.Size) {
-	v.size = size
-	GetPlatformViewRegistry().UpdateViewGeometry(v.viewID, v.offset, v.size, nil)
-}
-
-func (v *basePlatformView) SetOffset(offset graphics.Offset) {
-	v.offset = offset
-	GetPlatformViewRegistry().UpdateViewGeometry(v.viewID, v.offset, v.size, nil)
-}
-
-// SetGeometry updates position, size, and clip bounds in a single call.
-func (v *basePlatformView) SetGeometry(offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) {
-	v.offset = offset
-	v.size = size
-	GetPlatformViewRegistry().UpdateViewGeometry(v.viewID, v.offset, v.size, clipBounds)
-}
-
-func (v *basePlatformView) SetVisible(visible bool) {
-	v.visible = visible
-	GetPlatformViewRegistry().SetViewVisible(v.viewID, visible)
 }
 
 func (v *basePlatformView) SetEnabled(enabled bool) {

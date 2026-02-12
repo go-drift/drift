@@ -135,6 +135,16 @@ func GLBindFramebuffer(fbo int) {
 	C.drift_skia_gl_bind_framebuffer(C.int(fbo))
 }
 
+// PurgeGpuResources resets GL state tracking and releases all cached GPU
+// resources (glyph atlases, texture caches, etc.). Call this after events
+// that may invalidate GPU memory, such as sleep/wake or surface recreation.
+func (c *Context) PurgeGpuResources() {
+	if c == nil || c.ptr == nil {
+		return
+	}
+	C.drift_skia_context_purge_resources(c.ptr)
+}
+
 // MakeGLSurface creates a Skia surface targeting the current GL framebuffer.
 func (c *Context) MakeGLSurface(width, height int) (*Surface, error) {
 	if c == nil || c.ptr == nil {

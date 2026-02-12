@@ -15,8 +15,8 @@ type decorativeEntry struct {
 	layout.RenderBoxBase
 }
 
-func (d *decorativeEntry) PerformLayout()                                             {}
-func (d *decorativeEntry) Paint(ctx *layout.PaintContext)                              {}
+func (d *decorativeEntry) PerformLayout()                                            {}
+func (d *decorativeEntry) Paint(ctx *layout.PaintContext)                            {}
 func (d *decorativeEntry) HitTest(pos graphics.Offset, r *layout.HitTestResult) bool { return false }
 
 // pointerHandlerEntry implements PointerHandler but not PlatformViewOwner.
@@ -24,10 +24,12 @@ type pointerHandlerEntry struct {
 	layout.RenderBoxBase
 }
 
-func (p *pointerHandlerEntry) PerformLayout()                                             {}
-func (p *pointerHandlerEntry) Paint(ctx *layout.PaintContext)                              {}
-func (p *pointerHandlerEntry) HitTest(pos graphics.Offset, r *layout.HitTestResult) bool { return false }
-func (p *pointerHandlerEntry) HandlePointer(event gestures.PointerEvent)                  {}
+func (p *pointerHandlerEntry) PerformLayout()                 {}
+func (p *pointerHandlerEntry) Paint(ctx *layout.PaintContext) {}
+func (p *pointerHandlerEntry) HitTest(pos graphics.Offset, r *layout.HitTestResult) bool {
+	return false
+}
+func (p *pointerHandlerEntry) HandlePointer(event gestures.PointerEvent) {}
 
 // platformViewEntry implements PlatformViewOwner but not PointerHandler
 // (like renderVideoPlayer and renderNativeWebView).
@@ -36,10 +38,10 @@ type platformViewEntry struct {
 	viewID int64
 }
 
-func (v *platformViewEntry) PerformLayout()                                             {}
-func (v *platformViewEntry) Paint(ctx *layout.PaintContext)                              {}
+func (v *platformViewEntry) PerformLayout()                                            {}
+func (v *platformViewEntry) Paint(ctx *layout.PaintContext)                            {}
 func (v *platformViewEntry) HitTest(pos graphics.Offset, r *layout.HitTestResult) bool { return false }
-func (v *platformViewEntry) PlatformViewID() int64                                      { return v.viewID }
+func (v *platformViewEntry) PlatformViewID() int64                                     { return v.viewID }
 
 // platformViewWithPointerEntry implements both (like renderSwitch, renderTextInput).
 type platformViewWithPointerEntry struct {
@@ -47,11 +49,13 @@ type platformViewWithPointerEntry struct {
 	viewID int64
 }
 
-func (v *platformViewWithPointerEntry) PerformLayout()                                             {}
-func (v *platformViewWithPointerEntry) Paint(ctx *layout.PaintContext)                              {}
-func (v *platformViewWithPointerEntry) HitTest(pos graphics.Offset, r *layout.HitTestResult) bool { return false }
-func (v *platformViewWithPointerEntry) HandlePointer(event gestures.PointerEvent)                  {}
-func (v *platformViewWithPointerEntry) PlatformViewID() int64                                      { return v.viewID }
+func (v *platformViewWithPointerEntry) PerformLayout()                 {}
+func (v *platformViewWithPointerEntry) Paint(ctx *layout.PaintContext) {}
+func (v *platformViewWithPointerEntry) HitTest(pos graphics.Offset, r *layout.HitTestResult) bool {
+	return false
+}
+func (v *platformViewWithPointerEntry) HandlePointer(event gestures.PointerEvent) {}
+func (v *platformViewWithPointerEntry) PlatformViewID() int64                     { return v.viewID }
 
 // hitTestRoot is a mock root render object that returns a pre-configured hit test result.
 type hitTestRoot struct {
@@ -59,7 +63,7 @@ type hitTestRoot struct {
 	entries []layout.RenderObject
 }
 
-func (r *hitTestRoot) PerformLayout() {}
+func (r *hitTestRoot) PerformLayout()                 {}
 func (r *hitTestRoot) Paint(ctx *layout.PaintContext) {}
 func (r *hitTestRoot) HitTest(pos graphics.Offset, result *layout.HitTestResult) bool {
 	for _, e := range r.entries {

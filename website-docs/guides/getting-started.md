@@ -19,6 +19,7 @@ Install **Go 1.24** or later from [go.dev](https://go.dev/dl/).
 - Android SDK (via Android Studio or command-line tools)
 - Android NDK
 - Java 17+
+- Target device running Android 12 (API 31) or later
 
 Set these environment variables:
 

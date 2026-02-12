@@ -1732,4 +1732,12 @@ void drift_skia_gl_bind_framebuffer(int fbo) {
     (void)fbo;
 }
 
+void drift_skia_context_purge_resources(DriftSkiaContext ctx) {
+    if (!ctx) {
+        return;
+    }
+    auto context = reinterpret_cast<GrDirectContext*>(ctx);
+    context->freeGpuResources();
+}
+
 }  // extern "C"

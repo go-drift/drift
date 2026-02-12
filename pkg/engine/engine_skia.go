@@ -3,31 +3,25 @@
 package engine
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"sync"
-	"time"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/go-drift/drift/pkg/graphics"
-	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/skia"
 )
 
 type skiaStateTracker struct {
-	mu      sync.Mutex
+	mu      sync.Mutex   // protects ctx and backend only
 	ctx     *skia.Context
 	backend string
-	lastErr string
+	lastErr atomic.Value // stores string; atomic, no mutex needed
 }
 
 var skiaState skiaStateTracker
-
-// platformGeometryTimeout is the maximum time the render thread waits for
-// native to confirm platform view geometry has been applied. Half a frame
-// at 60fps — long enough for the main thread to run a posted closure, short
-// enough to avoid visible stalls if the signal is lost.
-const platformGeometryTimeout = 8 * time.Millisecond
 
 var (
 	errInvalidSize = errors.New("skia: invalid surface size")
@@ -40,9 +34,8 @@ func InitSkiaGL() error {
 
 	if skiaState.ctx != nil {
 		if skiaState.backend != "gl" {
-			err := skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
 			skiaState.mu.Unlock()
-			return err
+			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
 		}
 		skiaState.ctx.Destroy()
 		skiaState.ctx = nil
@@ -50,15 +43,14 @@ func InitSkiaGL() error {
 
 	ctx, err := skia.NewGLContext()
 	if err != nil {
-		err = skiaState.setError(err)
 		skiaState.mu.Unlock()
-		return err
+		return skiaState.setError(err)
 	}
 	skiaState.ctx = ctx
 	skiaState.backend = "gl"
 	skiaState.mu.Unlock()
 
-	// Warmup shaders outside the lock (runs on GL thread, logs on failure).
+	// Warmup shaders outside the lock (runs on init thread, logs on failure).
 	// This avoids blocking other callers if warmup is slow.
 	if err := ctx.WarmupShaders("gl"); err != nil {
 		log.Printf("skia: shader warmup failed: %v", err)
@@ -73,9 +65,8 @@ func InitSkiaMetal(device, queue unsafe.Pointer) error {
 
 	if skiaState.ctx != nil {
 		if skiaState.backend != "metal" {
-			err := skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
 			skiaState.mu.Unlock()
-			return err
+			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
 		}
 		skiaState.mu.Unlock()
 		return nil
@@ -83,9 +74,8 @@ func InitSkiaMetal(device, queue unsafe.Pointer) error {
 
 	ctx, err := skia.NewMetalContext(device, queue)
 	if err != nil {
-		err = skiaState.setError(err)
 		skiaState.mu.Unlock()
-		return err
+		return skiaState.setError(err)
 	}
 	skiaState.ctx = ctx
 	skiaState.backend = "metal"
@@ -100,8 +90,30 @@ func InitSkiaMetal(device, queue unsafe.Pointer) error {
 	return nil
 }
 
-// RenderSkiaGL draws a frame into the currently bound OpenGL framebuffer.
-func RenderSkiaGL(width, height int) error {
+// StepAndSnapshot runs the engine pipeline and returns the platform view
+// geometry snapshot as JSON bytes. Called from the Android UI thread via JNI.
+func StepAndSnapshot(width, height int) ([]byte, error) {
+	if width <= 0 || height <= 0 {
+		return nil, errInvalidSize
+	}
+	size := graphics.Size{Width: float64(width), Height: float64(height)}
+	snapshot, err := app.StepFrame(size)
+	if err != nil {
+		return nil, err
+	}
+	if snapshot == nil {
+		return nil, nil
+	}
+	return json.Marshal(snapshot)
+}
+
+// RenderSkiaGLSync renders a frame into the currently bound framebuffer using
+// the split pipeline (RenderFrame only, composite phase). Geometry is applied
+// synchronously by the Android UI thread between StepAndSnapshot and this call.
+//
+// Y-flip is only applied when the current FBO is 0 (default framebuffer).
+// HardwareBuffer FBOs have top-left origin matching the Skia coordinate system.
+func RenderSkiaGLSync(width, height int) error {
 	if width <= 0 || height <= 0 {
 		return skiaState.setError(errInvalidSize)
 	}
@@ -116,23 +128,27 @@ func RenderSkiaGL(width, height int) error {
 	defer surface.Destroy()
 
 	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
-	// GL default framebuffer origin differs from our top-left coordinate system.
-	// Flip both axes to correct the 180° rotation observed on emulators.
-	canvas.Translate(0, float64(height))
-	canvas.Scale(1, -1)
-	if err := app.Paint(canvas, graphics.Size{Width: float64(width), Height: float64(height)}); err != nil {
+
+	// Only flip for default framebuffer (FBO 0). HardwareBuffer FBOs
+	// have top-left origin and don't need flipping.
+	fbo := skia.GLGetFramebufferBinding()
+	if fbo == 0 {
+		canvas.Translate(0, float64(height))
+		canvas.Scale(1, -1)
+	}
+
+	if err := app.RenderFrame(canvas); err != nil {
 		return skiaState.setError(err)
 	}
 	surface.Flush()
-	// Wait for native to confirm geometry applied (no-op if no platform views).
-	// GPU work is already submitted above and runs in parallel with this wait.
-	platform.GetPlatformViewRegistry().WaitGeometryApplied(platformGeometryTimeout)
 	skiaState.clearError()
 	return nil
 }
 
-// RenderSkiaMetal draws a frame into the provided Metal texture.
-func RenderSkiaMetal(width, height int, texture unsafe.Pointer) error {
+// RenderSkiaMetalSync renders a frame into the provided Metal texture using the
+// split pipeline (composite only). Geometry is applied synchronously by the iOS
+// main thread between StepAndSnapshot and this call.
+func RenderSkiaMetalSync(width, height int, texture unsafe.Pointer) error {
 	if width <= 0 || height <= 0 {
 		return skiaState.setError(errInvalidSize)
 	}
@@ -150,15 +166,24 @@ func RenderSkiaMetal(width, height int, texture unsafe.Pointer) error {
 	defer surface.Destroy()
 
 	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
-	if err := app.Paint(canvas, graphics.Size{Width: float64(width), Height: float64(height)}); err != nil {
+	if err := app.RenderFrame(canvas); err != nil {
 		return skiaState.setError(err)
 	}
 	surface.Flush()
-	// Wait for native to confirm geometry applied (no-op if no platform views).
-	// GPU work is already submitted above and runs in parallel with this wait.
-	platform.GetPlatformViewRegistry().WaitGeometryApplied(platformGeometryTimeout)
 	skiaState.clearError()
 	return nil
+}
+
+// PurgeSkiaGLResources resets GL state tracking and releases all cached GPU
+// resources. Call this after events that may invalidate GPU memory (e.g.
+// sleep/wake, surface recreation) to force Skia to rebuild its glyph atlas
+// and other GPU caches on the next frame.
+func PurgeSkiaGLResources() {
+	skiaState.mu.Lock()
+	defer skiaState.mu.Unlock()
+	if skiaState.ctx != nil && skiaState.backend == "gl" {
+		skiaState.ctx.PurgeGpuResources()
+	}
 }
 
 func currentSkiaContext(backend string) (*skia.Context, error) {
@@ -176,19 +201,20 @@ func currentSkiaContext(backend string) (*skia.Context, error) {
 
 // LastSkiaError returns the most recent Skia error message, if any.
 func LastSkiaError() string {
-	skiaState.mu.Lock()
-	defer skiaState.mu.Unlock()
-	return skiaState.lastErr
+	if v, ok := skiaState.lastErr.Load().(string); ok {
+		return v
+	}
+	return ""
 }
 
 func (s *skiaStateTracker) setError(err error) error {
 	if err == nil {
 		return nil
 	}
-	s.lastErr = err.Error()
+	s.lastErr.Store(err.Error())
 	return err
 }
 
 func (s *skiaStateTracker) clearError() {
-	s.lastErr = ""
+	s.lastErr.Store("")
 }

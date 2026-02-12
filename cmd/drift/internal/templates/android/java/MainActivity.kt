@@ -1,30 +1,10 @@
 /**
  * MainActivity is the entry point for the Drift Android application.
  *
- * This activity hosts the DriftSurfaceView, which displays the Go-rendered content.
- * It handles the Android activity lifecycle, ensuring the OpenGL surface is properly
- * paused and resumed with the application.
- *
- * Architecture:
- *
- *     Android System
- *           │
- *           ▼ Activity lifecycle
- *     MainActivity
- *           │
- *           ▼ setContentView()
- *     DriftSurfaceView (GLSurfaceView)
- *           │
- *           ▼ OpenGL rendering
- *     DriftRenderer
- *           │
- *           ▼ JNI calls
- *     Go Engine
- *
- * Lifecycle Management:
- *   - onCreate(): Creates the DriftSurfaceView and sets it as content
- *   - onResume(): Resumes the GL rendering thread
- *   - onPause(): Pauses the GL rendering thread to save battery
+ * Uses the unified frame orchestrator: all rendering happens on the UI thread
+ * via Choreographer callbacks, with HardwareBuffer + HWUI onDraw for Skia
+ * output. Platform views are positioned synchronously within the same callback,
+ * eliminating visual lag during scrolling.
  */
 package {{.PackageName}}
 
@@ -34,35 +14,11 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 
-/**
- * Main activity that hosts the Drift rendering surface.
- *
- * Extends AppCompatActivity for compatibility with older Android versions
- * and access to the AndroidX support libraries.
- */
 class MainActivity : AppCompatActivity() {
-    /**
-     * The OpenGL surface view that displays the Drift engine output.
-     *
-     * Using lateinit because it's initialized in onCreate() before any
-     * other methods access it. This avoids null checks throughout the class.
-     */
-    private lateinit var surfaceView: DriftSurfaceView
 
-    /**
-     * Container layout that holds the surface view and platform views.
-     */
     private lateinit var container: DriftContainer
+    private lateinit var orchestrator: UnifiedFrameOrchestrator
 
-    /**
-     * Called when the activity is first created.
-     *
-     * Creates the DriftSurfaceView and sets it as the activity's content.
-     * The surface view will initialize OpenGL and start the render loop
-     * when it's attached to the window.
-     *
-     * @param savedInstanceState Previously saved state (unused in this app)
-     */
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
@@ -72,37 +28,28 @@ class MainActivity : AppCompatActivity() {
         NotificationHandler.handleNotificationOpen(intent)
         DeepLinkHandler.handleIntent(intent, "launch")
 
-        // Create a container for the surface view and platform views.
         container = DriftContainer(this)
-
-        surfaceView = DriftSurfaceView(this)
-        container.addView(surfaceView, android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-
         setContentView(container)
 
-        PlatformChannelManager.setView(surfaceView)
-        PlatformChannelManager.setOnFrameNeeded { surfaceView.scheduleFrame() }
+        val density = resources.displayMetrics.density
+        val overlayController = InputOverlayController(container.overlayLayout, density)
+        orchestrator = UnifiedFrameOrchestrator(container.skiaView, overlayController)
 
-        // Initialize platform view handler with the container and surface view
-        PlatformViewHandler.init(this, container)
-        PlatformViewHandler.setSurfaceView(surfaceView)
+        // Wire frame scheduling from SkiaHostView to orchestrator
+        container.skiaView.onFrameNeeded = { orchestrator.scheduleFrame() }
 
-        // Initialize accessibility support
-        AccessibilityHandler.initialize(this, surfaceView)
+        PlatformChannelManager.setView(container.skiaView)
+        PlatformChannelManager.setOnFrameNeeded { orchestrator.scheduleFrame() }
+
+        PlatformViewHandler.init(this, container.overlayLayout, container.skiaView, overlayController)
+
+        AccessibilityHandler.initialize(this, container.skiaView)
 
         // Set up safe area insets listener
         ViewCompat.setOnApplyWindowInsetsListener(container) { _, insets ->
             SafeAreaHandler.sendInsetsUpdate()
             insets
         }
-
-        // Push initial insets eagerly so the first Go layout has correct safe area
-        // values. The listener above only fires when the system dispatches insets,
-        // which may happen after the first frame. Posting defers the call until
-        // the view is attached and getRootWindowInsets() returns non-null.
         container.post { SafeAreaHandler.sendInsetsUpdate() }
 
         // Handle back button presses via the Go navigation system
@@ -110,13 +57,12 @@ class MainActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 val handled = NativeBridge.backButtonPressed()
                 if (handled == 0) {
-                    // Go didn't handle it (at root), let system handle (exit app)
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                     isEnabled = true
                 } else {
-                    // Go handled the back button - render the navigation change
-                    surfaceView.renderNow()
+                    NativeBridge.requestFrame()
+                    orchestrator.scheduleFrame()
                 }
             }
         })
@@ -128,12 +74,8 @@ class MainActivity : AppCompatActivity() {
         Log.i("DriftDeepLink", "onNewIntent action=${intent.action} data=${intent.dataString}")
         NotificationHandler.handleNotificationOpen(intent)
         DeepLinkHandler.handleIntent(intent, "open")
-        if (::surfaceView.isInitialized) {
-            surfaceView.onResume()
-            surfaceView.resumeScheduling()
-            // renderNow() adds an immediate GL render on top of the Choreographer
-            // callback from resumeScheduling(), giving lower latency for deep links.
-            surfaceView.renderNow()
+        if (::orchestrator.isInitialized) {
+            orchestrator.start()
         }
     }
 
@@ -149,37 +91,14 @@ class MainActivity : AppCompatActivity() {
         StorageHandler.onActivityResult(requestCode, resultCode, data, this)
     }
 
-    /**
-     * Called when the activity becomes visible and interactive.
-     *
-     * Resumes the OpenGL rendering thread. This is important because:
-     *   - onPause() stops the GL thread to save battery
-     *   - The GL thread needs to be explicitly resumed when returning
-     *
-     * GLSurfaceView manages its own thread, but we must call onResume()
-     * to restart it after it was paused.
-     */
     override fun onResume() {
         super.onResume()
-        surfaceView.onResume()         // GLSurfaceView: resume GL thread
-        surfaceView.resumeScheduling() // Drift: enable Choreographer callbacks
+        container.skiaView.notifyResume()
+        orchestrator.start()
     }
 
-    /**
-     * Called when the activity is no longer in the foreground.
-     *
-     * Pauses the OpenGL rendering thread to conserve battery and CPU.
-     * This is called when:
-     *   - The user presses Home or switches to another app
-     *   - A dialog or other activity appears on top
-     *   - The screen turns off
-     *
-     * The GL context is preserved, so rendering will resume seamlessly
-     * when onResume() is called.
-     */
     override fun onPause() {
         super.onPause()
-        surfaceView.pauseScheduling() // Drift: disable Choreographer callbacks
-        surfaceView.onPause()         // GLSurfaceView: pause GL thread
+        orchestrator.stop()
     }
 }

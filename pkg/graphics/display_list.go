@@ -215,8 +215,8 @@ func (c *recordingCanvas) Size() Size {
 }
 
 // opEmbedPlatformView records a platform view embedding.
-// On execute, calls canvas.EmbedPlatformView() which, for CompositingCanvas,
-// resolves the current transform+clip and updates native view geometry.
+// On execute, calls canvas.EmbedPlatformView() which, for GeometryCanvas,
+// resolves the current transform+clip and captures native view geometry.
 type opEmbedPlatformView struct {
 	viewID int64
 	size   Size
@@ -228,10 +228,10 @@ func (op opEmbedPlatformView) execute(canvas Canvas) {
 
 // opDrawChildLayer references a child layer to composite at current canvas state.
 //
-// Future optimization: CompositingCanvas could expose its clip bounds, allowing
-// this op to skip compositing layers entirely outside the visible region. If
-// added, ensure platform views in culled layers are still hidden (the
-// viewsSeenThisFrame tracking in PlatformViewRegistry handles this).
+// Future optimization: the compositing canvas could expose its clip bounds,
+// allowing this op to skip compositing layers entirely outside the visible
+// region. If added, ensure platform views in culled layers are still hidden
+// (the viewsSeenThisFrame tracking in PlatformViewRegistry handles this).
 type opDrawChildLayer struct {
 	layer *Layer
 }

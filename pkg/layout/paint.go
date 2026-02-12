@@ -50,7 +50,8 @@ type PaintContext struct {
 }
 
 // EmbedPlatformView records a platform view at the current position.
-// During compositing, the CompositingCanvas resolves transform+clip and updates native geometry.
+// During the geometry compositing pass, GeometryCanvas resolves transform+clip
+// and captures native view geometry for the platform to apply.
 func (p *PaintContext) EmbedPlatformView(viewID int64, size graphics.Size) {
 	p.Canvas.EmbedPlatformView(viewID, size)
 }

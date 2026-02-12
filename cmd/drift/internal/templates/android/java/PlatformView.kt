@@ -6,17 +6,11 @@ package {{.PackageName}}
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Rect
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import kotlin.math.ceil
-import kotlin.math.floor
 
 /**
  * Handles platform view channel methods from Go.
@@ -27,19 +21,7 @@ object PlatformViewHandler {
     private var context: Context? = null
     private var hostView: ViewGroup? = null
     private var surfaceView: View? = null
-
-    // Frame sequence tracking for geometry batches
-    private var lastAppliedSeq: Long = 0
-
-    // Dedicated handler for geometry batches: postAtFrontOfQueue bypasses queued
-    // touch events, and createAsync (API 28+) bypasses the choreographer sync barrier.
-    private val geometryHandler: Handler by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            Handler.createAsync(Looper.getMainLooper())
-        } else {
-            Handler(Looper.getMainLooper())
-        }
-    }
+    private var overlayController: InputOverlayController? = null
 
     // Supported methods for each view type
     private val webViewMethods = setOf("load", "goBack", "goForward", "reload")
@@ -48,13 +30,11 @@ object PlatformViewHandler {
     private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
     private val videoPlayerMethods = setOf("play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "load")
 
-    fun init(context: Context, hostView: ViewGroup) {
+    fun init(context: Context, hostView: ViewGroup, surfaceView: View, overlayController: InputOverlayController) {
         this.context = context
         this.hostView = hostView
-    }
-
-    fun setSurfaceView(view: View) {
-        this.surfaceView = view
+        this.surfaceView = surfaceView
+        this.overlayController = overlayController
     }
 
     fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
@@ -64,8 +44,6 @@ object PlatformViewHandler {
         return when (method) {
             "create" -> create(argsMap)
             "dispose" -> dispose(argsMap)
-            "setGeometry" -> setGeometry(argsMap)
-            "batchSetGeometry" -> batchSetGeometry(argsMap)
             "setVisible" -> setVisible(argsMap)
             "setEnabled" -> setEnabled(argsMap)
             "invokeViewMethod" -> invokeViewMethod(argsMap)
@@ -234,7 +212,7 @@ object PlatformViewHandler {
             interceptor.addView(container.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             interceptor.visibility = View.GONE // Hidden until positioned
             interceptors[viewId] = interceptor
-            host.addView(interceptor)
+            (host as? InputOverlayLayout)?.addOverlayView(viewId, interceptor) ?: host.addView(interceptor)
 
             // Notify Go that view is created
             PlatformChannelManager.sendEvent(
@@ -256,172 +234,15 @@ object PlatformViewHandler {
         host.post {
             val container = views.remove(viewId) ?: return@post
             container.dispose()
+            overlayController?.removeView(viewId.toLong())
             val interceptor = interceptors.remove(viewId)
             if (interceptor != null) {
-                host.removeView(interceptor)
+                (host as? InputOverlayLayout)?.removeOverlayView(viewId) ?: host.removeView(interceptor)
             } else {
                 host.removeView(container.view)
             }
         }
 
-        return Pair(null, null)
-    }
-
-    private fun setGeometry(args: Map<*, *>): Pair<Any?, Exception?> {
-        val viewId = (args["viewId"] as? Number)?.toInt() ?: return Pair(null, null)
-        val host = hostView ?: return Pair(null, null)
-
-        val x = (args["x"] as? Number)?.toFloat() ?: 0f
-        val y = (args["y"] as? Number)?.toFloat() ?: 0f
-        val width = (args["width"] as? Number)?.toFloat() ?: 0f
-        val height = (args["height"] as? Number)?.toFloat() ?: 0f
-        val clipLeft = (args["clipLeft"] as? Number)?.toFloat()
-        val clipTop = (args["clipTop"] as? Number)?.toFloat()
-        val clipRight = (args["clipRight"] as? Number)?.toFloat()
-        val clipBottom = (args["clipBottom"] as? Number)?.toFloat()
-
-        host.post {
-            val container = views[viewId] ?: return@post
-            val density = context?.resources?.displayMetrics?.density ?: 1f
-            val targetView = interceptors[viewId] ?: container.view
-            applyViewGeometry(targetView, x, y, width, height, density)
-            applyClipBounds(targetView, x, y, width, height, clipLeft, clipTop, clipRight, clipBottom, density)
-        }
-
-        return Pair(null, null)
-    }
-
-    /**
-     * Position a view using translationX/Y (RenderNode properties) instead of
-     * LayoutParams margins. RenderNode properties sync to the RenderThread without
-     * a full measure/layout traversal, eliminating the 1-frame lag between the GL
-     * surface and the View surface during scrolling. Also provides sub-pixel
-     * precision, avoiding integer-truncation jitter.
-     */
-    private fun applyViewGeometry(view: View, x: Float, y: Float, width: Float, height: Float, density: Float) {
-        view.layoutParams = FrameLayout.LayoutParams(
-            (width * density).toInt(),
-            (height * density).toInt()
-        )
-        view.translationX = x * density
-        view.translationY = y * density
-    }
-
-    /**
-     * Apply clip bounds to a view.
-     * Clip bounds are in global logical pixels. We convert to local view coordinates.
-     * Uses floor for left/top and ceil for right/bottom to avoid over-clipping.
-     */
-    private fun applyClipBounds(
-        view: View,
-        viewX: Float, viewY: Float,
-        viewWidth: Float, viewHeight: Float,
-        clipLeft: Float?, clipTop: Float?,
-        clipRight: Float?, clipBottom: Float?,
-        density: Float
-    ) {
-        // No clip provided - clear any existing clip, but don't change visibility
-        // (visibility is controlled by SetVisible or by full clipping below)
-        if (clipLeft == null || clipTop == null || clipRight == null || clipBottom == null) {
-            view.clipBounds = null
-            return
-        }
-
-        // Convert global clip to local view coordinates
-        val localClipLeft = (clipLeft - viewX) * density
-        val localClipTop = (clipTop - viewY) * density
-        val localClipRight = (clipRight - viewX) * density
-        val localClipBottom = (clipBottom - viewY) * density
-
-        val viewWidthPx = viewWidth * density
-        val viewHeightPx = viewHeight * density
-
-        // Clamp to view bounds with floor/ceil for safe rounding
-        val left = floor(localClipLeft.coerceIn(0f, viewWidthPx)).toInt()
-        val top = floor(localClipTop.coerceIn(0f, viewHeightPx)).toInt()
-        val right = ceil(localClipRight.coerceIn(0f, viewWidthPx)).toInt()
-        val bottom = ceil(localClipBottom.coerceIn(0f, viewHeightPx)).toInt()
-
-        // Completely clipped - hide view (INVISIBLE keeps layout, GONE would not)
-        if (left >= right || top >= bottom) {
-            view.visibility = View.INVISIBLE
-            view.clipBounds = null  // Clear clip when hidden
-            return
-        }
-
-        // Fully visible (clip covers entire view) - no clip needed
-        // Compare against float values to avoid sub-pixel edge exposure
-        if (localClipLeft <= 0f && localClipTop <= 0f &&
-            localClipRight >= viewWidthPx && localClipBottom >= viewHeightPx) {
-            view.clipBounds = null
-            view.visibility = View.VISIBLE
-            return
-        }
-
-        // Partial clip
-        view.clipBounds = Rect(left, top, right, bottom)
-        view.visibility = View.VISIBLE
-    }
-
-    /**
-     * Batch geometry update. Posts geometry changes to the main thread and returns
-     * immediately. The frameSeq mechanism ensures stale batches are skipped if the
-     * main thread falls behind.
-     */
-    private fun batchSetGeometry(args: Map<*, *>): Pair<Any?, Exception?> {
-        val frameSeq = (args["frameSeq"] as? Number)?.toLong() ?: return Pair(null, null)
-        @Suppress("UNCHECKED_CAST")
-        val geometries = args["geometries"] as? List<Map<String, Any?>> ?: return Pair(null, null)
-        val host = hostView ?: return Pair(null, null)
-
-        if (geometries.isEmpty()) {
-            return Pair(null, null)
-        }
-
-        // Skip stale batches (older than last applied).
-        // Still signal geometry applied so the render thread doesn't timeout.
-        if (frameSeq <= lastAppliedSeq) {
-            NativeBridge.geometryApplied()
-            return Pair(null, null)
-        }
-
-        val density = context?.resources?.displayMetrics?.density ?: 1f
-
-        val applyGeometries = {
-            for (geom in geometries) {
-                val viewId = (geom["viewId"] as? Number)?.toInt() ?: continue
-                val x = (geom["x"] as? Number)?.toFloat() ?: 0f
-                val y = (geom["y"] as? Number)?.toFloat() ?: 0f
-                val width = (geom["width"] as? Number)?.toFloat() ?: 0f
-                val height = (geom["height"] as? Number)?.toFloat() ?: 0f
-                val clipLeft = (geom["clipLeft"] as? Number)?.toFloat()
-                val clipTop = (geom["clipTop"] as? Number)?.toFloat()
-                val clipRight = (geom["clipRight"] as? Number)?.toFloat()
-                val clipBottom = (geom["clipBottom"] as? Number)?.toFloat()
-
-                val container = views[viewId] ?: continue
-                val targetView = interceptors[viewId] ?: container.view
-                applyViewGeometry(targetView, x, y, width, height, density)
-                applyClipBounds(targetView, x, y, width, height, clipLeft, clipTop, clipRight, clipBottom, density)
-            }
-            lastAppliedSeq = frameSeq
-        }
-
-        // If already on main thread, apply directly and signal immediately.
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            applyGeometries()
-            NativeBridge.geometryApplied()
-            return Pair(null, null)
-        }
-
-        // Post to main thread and return immediately.
-        // frameSeq ensures stale batches are skipped if main thread falls behind.
-        // Signal geometry applied after the closure runs so the render thread
-        // can defer surface presentation until geometry lands.
-        geometryHandler.postAtFrontOfQueue {
-            applyGeometries()
-            NativeBridge.geometryApplied()
-        }
         return Pair(null, null)
     }
 

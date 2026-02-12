@@ -22,7 +22,7 @@
  *   2. libdrift_jni.so depends on libdrift.so (it calls its functions)
  *
  * Usage:
- *   - Call renderFrameSkia() from your OpenGL renderer's onDrawFrame() method
+ *   - Call stepAndSnapshot() + renderFrameSync() from UnifiedFrameOrchestrator
  *   - Call pointerEvent() from your view's onTouchEvent() method
  *
  * Thread Safety:
@@ -53,7 +53,7 @@ object NativeBridge {
         // Ensure the shared C++ runtime is loaded before native libraries.
         System.loadLibrary("c++_shared")
 
-        // Load the Go engine library first (contains DriftSkiaInitGL, DriftSkiaRenderGL, DriftPointerEvent)
+        // Load the Go engine library first (contains DriftSkiaInitGL, DriftPointerEvent, etc.)
         System.loadLibrary("drift")
 
         // Load the JNI bridge library second (contains Java_com_drift_embedder_* functions)
@@ -73,21 +73,11 @@ object NativeBridge {
     /**
      * Initializes the Skia GL backend using the current OpenGL context.
      *
-     * Call this once from the GL thread (e.g., in GLSurfaceView.Renderer.onSurfaceCreated).
+     * Call this once after EGL context creation (e.g., during SkiaHostView init).
      *
      * @return 0 on success, non-zero on failure.
      */
     external fun initSkiaGL(): Int
-
-    /**
-     * Renders a frame directly into the current OpenGL framebuffer using Skia.
-     *
-     * @param width  Width of the render target in pixels.
-     * @param height Height of the render target in pixels.
-     *
-     * @return 0 on success, non-zero on failure.
-     */
-    external fun renderFrameSkia(width: Int, height: Int): Int
 
     /**
      * Sends a pointer/touch event to the Go engine.
@@ -109,7 +99,7 @@ object NativeBridge {
      *   - Origin (0, 0) is at the top-left corner of the view
      *   - X increases to the right
      *   - Y increases downward
-     *   - Coordinates should match the framebuffer dimensions passed to renderFrameSkia()
+     *   - Coordinates should match the framebuffer dimensions passed to renderFrameSync()
      *
      * Thread Safety:
      *   This function is thread-safe. Typically called from the main/UI thread
@@ -188,7 +178,7 @@ object NativeBridge {
     /**
      * Checks if a new frame needs to be rendered.
      *
-     * Call this before renderFrameSkia() to skip unnecessary render cycles
+     * Call this before renderFrameSync() to skip unnecessary render cycles
      * when nothing has changed (no animations, no user input, no state changes).
      *
      * @return 1 if a new frame should be rendered, 0 if the frame can be skipped.
@@ -209,11 +199,39 @@ object NativeBridge {
      */
     external fun hitTestPlatformView(viewID: Long, x: Double, y: Double): Int
 
-    /**
-     * Signals the Go render thread that platform view geometry has been applied.
-     *
-     * Called from the main thread after applying geometry updates so the
-     * render thread can proceed with surface presentation (eglSwapBuffers).
-     */
-    external fun geometryApplied()
+    // ─── Unified Frame Orchestrator (HardwareBuffer + HWUI path) ───
+
+    /** Initializes EGL display, context, and 1x1 pbuffer surface. */
+    external fun initEGL(): Int
+
+    /** Allocates a HardwareBuffer-backed FBO at the given size. */
+    external fun createHwbFBO(width: Int, height: Int): Int
+
+    /** Destroys the HardwareBuffer FBO and releases all resources. */
+    external fun destroyHwbFBO()
+
+    /** Binds the HardwareBuffer FBO for rendering. */
+    external fun bindHwbFBO()
+
+    /** Unbinds the HardwareBuffer FBO. */
+    external fun unbindHwbFBO()
+
+    /** Makes the EGL context current on the calling thread. */
+    external fun makeCurrent()
+
+    /** Releases the EGL context from the calling thread. */
+    external fun releaseContext()
+
+    /** Returns the current HardwareBuffer as a Java HardwareBuffer object. */
+    external fun getHardwareBuffer(): android.hardware.HardwareBuffer?
+
+    /** Runs the engine pipeline and returns geometry snapshot as JSON bytes. */
+    external fun stepAndSnapshot(width: Int, height: Int): ByteArray?
+
+    /** Renders into the currently bound FBO using the split pipeline. */
+    external fun renderFrameSync(width: Int, height: Int): Int
+
+    /** Resets GL state tracking and releases all cached GPU resources.
+     *  Call after sleep/wake or surface recreation to prevent stale textures. */
+    external fun purgeResources()
 }
