@@ -1213,3 +1213,89 @@ func SVGDOMRenderTinted(svgPtr, canvasPtr unsafe.Pointer, width, height float32,
 		C.DriftSkiaSVGDOM(svgPtr), C.DriftSkiaCanvas(canvasPtr),
 		C.float(width), C.float(height), C.uint(tintColor))
 }
+
+// Skottie wraps a Skia Skottie animation (Lottie player).
+type Skottie struct {
+	ptr C.DriftSkiaSkottie
+}
+
+// NewSkottie creates a Skottie animation from Lottie JSON data.
+// Returns nil if parsing fails.
+func NewSkottie(data []byte) *Skottie {
+	if len(data) == 0 {
+		return nil
+	}
+	ptr := C.drift_skia_skottie_create(
+		(*C.uint8_t)(unsafe.Pointer(&data[0])),
+		C.int(len(data)),
+	)
+	if ptr == nil {
+		return nil
+	}
+	return &Skottie{ptr: ptr}
+}
+
+// Destroy releases the Skottie animation resources.
+func (s *Skottie) Destroy() {
+	if s == nil || s.ptr == nil {
+		return
+	}
+	C.drift_skia_skottie_destroy(s.ptr)
+	s.ptr = nil
+}
+
+// Ptr returns the underlying C handle for use in DrawLottie.
+// The returned pointer is stable (not subject to Go GC).
+func (s *Skottie) Ptr() unsafe.Pointer {
+	if s == nil || s.ptr == nil {
+		return nil
+	}
+	return unsafe.Pointer(s.ptr)
+}
+
+// Duration returns the animation duration in seconds.
+func (s *Skottie) Duration() float64 {
+	if s == nil || s.ptr == nil {
+		return 0
+	}
+	var dur C.float
+	if C.drift_skia_skottie_get_duration(s.ptr, &dur) == 0 {
+		return 0
+	}
+	return float64(dur)
+}
+
+// Size returns the intrinsic size of the animation.
+func (s *Skottie) Size() (width, height float64) {
+	if s == nil || s.ptr == nil {
+		return 0, 0
+	}
+	var w, h C.float
+	if C.drift_skia_skottie_get_size(s.ptr, &w, &h) == 0 {
+		return 0, 0
+	}
+	return float64(w), float64(h)
+}
+
+// Seek sets the animation to the given normalized time (0.0 to 1.0).
+func (s *Skottie) Seek(t float64) {
+	if s == nil || s.ptr == nil {
+		return
+	}
+	C.drift_skia_skottie_seek(s.ptr, C.float(t))
+}
+
+// SkottieSeekAndRender seeks to normalized time t and renders the current frame.
+// Used internally by display list playback.
+func SkottieSeekAndRender(animPtr, canvasPtr unsafe.Pointer, t, width, height float32) {
+	if animPtr == nil || canvasPtr == nil {
+		return
+	}
+	C.drift_skia_skottie_seek(C.DriftSkiaSkottie(animPtr), C.float(t))
+	C.drift_skia_skottie_render(
+		C.DriftSkiaSkottie(animPtr),
+		C.DriftSkiaCanvas(canvasPtr),
+		C.float(width),
+		C.float(height),
+	)
+}

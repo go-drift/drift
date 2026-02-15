@@ -210,6 +210,16 @@ func (c *serializingCanvas) DrawSVGTinted(_ unsafe.Pointer, bounds graphics.Rect
 	})
 }
 
+func (c *serializingCanvas) DrawLottie(_ unsafe.Pointer, bounds graphics.Rect, t float64) {
+	c.ops = append(c.ops, DisplayOp{
+		Op: "drawLottie",
+		Params: sortedMap(
+			"bounds", serializeRect(bounds),
+			"t", t,
+		),
+	})
+}
+
 func (c *serializingCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
 	c.ops = append(c.ops, DisplayOp{
 		Op: "embedPlatformView",

@@ -76,6 +76,7 @@ type AnimationController struct {
 	ticker          *Ticker
 	target          float64
 	startValue      float64
+	scaledDuration  time.Duration
 	listeners       map[int]func()
 	statusListeners map[int]func(AnimationStatus)
 	nextListenerID  int
@@ -121,6 +122,27 @@ func (c *AnimationController) animateTo(target float64, direction AnimationStatu
 
 	c.target = target
 	c.startValue = c.Value
+
+	// Scale duration proportionally to the fraction of the full range being
+	// animated so that resuming from a mid-point maintains consistent speed.
+	fullRange := c.UpperBound - c.LowerBound
+	animRange := target - c.startValue
+	if animRange < 0 {
+		animRange = -animRange
+	}
+	if fullRange > 0 {
+		c.scaledDuration = time.Duration(float64(c.Duration) * animRange / fullRange)
+	} else {
+		c.scaledDuration = c.Duration
+	}
+
+	if c.scaledDuration <= 0 {
+		c.Value = target
+		c.setStatus(direction)
+		c.stop()
+		return
+	}
+
 	c.setStatus(direction)
 
 	c.ticker = NewTicker(func(elapsed time.Duration) {
@@ -136,8 +158,8 @@ func (c *AnimationController) tick(elapsed time.Duration) {
 		return
 	}
 
-	// Calculate progress as fraction of duration
-	progress := float64(elapsed) / float64(c.Duration)
+	// Calculate progress as fraction of scaled duration
+	progress := float64(elapsed) / float64(c.scaledDuration)
 	if progress >= 1.0 {
 		progress = 1.0
 	}

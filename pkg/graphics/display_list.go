@@ -201,6 +201,10 @@ func (c *recordingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tint
 	c.recorder.append(opSVGTinted{svgPtr: svgPtr, bounds: bounds, tintColor: tintColor})
 }
 
+func (c *recordingCanvas) DrawLottie(animPtr unsafe.Pointer, bounds Rect, t float64) {
+	c.recorder.append(opLottie{animPtr: animPtr, bounds: bounds, t: t})
+}
+
 func (c *recordingCanvas) EmbedPlatformView(viewID int64, size Size) {
 	c.recorder.append(opEmbedPlatformView{viewID: viewID, size: size})
 }
@@ -452,6 +456,16 @@ type opSVGTinted struct {
 
 func (op opSVGTinted) execute(canvas Canvas) {
 	canvas.DrawSVGTinted(op.svgPtr, op.bounds, op.tintColor)
+}
+
+type opLottie struct {
+	animPtr unsafe.Pointer
+	bounds  Rect
+	t       float64
+}
+
+func (op opLottie) execute(canvas Canvas) {
+	canvas.DrawLottie(op.animPtr, op.bounds, op.t)
 }
 
 // deepCopyPath creates a fully independent copy of a Path, including all

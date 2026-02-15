@@ -159,6 +159,12 @@ type Canvas interface {
 	// Note: Tinting affects ALL SVG content including gradients and embedded images.
 	DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor Color)
 
+	// DrawLottie renders a Lottie animation frame within the given bounds.
+	// animPtr must be the C handle from Skottie.Ptr(), not a Go pointer.
+	// t is the normalized time (0.0 to 1.0) representing animation progress.
+	// The animation is positioned at bounds.Left/Top and sized to bounds width/height.
+	DrawLottie(animPtr unsafe.Pointer, bounds Rect, t float64)
+
 	// EmbedPlatformView records a platform view at the current canvas position.
 	// During compositing, the canvas resolves transform+clip and updates native geometry.
 	EmbedPlatformView(viewID int64, size Size)
