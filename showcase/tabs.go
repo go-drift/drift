@@ -12,7 +12,7 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-//go:embed assets/*.svg assets/*.png
+//go:embed assets/*.svg assets/*.png assets/*.json
 var assetFS embed.FS
 
 var svgAssetCache = svg.NewIconCache()

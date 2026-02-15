@@ -61,7 +61,8 @@ func (c *nullCanvas) SaveLayerBlur(bounds graphics.Rect, sigmaX, sigmaY float64)
 func (c *nullCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds graphics.Rect)             {}
 func (c *nullCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics.Rect, tintColor graphics.Color) {
 }
-func (c *nullCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {}
+func (c *nullCanvas) DrawLottie(animPtr unsafe.Pointer, bounds graphics.Rect, t float64) {}
+func (c *nullCanvas) EmbedPlatformView(viewID int64, size graphics.Size)                 {}
 func (c *nullCanvas) Size() graphics.Size                                { return c.size }
 
 func TestCompositingCanvas_PlatformViewWithTranslation(t *testing.T) {

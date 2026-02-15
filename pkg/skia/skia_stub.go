@@ -457,3 +457,35 @@ func (s *SVGDOM) SetPreserveAspectRatio(align, scale int) {}
 // SetSizeToContainer sets the SVG's root width/height to 100%,
 // making it scale to fill the container size set via render calls.
 func (s *SVGDOM) SetSizeToContainer() {}
+
+// Skottie wraps a Skia Skottie animation (Lottie player).
+type Skottie struct{}
+
+// NewSkottie creates a Skottie animation from Lottie JSON data.
+func NewSkottie(data []byte) *Skottie {
+	return nil
+}
+
+// Destroy releases the Skottie animation resources.
+func (s *Skottie) Destroy() {}
+
+// Ptr returns the underlying C handle for use in DrawLottie.
+func (s *Skottie) Ptr() unsafe.Pointer {
+	return nil
+}
+
+// Duration returns the animation duration in seconds.
+func (s *Skottie) Duration() float64 {
+	return 0
+}
+
+// Size returns the intrinsic size of the animation.
+func (s *Skottie) Size() (width, height float64) {
+	return 0, 0
+}
+
+// Seek sets the animation to the given normalized time (0.0 to 1.0).
+func (s *Skottie) Seek(t float64) {}
+
+// SkottieSeekAndRender seeks to normalized time t and renders the current frame.
+func SkottieSeekAndRender(animPtr, canvasPtr unsafe.Pointer, t, width, height float32) {}

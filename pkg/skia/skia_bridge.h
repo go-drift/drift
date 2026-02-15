@@ -272,6 +272,15 @@ void drift_skia_svg_dom_set_size_to_container(DriftSkiaSVGDOM svg);
 void drift_skia_svg_dom_render_tinted(DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
     float width, float height, uint32_t tint_argb);
 
+typedef void* DriftSkiaSkottie;
+
+DriftSkiaSkottie drift_skia_skottie_create(const uint8_t* data, int length);
+void drift_skia_skottie_destroy(DriftSkiaSkottie anim);
+int drift_skia_skottie_get_duration(DriftSkiaSkottie anim, float* duration);
+int drift_skia_skottie_get_size(DriftSkiaSkottie anim, float* width, float* height);
+void drift_skia_skottie_seek(DriftSkiaSkottie anim, float t);
+void drift_skia_skottie_render(DriftSkiaSkottie anim, DriftSkiaCanvas canvas, float width, float height);
+
 DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height);
 DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx, int width, int height);
 void drift_skia_context_flush_and_submit(DriftSkiaContext ctx, int sync_cpu);

@@ -144,6 +144,10 @@ func (c *CompositingCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics
 	c.inner.DrawSVGTinted(svgPtr, bounds, tintColor)
 }
 
+func (c *CompositingCanvas) DrawLottie(animPtr unsafe.Pointer, bounds graphics.Rect, t float64) {
+	c.inner.DrawLottie(animPtr, bounds, t)
+}
+
 func (c *CompositingCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
 	c.tracker.embedPlatformView(c.sink, viewID, size)
 }

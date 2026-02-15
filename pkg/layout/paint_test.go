@@ -290,7 +290,8 @@ func (c *nullPaintCanvas) SaveLayerBlur(bounds graphics.Rect, sigmaX, sigmaY flo
 func (c *nullPaintCanvas) DrawSVG(svgPtr unsafe.Pointer, bounds graphics.Rect)             {}
 func (c *nullPaintCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics.Rect, tintColor graphics.Color) {
 }
-func (c *nullPaintCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {}
+func (c *nullPaintCanvas) DrawLottie(animPtr unsafe.Pointer, bounds graphics.Rect, t float64) {}
+func (c *nullPaintCanvas) EmbedPlatformView(viewID int64, size graphics.Size)                 {}
 func (c *nullPaintCanvas) Size() graphics.Size                                { return c.size }
 
 func TestEmbedPlatformView_Recording(t *testing.T) {

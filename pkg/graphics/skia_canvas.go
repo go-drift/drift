@@ -602,6 +602,23 @@ func (c *SkiaCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds Rect, tintColor
 	skia.CanvasRestore(c.canvas)
 }
 
+func (c *SkiaCanvas) DrawLottie(animPtr unsafe.Pointer, bounds Rect, t float64) {
+	if animPtr == nil {
+		return
+	}
+	w, h := bounds.Width(), bounds.Height()
+	if w <= 0 || h <= 0 {
+		return
+	}
+	skia.CanvasSave(c.canvas)
+	skia.CanvasClipRect(c.canvas, float32(bounds.Left), float32(bounds.Top), float32(bounds.Right), float32(bounds.Bottom))
+	if bounds.Left != 0 || bounds.Top != 0 {
+		skia.CanvasTranslate(c.canvas, float32(bounds.Left), float32(bounds.Top))
+	}
+	skia.SkottieSeekAndRender(animPtr, c.canvas, float32(t), float32(w), float32(h))
+	skia.CanvasRestore(c.canvas)
+}
+
 func (c *SkiaCanvas) EmbedPlatformView(viewID int64, size Size) {
 	// No-op: platform view geometry is resolved by GeometryCanvas in StepFrame
 }

@@ -57,6 +57,7 @@ extern "C" {
 #include "gpu/ganesh/mtl/GrMtlDirectContext.h"
 #include "ports/SkFontMgr_mac_ct.h"
 #include "skia_path_impl.h"
+#include "skia_skottie_impl.h"
 #include "skia_svg_impl.h"
 
 namespace {
@@ -1691,6 +1692,30 @@ void drift_skia_svg_dom_set_size_to_container(DriftSkiaSVGDOM svg) {
 void drift_skia_svg_dom_render_tinted(DriftSkiaSVGDOM svg, DriftSkiaCanvas canvas,
     float width, float height, uint32_t tint_argb) {
     drift_skia_svg_dom_render_tinted_impl(svg, canvas, width, height, tint_argb);
+}
+
+DriftSkiaSkottie drift_skia_skottie_create(const uint8_t* data, int length) {
+    return drift_skia_skottie_create_impl(data, length);
+}
+
+void drift_skia_skottie_destroy(DriftSkiaSkottie anim) {
+    drift_skia_skottie_destroy_impl(anim);
+}
+
+int drift_skia_skottie_get_duration(DriftSkiaSkottie anim, float* duration) {
+    return drift_skia_skottie_get_duration_impl(anim, duration);
+}
+
+int drift_skia_skottie_get_size(DriftSkiaSkottie anim, float* width, float* height) {
+    return drift_skia_skottie_get_size_impl(anim, width, height);
+}
+
+void drift_skia_skottie_seek(DriftSkiaSkottie anim, float t) {
+    drift_skia_skottie_seek_impl(anim, t);
+}
+
+void drift_skia_skottie_render(DriftSkiaSkottie anim, DriftSkiaCanvas canvas, float width, float height) {
+    drift_skia_skottie_render_impl(anim, canvas, width, height);
 }
 
 DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height) {

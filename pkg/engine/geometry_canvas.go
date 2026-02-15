@@ -58,6 +58,7 @@ func (c *GeometryCanvas) DrawRectShadow(_ graphics.Rect, _ graphics.BoxShadow)  
 func (c *GeometryCanvas) DrawRRectShadow(_ graphics.RRect, _ graphics.BoxShadow)            {}
 func (c *GeometryCanvas) DrawSVG(_ unsafe.Pointer, _ graphics.Rect)                         {}
 func (c *GeometryCanvas) DrawSVGTinted(_ unsafe.Pointer, _ graphics.Rect, _ graphics.Color) {}
+func (c *GeometryCanvas) DrawLottie(_ unsafe.Pointer, _ graphics.Rect, _ float64)           {}
 
 func (c *GeometryCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
 	c.tracker.embedPlatformView(c.sink, viewID, size)
