@@ -269,6 +269,7 @@ type navigatorState struct {
 
 	exitingRoute       Route  // route currently animating out
 	exitingUnsubscribe func() // cleanup for exit animation status listener
+	pushUnsubscribe    func() // cleanup for push animation status listener
 
 	isRefreshing       bool   // guard against re-entrant refresh
 	unsubscribeRefresh func() // cleanup for RefreshListenable
@@ -396,21 +397,30 @@ func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
 
 		// Always wrap in ExcludeSemantics to maintain element tree identity.
 		// Non-top routes are excluded from accessibility (hidden behind the top route).
+		// IgnorePointer blocks interaction on all routes during transitions.
+		isTransitioning := topIsAnimating || s.exitingRoute != nil
 		children = append(children, widgets.ExcludeSemantics{
 			Child: widgets.Offstage{
 				Offstage: !isVisible,
-				Child:    child,
+				Child: widgets.IgnorePointer{
+					Ignoring: isTransitioning,
+					Child:    child,
+				},
 			},
 			Excluding: !isTop,
 		})
 	}
 
-	// Add exiting route on top (it's animating out)
+	// Add exiting route on top (it's animating out).
+	// Always block interaction on the exiting route.
 	if s.exitingRoute != nil {
 		children = append(children, widgets.ExcludeSemantics{
-			Child: routeBuilder{
-				route: s.exitingRoute,
-				isTop: false, // No longer visually on top
+			Child: widgets.IgnorePointer{
+				Ignoring: true,
+				Child: routeBuilder{
+					route: s.exitingRoute,
+					isTop: false, // No longer visually on top
+				},
 			},
 			Excluding: true, // Exclude from accessibility - user is navigating away
 		})
@@ -453,7 +463,8 @@ func (s *navigatorState) SetState(fn func()) {
 }
 
 func (s *navigatorState) Dispose() {
-	// Clean up any in-progress exit animation
+	// Clean up animation listeners
+	s.clearPushListener()
 	s.clearExitingRoute()
 
 	// Dispose animation controllers for all remaining routes
@@ -471,6 +482,14 @@ func (s *navigatorState) Dispose() {
 	globalScope.ClearActiveIf(s)
 	if s.navigator.IsRoot {
 		globalScope.ClearRootIf(s)
+	}
+}
+
+// clearPushListener removes the status listener for push animation completion.
+func (s *navigatorState) clearPushListener() {
+	if s.pushUnsubscribe != nil {
+		s.pushUnsubscribe()
+		s.pushUnsubscribe = nil
 	}
 }
 
@@ -552,6 +571,20 @@ func (s *navigatorState) doPush(route Route) {
 
 		route.DidPush()
 
+		// Listen for push animation completion to unblock interaction.
+		s.clearPushListener()
+		if ar, ok := route.(AnimatedRoute); ok {
+			if fc := ar.ForegroundController(); fc != nil && fc.IsAnimating() {
+				s.pushUnsubscribe = fc.AddStatusListener(func(status animation.AnimationStatus) {
+					if status == animation.AnimationCompleted {
+						s.clearPushListener()
+						// Rebuild to unblock interaction (clears isTransitioning)
+						s.SetState(func() {})
+					}
+				})
+			}
+		}
+
 		// Notify observers
 		for _, observer := range s.navigator.Observers {
 			observer.DidPush(route, previousTop)
@@ -631,6 +664,8 @@ func (s *navigatorState) Pop(result any) {
 	}
 
 	s.SetState(func() {
+		s.clearPushListener()
+
 		popped := s.routes[len(s.routes)-1]
 		s.routes = s.routes[:len(s.routes)-1]
 
