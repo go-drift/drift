@@ -22,6 +22,13 @@ const explicitZero float64 = math.SmallestNonzeroFloat64
 // using this constant directly.
 const noBackgroundColor Color = 1
 
+// noDecorationColor is a sentinel Color that explicitly clears an inherited
+// decoration color, causing the decoration to use the span's text color
+// instead. Its value (0x00000001, alpha 0) is visually indistinguishable
+// from fully transparent. Users should call TextSpan.NoDecorationColor rather
+// than using this constant directly.
+const noDecorationColor Color = 1
+
 // TextDecoration selects a single text decoration line. Like [FontStyle] and
 // [TextDecorationStyle], the zero value means "inherit from parent."
 type TextDecoration int
@@ -77,7 +84,8 @@ const (
 //   - 1-based enums ([FontStyle], [TextDecorationStyle], [TextDecoration]):
 //     0 = inherit, 1+ = explicit values (e.g. [TextDecorationNone] = 1).
 //   - No* builder methods ([TextSpan.NoLetterSpacing], [TextSpan.NoWordSpacing],
-//     [TextSpan.NoHeight], [TextSpan.NoBackground]) for resetting inherited values.
+//     [TextSpan.NoHeight], [TextSpan.NoBackground], [TextSpan.NoDecorationColor])
+//     for resetting inherited values.
 type SpanStyle struct {
 	Color           Color
 	FontFamily      string
@@ -211,25 +219,28 @@ func (s TextSpan) Family(name string) TextSpan {
 	return s
 }
 
-// Underline returns a copy with an underline decoration. The decoration color
-// defaults to the span's text color (zero value). Use DecorationColor to set
-// an explicit color.
+// Underline returns a copy with an underline decoration. If no DecorationColor
+// is set on this span or any ancestor, the decoration line uses the span's text
+// color. Use DecorationColor to set an explicit color, or NoDecorationColor to
+// clear an inherited one.
 func (s TextSpan) Underline() TextSpan {
 	s.Style.Decoration = TextDecorationUnderline
 	return s
 }
 
-// Overline returns a copy with an overline decoration. The decoration color
-// defaults to the span's text color (zero value). Use DecorationColor to set
-// an explicit color.
+// Overline returns a copy with an overline decoration. If no DecorationColor
+// is set on this span or any ancestor, the decoration line uses the span's text
+// color. Use DecorationColor to set an explicit color, or NoDecorationColor to
+// clear an inherited one.
 func (s TextSpan) Overline() TextSpan {
 	s.Style.Decoration = TextDecorationOverline
 	return s
 }
 
-// Strikethrough returns a copy with a line-through decoration. The decoration
-// color defaults to the span's text color (zero value). Use DecorationColor to
-// set an explicit color.
+// Strikethrough returns a copy with a line-through decoration. If no
+// DecorationColor is set on this span or any ancestor, the decoration line uses
+// the span's text color. Use DecorationColor to set an explicit color, or
+// NoDecorationColor to clear an inherited one.
 func (s TextSpan) Strikethrough() TextSpan {
 	s.Style.Decoration = TextDecorationLineThrough
 	return s
@@ -245,6 +256,14 @@ func (s TextSpan) NoDecoration() TextSpan {
 // DecorationColor returns a copy with the specified decoration line color.
 func (s TextSpan) DecorationColor(c Color) TextSpan {
 	s.Style.DecorationColor = c
+	return s
+}
+
+// NoDecorationColor returns a copy that explicitly clears the decoration color,
+// overriding any value inherited from a parent span. When the decoration color
+// is unset, Skia uses the span's text color for the decoration line.
+func (s TextSpan) NoDecorationColor() TextSpan {
+	s.Style.DecorationColor = noDecorationColor
 	return s
 }
 
@@ -359,6 +378,14 @@ func LayoutRichText(span TextSpan, baseStyle SpanStyle, manager *FontManager, op
 		if s.Height == explicitZero {
 			height = 0
 		}
+		decoration := 0
+		if int(s.Decoration) >= 0 && int(s.Decoration) < len(decorationToSkia) {
+			decoration = decorationToSkia[s.Decoration]
+		}
+		decorationColor := uint32(s.DecorationColor)
+		if s.DecorationColor == noDecorationColor {
+			decorationColor = 0
+		}
 		skiaSpans[i] = skia.TextSpanData{
 			Text:            f.text,
 			Family:          s.FontFamily,
@@ -366,8 +393,8 @@ func LayoutRichText(span TextSpan, baseStyle SpanStyle, manager *FontManager, op
 			Weight:          int(s.FontWeight),
 			Style:           fontStyleBridgeValue(s.FontStyle),
 			Color:           uint32(s.Color),
-			Decoration:      decorationToSkia[s.Decoration],
-			DecorationColor: uint32(s.DecorationColor),
+			Decoration:      decoration,
+			DecorationColor: decorationColor,
 			DecorationStyle: max(int(s.DecorationStyle)-1, 0),
 			LetterSpacing:   letterSpacing,
 			WordSpacing:     wordSpacing,

@@ -89,7 +89,7 @@ graphics.Span("styled").Bold().Italic().Color(0xFFFF0000).Size(20)
 | `Underline()` | Add underline decoration |
 | `Overline()` | Add overline decoration |
 | `Strikethrough()` | Add line-through decoration |
-| `DecorationColor(c)` | Set decoration line color (defaults to text color) |
+| `DecorationColor(c)` | Set decoration line color (inherited by children; defaults to text color when unset) |
 | `DecorationStyle(s)` | Set decoration line style (solid, double, dotted, dashed, wavy) |
 | `LetterSpacing(v)` | Set spacing between characters |
 | `WordSpacing(v)` | Set spacing between words |
@@ -104,6 +104,7 @@ When a parent sets a style, children inherit it. Use the `No*` methods to explic
 | Method | Description |
 |--------|-------------|
 | `NoDecoration()` | Remove inherited decoration |
+| `NoDecorationColor()` | Reset decoration color to use text color |
 | `NoLetterSpacing()` | Reset letter spacing to zero |
 | `NoWordSpacing()` | Reset word spacing to zero |
 | `NoHeight()` | Reset line height multiplier |

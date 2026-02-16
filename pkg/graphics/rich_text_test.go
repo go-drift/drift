@@ -426,6 +426,51 @@ func TestFlattenSpans_NoBackgroundOverridesParent(t *testing.T) {
 	}
 }
 
+func TestTextSpan_NoDecorationColor(t *testing.T) {
+	s := Span("x").NoDecorationColor()
+	if s.Style.DecorationColor != noDecorationColor {
+		t.Errorf("expected noDecorationColor sentinel, got 0x%08X", uint32(s.Style.DecorationColor))
+	}
+}
+
+func TestFlattenSpans_NoDecorationColorOverridesParent(t *testing.T) {
+	parent := TextSpan{
+		Style: SpanStyle{DecorationColor: 0xFFFF0000},
+		Children: []TextSpan{
+			Span("child").Underline().NoDecorationColor(),
+		},
+	}
+	flat := flattenSpans(parent, SpanStyle{})
+	if len(flat) != 1 {
+		t.Fatalf("expected 1 flat span, got %d", len(flat))
+	}
+	if flat[0].style.DecorationColor != noDecorationColor {
+		t.Errorf("expected noDecorationColor sentinel, got 0x%08X", uint32(flat[0].style.DecorationColor))
+	}
+}
+
+func TestDecorationToSkia_OutOfBoundsDoesNotPanic(t *testing.T) {
+	// An invalid TextDecoration value should not cause an index-out-of-range
+	// panic during layout. Verify by flattening and converting to Skia data.
+	span := TextSpan{
+		Text:  "test",
+		Style: SpanStyle{Decoration: TextDecoration(99)},
+	}
+	flat := flattenSpans(span, SpanStyle{})
+	if len(flat) != 1 {
+		t.Fatalf("expected 1 flat span, got %d", len(flat))
+	}
+	// Verify the out-of-bounds value is clamped to 0 (no decoration).
+	s := flat[0].style
+	decoration := 0
+	if int(s.Decoration) >= 0 && int(s.Decoration) < len(decorationToSkia) {
+		decoration = decorationToSkia[s.Decoration]
+	}
+	if decoration != 0 {
+		t.Errorf("expected out-of-bounds decoration to map to 0, got %d", decoration)
+	}
+}
+
 func TestFlattenSpans_BaseStyleApplied(t *testing.T) {
 	base := SpanStyle{
 		Color:    0xFFAA0000,
