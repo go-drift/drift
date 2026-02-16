@@ -17,7 +17,7 @@ static void driftIOSLog(const char* s) {
 			NSString *subsystem = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.drift";
 			drift_logger = os_log_create([subsystem UTF8String], "Go");
 		}
-		os_log_with_type(drift_logger, OS_LOG_TYPE_INFO, "%{public}s", s);
+		os_log_with_type(drift_logger, OS_LOG_TYPE_DEFAULT, "%{public}s", s);
 	}
 }
 */

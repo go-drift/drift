@@ -154,7 +154,7 @@ func streamDeviceLogs(ctx context.Context, appName, deviceID string) {
 		return
 	}
 
-	logArgs := []string{"-K", "-q", "--process", appName}
+	logArgs := []string{"--process", appName}
 	if deviceID != "" {
 		logArgs = append([]string{"-u", deviceID}, logArgs...)
 	}
