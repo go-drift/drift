@@ -82,6 +82,8 @@ func detectDeviceABI(adb string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// installAndroidAPK installs the debug APK onto the connected Android device
+// using adb install.
 func installAndroidAPK(adb string, ws *workspace.Workspace) error {
 	apkPath := filepath.Join(ws.AndroidDir, "app", "build", "outputs", "apk", "debug", "app-debug.apk")
 	cmd := exec.Command(adb, "install", "-r", apkPath)
@@ -93,6 +95,8 @@ func installAndroidAPK(adb string, ws *workspace.Workspace) error {
 	return nil
 }
 
+// launchAndroidApp starts the app's main activity on the connected Android
+// device using adb shell am start.
 func launchAndroidApp(adb string, cfg *config.Resolved) error {
 	activityName := fmt.Sprintf("%s/.MainActivity", cfg.AppID)
 	cmd := exec.Command(adb, "shell", "am", "start", "-n", activityName)

@@ -79,7 +79,12 @@ drift run xtool --device 00008030-001234567890
 
 # Run without streaming logs
 drift run xtool --no-logs
+
+# Watch mode: rebuild on file changes
+drift run xtool --watch
 ```
+
+**Note:** with `--watch`, the app cannot be relaunched automatically on the device. After each rebuild, close and reopen the app on your iOS device to pick up the changes.
 
 ### Listing Connected Devices
 

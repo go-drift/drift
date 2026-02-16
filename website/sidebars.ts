@@ -12,6 +12,7 @@ const sidebars: SidebarsConfig = {
       },
       items: [
         'guides/getting-started',
+        'guides/watch-mode',
         'guides/widgets',
         'guides/layout',
         'guides/state-management',

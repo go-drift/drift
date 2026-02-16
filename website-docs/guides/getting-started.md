@@ -155,11 +155,19 @@ func App() core.Widget {
 }
 ```
 
-Run again to see your change:
+The fastest way to see your change is with watch mode, which rebuilds and relaunches automatically:
+
+```bash
+drift run android --watch  # or ios --watch, xtool --watch
+```
+
+You can also re-run manually without `--watch`:
 
 ```bash
 drift run android  # or your target
 ```
+
+See the [Watch Mode](/docs/guides/watch-mode) guide for details.
 
 ## Configuration (Optional)
 
@@ -193,6 +201,7 @@ engine:
 |---------|-------------|
 | `drift init <directory> [module-path]` | Create a new project |
 | `drift run android` | Run on Android device/emulator |
+| `drift run android --watch` | Run with automatic rebuild on changes |
 | `drift run ios` | Run on iOS simulator (default: iPhone 15) |
 | `drift run ios --simulator "<name>"` | Run on specific iOS simulator |
 | `drift run ios --device --team-id ID` | Run on physical iOS device |

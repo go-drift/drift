@@ -16,6 +16,8 @@ type xtoolRunOptions struct {
 	watch    bool
 }
 
+// parseXtoolRunArgs parses xtool-specific flags from the argument list and
+// returns the resolved options.
 func parseXtoolRunArgs(args []string) xtoolRunOptions {
 	opts := xtoolRunOptions{}
 	for i := 0; i < len(args); i++ {
@@ -105,6 +107,8 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	return nil
 }
 
+// xtoolDevRun installs and launches the app on a connected iOS device using
+// the xtool dev run command.
 func xtoolDevRun(ws *workspace.Workspace, opts xtoolRunOptions) error {
 	xtoolPath, err := exec.LookPath("xtool")
 	if err != nil {

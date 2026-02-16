@@ -21,6 +21,8 @@ type iosRunOptions struct {
 	watch     bool
 }
 
+// parseIOSRunArgs parses iOS-specific flags from the argument list and returns
+// the resolved options.
 func parseIOSRunArgs(args []string) iosRunOptions {
 	opts := iosRunOptions{
 		simulator: "iPhone 15",
@@ -212,6 +214,8 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 // iOS helper functions
 // --------------------------------------------------------------------
 
+// bootSimulator boots the named iOS Simulator. If the simulator is already
+// booted (exit code 149), the error is silently ignored.
 func bootSimulator(name string) error {
 	fmt.Printf("  Booting %s...\n", name)
 	cmd := exec.Command("xcrun", "simctl", "boot", name)
@@ -226,6 +230,7 @@ func bootSimulator(name string) error {
 	return nil
 }
 
+// xcodebuildForSimulator runs xcodebuild targeting the named iOS Simulator.
 func xcodebuildForSimulator(ws *workspace.Workspace, simulator string) error {
 	xcodeproj := filepath.Join(ws.IOSDir, "Runner.xcodeproj")
 	buildArgs := []string{
@@ -247,6 +252,8 @@ func xcodebuildForSimulator(ws *workspace.Workspace, simulator string) error {
 	return nil
 }
 
+// installIOSSimulatorApp installs the built .app bundle into the named iOS
+// Simulator using simctl.
 func installIOSSimulatorApp(ws *workspace.Workspace, simulator string) error {
 	appPath := filepath.Join(ws.BuildDir, "DerivedData", "Build", "Products", "Debug-iphonesimulator", "Runner.app")
 	cmd := exec.Command("xcrun", "simctl", "install", simulator, appPath)
@@ -258,6 +265,8 @@ func installIOSSimulatorApp(ws *workspace.Workspace, simulator string) error {
 	return nil
 }
 
+// launchIOSSimulatorApp launches the app by bundle ID in the named iOS
+// Simulator using simctl.
 func launchIOSSimulatorApp(appID, simulator string) error {
 	cmd := exec.Command("xcrun", "simctl", "launch", simulator, appID)
 	cmd.Stdout = os.Stdout
@@ -268,6 +277,7 @@ func launchIOSSimulatorApp(appID, simulator string) error {
 	return nil
 }
 
+// xcodebuildForDevice runs xcodebuild targeting a physical iOS device.
 func xcodebuildForDevice(ws *workspace.Workspace, opts iosRunOptions) error {
 	xcodeproj := filepath.Join(ws.IOSDir, "Runner.xcodeproj")
 	buildArgs := []string{
