@@ -118,7 +118,7 @@ func isRelevantChange(event fsnotify.Event) bool {
 // streamAndroidLogs streams tag-filtered logcat output until ctx is
 // cancelled. Tag-based filtering survives app restarts, unlike PID-based.
 // Intended to run as a goroutine.
-func streamAndroidLogs(ctx context.Context, appID string) {
+func streamAndroidLogs(ctx context.Context) {
 	adb := findADB()
 
 	// Clear stale logs so the stream starts fresh

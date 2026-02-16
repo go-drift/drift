@@ -110,7 +110,11 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 		// app is not started twice (--terminate-running-process would kill
 		// a non-console launch and relaunch).
 		if !opts.noLogs {
-			go launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true)
+			go func() {
+				if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true); err != nil {
+					fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
+				}
+			}()
 		} else {
 			if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false); err != nil {
 				return err
@@ -145,7 +149,11 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 			if !opts.noLogs {
 				// --terminate-running-process kills the old app, which
 				// causes the previous goroutine's cmd.Run() to return.
-				go launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true)
+				go func() {
+					if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true); err != nil {
+						fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
+					}
+				}()
 				return nil
 			}
 			return launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false)
@@ -211,7 +219,11 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 		if !opts.noLogs {
 			consoleCtx, cc := context.WithCancel(ctx)
 			consoleCancel = cc
-			go devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true)
+			go func() {
+				if err := devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true); err != nil {
+					fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
+				}
+			}()
 		} else {
 			fmt.Println("  Launching on device...")
 			if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false); err != nil {
@@ -251,7 +263,11 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 			if !opts.noLogs {
 				consoleCtx, cc := context.WithCancel(ctx)
 				consoleCancel = cc
-				go devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true)
+				go func() {
+					if err := devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true); err != nil {
+						fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
+					}
+				}()
 				return nil
 			}
 			return devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false)

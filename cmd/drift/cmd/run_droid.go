@@ -49,7 +49,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, _ []string, opts 
 		ctx, cancel := watchContext()
 		defer cancel()
 		if !opts.noLogs {
-			go streamAndroidLogs(ctx, cfg.AppID)
+			go streamAndroidLogs(ctx)
 		}
 		return watchAndRun(ctx, ws, func() error {
 			exec.Command(adb, "shell", "am", "force-stop", cfg.AppID).Run()
@@ -69,7 +69,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, _ []string, opts 
 	if !opts.noLogs {
 		ctx, cancel := watchContext()
 		defer cancel()
-		streamAndroidLogs(ctx, cfg.AppID)
+		streamAndroidLogs(ctx)
 	}
 	return nil
 }

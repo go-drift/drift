@@ -46,7 +46,7 @@ func runLog(args []string) error {
 
 	switch platform {
 	case "android":
-		return logAndroid(cfg.AppID)
+		return logAndroid()
 	case "ios":
 		return logIOS(cfg.AppID)
 	default:
@@ -55,12 +55,12 @@ func runLog(args []string) error {
 }
 
 // logAndroid streams logs from Android device.
-func logAndroid(appID string) error {
+func logAndroid() error {
 	fmt.Println("Streaming Android logs (Ctrl+C to stop)...")
 	fmt.Println()
 	ctx, cancel := watchContext()
 	defer cancel()
-	streamAndroidLogs(ctx, appID)
+	streamAndroidLogs(ctx)
 	return nil
 }
 
