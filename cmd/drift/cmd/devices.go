@@ -3,9 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -56,12 +54,7 @@ func runDevices(args []string) error {
 }
 
 func listAndroidDevices() error {
-	adb := "adb"
-	if sdkRoot := os.Getenv("ANDROID_SDK_ROOT"); sdkRoot != "" {
-		adb = filepath.Join(sdkRoot, "platform-tools", "adb")
-	} else if androidHome := os.Getenv("ANDROID_HOME"); androidHome != "" {
-		adb = filepath.Join(androidHome, "platform-tools", "adb")
-	}
+	adb := findADB()
 
 	cmd := exec.Command(adb, "devices", "-l")
 	var out bytes.Buffer
@@ -223,25 +216,57 @@ func listIOSDevicesWithIOSDeploy() error {
 }
 
 func listIOSDevicesWithXctrace() error {
+	devices, err := connectedIOSDevices()
+	if err != nil {
+		return err
+	}
+
+	if len(devices) == 0 {
+		fmt.Println("  No devices connected")
+		fmt.Println()
+		fmt.Println("  To connect a device:")
+		fmt.Println("    1. Connect your iOS device via USB")
+		fmt.Println("    2. Trust the computer on your device")
+		fmt.Println("    3. Ensure device is unlocked")
+		fmt.Println()
+		fmt.Println("  Tip: Install ios-deploy for better device detection:")
+		fmt.Println("    brew install ios-deploy")
+	} else {
+		for i, d := range devices {
+			fmt.Printf("  [%d] %s (%s)\n", i+1, d.name, d.udid)
+		}
+		fmt.Println()
+		fmt.Printf("  Run with: drift run ios --device <UDID>\n")
+	}
+
+	return nil
+}
+
+// iosDevice holds the name and UDID of a connected iOS device.
+type iosDevice struct {
+	name string
+	udid string
+}
+
+// connectedIOSDevices returns the list of physical iOS devices reported by
+// xcrun xctrace list devices, excluding simulators and the host Mac.
+func connectedIOSDevices() ([]iosDevice, error) {
 	cmd := exec.Command("xcrun", "xctrace", "list", "devices")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Parse xctrace output
-	// Format: <DeviceName> (<Version>) (<UDID>)
+	var devices []iosDevice
 	lines := strings.Split(out.String(), "\n")
-	deviceCount := 0
 	inDeviceSection := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		// Skip header and simulator section
 		if line == "== Devices ==" {
 			inDeviceSection = true
 			continue
@@ -253,8 +278,7 @@ func listIOSDevicesWithXctrace() error {
 			continue
 		}
 
-		// Parse device line: DeviceName (Version) (UDID)
-		// Find last parentheses for UDID
+		// Format: DeviceName (Version) (UDID)
 		lastOpen := strings.LastIndex(line, "(")
 		lastClose := strings.LastIndex(line, ")")
 		if lastOpen == -1 || lastClose == -1 || lastClose <= lastOpen {
@@ -262,47 +286,25 @@ func listIOSDevicesWithXctrace() error {
 		}
 
 		udid := line[lastOpen+1 : lastClose]
-		// Skip if UDID looks like a version number
 		if strings.Count(udid, ".") >= 2 {
 			continue
 		}
 
-		// Get device name (everything before version)
 		rest := strings.TrimSpace(line[:lastOpen])
-		// Remove version in parentheses
 		if versionEnd := strings.LastIndex(rest, ")"); versionEnd != -1 {
 			if versionStart := strings.LastIndex(rest[:versionEnd], "("); versionStart != -1 {
 				rest = strings.TrimSpace(rest[:versionStart])
 			}
 		}
 
-		deviceName := rest
-
-		// Skip entries that look like the host machine (usually Mac)
-		if strings.Contains(deviceName, "Mac") {
+		if strings.Contains(rest, "Mac") {
 			continue
 		}
 
-		deviceCount++
-		fmt.Printf("  [%d] %s (%s)\n", deviceCount, deviceName, udid)
+		devices = append(devices, iosDevice{name: rest, udid: udid})
 	}
 
-	if deviceCount == 0 {
-		fmt.Println("  No devices connected")
-		fmt.Println()
-		fmt.Println("  To connect a device:")
-		fmt.Println("    1. Connect your iOS device via USB")
-		fmt.Println("    2. Trust the computer on your device")
-		fmt.Println("    3. Ensure device is unlocked")
-		fmt.Println()
-		fmt.Println("  Tip: Install ios-deploy for better device detection:")
-		fmt.Println("    brew install ios-deploy")
-	} else {
-		fmt.Println()
-		fmt.Printf("  Run with: drift run ios --device <UDID>\n")
-	}
-
-	return nil
+	return devices, nil
 }
 
 func listIOSSimulators() error {

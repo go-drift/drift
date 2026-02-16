@@ -143,11 +143,9 @@ func streamAndroidLogs(ctx context.Context, appID string) {
 }
 
 // streamDeviceLogs streams physical-device logs via idevicesyslog filtered by
-// process name and Drift-specific log messages until ctx is cancelled. Uses
-// -K (no kernel) and -q (quiet, no header) for cleaner output, plus -m to
-// match only lines containing Drift log categories or the Go runtime tag.
-// If idevicesyslog is not installed, a warning is printed and the function
-// returns immediately. Intended to run as a goroutine.
+// process name until ctx is cancelled. Uses -K (no kernel) and -q (quiet, no
+// header) for cleaner output. If idevicesyslog is not installed, a warning is
+// printed and the function returns immediately. Intended to run as a goroutine.
 func streamDeviceLogs(ctx context.Context, appName, deviceID string) {
 	idevicesyslog, err := exec.LookPath("idevicesyslog")
 	if err != nil {

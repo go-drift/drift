@@ -172,7 +172,11 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 	}
 
 	if opts.deviceID == "" {
-		return fmt.Errorf("device UDID is required: drift run ios --device <UDID> --team-id <TEAM_ID>")
+		udid, err := detectIOSDevice()
+		if err != nil {
+			return err
+		}
+		opts.deviceID = udid
 	}
 
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: true, teamID: opts.teamID}
@@ -384,6 +388,30 @@ func devicectlInstall(ws *workspace.Workspace, opts iosRunOptions) error {
 		return fmt.Errorf("devicectl install failed: %w\nMake sure Xcode 15+ is installed and the device is connected", err)
 	}
 	return nil
+}
+
+// detectIOSDevice auto-detects a single connected iOS device using
+// connectedIOSDevices. Returns the device UDID, or an error if zero or
+// multiple devices are found.
+func detectIOSDevice() (string, error) {
+	devices, err := connectedIOSDevices()
+	if err != nil {
+		return "", fmt.Errorf("failed to list devices: %w", err)
+	}
+
+	switch len(devices) {
+	case 0:
+		return "", fmt.Errorf("no connected iOS devices found\nConnect a device via USB, or specify a UDID with --device <UDID>")
+	case 1:
+		fmt.Printf("  Auto-detected device: %s (%s)\n", devices[0].name, devices[0].udid)
+		return devices[0].udid, nil
+	default:
+		var lines []string
+		for _, d := range devices {
+			lines = append(lines, fmt.Sprintf("  %s (%s)", d.name, d.udid))
+		}
+		return "", fmt.Errorf("multiple iOS devices connected, specify one with --device <UDID>:\n%s", strings.Join(lines, "\n"))
+	}
 }
 
 // devicectlLaunch launches the app by bundle ID on a physical iOS device
