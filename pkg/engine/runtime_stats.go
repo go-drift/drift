@@ -47,10 +47,7 @@ func NewRuntimeSampleBuffer(window, interval time.Duration) *RuntimeSampleBuffer
 	interval = normalizeRuntimeInterval(interval)
 	window = normalizeRuntimeWindow(window, interval)
 
-	capacity := int(window / interval)
-	if capacity < 1 {
-		capacity = 1
-	}
+	capacity := max(int(window/interval), 1)
 	if capacity > runtimeSampleMaxSamples {
 		capacity = runtimeSampleMaxSamples
 	}

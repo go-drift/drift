@@ -98,7 +98,7 @@ func (p InheritedProvider[T]) UpdateShouldNotifyDependent(oldWidget InheritedWid
 //	    fmt.Println("Hello,", user.Name)
 //	}
 func ProviderOf[T any](ctx BuildContext) (T, bool) {
-	providerType := reflect.TypeOf(InheritedProvider[T]{})
+	providerType := reflect.TypeFor[InheritedProvider[T]]()
 	widget := ctx.DependOnInherited(providerType, nil)
 	if widget == nil {
 		var zero T

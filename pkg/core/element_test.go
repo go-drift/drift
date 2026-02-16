@@ -548,7 +548,7 @@ func TestUpdateChildren_TopSync(t *testing.T) {
 	}
 
 	// Elements should be reused (same type, no key)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if newChildren[i] != oldChildren[i] {
 			t.Errorf("expected child %d to be reused", i)
 		}
@@ -913,7 +913,7 @@ func TestIsComparable(t *testing.T) {
 		{"map", map[string]int{"a": 1}, false},
 		{"func", func() {}, false},
 		{"pointer", new(int), true},
-		{"interface with comparable", interface{}("hello"), true},
+		{"interface with comparable", any("hello"), true},
 	}
 
 	for _, tt := range tests {

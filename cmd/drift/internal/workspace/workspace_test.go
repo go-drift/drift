@@ -146,10 +146,10 @@ func TestWriteDriftEnv(t *testing.T) {
 	}
 
 	// DRIFT_BIN should point to an executable
-	for _, line := range strings.Split(content, "\n") {
-		if strings.HasPrefix(line, "DRIFT_BIN=") {
+	for line := range strings.SplitSeq(content, "\n") {
+		if after, ok := strings.CutPrefix(line, "DRIFT_BIN="); ok {
 			// Extract quoted path
-			path := strings.TrimPrefix(line, "DRIFT_BIN=")
+			path := after
 			path = strings.Trim(path, "\"")
 			if _, err := os.Stat(path); err != nil {
 				t.Errorf("DRIFT_BIN path %q does not exist: %v", path, err)

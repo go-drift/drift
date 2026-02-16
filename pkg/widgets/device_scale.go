@@ -37,7 +37,7 @@ func (d DeviceScale) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget,
 	return d.UpdateShouldNotify(oldWidget)
 }
 
-var deviceScaleType = reflect.TypeOf(DeviceScale{})
+var deviceScaleType = reflect.TypeFor[DeviceScale]()
 
 // DeviceScaleOf returns the current device scale, defaulting to 1 if not found.
 func DeviceScaleOf(ctx core.BuildContext) float64 {

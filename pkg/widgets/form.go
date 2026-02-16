@@ -348,7 +348,7 @@ func (f formScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, a
 	return f.UpdateShouldNotify(oldWidget)
 }
 
-var formScopeType = reflect.TypeOf(formScope{})
+var formScopeType = reflect.TypeFor[formScope]()
 
 // FormField is a generic form field widget for building custom form inputs
 // that integrate with [Form] for validation, save, and reset operations.

@@ -72,20 +72,20 @@ func TestBuildPlatformViewConfig_ConfigUnchangedOnRebuild(t *testing.T) {
 	// Two independent widget instances with the same config (as would happen
 	// when Form.generation bumps and the entire form rebuilds).
 	old := TextInput{
-		Obscure:     true,
-		Autocorrect: false,
-		Style:       graphics.TextStyle{FontSize: 16, FontFamily: "Roboto", Color: graphics.RGB(0, 0, 0)},
-		Placeholder: "Enter password",
-		Padding:     layout.EdgeInsetsSymmetric(12, 8),
+		Obscure:      true,
+		Autocorrect:  false,
+		Style:        graphics.TextStyle{FontSize: 16, FontFamily: "Roboto", Color: graphics.RGB(0, 0, 0)},
+		Placeholder:  "Enter password",
+		Padding:      layout.EdgeInsetsSymmetric(12, 8),
 		KeyboardType: platform.KeyboardTypePassword,
 		InputAction:  platform.TextInputActionDone,
 	}
 	new := TextInput{
-		Obscure:     true,
-		Autocorrect: false,
-		Style:       graphics.TextStyle{FontSize: 16, FontFamily: "Roboto", Color: graphics.RGB(0, 0, 0)},
-		Placeholder: "Enter password",
-		Padding:     layout.EdgeInsetsSymmetric(12, 8),
+		Obscure:      true,
+		Autocorrect:  false,
+		Style:        graphics.TextStyle{FontSize: 16, FontFamily: "Roboto", Color: graphics.RGB(0, 0, 0)},
+		Placeholder:  "Enter password",
+		Padding:      layout.EdgeInsetsSymmetric(12, 8),
 		KeyboardType: platform.KeyboardTypePassword,
 		InputAction:  platform.TextInputActionDone,
 	}

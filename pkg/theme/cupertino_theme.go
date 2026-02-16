@@ -43,7 +43,7 @@ func (t CupertinoTheme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidg
 	return t.UpdateShouldNotify(oldWidget)
 }
 
-var cupertinoThemeType = reflect.TypeOf(CupertinoTheme{})
+var cupertinoThemeType = reflect.TypeFor[CupertinoTheme]()
 
 // CupertinoThemeOf returns the nearest CupertinoThemeData in the tree.
 // If no CupertinoTheme ancestor is found, returns the default light theme.

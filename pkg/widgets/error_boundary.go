@@ -224,7 +224,7 @@ func (e *errorBoundaryScopeElement) CaptureError(err *errors.BoundaryError) bool
 //
 // Returns nil if there is no ErrorBoundary ancestor.
 func ErrorBoundaryOf(ctx core.BuildContext) *errorBoundaryState {
-	inherited := ctx.DependOnInherited(reflect.TypeOf(errorBoundaryScope{}), nil)
+	inherited := ctx.DependOnInherited(reflect.TypeFor[errorBoundaryScope](), nil)
 	if inherited == nil {
 		return nil
 	}

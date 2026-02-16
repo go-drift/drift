@@ -206,7 +206,7 @@ func TestDrag_VelocityCalculation(t *testing.T) {
 	})
 
 	// Multiple rapid moves to build velocity
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		time.Sleep(5 * time.Millisecond)
 		recognizer.HandleEvent(PointerEvent{
 			PointerID: 1,

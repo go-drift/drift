@@ -106,8 +106,8 @@ func FormatBuildError(err *BuildError) string {
 		sb.WriteString("Output:\n")
 		sb.WriteString(color(colorReset))
 		// Indent output
-		lines := strings.Split(err.Output, "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(err.Output, "\n")
+		for line := range lines {
 			sb.WriteString("  ")
 			sb.WriteString(line)
 			sb.WriteString("\n")
@@ -138,8 +138,8 @@ func RecoverPanic() {
 		fmt.Fprintf(os.Stderr, "%sStack trace:%s\n", color(colorGray), color(colorReset))
 
 		// Format stack trace
-		lines := strings.Split(stack, "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(stack, "\n")
+		for line := range lines {
 			if strings.HasPrefix(line, "goroutine") {
 				continue // Skip goroutine header
 			}
@@ -172,8 +172,8 @@ func FormatWithSuggestion(err error, suggestion Suggestion) string {
 	sb.WriteString("\n")
 
 	if suggestion.Details != "" {
-		lines := strings.Split(suggestion.Details, "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(suggestion.Details, "\n")
+		for line := range lines {
 			sb.WriteString("  ")
 			sb.WriteString(line)
 			sb.WriteString("\n")

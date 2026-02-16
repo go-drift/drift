@@ -173,7 +173,7 @@ func captureRenderNode(ro layout.RenderObject, counter *typeCounter) *RenderNode
 
 func renderTypeName(ro layout.RenderObject) string {
 	t := reflect.TypeOf(ro)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	name := t.Name()
@@ -188,12 +188,12 @@ func renderTypeName(ro layout.RenderObject) string {
 // getFieldByPath navigates a dot-separated path like "painter.color" through
 // nested structs. Returns an invalid Value if the path doesn't exist.
 func getFieldByPath(v reflect.Value, path string) reflect.Value {
-	parts := strings.Split(path, ".")
-	for _, part := range parts {
+	parts := strings.SplitSeq(path, ".")
+	for part := range parts {
 		if part == "" {
 			return reflect.Value{}
 		}
-		if v.Kind() == reflect.Ptr {
+		if v.Kind() == reflect.Pointer {
 			if v.IsNil() {
 				return reflect.Value{}
 			}
@@ -224,7 +224,7 @@ func captureProperties(ro layout.RenderObject, typeName string) map[string]any {
 
 	props := make(map[string]any)
 	v := reflect.ValueOf(ro)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
@@ -254,7 +254,7 @@ func serializeFieldValue(v reflect.Value) any {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v.Int()
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if v.Type() == reflect.TypeOf(graphics.Color(0)) {
+		if v.Type() == reflect.TypeFor[graphics.Color]() {
 			return serializeColor(graphics.Color(v.Uint()))
 		}
 		return v.Uint()
@@ -326,10 +326,7 @@ func unifiedDiff(expected, actual string) string {
 	var buf strings.Builder
 	buf.WriteString("--- expected\n+++ actual\n")
 
-	maxLen := len(expectedLines)
-	if len(actualLines) > maxLen {
-		maxLen = len(actualLines)
-	}
+	maxLen := max(len(actualLines), len(expectedLines))
 
 	for i := 0; i < maxLen; i++ {
 		var e, a string

@@ -238,8 +238,8 @@ func validateAppID(appID string) error {
 	if !strings.Contains(appID, ".") {
 		return fmt.Errorf("app.id must contain at least one '.' (got %q)", appID)
 	}
-	segments := strings.Split(appID, ".")
-	for _, segment := range segments {
+	segments := strings.SplitSeq(appID, ".")
+	for segment := range segments {
 		if segment == "" {
 			return fmt.Errorf("app.id contains an empty segment (%q)", appID)
 		}

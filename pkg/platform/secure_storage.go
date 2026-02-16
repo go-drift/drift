@@ -1,5 +1,7 @@
 package platform
 
+import "maps"
+
 import "fmt"
 
 // SecureStorage provides secure key-value storage using platform-native encryption.
@@ -145,9 +147,7 @@ func (s *SecureStorageService) Set(key, value string, opts *SecureStorageOptions
 		"value": value,
 	}
 	if opts != nil {
-		for k, v := range opts.toArgs() {
-			args[k] = v
-		}
+		maps.Copy(args, opts.toArgs())
 	}
 
 	result, err := s.channel.Invoke("set", args)

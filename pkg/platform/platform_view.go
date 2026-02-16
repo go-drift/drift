@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -363,9 +364,8 @@ func (r *PlatformViewRegistry) InvokeViewMethod(viewID int64, method string, arg
 		size += len(args)
 	}
 	invokeArgs := make(map[string]any, size)
-	for k, v := range args { // safe: range over nil map is no-op
-		invokeArgs[k] = v
-	}
+	// safe: range over nil map is no-op
+	maps.Copy(invokeArgs, args)
 	invokeArgs["viewId"] = viewID
 	invokeArgs["method"] = method
 	return r.channel.Invoke("invokeViewMethod", invokeArgs)

@@ -145,10 +145,10 @@ func NewPathPattern(pattern string, opts ...PathPatternOption) *PathPattern {
 				// Invalid pattern, but we'll just ignore trailing parts
 				break
 			}
-		} else if strings.HasPrefix(part, ":") {
+		} else if after, ok := strings.CutPrefix(part, ":"); ok {
 			// Parameter
 			p.segments = append(p.segments, segment{
-				value:   strings.TrimPrefix(part, ":"),
+				value:   after,
 				isParam: true,
 			})
 		} else {
@@ -223,7 +223,7 @@ func (p *PathPattern) Match(path string) (params map[string]string, ok bool) {
 	params = make(map[string]string)
 
 	segIdx := 0
-	for i := 0; i < len(pathParts); i++ {
+	for i := range pathParts {
 		if segIdx >= len(p.segments) {
 			// More path segments than pattern segments
 			return nil, false

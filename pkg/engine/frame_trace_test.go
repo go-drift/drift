@@ -22,7 +22,7 @@ func TestFrameTraceBuffer_EmptySnapshot(t *testing.T) {
 
 func TestFrameTraceBuffer_AddSnapshotOrdering(t *testing.T) {
 	buf := NewFrameTraceBuffer(10, 100*time.Millisecond)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		buf.Add(FrameSample{Timestamp: int64(i)}, time.Millisecond)
 	}
 	snap := buf.Snapshot()
@@ -39,7 +39,7 @@ func TestFrameTraceBuffer_AddSnapshotOrdering(t *testing.T) {
 func TestFrameTraceBuffer_WrapAround(t *testing.T) {
 	buf := NewFrameTraceBuffer(4, 100*time.Millisecond)
 	// Add 7 samples to a capacity-4 buffer
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		buf.Add(FrameSample{Timestamp: int64(i)}, time.Millisecond)
 	}
 	snap := buf.Snapshot()

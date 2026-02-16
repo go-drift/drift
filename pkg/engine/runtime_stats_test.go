@@ -15,7 +15,7 @@ func TestRuntimeSampleBuffer_EmptySnapshot(t *testing.T) {
 
 func TestRuntimeSampleBuffer_AddSnapshotOrdering(t *testing.T) {
 	buf := NewRuntimeSampleBuffer(60*time.Second, 5*time.Second)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		buf.Add(RuntimeSample{Timestamp: int64(i)})
 	}
 	snap := buf.Snapshot()
@@ -32,7 +32,7 @@ func TestRuntimeSampleBuffer_AddSnapshotOrdering(t *testing.T) {
 func TestRuntimeSampleBuffer_WrapAround(t *testing.T) {
 	// capacity = window/interval = 4s/1s = 4
 	buf := NewRuntimeSampleBuffer(4*time.Second, 1*time.Second)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		buf.Add(RuntimeSample{Timestamp: int64(i)})
 	}
 	snap := buf.Snapshot()
@@ -94,7 +94,7 @@ func TestRuntimeSampleBuffer_CapacityClamping(t *testing.T) {
 	// window/interval = 600/1 = 600, but max is 120
 	buf := NewRuntimeSampleBuffer(600*time.Second, 1*time.Second)
 	// Fill to capacity
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		buf.Add(RuntimeSample{Timestamp: int64(i)})
 	}
 	snap := buf.Snapshot()

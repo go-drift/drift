@@ -142,8 +142,8 @@ func CopyTree(srcDir, destDir string, data *TemplateData, filter func(name strin
 		}
 
 		destName := name
-		if strings.HasSuffix(destName, ".tmpl") {
-			destName = strings.TrimSuffix(destName, ".tmpl")
+		if before, ok := strings.CutSuffix(destName, ".tmpl"); ok {
+			destName = before
 		}
 
 		// Preserve subdirectory structure relative to srcDir

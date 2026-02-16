@@ -51,7 +51,7 @@ func CubicBezier(x1, y1, x2, y2 float64) func(float64) float64 {
 
 		u := t
 		// Newton-Raphson converges quickly for most values.
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			x := sampleCurve(x1, x2, u) - t
 			if math.Abs(x) < 1e-7 {
 				return sampleCurve(y1, y2, clampUnit(u))
@@ -66,7 +66,7 @@ func CubicBezier(x1, y1, x2, y2 float64) func(float64) float64 {
 		// Fallback to bisection to guarantee a stable solution in [0,1].
 		lo, hi := 0.0, 1.0
 		u = clampUnit(u)
-		for i := 0; i < 12; i++ {
+		for range 12 {
 			x := sampleCurve(x1, x2, u) - t
 			if math.Abs(x) < 1e-7 {
 				break

@@ -113,7 +113,7 @@ func TestObservable_ConcurrentAccess(t *testing.T) {
 	obs := NewObservable(0)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(2)
 		go func(v int) {
 			defer wg.Done()
@@ -205,7 +205,7 @@ func TestNotifier_ConcurrentAccess(t *testing.T) {
 	n := NewNotifier()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()

@@ -49,7 +49,7 @@ type FrameSample struct {
 	Phases     FramePhaseTimings `json:"phases"`
 	Counts     FrameCounts       `json:"counts"`
 	Flags      FrameFlags        `json:"flags"`
-	DirtyTypes FrameDirtyTypes   `json:"dirtyTypes,omitempty"`
+	DirtyTypes FrameDirtyTypes   `json:"dirtyTypes"`
 }
 
 // FrameDirtyTypes provides the most common dirty types per phase.

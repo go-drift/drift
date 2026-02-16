@@ -43,7 +43,7 @@ func (t Theme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspec
 	return t.UpdateShouldNotify(oldWidget)
 }
 
-var themeType = reflect.TypeOf(Theme{})
+var themeType = reflect.TypeFor[Theme]()
 
 // ThemeOf returns the nearest ThemeData in the tree.
 // If no Theme ancestor is found, returns the default light theme.

@@ -126,7 +126,7 @@ func (a AppTheme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, as
 	return a.UpdateShouldNotify(oldWidget)
 }
 
-var appThemeType = reflect.TypeOf(AppTheme{})
+var appThemeType = reflect.TypeFor[AppTheme]()
 
 // Cached default to avoid repeated allocations when no AppTheme is found.
 var defaultAppThemeData = NewAppThemeData(TargetPlatformMaterial, BrightnessLight)

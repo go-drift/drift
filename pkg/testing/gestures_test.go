@@ -25,7 +25,7 @@ func TestTap_CounterMultiple(t *testing.T) {
 	tester := NewWidgetTesterWithT(t)
 	tester.PumpWidget(testbed.Counter{Initial: 0})
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		tester.Tap(ByType[testbed.Counter]())
 		tester.Pump()
 	}

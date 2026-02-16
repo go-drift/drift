@@ -31,7 +31,7 @@ type RenderTreeNode struct {
 	Type              string           `json:"type"`
 	Size              SafeSize         `json:"size"`
 	Constraints       *SafeConstraints `json:"constraints,omitempty"`
-	Offset            SafeOffset       `json:"offset,omitempty"`
+	Offset            SafeOffset       `json:"offset"`
 	Depth             int              `json:"depth"`
 	NeedsLayout       bool             `json:"needsLayout"`
 	NeedsPaint        bool             `json:"needsPaint"`
@@ -538,7 +538,7 @@ func getNeedsBuild(elem core.Element) bool {
 	if !v.IsValid() {
 		return false
 	}
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return false
 		}

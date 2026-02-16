@@ -15,7 +15,7 @@ import (
 )
 
 type skiaStateTracker struct {
-	mu      sync.Mutex   // protects ctx and backend only
+	mu      sync.Mutex // protects ctx and backend only
 	ctx     *skia.Context
 	backend string
 	lastErr atomic.Value // stores string; atomic, no mutex needed

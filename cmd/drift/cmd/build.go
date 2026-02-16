@@ -362,7 +362,7 @@ func checkNDKVersion(ndkHome string) {
 	if err != nil {
 		return
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if strings.HasPrefix(line, "Pkg.Revision") {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) != 2 {

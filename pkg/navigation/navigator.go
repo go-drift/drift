@@ -774,7 +774,7 @@ func (n navigatorInherited) UpdateShouldNotifyDependent(oldWidget core.Inherited
 	return n.UpdateShouldNotify(oldWidget)
 }
 
-var navigatorInheritedType = reflect.TypeOf(navigatorInherited{})
+var navigatorInheritedType = reflect.TypeFor[navigatorInherited]()
 
 // NavigatorOf returns the NavigatorState from the nearest Navigator ancestor.
 // Returns nil if no Navigator is found.
@@ -880,7 +880,7 @@ func (s *navigatorState) applyRedirect(fromPath, toPath string, args any) (strin
 	currentArgs := args
 	replace := false
 
-	for i := 0; i < maxRedirects; i++ {
+	for range maxRedirects {
 		if seen[currentPath] {
 			// Loop detected - return error path for OnUnknownRoute
 			return redirectErrorPath, map[string]any{

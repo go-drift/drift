@@ -92,8 +92,8 @@ func listAndroidDevices() error {
 		// Extract model if available
 		model := ""
 		for _, p := range parts[2:] {
-			if strings.HasPrefix(p, "model:") {
-				model = strings.TrimPrefix(p, "model:")
+			if after, ok := strings.CutPrefix(p, "model:"); ok {
+				model = after
 				break
 			}
 		}
@@ -384,28 +384,21 @@ func listIOSSimulators() error {
 func extractJSONString(line, key string) string {
 	// Simple extraction: "key" : "value"
 	keyPattern := fmt.Sprintf(`"%s"`, key)
-	idx := strings.Index(line, keyPattern)
-	if idx == -1 {
+	_, after, ok := strings.Cut(line, keyPattern)
+	if !ok {
 		return ""
 	}
 
-	rest := line[idx+len(keyPattern):]
+	rest := after
 	// Find the value
 	start := strings.Index(rest, `"`)
 	if start == -1 {
 		return ""
 	}
 	rest = rest[start+1:]
-	end := strings.Index(rest, `"`)
-	if end == -1 {
+	before, _, ok := strings.Cut(rest, `"`)
+	if !ok {
 		return ""
 	}
-	return rest[:end]
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return before
 }

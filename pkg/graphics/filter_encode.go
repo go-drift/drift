@@ -39,7 +39,7 @@ func encodeColorFilter(cf *ColorFilter) []float32 {
 
 	case ColorFilterMatrix:
 		result = append(result, colorFilterTypeMatrix)
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			result = append(result, float32(cf.Matrix[i]))
 		}
 

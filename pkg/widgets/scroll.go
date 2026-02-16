@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -527,10 +528,8 @@ func (c *ScrollController) AnimateTo(offset float64, _ time.Duration) {
 }
 
 func (c *ScrollController) attach(position *ScrollPosition) {
-	for _, existing := range c.positions {
-		if existing == position {
-			return
-		}
+	if slices.Contains(c.positions, position) {
+		return
 	}
 	c.positions = append(c.positions, position)
 }

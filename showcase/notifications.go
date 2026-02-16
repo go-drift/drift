@@ -178,4 +178,3 @@ func (s *notificationsState) scheduleLocal() {
 
 	s.receivedText.Set("Scheduled local notification.")
 }
-

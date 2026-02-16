@@ -218,7 +218,7 @@ func dependOnInheritedWithAspects(element Element, inheritedType reflect.Type, a
 	for current != nil {
 		if inherited, ok := current.(*InheritedElement); ok {
 			widgetType := reflect.TypeOf(inherited.widget)
-			if widgetType == inheritedType || (widgetType.Kind() == reflect.Ptr && widgetType.Elem() == inheritedType) {
+			if widgetType == inheritedType || (widgetType.Kind() == reflect.Pointer && widgetType.Elem() == inheritedType) {
 				// Register all aspects in one call
 				for _, aspect := range aspects {
 					inherited.AddDependent(element, aspect)
@@ -247,7 +247,7 @@ func dependOnInheritedImpl(element Element, inheritedType reflect.Type, aspect a
 	for current != nil {
 		if inherited, ok := current.(*InheritedElement); ok {
 			widgetType := reflect.TypeOf(inherited.widget)
-			if widgetType == inheritedType || (widgetType.Kind() == reflect.Ptr && widgetType.Elem() == inheritedType) {
+			if widgetType == inheritedType || (widgetType.Kind() == reflect.Pointer && widgetType.Elem() == inheritedType) {
 				// Register dependency with optional aspect
 				inherited.AddDependent(element, aspect)
 				return inherited.widget

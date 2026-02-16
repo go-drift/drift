@@ -292,7 +292,7 @@ func (c *nullPaintCanvas) DrawSVGTinted(svgPtr unsafe.Pointer, bounds graphics.R
 }
 func (c *nullPaintCanvas) DrawLottie(animPtr unsafe.Pointer, bounds graphics.Rect, t float64) {}
 func (c *nullPaintCanvas) EmbedPlatformView(viewID int64, size graphics.Size)                 {}
-func (c *nullPaintCanvas) Size() graphics.Size                                { return c.size }
+func (c *nullPaintCanvas) Size() graphics.Size                                                { return c.size }
 
 func TestEmbedPlatformView_Recording(t *testing.T) {
 	recorder := &graphics.PictureRecorder{}

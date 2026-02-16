@@ -1,5 +1,7 @@
 package gestures
 
+import "slices"
+
 import "sync"
 
 // ArenaMember participates in the gesture arena.
@@ -110,13 +112,7 @@ func (a *GestureArena) Hold(pointerID int64, member ArenaMember) bool {
 		return false
 	}
 	// Verify member is in the arena
-	found := false
-	for _, m := range entry.members {
-		if m == member {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(entry.members, member)
 	if !found {
 		return false
 	}

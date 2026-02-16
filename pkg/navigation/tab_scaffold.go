@@ -324,7 +324,7 @@ func (t tabNavigatorScope) UpdateShouldNotifyDependent(oldWidget core.InheritedW
 	return t.UpdateShouldNotify(oldWidget)
 }
 
-var tabNavigatorScopeType = reflect.TypeOf(tabNavigatorScope{})
+var tabNavigatorScopeType = reflect.TypeFor[tabNavigatorScope]()
 
 // RegisterTabNavigator registers a navigator with its enclosing [TabScaffold].
 //

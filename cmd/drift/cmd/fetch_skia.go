@@ -59,8 +59,8 @@ func runFetchSkia(args []string) error {
 				return fmt.Errorf("--version requires a value")
 			}
 		default:
-			if strings.HasPrefix(args[i], "--version=") {
-				opts.Version = strings.TrimPrefix(args[i], "--version=")
+			if after, ok := strings.CutPrefix(args[i], "--version="); ok {
+				opts.Version = after
 			} else {
 				return fmt.Errorf("unknown flag: %s", args[i])
 			}

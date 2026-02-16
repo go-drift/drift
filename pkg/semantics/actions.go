@@ -1,5 +1,7 @@
 package semantics
 
+import "maps"
+
 // SemanticsAction represents an accessibility action that can be performed on a node.
 type SemanticsAction uint64
 
@@ -192,9 +194,7 @@ func (a *SemanticsActions) Merge(other *SemanticsActions) {
 	if a.handlers == nil {
 		a.handlers = make(map[SemanticsAction]ActionHandler)
 	}
-	for action, handler := range other.handlers {
-		a.handlers[action] = handler
-	}
+	maps.Copy(a.handlers, other.handlers)
 }
 
 // Clear removes all handlers.

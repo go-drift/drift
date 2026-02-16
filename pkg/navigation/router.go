@@ -451,7 +451,7 @@ func (r routerInherited) UpdateShouldNotifyDependent(oldWidget core.InheritedWid
 	return r.UpdateShouldNotify(oldWidget)
 }
 
-var routerInheritedType = reflect.TypeOf(routerInherited{})
+var routerInheritedType = reflect.TypeFor[routerInherited]()
 
 // RouterOf returns the [RouterState] from the nearest [Router] ancestor.
 //

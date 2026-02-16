@@ -111,8 +111,8 @@ func Execute() error {
 				return fmt.Errorf("--cache-dir requires a directory path")
 			}
 		default:
-			if strings.HasPrefix(arg, "--cache-dir=") {
-				cache.SetCacheDir(strings.TrimPrefix(arg, "--cache-dir="))
+			if after, ok := strings.CutPrefix(arg, "--cache-dir="); ok {
+				cache.SetCacheDir(after)
 				continue
 			}
 			filteredArgs = append(filteredArgs, arg)

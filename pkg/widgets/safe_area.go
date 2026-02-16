@@ -164,7 +164,7 @@ func (s *safeAreaProviderState) Build(ctx core.BuildContext) core.Widget {
 	}
 }
 
-var safeAreaDataType = reflect.TypeOf(SafeAreaData{})
+var safeAreaDataType = reflect.TypeFor[SafeAreaData]()
 
 // SafeAreaOf returns the current safe area insets from context.
 // Widgets calling this will rebuild when any inset changes.
