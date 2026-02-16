@@ -58,7 +58,6 @@
 #include "ports/SkFontMgr_android_ndk.h"
 #include "ports/SkFontScanner_FreeType.h"
 #include "skia_path_impl.h"
-#include "skia_rich_paragraph_impl.h"
 #include "skia_skottie_impl.h"
 #include "skia_svg_impl.h"
 
@@ -560,6 +559,8 @@ sk_sp<SkImageFilter> parse_image_filter(const float* data, int len, int& consume
 
     return filter;
 }
+
+#include "skia_rich_paragraph_impl.h"
 
 }  // namespace
 

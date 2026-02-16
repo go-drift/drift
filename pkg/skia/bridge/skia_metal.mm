@@ -57,7 +57,6 @@ extern "C" {
 #include "gpu/ganesh/mtl/GrMtlDirectContext.h"
 #include "ports/SkFontMgr_mac_ct.h"
 #include "skia_path_impl.h"
-#include "skia_rich_paragraph_impl.h"
 #include "skia_skottie_impl.h"
 #include "skia_svg_impl.h"
 
@@ -546,6 +545,8 @@ sk_sp<SkImageFilter> parse_image_filter(const float* data, int len, int& consume
 
     return filter;
 }
+
+#include "skia_rich_paragraph_impl.h"
 
 }  // namespace
 
