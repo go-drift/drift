@@ -180,6 +180,9 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 	if opts.watch {
 		ctx, cancel := watchContext()
 		defer cancel()
+		if !opts.noLogs {
+			go streamIOSLogs(ctx, cfg.AppID)
+		}
 		compileCfg := iosCompileConfig{
 			projectRoot: ws.Root,
 			overlayPath: ws.Overlay,
