@@ -67,7 +67,9 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, _ []string, opts 
 	}
 
 	if !opts.noLogs {
-		return logAndroid(cfg.AppID)
+		ctx, cancel := watchContext()
+		defer cancel()
+		streamAndroidLogs(ctx, cfg.AppID)
 	}
 	return nil
 }

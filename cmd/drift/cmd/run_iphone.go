@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -101,20 +102,25 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 		return err
 	}
 
-	if err := launchIOSSimulatorApp(cfg.AppID, opts.simulator); err != nil {
-		return err
-	}
-
-	fmt.Println()
-	fmt.Println("Application running!")
-	fmt.Println()
+	ctx, cancel := watchContext()
+	defer cancel()
 
 	if opts.watch {
-		ctx, cancel := watchContext()
-		defer cancel()
+		// In watch mode with logs, launch with --console directly so the
+		// app is not started twice (--terminate-running-process would kill
+		// a non-console launch and relaunch).
 		if !opts.noLogs {
-			go streamIOSLogs(ctx, cfg.AppID)
+			go launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true)
+		} else {
+			if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false); err != nil {
+				return err
+			}
 		}
+
+		fmt.Println()
+		fmt.Println("Application running!")
+		fmt.Println()
+
 		compileCfg := iosCompileConfig{
 			projectRoot: ws.Root,
 			overlayPath: ws.Overlay,
@@ -124,7 +130,6 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 			noFetch:     noFetch,
 		}
 		return watchAndRun(ctx, ws, func() error {
-			exec.Command("xcrun", "simctl", "terminate", opts.simulator, cfg.AppID).Run()
 			if err := ws.Refresh(); err != nil {
 				return err
 			}
@@ -137,20 +142,37 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 			if err := installIOSSimulatorApp(ws, opts.simulator); err != nil {
 				return err
 			}
-			return launchIOSSimulatorApp(cfg.AppID, opts.simulator)
+			if !opts.noLogs {
+				// --terminate-running-process kills the old app, which
+				// causes the previous goroutine's cmd.Run() to return.
+				go launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true)
+				return nil
+			}
+			return launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false)
 		})
 	}
 
+	// Non-watch mode: launch with --console to stream logs until exit.
+	if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false); err != nil {
+		return err
+	}
+	fmt.Println()
+	fmt.Println("Application running!")
+	fmt.Println()
 	if !opts.noLogs {
-		return logIOS(cfg.AppID)
+		launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true)
 	}
 	return nil
 }
 
 // runIOSDevice builds and runs on a physical iOS device.
 func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOptions, noFetch bool) error {
-	if _, err := exec.LookPath("ios-deploy"); err != nil {
-		return fmt.Errorf("ios-deploy not found; install with: brew install ios-deploy")
+	if _, err := exec.LookPath("xcrun"); err != nil {
+		return fmt.Errorf("xcrun not found; make sure Xcode command line tools are installed")
+	}
+
+	if opts.deviceID == "" {
+		return fmt.Errorf("device UDID is required: drift run ios --device <UDID> --team-id <TEAM_ID>")
 	}
 
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: true, teamID: opts.teamID}
@@ -169,22 +191,35 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 		return err
 	}
 
-	fmt.Println("  Installing and launching on device...")
-	// In watch mode, use --justlaunch so ios-deploy exits after launching
-	if err := iosDeployApp(ws, opts, opts.watch); err != nil {
+	fmt.Println("  Installing on device...")
+	if err := devicectlInstall(ws, opts); err != nil {
 		return err
 	}
 
-	fmt.Println()
-	fmt.Println("Application running!")
-	fmt.Println()
+	ctx, cancel := watchContext()
+	defer cancel()
 
 	if opts.watch {
-		ctx, cancel := watchContext()
-		defer cancel()
+		// Track the console goroutine's context so it can be cancelled
+		// before each rebuild (devicectl --console does not have a
+		// --terminate-running-process equivalent).
+		var consoleCancel context.CancelFunc
+
 		if !opts.noLogs {
-			go streamIOSLogs(ctx, cfg.AppID)
+			consoleCtx, cc := context.WithCancel(ctx)
+			consoleCancel = cc
+			go devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true)
+		} else {
+			fmt.Println("  Launching on device...")
+			if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false); err != nil {
+				return err
+			}
 		}
+
+		fmt.Println()
+		fmt.Println("Application running!")
+		fmt.Println()
+
 		compileCfg := iosCompileConfig{
 			projectRoot: ws.Root,
 			overlayPath: ws.Overlay,
@@ -194,6 +229,10 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 			noFetch:     noFetch,
 		}
 		return watchAndRun(ctx, ws, func() error {
+			// Cancel the previous console goroutine before rebuilding.
+			if consoleCancel != nil {
+				consoleCancel()
+			}
 			if err := ws.Refresh(); err != nil {
 				return err
 			}
@@ -203,10 +242,30 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 			if err := xcodebuildForDevice(ws, opts); err != nil {
 				return err
 			}
-			return iosDeployApp(ws, opts, true)
+			if err := devicectlInstall(ws, opts); err != nil {
+				return err
+			}
+			if !opts.noLogs {
+				consoleCtx, cc := context.WithCancel(ctx)
+				consoleCancel = cc
+				go devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true)
+				return nil
+			}
+			return devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false)
 		})
 	}
 
+	// Non-watch mode: install, launch, and optionally stream logs.
+	fmt.Println("  Launching on device...")
+	if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false); err != nil {
+		return err
+	}
+	fmt.Println()
+	fmt.Println("Application running!")
+	fmt.Println()
+	if !opts.noLogs {
+		devicectlLaunch(ctx, cfg.AppID, opts.deviceID, true)
+	}
 	return nil
 }
 
@@ -266,12 +325,22 @@ func installIOSSimulatorApp(ws *workspace.Workspace, simulator string) error {
 }
 
 // launchIOSSimulatorApp launches the app by bundle ID in the named iOS
-// Simulator using simctl.
-func launchIOSSimulatorApp(appID, simulator string) error {
-	cmd := exec.Command("xcrun", "simctl", "launch", simulator, appID)
+// Simulator using simctl. When console is true, the command uses
+// --console --terminate-running-process to stream stdout/stderr and blocks
+// until the app exits or ctx is cancelled.
+func launchIOSSimulatorApp(ctx context.Context, appID, simulator string, console bool) error {
+	args := []string{"simctl", "launch"}
+	if console {
+		args = append(args, "--console", "--terminate-running-process")
+	}
+	args = append(args, simulator, appID)
+	cmd := exec.CommandContext(ctx, "xcrun", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("failed to launch app: %w", err)
 	}
 	return nil
@@ -303,29 +372,38 @@ func xcodebuildForDevice(ws *workspace.Workspace, opts iosRunOptions) error {
 	return nil
 }
 
-// iosDeployApp installs and launches the app on a physical device using
-// ios-deploy. When justLaunch is true, ios-deploy exits after launching
-// (used in watch mode so the rebuild loop can continue).
-func iosDeployApp(ws *workspace.Workspace, opts iosRunOptions, justLaunch bool) error {
+// devicectlInstall installs the built .app bundle on a physical iOS device
+// using xcrun devicectl (requires Xcode 15+).
+func devicectlInstall(ws *workspace.Workspace, opts iosRunOptions) error {
 	appPath := filepath.Join(ws.BuildDir, "DerivedData", "Build", "Products", "Debug-iphoneos", "Runner.app")
-	var deployArgs []string
-	if justLaunch {
-		deployArgs = []string{"--bundle", appPath, "--justlaunch", "--noninteractive"}
-	} else {
-		deployArgs = []string{"--bundle", appPath, "--debug", "--noninteractive"}
-	}
-	if opts.deviceID != "" {
-		deployArgs = append([]string{"--id", opts.deviceID}, deployArgs...)
-	}
-
-	cmd := exec.Command("ios-deploy", deployArgs...)
+	args := []string{"devicectl", "device", "install", "app", "--device", opts.deviceID, appPath}
+	cmd := exec.Command("xcrun", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if !justLaunch {
-		cmd.Stdin = os.Stdin
-	}
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ios-deploy failed: %w", err)
+		return fmt.Errorf("devicectl install failed: %w\nMake sure Xcode 15+ is installed and the device is connected", err)
+	}
+	return nil
+}
+
+// devicectlLaunch launches the app by bundle ID on a physical iOS device
+// using xcrun devicectl (requires Xcode 15+). When console is true, the
+// command uses --console to stream stdout/stderr and blocks until the app
+// exits or ctx is cancelled.
+func devicectlLaunch(ctx context.Context, appID, deviceID string, console bool) error {
+	args := []string{"devicectl", "device", "process", "launch", "--device", deviceID}
+	if console {
+		args = append(args, "--console")
+	}
+	args = append(args, appID)
+	cmd := exec.CommandContext(ctx, "xcrun", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("devicectl launch failed: %w\nMake sure Xcode 15+ is installed and the device is connected", err)
 	}
 	return nil
 }

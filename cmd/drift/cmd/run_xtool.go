@@ -79,34 +79,11 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 		})
 	}
 
-	// Stream logs if requested
 	if !xtoolOpts.noLogs {
-		idevicesyslog, err := exec.LookPath("idevicesyslog")
-		if err != nil {
-			fmt.Println("Note: idevicesyslog not found, cannot stream logs")
-			fmt.Println("Install libimobiledevice for log streaming support")
-			return nil
-		}
-
-		fmt.Println("Streaming device logs (Ctrl+C to stop)...")
-		fmt.Println()
-
-		// Use --process to filter by app name (matches the executable name)
-		logArgs := []string{"--process", cfg.AppName}
-		if xtoolOpts.deviceID != "" {
-			logArgs = append([]string{"-u", xtoolOpts.deviceID}, logArgs...)
-		}
-
-		cmd := exec.Command(idevicesyslog, logArgs...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			// User likely hit Ctrl+C, which is fine
-			return nil
-		}
+		ctx, cancel := watchContext()
+		defer cancel()
+		streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
 	}
-
 	return nil
 }
 

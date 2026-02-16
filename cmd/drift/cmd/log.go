@@ -1,12 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 )
@@ -59,127 +58,37 @@ func runLog(args []string) error {
 func logAndroid(appID string) error {
 	fmt.Println("Streaming Android logs (Ctrl+C to stop)...")
 	fmt.Println()
-
-	adb := findADB()
-
-	// Clear existing logs first
-	clearCmd := exec.Command(adb, "logcat", "-c")
-	if err := clearCmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to clear logcat: %v\n", err)
-	}
-
-	// Try to get PID of the app (with fallbacks for older devices)
-	pid := getAppPID(adb, appID)
-
-	var cmd *exec.Cmd
-	if pid != "" {
-		// Test if --pid is supported (fails on old adb/devices)
-		testCmd := exec.Command(adb, "logcat", "-d", "--pid", pid)
-		if err := testCmd.Run(); err == nil {
-			// PID-based filtering (preferred) - app logs only
-			cmd = exec.Command(adb, "logcat", "-v", "time", "--pid", pid)
-		} else {
-			pid = "" // Force fallback
-		}
-	}
-
-	if pid == "" {
-		// Fallback: tag-based filtering (includes crash logs)
-		fmt.Fprintf(os.Stderr, "Note: using tag-based filtering (includes crash logs)\n")
-		cmd = exec.Command(adb, "logcat", "-v", "time",
-			"DriftJNI:*",
-			"DriftAccessibility:*",
-			"DriftDeepLink:*",
-			"SkiaHostView:*",
-			"DriftBackground:*",
-			"DriftPush:*",
-			"DriftSkia:*",
-			"PlatformChannel:*",
-			"Go:*",
-			"AndroidRuntime:E",
-			"*:S",
-		)
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	// Handle Ctrl+C gracefully
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		cmd.Process.Kill()
-	}()
-
-	if err := cmd.Run(); err != nil {
-		// Check if killed by signal
-		if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == -1 {
-			fmt.Println("\nLog streaming stopped.")
-			return nil
-		}
-		return fmt.Errorf("logcat failed: %w", err)
-	}
-
+	ctx, cancel := watchContext()
+	defer cancel()
+	streamAndroidLogs(ctx, appID)
 	return nil
-}
-
-// getAppPID tries multiple methods to get the app's PID.
-func getAppPID(adb, appID string) string {
-	// Try pidof -s first (single PID, most common)
-	if out, err := exec.Command(adb, "shell", "pidof", "-s", appID).Output(); err == nil {
-		if pid := strings.TrimSpace(string(out)); pid != "" {
-			return pid
-		}
-	}
-
-	// Fallback: pidof without -s (some devices)
-	if out, err := exec.Command(adb, "shell", "pidof", appID).Output(); err == nil {
-		if pid := strings.TrimSpace(string(out)); pid != "" {
-			// May return multiple PIDs, take first
-			fields := strings.Fields(pid)
-			if len(fields) > 0 {
-				return fields[0]
-			}
-		}
-	}
-
-	return "" // PID unavailable
 }
 
 // logIOS streams logs from iOS simulator.
 func logIOS(appID string) error {
 	fmt.Println("Streaming iOS simulator logs (Ctrl+C to stop)...")
 	fmt.Println()
+	ctx, cancel := watchContext()
+	defer cancel()
+	streamIOSLogs(ctx, appID)
+	return nil
+}
 
-	// Filter by app's bundle ID (which is used as the os_log subsystem)
-	// This captures DriftLog.* calls; NSLog and third-party logs are excluded to reduce noise
+// streamIOSLogs streams os_log output filtered by subsystem (bundle ID)
+// until ctx is cancelled. Used by "drift log ios" to tap into a running
+// simulator app.
+func streamIOSLogs(ctx context.Context, appID string) {
+	if strings.ContainsAny(appID, `"'\`) {
+		fmt.Fprintf(os.Stderr, "Warning: cannot stream logs, app ID %q contains invalid characters\n", appID)
+		return
+	}
 	predicate := fmt.Sprintf(`subsystem == "%s"`, appID)
-
-	cmd := exec.Command("log", "stream",
+	cmd := exec.CommandContext(ctx, "log", "stream",
 		"--predicate", predicate,
 		"--level", "debug",
 		"--style", "compact",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	// Handle Ctrl+C gracefully
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		cmd.Process.Kill()
-	}()
-
-	if err := cmd.Run(); err != nil {
-		if cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == -1 {
-			fmt.Println("\nLog streaming stopped.")
-			return nil
-		}
-		return fmt.Errorf("log stream failed: %w", err)
-	}
-
-	return nil
+	cmd.Run()
 }

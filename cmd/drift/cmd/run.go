@@ -46,8 +46,7 @@ For xtool (Linux/macOS):
   drift run xtool                     Run on connected device
   drift run xtool --device UDID       Run on specific device
 
-Note: Physical device deployment requires ios-deploy (brew install ios-deploy)
-      or ideviceinstaller (part of libimobiledevice)`,
+Note: Physical device deployment uses devicectl (requires Xcode 15+, iOS 17+)`,
 		Usage: "drift run <platform> [--watch] [--no-logs] [--no-fetch] [--device [UDID]] [--simulator NAME] [--team-id TEAM_ID]",
 		Run:   runRun,
 	})

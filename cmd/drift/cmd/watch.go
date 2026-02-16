@@ -128,8 +128,7 @@ func streamAndroidLogs(ctx context.Context, appID string) {
 		"DriftJNI:*",
 		"DriftAccessibility:*",
 		"DriftDeepLink:*",
-		"DriftRenderer:*",
-		"DriftSurfaceView:*",
+		"SkiaHostView:*",
 		"DriftBackground:*",
 		"DriftPush:*",
 		"DriftSkia:*",
@@ -137,26 +136,6 @@ func streamAndroidLogs(ctx context.Context, appID string) {
 		"Go:*",
 		"AndroidRuntime:E",
 		"*:S",
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run() // exits when ctx is cancelled
-}
-
-// streamIOSLogs streams os_log output filtered by subsystem (bundle ID)
-// until ctx is cancelled. Subsystem filtering survives app restarts.
-// Intended to run as a goroutine.
-func streamIOSLogs(ctx context.Context, appID string) {
-	// Reject bundle IDs containing characters that would break the predicate.
-	if strings.ContainsAny(appID, `"'\`) {
-		fmt.Fprintf(os.Stderr, "Warning: cannot stream logs, app ID %q contains invalid characters\n", appID)
-		return
-	}
-	predicate := fmt.Sprintf(`subsystem == "%s"`, appID)
-	cmd := exec.CommandContext(ctx, "log", "stream",
-		"--predicate", predicate,
-		"--level", "debug",
-		"--style", "compact",
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
