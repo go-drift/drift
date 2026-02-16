@@ -10,23 +10,36 @@ import (
 // a single style to the entire paragraph, RichText supports inline style
 // changes (color, weight, decoration, font) within a single paragraph.
 //
+// Style provides widget-level defaults (color, font size, etc.) that act as
+// the lowest-priority base. The Content span tree's own styles override Style,
+// and child spans override their parents as usual.
+//
 // Basic usage:
 //
 //	widgets.RichText{
 //	    Content: graphics.Spans(
 //	        graphics.Span("Hello "),
 //	        graphics.Span("World").Bold(),
-//	    ).Size(16).Color(colors.OnSurface),
-//	}
+//	    ),
+//	}.WithStyle(graphics.SpanStyle{Color: colors.OnSurface, FontSize: 16})
 type RichText struct {
 	// Content is the root span tree. Child spans inherit any style fields from
 	// their parent for fields left at their zero value.
-	Content  graphics.TextSpan
+	Content graphics.TextSpan
+	// Style is the widget-level default style. Spans inherit these values for
+	// any zero-valued fields not already set by the span tree.
+	Style    graphics.SpanStyle
 	Align    graphics.TextAlign
 	MaxLines int
 	// Wrap enables text wrapping at the constraint width. When false (default),
 	// text renders on a single line and may overflow.
 	Wrap bool
+}
+
+// WithStyle returns a copy with the given widget-level default style.
+func (r RichText) WithStyle(style graphics.SpanStyle) RichText {
+	r.Style = style
+	return r
 }
 
 // WithWrap returns a copy with text wrapping enabled or disabled.
@@ -57,11 +70,12 @@ func (r RichText) Key() any {
 
 func (r RichText) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
 	ro := &renderRichText{
-		span:     r.Content,
-		text:     r.Content.PlainText(),
-		align:    r.Align,
-		maxLines: r.MaxLines,
-		wrap:     r.Wrap,
+		span:      r.Content,
+		text:      r.Content.PlainText(),
+		baseStyle: r.Style,
+		align:     r.Align,
+		maxLines:  r.MaxLines,
+		wrap:      r.Wrap,
 	}
 	ro.SetSelf(ro)
 	return ro
@@ -71,6 +85,7 @@ func (r RichText) UpdateRenderObject(ctx core.BuildContext, renderObject layout.
 	if ro, ok := renderObject.(*renderRichText); ok {
 		ro.span = r.Content
 		ro.text = r.Content.PlainText()
+		ro.baseStyle = r.Style
 		ro.align = r.Align
 		ro.maxLines = r.MaxLines
 		ro.wrap = r.Wrap
@@ -84,6 +99,7 @@ type renderRichText struct {
 	layout.RenderBoxBase
 	span       graphics.TextSpan
 	text       string
+	baseStyle  graphics.SpanStyle
 	align      graphics.TextAlign
 	textLayout *graphics.TextLayout
 	maxLines   int
@@ -126,7 +142,7 @@ func (r *renderRichText) PerformLayout() {
 		return
 	}
 
-	tl, err := graphics.LayoutRichText(r.span, manager, graphics.ParagraphOptions{
+	tl, err := graphics.LayoutRichText(r.span, r.baseStyle, manager, graphics.ParagraphOptions{
 		MaxWidth:  maxWidth,
 		MaxLines:  r.maxLines,
 		TextAlign: r.align,

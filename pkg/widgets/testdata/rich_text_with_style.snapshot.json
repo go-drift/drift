@@ -13,12 +13,12 @@
     "props": {
       "baseStyle": {
         "BackgroundColor": "0x00000000",
-        "Color": "0x00000000",
+        "Color": "0xFFFF0000",
         "Decoration": 0,
         "DecorationColor": "0x00000000",
         "DecorationStyle": 0,
         "FontFamily": "",
-        "FontSize": 0,
+        "FontSize": 24,
         "FontStyle": 0,
         "FontWeight": 0,
         "Height": 0,

@@ -45,7 +45,7 @@ var propertyWhitelist = map[string][]string{
 	"RenderPadding":        {"padding"},
 	"RenderContainer":      {"painter.color", "padding", "width", "height"},
 	"RenderText":           {"text", "maxLines"},
-	"RenderRichText":       {"text", "maxLines"},
+	"RenderRichText":       {"text", "maxLines", "baseStyle"},
 	"RenderConstrainedBox": {"minWidth", "maxWidth", "minHeight", "maxHeight"},
 	"RenderSizedBox":       {"width", "height"},
 	"RenderOpacity":        {"opacity"},

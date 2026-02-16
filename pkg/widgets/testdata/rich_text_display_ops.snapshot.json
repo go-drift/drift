@@ -11,8 +11,22 @@
       0
     ],
     "props": {
-      "text": "ops test",
-      "maxLines": 0
+      "baseStyle": {
+        "BackgroundColor": "0x00000000",
+        "Color": "0x00000000",
+        "Decoration": 0,
+        "DecorationColor": "0x00000000",
+        "DecorationStyle": 0,
+        "FontFamily": "",
+        "FontSize": 0,
+        "FontStyle": 0,
+        "FontWeight": 0,
+        "Height": 0,
+        "LetterSpacing": 0,
+        "WordSpacing": 0
+      },
+      "maxLines": 0,
+      "text": "ops test"
     }
   }
 }

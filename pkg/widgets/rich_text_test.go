@@ -102,6 +102,60 @@ func TestRichText_DisplayOps(t *testing.T) {
 	}
 }
 
+func TestRichText_WithStyle(t *testing.T) {
+	original := widgets.RichText{
+		Content: graphics.TextSpan{Text: "hello"},
+	}
+	styled := original.WithStyle(graphics.SpanStyle{
+		Color:    0xFFFF0000,
+		FontSize: 24,
+	})
+	if styled.Style.Color != 0xFFFF0000 {
+		t.Errorf("expected color 0xFFFF0000, got 0x%08X", uint32(styled.Style.Color))
+	}
+	if styled.Style.FontSize != 24 {
+		t.Errorf("expected font size 24, got %v", styled.Style.FontSize)
+	}
+	if original.Style != (graphics.SpanStyle{}) {
+		t.Error("WithStyle mutated the original")
+	}
+}
+
+func TestRichText_StyleInfluencesRenderObject(t *testing.T) {
+	tester := drifttest.NewWidgetTesterWithT(t)
+
+	tester.PumpWidget(widgets.RichText{
+		Content: graphics.Spans(
+			graphics.Span("Hello "),
+			graphics.Span("World").Bold(),
+		),
+		Style: graphics.SpanStyle{
+			Color:    0xFFFF0000,
+			FontSize: 24,
+		},
+	})
+
+	snap := tester.CaptureSnapshot()
+	snap.MatchesFile(t, "testdata/rich_text_with_style.snapshot.json")
+
+	node := findRenderNode(snap.RenderTree, "RenderRichText")
+	if node == nil {
+		t.Fatal("expected a RenderRichText node in the render tree")
+	}
+
+	baseStyle, ok := node.Properties["baseStyle"].(map[string]any)
+	if !ok {
+		t.Fatal("expected baseStyle property in RenderRichText node")
+	}
+
+	if color, ok := baseStyle["Color"].(string); !ok || color != "0xFFFF0000" {
+		t.Errorf("expected baseStyle.Color 0xFFFF0000, got %v", baseStyle["Color"])
+	}
+	if fontSize, ok := baseStyle["FontSize"].(float64); !ok || fontSize != 24 {
+		t.Errorf("expected baseStyle.FontSize 24, got %v", baseStyle["FontSize"])
+	}
+}
+
 func TestRichText_AlignCenter_ExpandsWidth(t *testing.T) {
 	tester := drifttest.NewWidgetTesterWithT(t)
 	tester.SetSize(graphics.Size{Width: 300, Height: 600})

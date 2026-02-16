@@ -24,7 +24,7 @@ Child spans inherit style fields from their parent for any field left at its zer
 
 ## Themed Constructor
 
-`theme.RichTextOf` creates a RichText with the current theme's text color and body font size applied to the root span. Wrapping is enabled by default:
+`theme.RichTextOf` creates a RichText with the current theme's text color and body font size set on the widget-level `Style` (not the root span's style). Wrapping is enabled by default:
 
 ```go
 theme.RichTextOf(ctx,
@@ -45,9 +45,30 @@ theme.RichTextOf(ctx, spans...).WithAlign(graphics.TextAlignCenter).WithMaxLines
 | Property | Type | Description |
 |----------|------|-------------|
 | `Content` | `graphics.TextSpan` | Root of the styled span tree |
+| `Style` | `graphics.SpanStyle` | Widget-level default style; spans inherit these values for any zero-valued fields |
 | `Wrap` | `bool` | Enable line wrapping within the available width |
 | `MaxLines` | `int` | Maximum number of visible lines (0 = unlimited) |
 | `Align` | `graphics.TextAlign` | Horizontal text alignment (only visible when wrapping) |
+
+## Widget Methods
+
+All methods use value receivers and return copies, so calls can be chained:
+
+```go
+widgets.RichText{
+    Content: graphics.Spans(
+        graphics.Span("Hello "),
+        graphics.Span("World").Bold(),
+    ),
+}.WithStyle(graphics.SpanStyle{Color: colors.OnSurface, FontSize: 16})
+```
+
+| Method | Description |
+|--------|-------------|
+| `WithStyle(style)` | Set widget-level default style (lowest priority, inherited by all spans) |
+| `WithWrap(bool)` | Enable or disable text wrapping |
+| `WithMaxLines(n)` | Set maximum visible line count |
+| `WithAlign(align)` | Set horizontal text alignment |
 
 ## Span Builder Methods
 

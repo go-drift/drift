@@ -59,7 +59,7 @@ func TestFlattenSpans_InheritsParentStyle(t *testing.T) {
 			}},
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -85,7 +85,7 @@ func TestFlattenSpans_ChildOverridesParent(t *testing.T) {
 			}},
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -104,7 +104,7 @@ func TestFlattenSpans_ZeroValueInheritsFromParent(t *testing.T) {
 			{Text: "child"}, // all zero, inherits parent color
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -126,7 +126,7 @@ func TestFlattenSpans_CollectsLeaves(t *testing.T) {
 			},
 		},
 	}
-	flat := flattenSpans(span)
+	flat := flattenSpans(span, SpanStyle{})
 	if len(flat) != 4 {
 		t.Fatalf("expected 4 flat spans, got %d", len(flat))
 	}
@@ -158,7 +158,7 @@ func TestFlattenSpans_DeepInheritance(t *testing.T) {
 			},
 		},
 	}
-	flat := flattenSpans(span)
+	flat := flattenSpans(span, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -180,7 +180,7 @@ func TestFlattenSpans_ChildOverridesDecorationStyleToSolid(t *testing.T) {
 			{Text: "child", Style: SpanStyle{DecorationStyle: TextDecorationStyleSolid}},
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -197,7 +197,7 @@ func TestFlattenSpans_ChildOverridesFontStyleToNormal(t *testing.T) {
 			{Text: "child", Style: SpanStyle{FontStyle: FontStyleNormal}},
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -367,7 +367,7 @@ func TestFlattenSpans_NoLetterSpacingOverridesParent(t *testing.T) {
 			Span("child").NoLetterSpacing(),
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -385,7 +385,7 @@ func TestFlattenSpans_NoDecorationOverridesParent(t *testing.T) {
 			{Text: "child", Style: SpanStyle{Decoration: TextDecorationNone}},
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
@@ -417,11 +417,56 @@ func TestFlattenSpans_NoBackgroundOverridesParent(t *testing.T) {
 			{Text: "child", Style: SpanStyle{BackgroundColor: noBackgroundColor}},
 		},
 	}
-	flat := flattenSpans(parent)
+	flat := flattenSpans(parent, SpanStyle{})
 	if len(flat) != 1 {
 		t.Fatalf("expected 1 flat span, got %d", len(flat))
 	}
 	if flat[0].style.BackgroundColor != noBackgroundColor {
 		t.Errorf("expected noBackgroundColor sentinel, got 0x%08X", uint32(flat[0].style.BackgroundColor))
+	}
+}
+
+func TestFlattenSpans_BaseStyleApplied(t *testing.T) {
+	base := SpanStyle{
+		Color:    0xFFAA0000,
+		FontSize: 18,
+	}
+	span := TextSpan{
+		Children: []TextSpan{
+			{Text: "child"},
+		},
+	}
+	flat := flattenSpans(span, base)
+	if len(flat) != 1 {
+		t.Fatalf("expected 1 flat span, got %d", len(flat))
+	}
+	if flat[0].style.Color != 0xFFAA0000 {
+		t.Errorf("expected base color 0xFFAA0000, got 0x%08X", uint32(flat[0].style.Color))
+	}
+	if flat[0].style.FontSize != 18 {
+		t.Errorf("expected base font size 18, got %v", flat[0].style.FontSize)
+	}
+}
+
+func TestFlattenSpans_ContentStyleOverridesBaseStyle(t *testing.T) {
+	base := SpanStyle{
+		Color:    0xFFAA0000,
+		FontSize: 18,
+	}
+	span := TextSpan{
+		Style: SpanStyle{Color: 0xFF00BB00},
+		Children: []TextSpan{
+			{Text: "child"},
+		},
+	}
+	flat := flattenSpans(span, base)
+	if len(flat) != 1 {
+		t.Fatalf("expected 1 flat span, got %d", len(flat))
+	}
+	if flat[0].style.Color != 0xFF00BB00 {
+		t.Errorf("expected content color 0xFF00BB00 to override base, got 0x%08X", uint32(flat[0].style.Color))
+	}
+	if flat[0].style.FontSize != 18 {
+		t.Errorf("expected base font size 18 (not overridden), got %v", flat[0].style.FontSize)
 	}
 }

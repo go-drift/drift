@@ -316,8 +316,8 @@ type flatSpan struct {
 // flattenSpans walks a TextSpan tree depth-first, collecting leaf (text, style)
 // pairs. Each child's style is merged with the parent's resolved style so that
 // unset fields are inherited.
-func flattenSpans(span TextSpan) []flatSpan {
-	return flattenSpansInherited(span, SpanStyle{})
+func flattenSpans(span TextSpan, baseStyle SpanStyle) []flatSpan {
+	return flattenSpansInherited(span, baseStyle)
 }
 
 func flattenSpansInherited(span TextSpan, parentStyle SpanStyle) []flatSpan {
@@ -334,11 +334,11 @@ func flattenSpansInherited(span TextSpan, parentStyle SpanStyle) []flatSpan {
 
 // LayoutRichText measures and shapes a tree of styled text spans. The returned
 // TextLayout can be rendered with Canvas.DrawText, just like single-style text.
-func LayoutRichText(span TextSpan, manager *FontManager, opts ParagraphOptions) (*TextLayout, error) {
+func LayoutRichText(span TextSpan, baseStyle SpanStyle, manager *FontManager, opts ParagraphOptions) (*TextLayout, error) {
 	if manager == nil {
 		return nil, errors.New("font manager required")
 	}
-	flat := flattenSpans(span)
+	flat := flattenSpans(span, baseStyle)
 	if len(flat) == 0 {
 		return nil, errors.New("rich text: no text spans")
 	}
