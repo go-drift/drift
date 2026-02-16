@@ -63,9 +63,20 @@ func (w FontWeight) String() string {
 type FontStyle int
 
 const (
-	FontStyleNormal FontStyle = iota
-	FontStyleItalic
+	fontStyleUnset FontStyle = 0 // zero value = inherit
+
+	// FontStyleNormal selects the upright (roman) variant of the typeface.
+	FontStyleNormal FontStyle = 1
+
+	// FontStyleItalic selects the italic variant of the typeface.
+	FontStyleItalic FontStyle = 2
 )
+
+// fontStyleBridgeValue converts a 1-based FontStyle to Skia's 0-based enum.
+// A zero value (unset) maps to 0 (upright), preserving default behavior.
+func fontStyleBridgeValue(fs FontStyle) int {
+	return max(int(fs)-1, 0)
+}
 
 // String returns a human-readable representation of the font style.
 func (s FontStyle) String() string {
@@ -74,6 +85,8 @@ func (s FontStyle) String() string {
 		return "normal"
 	case FontStyleItalic:
 		return "italic"
+	case fontStyleUnset:
+		return "normal"
 	default:
 		return fmt.Sprintf("FontStyle(%d)", int(s))
 	}
@@ -325,7 +338,7 @@ func layoutParagraph(text string, style TextStyle, family string, size float64, 
 		family,
 		float32(size),
 		weight,
-		int(style.FontStyle),
+		fontStyleBridgeValue(style.FontStyle),
 		uint32(style.Color),
 		maxLines,
 		gradientType,
@@ -366,7 +379,7 @@ func layoutParagraph(text string, style TextStyle, family string, size float64, 
 			family,
 			float32(size),
 			weight,
-			int(style.FontStyle),
+			fontStyleBridgeValue(style.FontStyle),
 			uint32(style.Color),
 			maxLines,
 			gradientType,
@@ -424,7 +437,7 @@ func layoutParagraph(text string, style TextStyle, family string, size float64, 
 	// For empty text or missing paragraph metrics, fall back to font metrics
 	// so that empty text widgets still reserve the correct line height.
 	if layoutSize.Height == 0 {
-		fallback, err := skia.FontMetrics(family, size, weight, int(style.FontStyle))
+		fallback, err := skia.FontMetrics(family, size, weight, fontStyleBridgeValue(style.FontStyle))
 		if err == nil {
 			fallbackLineHeight := fallback.Ascent + fallback.Descent + fallback.Leading
 			if fallbackLineHeight == 0 {

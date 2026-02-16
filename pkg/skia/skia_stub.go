@@ -305,6 +305,11 @@ func NewParagraph(
 	return nil, errStubNotSupported
 }
 
+// NewRichParagraph creates a paragraph with multiple styled spans.
+func NewRichParagraph(spans []TextSpanData, maxLines int, textAlign int) (*Paragraph, error) {
+	return nil, errStubNotSupported
+}
+
 // Layout lays out the paragraph within the given width.
 func (p *Paragraph) Layout(width float32) {}
 

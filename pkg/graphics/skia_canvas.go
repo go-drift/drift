@@ -395,7 +395,7 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 				uint32(shadow.Color),
 				float32(shadow.Sigma()),
 				fontWeight,
-				int(layout.Style.FontStyle),
+				fontStyleBridgeValue(layout.Style.FontStyle),
 			)
 		}
 
@@ -410,7 +410,7 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 				float32(fontSize),
 				uint32(layout.Style.Color),
 				fontWeight,
-				int(layout.Style.FontStyle),
+				fontStyleBridgeValue(layout.Style.FontStyle),
 				payload.gradientType,
 				startX,
 				startY,
@@ -433,7 +433,7 @@ func (c *SkiaCanvas) DrawText(layout *TextLayout, position Offset) {
 			float32(fontSize),
 			uint32(layout.Style.Color),
 			fontWeight,
-			int(layout.Style.FontStyle),
+			fontStyleBridgeValue(layout.Style.FontStyle),
 		)
 	}
 }

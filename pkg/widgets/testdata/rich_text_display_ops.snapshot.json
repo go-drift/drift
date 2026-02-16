@@ -1,0 +1,18 @@
+{
+  "renderTree": {
+    "id": "RenderRichText#0",
+    "type": "RenderRichText",
+    "size": [
+      800,
+      600
+    ],
+    "offset": [
+      0,
+      0
+    ],
+    "props": {
+      "text": "ops test",
+      "maxLines": 0
+    }
+  }
+}

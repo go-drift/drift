@@ -59,6 +59,7 @@ var demos = []Demo{
 	{"/forms", "Forms", "Text input and selection controls", CategoryWidgets, "icon-form.svg", buildFormsPage},
 	{"/progress", "Progress", "Loading and progress indicators", CategoryWidgets, "icon-progress.svg", buildProgressPage},
 	{"/images", "Images", "PNG, JPG, and SVG rendering", CategoryWidgets, "icon-image.svg", buildImagesPage},
+	{"/rich-text", "Rich Text", "Inline styled text spans", CategoryWidgets, "icon-rich-text.svg", buildRichTextPage},
 
 	// Motion demos
 	{"/gestures", "Gestures", "Drag gestures with axis locking", CategoryMotion, "icon-gesture.svg", buildGesturesPage},

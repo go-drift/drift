@@ -223,6 +223,31 @@ int drift_skia_paragraph_get_metrics(DriftSkiaParagraph paragraph, float* height
 int drift_skia_paragraph_get_line_metrics(DriftSkiaParagraph paragraph, float* widths, float* ascents, float* descents, float* heights, int count);
 void drift_skia_paragraph_paint(DriftSkiaParagraph paragraph, DriftSkiaCanvas canvas, float x, float y);
 void drift_skia_paragraph_destroy(DriftSkiaParagraph paragraph);
+
+typedef struct {
+    const char* text;
+    const char* family;
+    float size;
+    int weight;
+    int style;
+    uint32_t color;
+    int decoration;
+    uint32_t decoration_color;
+    int decoration_style;
+    float letter_spacing;
+    float word_spacing;
+    float height;
+    int has_background;
+    uint32_t background_color;
+} DriftTextSpan;
+
+DriftSkiaParagraph drift_skia_rich_paragraph_create(
+    const DriftTextSpan* spans,
+    int span_count,
+    int max_lines,
+    int text_align
+);
+
 int drift_skia_register_font(const char* name, const uint8_t* data, int length);
 int drift_skia_measure_text(const char* text, const char* family, float size, int weight, int style, float* width);
 int drift_skia_font_metrics(const char* family, float size, int weight, int style, float* ascent, float* descent, float* leading);

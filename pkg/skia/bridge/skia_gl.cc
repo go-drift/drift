@@ -58,6 +58,7 @@
 #include "ports/SkFontMgr_android_ndk.h"
 #include "ports/SkFontScanner_FreeType.h"
 #include "skia_path_impl.h"
+#include "skia_rich_paragraph_impl.h"
 #include "skia_skottie_impl.h"
 #include "skia_svg_impl.h"
 
@@ -1403,6 +1404,15 @@ void drift_skia_paragraph_destroy(DriftSkiaParagraph paragraph) {
         return;
     }
     delete reinterpret_cast<skia::textlayout::Paragraph*>(paragraph);
+}
+
+DriftSkiaParagraph drift_skia_rich_paragraph_create(
+    const DriftTextSpan* spans,
+    int span_count,
+    int max_lines,
+    int text_align
+) {
+    return drift_skia_rich_paragraph_create_impl(spans, span_count, max_lines, text_align);
 }
 
 DriftSkiaPath drift_skia_path_create(int fill_type) {

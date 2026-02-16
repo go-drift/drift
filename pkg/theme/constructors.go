@@ -533,6 +533,35 @@ func VerticalDividerOf(ctx core.BuildContext) widgets.VerticalDivider {
 	}
 }
 
+// RichTextOf creates a [widgets.RichText] with themed defaults for color and
+// font size. The provided spans become children of a root TextSpan whose style
+// carries the theme's OnSurface color and BodyMedium font size. Child spans
+// inherit these values for any zero-valued fields.
+//
+// To override layout properties, chain With* methods on the returned widget:
+//
+//	theme.RichTextOf(ctx, spans...).WithAlign(graphics.TextAlignCenter).WithMaxLines(3)
+//
+// Example:
+//
+//	theme.RichTextOf(ctx,
+//	    graphics.Span("Hello "),
+//	    graphics.Span("World").Bold(),
+//	)
+func RichTextOf(ctx core.BuildContext, spans ...graphics.TextSpan) widgets.RichText {
+	_, colors, textTheme := UseTheme(ctx)
+	return widgets.RichText{
+		Content: graphics.TextSpan{
+			Style: graphics.SpanStyle{
+				Color:    colors.OnSurface,
+				FontSize: textTheme.BodyMedium.FontSize,
+			},
+			Children: spans,
+		},
+		Wrap: true,
+	}
+}
+
 // LinearProgressIndicatorOf creates a [widgets.LinearProgressIndicator] with
 // visual properties filled from the current theme's colors.
 //

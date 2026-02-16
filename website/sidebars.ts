@@ -62,6 +62,7 @@ const sidebars: SidebarsConfig = {
           label: 'Display',
           items: [
             'catalog/display/text',
+            'catalog/display/rich-text',
             'catalog/display/icon',
             'catalog/display/image-svg',
             'catalog/display/lottie',

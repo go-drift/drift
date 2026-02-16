@@ -787,6 +787,54 @@ func NewParagraph(
 	return &Paragraph{ptr: paragraph}, nil
 }
 
+// NewRichParagraph creates a paragraph with multiple styled spans.
+func NewRichParagraph(spans []TextSpanData, maxLines int, textAlign int) (*Paragraph, error) {
+	if len(spans) == 0 {
+		return nil, errors.New("skia: no spans provided")
+	}
+	cSpans := make([]C.DriftTextSpan, len(spans))
+	cStrings := make([]*C.char, 0, len(spans)*2)
+	for i, s := range spans {
+		cText := C.CString(s.Text)
+		cStrings = append(cStrings, cText)
+		cSpans[i].text = cText
+		if s.Family != "" {
+			cFamily := C.CString(s.Family)
+			cStrings = append(cStrings, cFamily)
+			cSpans[i].family = cFamily
+		}
+		cSpans[i].size = C.float(s.Size)
+		cSpans[i].weight = C.int(s.Weight)
+		cSpans[i].style = C.int(s.Style)
+		cSpans[i].color = C.uint32_t(s.Color)
+		cSpans[i].decoration = C.int(s.Decoration)
+		cSpans[i].decoration_color = C.uint32_t(s.DecorationColor)
+		cSpans[i].decoration_style = C.int(s.DecorationStyle)
+		cSpans[i].letter_spacing = C.float(s.LetterSpacing)
+		cSpans[i].word_spacing = C.float(s.WordSpacing)
+		cSpans[i].height = C.float(s.Height)
+		if s.HasBackground {
+			cSpans[i].has_background = 1
+		}
+		cSpans[i].background_color = C.uint32_t(s.BackgroundColor)
+	}
+	defer func() {
+		for _, cs := range cStrings {
+			C.free(unsafe.Pointer(cs))
+		}
+	}()
+	paragraph := C.drift_skia_rich_paragraph_create(
+		&cSpans[0],
+		C.int(len(spans)),
+		C.int(maxLines),
+		C.int(textAlign),
+	)
+	if paragraph == nil {
+		return nil, errors.New("skia: failed to create rich paragraph")
+	}
+	return &Paragraph{ptr: paragraph}, nil
+}
+
 // Layout lays out the paragraph within the given width.
 func (p *Paragraph) Layout(width float32) {
 	if p == nil || p.ptr == nil {

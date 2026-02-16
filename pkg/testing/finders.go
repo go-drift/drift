@@ -147,6 +147,9 @@ func (f *textFinder) Evaluate(root core.Element) []core.Element {
 		if t, ok := e.Widget().(widgets.Text); ok {
 			return t.Content == f.text
 		}
+		if rt, ok := e.Widget().(widgets.RichText); ok {
+			return rt.Content.PlainText() == f.text
+		}
 		return false
 	})
 }
@@ -155,7 +158,9 @@ func (f *textFinder) Description() string {
 	return fmt.Sprintf("ByText(%q)", f.text)
 }
 
-// ByText returns a finder that matches widgets.Text with exact content.
+// ByText returns a finder that matches [widgets.Text] or [widgets.RichText]
+// with exact content. For RichText, the match is against the concatenated
+// plain text of all spans.
 func ByText(text string) Finder {
 	return &textFinder{text: text}
 }
@@ -170,6 +175,9 @@ func (f *textContainingFinder) Evaluate(root core.Element) []core.Element {
 		if t, ok := e.Widget().(widgets.Text); ok {
 			return strings.Contains(t.Content, f.substring)
 		}
+		if rt, ok := e.Widget().(widgets.RichText); ok {
+			return strings.Contains(rt.Content.PlainText(), f.substring)
+		}
 		return false
 	})
 }
@@ -178,7 +186,9 @@ func (f *textContainingFinder) Description() string {
 	return fmt.Sprintf("ByTextContaining(%q)", f.substring)
 }
 
-// ByTextContaining returns a finder matching widgets.Text containing substring.
+// ByTextContaining returns a finder that matches [widgets.Text] or
+// [widgets.RichText] containing the given substring. For RichText, the match
+// is against the concatenated plain text of all spans.
 func ByTextContaining(substring string) Finder {
 	return &textContainingFinder{substring: substring}
 }
