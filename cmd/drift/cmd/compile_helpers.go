@@ -123,6 +123,18 @@ type androidCompileConfig struct {
 	targetABI   string // when set, compile only this ABI (e.g. "arm64-v8a")
 }
 
+// findADB locates the adb binary, checking ANDROID_SDK_ROOT and
+// ANDROID_HOME before falling back to bare "adb" on PATH.
+func findADB() string {
+	if sdkRoot := os.Getenv("ANDROID_SDK_ROOT"); sdkRoot != "" {
+		return filepath.Join(sdkRoot, "platform-tools", "adb")
+	}
+	if androidHome := os.Getenv("ANDROID_HOME"); androidHome != "" {
+		return filepath.Join(androidHome, "platform-tools", "adb")
+	}
+	return "adb"
+}
+
 // compileGoForAndroid compiles Go code to shared libraries for all Android ABIs.
 func compileGoForAndroid(cfg androidCompileConfig) error {
 	ndkHome := os.Getenv("ANDROID_NDK_HOME")

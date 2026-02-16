@@ -25,7 +25,7 @@ func watchAndRun(ctx context.Context, ws *workspace.Workspace, rebuild func() er
 	}
 	defer watcher.Close()
 
-	if err := addWatchDirs(watcher, ws.Root); err != nil {
+	if err := addWatchDirs(watcher, ws.Root, ws.BuildDir); err != nil {
 		return fmt.Errorf("failed to watch project directories: %w", err)
 	}
 
@@ -77,14 +77,21 @@ func watchAndRun(ctx context.Context, ws *workspace.Workspace, rebuild func() er
 }
 
 // addWatchDirs recursively adds project directories to the watcher,
-// skipping hidden dirs, vendor, platform scaffolds, and third_party.
-func addWatchDirs(watcher *fsnotify.Watcher, root string) error {
+// skipping hidden dirs, vendor, platform scaffolds, third_party, and the
+// build directory (which may reside inside the project root for ejected
+// platforms).
+func addWatchDirs(watcher *fsnotify.Watcher, root, buildDir string) error {
+	absBuildDir, _ := filepath.Abs(buildDir)
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // skip inaccessible entries
 		}
 		if !info.IsDir() {
 			return nil
+		}
+		absPath, _ := filepath.Abs(path)
+		if absBuildDir != "" && absPath == absBuildDir {
+			return filepath.SkipDir
 		}
 		name := info.Name()
 		if name != "." && strings.HasPrefix(name, ".") {
@@ -106,18 +113,6 @@ func isRelevantChange(event fsnotify.Event) bool {
 	}
 	base := filepath.Base(event.Name)
 	return strings.HasSuffix(base, ".go") || base == "drift.yaml" || base == "drift.yml"
-}
-
-// findADB locates the adb binary, checking ANDROID_SDK_ROOT and
-// ANDROID_HOME before falling back to bare "adb" on PATH.
-func findADB() string {
-	if sdkRoot := os.Getenv("ANDROID_SDK_ROOT"); sdkRoot != "" {
-		return filepath.Join(sdkRoot, "platform-tools", "adb")
-	}
-	if androidHome := os.Getenv("ANDROID_HOME"); androidHome != "" {
-		return filepath.Join(androidHome, "platform-tools", "adb")
-	}
-	return "adb"
 }
 
 // streamAndroidLogs streams tag-filtered logcat output until ctx is
@@ -152,12 +147,40 @@ func streamAndroidLogs(ctx context.Context, appID string) {
 // until ctx is cancelled. Subsystem filtering survives app restarts.
 // Intended to run as a goroutine.
 func streamIOSLogs(ctx context.Context, appID string) {
+	// Reject bundle IDs containing characters that would break the predicate.
+	if strings.ContainsAny(appID, `"'\`) {
+		fmt.Fprintf(os.Stderr, "Warning: cannot stream logs, app ID %q contains invalid characters\n", appID)
+		return
+	}
 	predicate := fmt.Sprintf(`subsystem == "%s"`, appID)
 	cmd := exec.CommandContext(ctx, "log", "stream",
 		"--predicate", predicate,
 		"--level", "debug",
 		"--style", "compact",
 	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run() // exits when ctx is cancelled
+}
+
+// streamDeviceLogs streams physical-device logs via idevicesyslog filtered by
+// process name until ctx is cancelled. If idevicesyslog is not installed, a
+// warning is printed and the function returns immediately.
+// Intended to run as a goroutine.
+func streamDeviceLogs(ctx context.Context, appName, deviceID string) {
+	idevicesyslog, err := exec.LookPath("idevicesyslog")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Note: idevicesyslog not found, cannot stream logs")
+		fmt.Fprintln(os.Stderr, "Install libimobiledevice for log streaming support")
+		return
+	}
+
+	logArgs := []string{"--process", appName}
+	if deviceID != "" {
+		logArgs = append([]string{"-u", deviceID}, logArgs...)
+	}
+
+	cmd := exec.CommandContext(ctx, idevicesyslog, logArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run() // exits when ctx is cancelled

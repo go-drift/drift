@@ -63,6 +63,9 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	if xtoolOpts.watch {
 		ctx, cancel := watchContext()
 		defer cancel()
+		if !xtoolOpts.noLogs {
+			go streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
+		}
 		return watchAndRun(ctx, ws, func() error {
 			if err := ws.Refresh(); err != nil {
 				return err

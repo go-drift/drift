@@ -12,7 +12,7 @@ import (
 )
 
 // runAndroid builds, installs, and runs on Android.
-func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, opts runOptions) error {
+func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, _ []string, opts runOptions) error {
 	adb := findADB()
 
 	buildOpts := androidBuildOptions{buildOptions: buildOptions{noFetch: opts.noFetch}, release: false}

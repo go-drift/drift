@@ -84,7 +84,7 @@ func runRun(args []string) error {
 
 	switch platform {
 	case "android":
-		return runAndroid(ws, cfg, opts)
+		return runAndroid(ws, cfg, platformArgs[1:], opts)
 	case "ios":
 		return runIOS(ws, cfg, platformArgs[1:], opts)
 	case "xtool":
