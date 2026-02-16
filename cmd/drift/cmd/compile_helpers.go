@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
 )
@@ -153,6 +154,23 @@ func compileGoForAndroid(cfg androidCompileConfig) error {
 		{"arm64-v8a", "arm64", "", "aarch64-linux-android21-clang", "aarch64-linux-android", "arm64"},
 		{"armeabi-v7a", "arm", "7", "armv7a-linux-androideabi21-clang", "arm-linux-androideabi", "arm"},
 		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
+	}
+
+	if cfg.targetABI != "" {
+		found := false
+		for _, abi := range abis {
+			if abi.abi == cfg.targetABI {
+				found = true
+				break
+			}
+		}
+		if !found {
+			supported := make([]string, len(abis))
+			for i, abi := range abis {
+				supported[i] = abi.abi
+			}
+			return fmt.Errorf("unsupported Android ABI %q (supported: %s)", cfg.targetABI, strings.Join(supported, ", "))
+		}
 	}
 
 	for _, abi := range abis {
