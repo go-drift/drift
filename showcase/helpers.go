@@ -178,7 +178,6 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 						widgets.VSpace(6),
 						widgets.Text{
 							Content:  description,
-							Wrap:     true,
 							MaxLines: 2,
 							Style: graphics.TextStyle{
 								Color:    colors.OnSurfaceVariant,
@@ -399,7 +398,6 @@ func categoryHubPage(ctx core.BuildContext, category string, title, description 
 	items := []core.Widget{
 		widgets.Text{
 			Content: description,
-			Wrap:    true,
 			Style: graphics.TextStyle{
 				Color:    colors.OnSurfaceVariant,
 				FontSize: 14,

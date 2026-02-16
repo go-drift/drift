@@ -183,14 +183,12 @@ widgets.DecoratedBox{
             widgets.Text{
                 Content: "Welcome",
                 Style:   textTheme.HeadlineLarge,
-                Wrap:    true,
                 Align:   graphics.TextAlignCenter,
             },
             widgets.VSpace(8),
             widgets.Text{
                 Content: "A cross-platform UI framework for Go",
                 Style:   textTheme.BodyMedium,
-                Wrap:    true,
                 Align:   graphics.TextAlignCenter,
             },
         ),
@@ -198,7 +196,7 @@ widgets.DecoratedBox{
 }
 ```
 
-Text alignment requires `Wrap: true`. Without wrapping, text renders on a single line and has no paragraph width to align within. See the [Theming guide](/docs/guides/theming#text-alignment) for all alignment options.
+Text wraps by default. For single-line text, set `Wrap: graphics.TextWrapNoWrap`. Alignment only takes effect when text wraps, because unwrapped text has no paragraph width to align within. See the [Theming guide](/docs/guides/theming#text-alignment) for all alignment options.
 
 ### List Item
 

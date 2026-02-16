@@ -91,7 +91,6 @@ func showBasicBottomSheet(ctx core.BuildContext) {
 					widgets.VSpace(12),
 					widgets.Text{
 						Content: "This is a modal bottom sheet. You can drag it down to dismiss, or tap the barrier behind it.",
-						Wrap:    true,
 						Style: graphics.TextStyle{
 							Color:    colors.OnSurfaceVariant,
 							FontSize: 14,
@@ -137,7 +136,6 @@ func showSnapPointsBottomSheet(ctx core.BuildContext) {
 				Padding: layout.EdgeInsets{Left: 24, Right: 24, Bottom: 16},
 				Child: widgets.Text{
 					Content: "Drag the handle to resize. Scroll the list below.",
-					Wrap:    true,
 					Style: graphics.TextStyle{
 						Color:    colors.OnSurfaceVariant,
 						FontSize: 14,
@@ -247,7 +245,6 @@ func showNonDismissibleBottomSheet(ctx core.BuildContext) {
 					widgets.VSpace(12),
 					widgets.Text{
 						Content: "This sheet requires you to take action. Tapping the barrier does NOT dismiss it. You must use the button below.",
-						Wrap:    true,
 						Style: graphics.TextStyle{
 							Color:    colors.OnSurfaceVariant,
 							FontSize: 14,
@@ -297,7 +294,6 @@ func showNoHandleBottomSheet(ctx core.BuildContext) {
 					widgets.VSpace(12),
 					widgets.Text{
 						Content: "This sheet has no drag handle at the top. You can still drag it to dismiss, or tap the barrier.",
-						Wrap:    true,
 						Style: graphics.TextStyle{
 							Color:    colors.OnSurfaceVariant,
 							FontSize: 14,

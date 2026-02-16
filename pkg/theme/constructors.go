@@ -9,18 +9,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-// TextOf creates a [widgets.Text] with the given content and style, with
-// wrapping enabled by default.
+// TextOf creates a [widgets.Text] with the given content and style.
 //
 // This is a convenient way to create text that follows the app's typography.
 // Pass a style from the theme's [TextTheme] for consistent typography:
 //
 //	_, _, textTheme := theme.UseTheme(ctx)
 //	theme.TextOf(ctx, "Welcome", textTheme.HeadlineMedium)
-//
-// The returned text has Wrap set to true (text wraps to multiple lines by default).
-//
-// For fully explicit text without wrapping, use [widgets.Text] struct literals.
 //
 // Example:
 //
@@ -38,7 +33,6 @@ func TextOf(ctx core.BuildContext, content string, style graphics.TextStyle) wid
 	return widgets.Text{
 		Content: content,
 		Style:   style,
-		Wrap:    true,
 	}
 }
 
@@ -556,7 +550,6 @@ func RichTextOf(ctx core.BuildContext, spans ...graphics.TextSpan) widgets.RichT
 			Color:    colors.OnSurface,
 			FontSize: textTheme.BodyMedium.FontSize,
 		},
-		Wrap: true,
 	}
 }
 

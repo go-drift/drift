@@ -103,7 +103,6 @@ func ExampleText() {
 			FontSize: 24,
 			Color:    graphics.RGB(33, 33, 33),
 		},
-		Wrap:     true,
 		MaxLines: 2,
 	}
 	_ = text

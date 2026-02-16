@@ -125,7 +125,6 @@ func showModalDialog(ctx core.BuildContext) {
 						widgets.VSpace(12),
 						widgets.Text{
 							Content: "This dialog was created using overlay entries. Tap outside or the button to dismiss.",
-							Wrap:    true,
 							Style: graphics.TextStyle{
 								Color:    colors.OnSurfaceVariant,
 								FontSize: 14,
@@ -181,7 +180,6 @@ func pushModalRoute(ctx core.BuildContext) {
 							widgets.VSpace(12),
 							widgets.Text{
 								Content: "This modal is a navigation route. Tap the barrier, use the system back button, or tap Close.",
-								Wrap:    true,
 								Style: graphics.TextStyle{
 									Color:    colors.OnSurfaceVariant,
 									FontSize: 14,
@@ -337,7 +335,6 @@ func showStackedOverlays(ctx core.BuildContext) {
 						widgets.VSpace(12),
 						widgets.Text{
 							Content: "Notice the toast below this dialog. Multiple overlays stack in order.",
-							Wrap:    true,
 							Style: graphics.TextStyle{
 								Color:    colors.OnSurfaceVariant,
 								FontSize: 14,
@@ -415,7 +412,6 @@ func showBlockingModal(ctx core.BuildContext) {
 						widgets.VSpace(12),
 						widgets.Text{
 							Content: "This modal requires you to take action. Tapping outside does NOT dismiss it.",
-							Wrap:    true,
 							Style: graphics.TextStyle{
 								Color:    colors.OnSurfaceVariant,
 								FontSize: 14,

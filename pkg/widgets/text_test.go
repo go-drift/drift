@@ -96,7 +96,7 @@ func TestText_AlignDefault(t *testing.T) {
 func TestText_AlignCenter(t *testing.T) {
 	tester := drifttest.NewWidgetTesterWithT(t)
 
-	tester.PumpWidget(widgets.Text{Content: "centered", Wrap: true, Align: graphics.TextAlignCenter})
+	tester.PumpWidget(widgets.Text{Content: "centered", Align: graphics.TextAlignCenter})
 
 	txt := tester.Find(drifttest.ByType[widgets.Text]()).Widget().(widgets.Text)
 	if txt.Align != graphics.TextAlignCenter {
@@ -105,7 +105,7 @@ func TestText_AlignCenter(t *testing.T) {
 }
 
 func TestText_WithAlign(t *testing.T) {
-	base := widgets.Text{Content: "hello", Wrap: true}
+	base := widgets.Text{Content: "hello"}
 	centered := base.WithAlign(graphics.TextAlignCenter)
 
 	if centered.Align != graphics.TextAlignCenter {
@@ -128,7 +128,7 @@ func TestText_AlignCenter_ExpandsWidth(t *testing.T) {
 	tester := drifttest.NewWidgetTesterWithT(t)
 	tester.SetSize(graphics.Size{Width: 300, Height: 600})
 
-	tester.PumpWidget(widgets.Text{Content: "short", Wrap: true, Align: graphics.TextAlignCenter})
+	tester.PumpWidget(widgets.Text{Content: "short", Align: graphics.TextAlignCenter})
 
 	ro := tester.Find(drifttest.ByType[widgets.Text]()).RenderObject()
 	if ro == nil {

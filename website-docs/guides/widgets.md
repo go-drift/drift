@@ -78,11 +78,10 @@ text := widgets.Text{
     Style:   graphics.TextStyle{Color: colors.OnSurface, FontSize: 16},
 }
 
-// Wrapping, centered text
+// Centered text (wraps by default)
 description := widgets.Text{
     Content: "A cross-platform UI framework for Go",
     Style:   graphics.TextStyle{Color: colors.OnSurface, FontSize: 14},
-    Wrap:    true,
     Align:   graphics.TextAlignCenter,
 }
 ```

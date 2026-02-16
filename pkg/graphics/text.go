@@ -92,11 +92,37 @@ func (s FontStyle) String() string {
 	}
 }
 
+// TextWrap controls whether text wraps at the constraint width.
+//
+// The zero value ([TextWrapWrap]) enables wrapping, which is the most common
+// behavior for UI text. Use [TextWrapNoWrap] for labels, buttons, and other
+// single-line text that should not break across lines.
+type TextWrap int
+
+const (
+	// TextWrapWrap wraps text at the constraint width (zero value).
+	TextWrapWrap TextWrap = iota
+	// TextWrapNoWrap renders text on a single line without wrapping.
+	TextWrapNoWrap
+)
+
+// String returns a human-readable representation of the text wrap mode.
+func (w TextWrap) String() string {
+	switch w {
+	case TextWrapWrap:
+		return "wrap"
+	case TextWrapNoWrap:
+		return "no_wrap"
+	default:
+		return fmt.Sprintf("TextWrap(%d)", int(w))
+	}
+}
+
 // TextAlign controls paragraph-level horizontal alignment for wrapped text.
 //
 // Alignment only has a visible effect when the text is laid out with a
-// constrained width (i.e., when [widgets.Text].Wrap is true). Without
-// wrapping there is no paragraph width to align within.
+// constrained width (i.e., when wrapping is enabled). Without wrapping
+// there is no paragraph width to align within.
 //
 // Values are ordered to match Skia's textlayout::TextAlign enum so they
 // can be passed through the C bridge without translation.

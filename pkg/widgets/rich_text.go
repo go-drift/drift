@@ -31,9 +31,10 @@ type RichText struct {
 	Style    graphics.SpanStyle
 	Align    graphics.TextAlign
 	MaxLines int
-	// Wrap enables text wrapping at the constraint width. When false (default),
-	// text renders on a single line and may overflow.
-	Wrap bool
+	// Wrap controls text wrapping behavior. The zero value
+	// ([graphics.TextWrapWrap]) wraps text at the constraint width.
+	// Set to [graphics.TextWrapNoWrap] for single-line text.
+	Wrap graphics.TextWrap
 }
 
 // WithStyle returns a copy with the given widget-level default style.
@@ -42,8 +43,8 @@ func (r RichText) WithStyle(style graphics.SpanStyle) RichText {
 	return r
 }
 
-// WithWrap returns a copy with text wrapping enabled or disabled.
-func (r RichText) WithWrap(wrap bool) RichText {
+// WithWrap returns a copy with the specified wrap mode.
+func (r RichText) WithWrap(wrap graphics.TextWrap) RichText {
 	r.Wrap = wrap
 	return r
 }
@@ -75,7 +76,7 @@ func (r RichText) CreateRenderObject(ctx core.BuildContext) layout.RenderObject 
 		baseStyle: r.Style,
 		align:     r.Align,
 		maxLines:  r.MaxLines,
-		wrap:      r.Wrap,
+		wrapMode:  r.Wrap,
 	}
 	ro.SetSelf(ro)
 	return ro
@@ -88,7 +89,7 @@ func (r RichText) UpdateRenderObject(ctx core.BuildContext, renderObject layout.
 		ro.baseStyle = r.Style
 		ro.align = r.Align
 		ro.maxLines = r.MaxLines
-		ro.wrap = r.Wrap
+		ro.wrapMode = r.Wrap
 		ro.generation++
 		ro.MarkNeedsLayout()
 		ro.MarkNeedsPaint()
@@ -103,7 +104,7 @@ type renderRichText struct {
 	align      graphics.TextAlign
 	textLayout *graphics.TextLayout
 	maxLines   int
-	wrap       bool
+	wrapMode   graphics.TextWrap
 	generation uint64
 	cache      richTextLayoutCache
 }
@@ -113,21 +114,21 @@ type richTextLayoutCache struct {
 	align      graphics.TextAlign
 	maxWidth   float64
 	maxLines   int
-	wrap       bool
+	wrapMode   graphics.TextWrap
 }
 
 func (r *renderRichText) PerformLayout() {
 	constraints := r.Constraints()
-	maxWidth := float64(0)
-	if r.wrap {
-		maxWidth = constraints.MaxWidth
+	maxWidth := constraints.MaxWidth // Default: wrap
+	if r.wrapMode == graphics.TextWrapNoWrap {
+		maxWidth = 0
 	}
 	current := richTextLayoutCache{
 		generation: r.generation,
 		align:      r.align,
 		maxWidth:   maxWidth,
 		maxLines:   r.maxLines,
-		wrap:       r.wrap,
+		wrapMode:   r.wrapMode,
 	}
 	if r.textLayout != nil && r.cache == current {
 		r.SetSize(constraints.Constrain(textLayoutSize(r.textLayout.Size, r.align, maxWidth)))

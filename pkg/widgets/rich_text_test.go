@@ -162,7 +162,6 @@ func TestRichText_AlignCenter_ExpandsWidth(t *testing.T) {
 
 	tester.PumpWidget(widgets.RichText{
 		Content: graphics.TextSpan{Text: "short"},
-		Wrap:    true,
 		Align:   graphics.TextAlignCenter,
 	})
 

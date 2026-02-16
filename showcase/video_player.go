@@ -65,7 +65,6 @@ func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 	return demoPage(ctx, "Video Player",
 		widgets.Text{
 			Content: "Native platform video player with built-in controls. Use a VideoPlayerController for programmatic control.",
-			Wrap:    true,
 			Style:   labelStyle(colors),
 		},
 		widgets.VSpace(12),

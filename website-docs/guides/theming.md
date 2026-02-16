@@ -126,21 +126,22 @@ theme.TextOf(ctx, "Centered heading", textTheme.HeadlineMedium).
 ### Text Alignment
 
 The `Align` field on `Text` controls horizontal alignment of wrapped lines.
-Alignment only takes effect when `Wrap` is true, because unwrapped text has
-no paragraph width to align within.
+Text wraps by default; set `Wrap: graphics.TextWrapNoWrap` for single-line text.
+Alignment only takes effect when text wraps, because unwrapped text has no
+paragraph width to align within.
 
 ```go
-// Left-aligned (default)
-widgets.Text{Content: longText, Wrap: true}
+// Left-aligned (default, wraps by default)
+widgets.Text{Content: longText}
 
 // Centered
-widgets.Text{Content: longText, Wrap: true, Align: graphics.TextAlignCenter}
+widgets.Text{Content: longText, Align: graphics.TextAlignCenter}
 
 // Right-aligned
-widgets.Text{Content: longText, Wrap: true, Align: graphics.TextAlignRight}
+widgets.Text{Content: longText, Align: graphics.TextAlignRight}
 
 // Justified (last line is left-aligned)
-widgets.Text{Content: longText, Wrap: true, Align: graphics.TextAlignJustify}
+widgets.Text{Content: longText, Align: graphics.TextAlignJustify}
 ```
 
 Available alignments: `TextAlignLeft` (default), `TextAlignRight`,

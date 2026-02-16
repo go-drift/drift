@@ -15,7 +15,6 @@ import (
 //	widgets.Text{
 //	    Content: "Hello, Drift",
 //	    Style:   graphics.TextStyle{Color: colors.OnSurface, FontSize: 16},
-//	    Wrap:    true,
 //	}
 //
 // Using text styles from theme:
@@ -23,57 +22,58 @@ import (
 //	_, _, textTheme := theme.UseTheme(ctx)
 //	widgets.Text{Content: "Title", Style: textTheme.HeadlineLarge}
 //
-// Themed with wrapping (using [theme.TextOf]):
+// Themed (using [theme.TextOf]):
 //
 //	theme.TextOf(ctx, "Welcome", textTheme.HeadlineMedium)
-//	// Returns Text with Wrap: true (text wraps by default)
 //
 // # Text Wrapping, Line Limits, and Alignment
 //
 // The Wrap, MaxLines, and Align fields control how text flows, truncates,
 // and aligns:
 //
-//   - Wrap=false (default): Text renders on a single line, extending beyond
+//   - Wrap=TextWrapWrap (default zero value): Text wraps at the constraint
+//     width, creating multiple lines. Use for paragraphs, descriptions, and
+//     content that should fit a container.
+//
+//   - Wrap=TextWrapNoWrap: Text renders on a single line, extending beyond
 //     the constraint width. Use for labels, buttons, and short text.
 //
-//   - Wrap=true: Text wraps at the constraint width, creating multiple lines.
-//     Use for paragraphs, descriptions, and content that should fit a container.
-//
-//   - MaxLines: Limits the number of visible lines. When Wrap=true and text
+//   - MaxLines: Limits the number of visible lines. When text wraps and
 //     exceeds MaxLines, it truncates. When MaxLines=0 (default), no limit applies.
 //
 //   - Align: Controls horizontal alignment of lines within the paragraph.
-//     Alignment only takes effect when Wrap is true, because unwrapped text
+//     Alignment only takes effect when text wraps, because unwrapped text
 //     has no paragraph width to align within. Use [Text.WithAlign] for chaining.
 //
 // Common patterns:
 //
-//	// Single line, may overflow
-//	Text{Content: "Label", Wrap: false}
+//	// Wrapping paragraph (default)
+//	Text{Content: longText}
 //
-//	// Wrapping paragraph
-//	Text{Content: longText, Wrap: true}
+//	// Single line, may overflow
+//	Text{Content: "Label", Wrap: graphics.TextWrapNoWrap}
 //
 //	// Preview text limited to 2 lines
-//	Text{Content: description, Wrap: true, MaxLines: 2}
+//	Text{Content: description, MaxLines: 2}
 //
 //	// Centered wrapping text
-//	Text{Content: longText, Wrap: true, Align: graphics.TextAlignCenter}
+//	Text{Content: longText, Align: graphics.TextAlignCenter}
 type Text struct {
 	// Content is the text string to display.
 	Content string
 	// Style controls the font, size, color, and other text properties.
 	Style graphics.TextStyle
 	// Align controls paragraph-level horizontal text alignment.
-	// Zero value is left-aligned. Only takes effect when Wrap is true;
+	// Zero value is left-aligned. Only takes effect when text wraps;
 	// unwrapped text has no paragraph width to align within.
 	Align graphics.TextAlign
 	// MaxLines limits the number of visible lines (0 = unlimited).
 	// Lines beyond this limit are not rendered.
 	MaxLines int
-	// Wrap enables text wrapping at the constraint width.
-	// When false, text renders on a single line.
-	Wrap bool
+	// Wrap controls text wrapping behavior. The zero value
+	// ([graphics.TextWrapWrap]) wraps text at the constraint width.
+	// Set to [graphics.TextWrapNoWrap] for single-line text.
+	Wrap graphics.TextWrap
 }
 
 func (t Text) CreateElement() core.Element {
@@ -84,8 +84,8 @@ func (t Text) Key() any {
 	return nil
 }
 
-// WithWrap returns a copy of the text with the specified wrap setting.
-func (t Text) WithWrap(wrap bool) Text {
+// WithWrap returns a copy of the text with the specified wrap mode.
+func (t Text) WithWrap(wrap graphics.TextWrap) Text {
 	t.Wrap = wrap
 	return t
 }
@@ -103,7 +103,7 @@ func (t Text) WithMaxLines(maxLines int) Text {
 }
 
 // WithAlign returns a copy of the text with the specified alignment.
-// Alignment only takes effect when Wrap is true. See [graphics.TextAlign]
+// Alignment only takes effect when text wraps. See [graphics.TextAlign]
 // for the available alignment options.
 func (t Text) WithAlign(align graphics.TextAlign) Text {
 	t.Align = align
@@ -111,7 +111,7 @@ func (t Text) WithAlign(align graphics.TextAlign) Text {
 }
 
 func (t Text) CreateRenderObject(ctx core.BuildContext) layout.RenderObject {
-	text := &renderText{text: t.Content, style: t.Style, align: t.Align, maxLines: t.MaxLines, wrap: t.Wrap}
+	text := &renderText{text: t.Content, style: t.Style, align: t.Align, maxLines: t.MaxLines, wrapMode: t.Wrap}
 	text.SetSelf(text)
 	return text
 }
@@ -122,7 +122,7 @@ func (t Text) UpdateRenderObject(ctx core.BuildContext, renderObject layout.Rend
 		text.style = t.Style
 		text.align = t.Align
 		text.maxLines = t.MaxLines
-		text.wrap = t.Wrap
+		text.wrapMode = t.Wrap
 		text.MarkNeedsLayout()
 		text.MarkNeedsPaint()
 	}
@@ -135,7 +135,7 @@ type renderText struct {
 	align    graphics.TextAlign
 	layout   *graphics.TextLayout
 	maxLines int
-	wrap     bool
+	wrapMode graphics.TextWrap
 	cache    textLayoutCache
 }
 
@@ -145,7 +145,7 @@ type textLayoutCache struct {
 	align    graphics.TextAlign
 	maxWidth float64
 	maxLines int
-	wrap     bool
+	wrapMode graphics.TextWrap
 }
 
 // textLayoutSize returns the widget size for a laid-out paragraph. When text
@@ -168,9 +168,9 @@ func textLayoutSize(layoutSize graphics.Size, align graphics.TextAlign, maxWidth
 
 func (r *renderText) PerformLayout() {
 	constraints := r.Constraints()
-	maxWidth := float64(0) // Default: no wrapping
-	if r.wrap {
-		maxWidth = constraints.MaxWidth
+	maxWidth := constraints.MaxWidth // Default: wrap
+	if r.wrapMode == graphics.TextWrapNoWrap {
+		maxWidth = 0
 	}
 	current := textLayoutCache{
 		text:     r.text,
@@ -178,7 +178,7 @@ func (r *renderText) PerformLayout() {
 		align:    r.align,
 		maxWidth: maxWidth,
 		maxLines: r.maxLines,
-		wrap:     r.wrap,
+		wrapMode: r.wrapMode,
 	}
 	if r.layout != nil && r.cache == current {
 		r.SetSize(constraints.Constrain(textLayoutSize(r.layout.Size, r.align, maxWidth)))

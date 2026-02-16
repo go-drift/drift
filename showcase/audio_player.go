@@ -68,7 +68,6 @@ func (s *audioPlayerState) Build(ctx core.BuildContext) core.Widget {
 	return demoPage(ctx, "Audio Player",
 		widgets.Text{
 			Content: "Standalone audio playback with no visual surface. Build your own UI with the controller.",
-			Wrap:    true,
 			Style:   labelStyle(colors),
 		},
 		widgets.VSpace(12),

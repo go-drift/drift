@@ -54,7 +54,6 @@ func (s *webViewState) Build(ctx core.BuildContext) core.Widget {
 	return demoPage(ctx, "WebView",
 		widgets.Text{
 			Content: "Platform-native browser surface with navigation controls and page-loading callbacks.",
-			Wrap:    true,
 			Style:   labelStyle(colors),
 		},
 		widgets.VSpace(12),

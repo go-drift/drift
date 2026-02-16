@@ -78,7 +78,6 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 				FontSize:   16,
 				FontWeight: graphics.FontWeightBold,
 			},
-			Wrap: true,
 		},
 	}
 
@@ -91,7 +90,6 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 					Color:    graphics.RGBA(255, 255, 255, 0.78),
 					FontSize: 12,
 				},
-				Wrap:     true,
 				MaxLines: 5,
 			},
 		)

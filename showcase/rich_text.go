@@ -160,7 +160,6 @@ func buildRichTextPage(ctx core.BuildContext) core.Widget {
 				graphics.Span("center-aligned").Bold().Color(colors.Primary),
 				graphics.Span(" and wraps at the constraint width. Each line is centered within the available space."),
 			).Size(15).Color(colors.OnSurface),
-			Wrap:  true,
 			Align: graphics.TextAlignCenter,
 		}),
 		widgets.VSpace(24),
