@@ -152,16 +152,15 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 		})
 	}
 
-	// Non-watch mode: launch with --console to stream logs until exit.
-	if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false); err != nil {
+	// Non-watch mode: launch once. When logs are enabled, use --console so
+	// the app's stdout/stderr stream to the terminal until it exits.
+	console := !opts.noLogs
+	if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, console); err != nil {
 		return err
 	}
 	fmt.Println()
 	fmt.Println("Application running!")
 	fmt.Println()
-	if !opts.noLogs {
-		launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true)
-	}
 	return nil
 }
 
@@ -259,17 +258,16 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 		})
 	}
 
-	// Non-watch mode: install, launch, and optionally stream logs.
+	// Non-watch mode: launch once. When logs are enabled, use --console so
+	// the app's stdout/stderr stream to the terminal until it exits.
 	fmt.Println("  Launching on device...")
-	if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false); err != nil {
+	console := !opts.noLogs
+	if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, console); err != nil {
 		return err
 	}
 	fmt.Println()
 	fmt.Println("Application running!")
 	fmt.Println()
-	if !opts.noLogs {
-		devicectlLaunch(ctx, cfg.AppID, opts.deviceID, true)
-	}
 	return nil
 }
 
