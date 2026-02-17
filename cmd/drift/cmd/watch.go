@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	ios "github.com/danielpaulus/go-ios/ios"
+	"github.com/danielpaulus/go-ios/ios/syslog"
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
@@ -142,27 +144,59 @@ func streamAndroidLogs(ctx context.Context) {
 	cmd.Run() // exits when ctx is cancelled
 }
 
-// streamDeviceLogs streams physical-device logs via idevicesyslog filtered by
-// process name until ctx is cancelled. Uses -K (no kernel) and -q (quiet, no
-// header) for cleaner output. If idevicesyslog is not installed, a warning is
-// printed and the function returns immediately. Intended to run as a goroutine.
+// streamDeviceLogs streams physical-device logs filtered by process name until
+// ctx is cancelled. Uses go-ios to connect to the syslog relay service
+// directly, so no external tools (like libimobiledevice) are required.
+// Intended to run as a goroutine.
 func streamDeviceLogs(ctx context.Context, appName, deviceID string) {
-	idevicesyslog, err := exec.LookPath("idevicesyslog")
+	device, err := ios.GetDevice(deviceID)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Note: idevicesyslog not found, cannot stream logs")
-		fmt.Fprintln(os.Stderr, "Install libimobiledevice for log streaming support")
+		fmt.Fprintf(os.Stderr, "Error: could not connect to iOS device: %v\n", err)
 		return
 	}
 
-	logArgs := []string{"--process", appName}
-	if deviceID != "" {
-		logArgs = append([]string{"-u", deviceID}, logArgs...)
+	conn, err := syslog.New(device)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: could not start syslog stream: %v\n", err)
+		return
 	}
+	defer conn.Close()
 
-	cmd := exec.CommandContext(ctx, idevicesyslog, logArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run() // exits when ctx is cancelled
+	type logMsg struct {
+		raw string
+		err error
+	}
+	ch := make(chan logMsg, 1)
+
+	go func() {
+		for {
+			msg, err := conn.ReadLogMessage()
+			ch <- logMsg{msg, err}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	parse := syslog.Parser()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case m := <-ch:
+			if m.err != nil {
+				fmt.Fprintf(os.Stderr, "Error: syslog read failed: %v\n", m.err)
+				return
+			}
+			entry, err := parse(m.raw)
+			if err != nil {
+				continue
+			}
+			if entry.Process == appName {
+				fmt.Println(entry.Message)
+			}
+		}
+	}
 }
 
 // watchContext creates a cancellable context that is cancelled on

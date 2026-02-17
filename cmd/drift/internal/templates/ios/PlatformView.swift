@@ -301,6 +301,7 @@ enum PlatformViewHandler {
         _ = WKWebView(frame: .zero)
         _ = AVPlayer()
         _ = UITextField()
+        DriftLog.platform.log("Platform view warmup complete")
     }
 
     /// Applies platform view geometry from a frame snapshot synchronously.

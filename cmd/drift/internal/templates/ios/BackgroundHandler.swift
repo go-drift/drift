@@ -103,7 +103,7 @@ enum BackgroundHandler {
             try BGTaskScheduler.shared.submit(request)
             // Track which task ID is currently scheduled for this identifier
             currentRefreshTaskId = id
-            DriftLog.background.debug("Scheduled background fetch task: \(id) using identifier \(refreshTaskIdentifier)")
+            DriftLog.background.log("Scheduled background fetch task: \(id) using identifier \(refreshTaskIdentifier)")
         } catch {
             DriftLog.background.error("Failed to schedule background fetch task: \(error.localizedDescription)")
             sendTaskEvent(taskId: id, eventType: "failed", data: ["error": error.localizedDescription])
@@ -120,7 +120,7 @@ enum BackgroundHandler {
             try BGTaskScheduler.shared.submit(request)
             // Track which task ID is currently scheduled for this identifier
             currentProcessingTaskId = id
-            DriftLog.background.debug("Scheduled background processing task: \(id) using identifier \(processingTaskIdentifier)")
+            DriftLog.background.log("Scheduled background processing task: \(id) using identifier \(processingTaskIdentifier)")
         } catch {
             DriftLog.background.error("Failed to schedule background processing task: \(error.localizedDescription)")
             sendTaskEvent(taskId: id, eventType: "failed", data: ["error": error.localizedDescription])
@@ -190,7 +190,7 @@ enum BackgroundHandler {
             handleBackgroundTask(task as! BGProcessingTask)
         }
 
-        DriftLog.background.debug("Registered background task identifiers: \(refreshTaskIdentifier), \(processingTaskIdentifier)")
+        DriftLog.background.log("Registered background task identifiers: \(refreshTaskIdentifier), \(processingTaskIdentifier)")
     }
 
     private static func handleBackgroundTask(_ task: BGTask) {
@@ -206,7 +206,7 @@ enum BackgroundHandler {
             taskId = "unknown"
         }
 
-        DriftLog.background.debug("Executing background task: \(taskId) (identifier: \(task.identifier))")
+        DriftLog.background.log("Executing background task: \(taskId) (identifier: \(task.identifier))")
 
         // Notify Go that task is starting
         sendTaskEvent(taskId: taskId, eventType: "started")
