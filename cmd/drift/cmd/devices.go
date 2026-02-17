@@ -16,7 +16,7 @@ func init() {
 
 Shows:
   - Connected Android devices and emulators
-  - Connected iOS devices (macOS only, requires ios-deploy)
+  - Connected iOS devices (macOS only, requires Xcode)
   - Available iOS simulators (macOS only)
 
 Use this to find device identifiers for running apps on specific devices.`,
@@ -121,101 +121,6 @@ func listAndroidDevices() error {
 }
 
 func listIOSDevices() error {
-	// Try ios-deploy first (preferred, more reliable)
-	if _, err := exec.LookPath("ios-deploy"); err == nil {
-		return listIOSDevicesWithIOSDeploy()
-	}
-
-	// Fall back to xcrun xctrace list devices
-	return listIOSDevicesWithXctrace()
-}
-
-func listIOSDevicesWithIOSDeploy() error {
-	cmd := exec.Command("ios-deploy", "-c", "-t", "1")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	if err := cmd.Run(); err != nil {
-		// ios-deploy returns error if no devices found, check output
-		output := out.String()
-		if strings.Contains(output, "Found") || output == "" {
-			fmt.Println("  No devices connected")
-			fmt.Println()
-			fmt.Println("  To connect a device:")
-			fmt.Println("    1. Connect your iOS device via USB")
-			fmt.Println("    2. Trust the computer on your device")
-			fmt.Println("    3. Ensure device is unlocked")
-			return nil
-		}
-		return err
-	}
-
-	// Parse ios-deploy output
-	// Format: [....] Found <UDID> (<DeviceName>, <Model>, <Version>, <Arch>) ...
-	lines := strings.Split(out.String(), "\n")
-	deviceCount := 0
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if !strings.Contains(line, "Found") {
-			continue
-		}
-
-		// Extract device info from line
-		// Example: [....] Found 00008030-001234567890 (iPhone, iPhone 14 Pro, 17.0, arm64e) ...
-		parts := strings.SplitN(line, "Found ", 2)
-		if len(parts) < 2 {
-			continue
-		}
-
-		rest := parts[1]
-		// Find UDID (first space-separated word)
-		fields := strings.Fields(rest)
-		if len(fields) < 1 {
-			continue
-		}
-
-		udid := fields[0]
-
-		// Extract device name from parentheses
-		deviceName := ""
-		if start := strings.Index(rest, "("); start != -1 {
-			if end := strings.Index(rest, ")"); end > start {
-				info := rest[start+1 : end]
-				infoParts := strings.Split(info, ", ")
-				if len(infoParts) >= 2 {
-					deviceName = infoParts[1] // Model name
-				} else if len(infoParts) >= 1 {
-					deviceName = infoParts[0] // Device type
-				}
-			}
-		}
-
-		deviceCount++
-		if deviceName != "" {
-			fmt.Printf("  [%d] %s (%s)\n", deviceCount, deviceName, udid)
-		} else {
-			fmt.Printf("  [%d] %s\n", deviceCount, udid)
-		}
-	}
-
-	if deviceCount == 0 {
-		fmt.Println("  No devices connected")
-		fmt.Println()
-		fmt.Println("  To connect a device:")
-		fmt.Println("    1. Connect your iOS device via USB")
-		fmt.Println("    2. Trust the computer on your device")
-		fmt.Println("    3. Ensure device is unlocked")
-	} else {
-		fmt.Println()
-		fmt.Printf("  Run with: drift run ios --device <UDID>\n")
-	}
-
-	return nil
-}
-
-func listIOSDevicesWithXctrace() error {
 	devices, err := connectedIOSDevices()
 	if err != nil {
 		return err
@@ -228,9 +133,6 @@ func listIOSDevicesWithXctrace() error {
 		fmt.Println("    1. Connect your iOS device via USB")
 		fmt.Println("    2. Trust the computer on your device")
 		fmt.Println("    3. Ensure device is unlocked")
-		fmt.Println()
-		fmt.Println("  Tip: Install ios-deploy for better device detection:")
-		fmt.Println("    brew install ios-deploy")
 	} else {
 		for i, d := range devices {
 			fmt.Printf("  [%d] %s (%s)\n", i+1, d.name, d.udid)
