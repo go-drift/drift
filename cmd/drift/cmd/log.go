@@ -102,9 +102,11 @@ func logIOS(cfg *config.Resolved, args []string) error {
 func logXtool(cfg *config.Resolved, args []string) error {
 	var deviceID string
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--device" && i+1 < len(args) {
-			deviceID = args[i+1]
-			i++
+		if args[i] == "--device" {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				deviceID = args[i+1]
+				i++
+			}
 		}
 	}
 	fmt.Println("Streaming device logs (Ctrl+C to stop)...")
