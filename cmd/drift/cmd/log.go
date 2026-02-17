@@ -70,24 +70,24 @@ func logIOS(appID string) error {
 	fmt.Println()
 	ctx, cancel := watchContext()
 	defer cancel()
-	streamIOSLogs(ctx, appID)
+	streamIOSSimulatorLogs(ctx, "booted", appID)
 	return nil
 }
 
-// streamIOSLogs streams os_log output filtered by subsystem (bundle ID)
-// until ctx is cancelled. Used by "drift log ios" to tap into a running
-// simulator app.
-func streamIOSLogs(ctx context.Context, appID string) {
-	if strings.ContainsAny(appID, `"'\`) {
-		fmt.Fprintf(os.Stderr, "Warning: cannot stream logs, app ID %q contains invalid characters\n", appID)
-		return
-	}
-	predicate := fmt.Sprintf(`subsystem == "%s"`, appID)
-	cmd := exec.CommandContext(ctx, "log", "stream",
-		"--predicate", predicate,
+// streamIOSSimulatorLogs streams logs from a simulator app, filtered by
+// process name and subsystem (bundle ID). simulator should be a simulator
+// name or "booted" for the active simulator.
+func streamIOSSimulatorLogs(ctx context.Context, simulator, appID string) {
+	args := []string{"simctl", "spawn", simulator,
+		"log", "stream",
+		"--process", "Runner",
 		"--level", "debug",
 		"--style", "compact",
-	)
+	}
+	if appID != "" && !strings.ContainsAny(appID, `"'\`) {
+		args = append(args, "--predicate", fmt.Sprintf(`subsystem == "%s"`, appID))
+	}
+	cmd := exec.CommandContext(ctx, "xcrun", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()

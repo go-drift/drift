@@ -45,9 +45,8 @@ drift run android --watch --no-logs
 Log streaming works differently per platform:
 
 - **Android**: logs are filtered by Drift-specific logcat tags (`DriftJNI`, `Go`, `AndroidRuntime`, etc.). Tag-based filtering survives app restarts, so logs continue seamlessly across rebuilds.
-- **iOS Simulator**: logs are streamed via `simctl launch --console`, which captures the app's stdout/stderr directly. Each rebuild terminates and relaunches the app, restarting the console stream automatically.
-- **iOS Device (Xcode)**: logs are streamed via `devicectl --console`, which works the same way as the simulator path.
-- **iOS Device (xtool)**: logs are streamed via the device syslog, filtered by process name.
+- **iOS Simulator**: logs are streamed via `xcrun simctl spawn`, filtered by process name (`Runner`). This survives app restarts, so logs continue seamlessly across rebuilds.
+- **iOS Device**: logs are streamed from the device syslog, filtered by process name.
 
 ## What Triggers a Rebuild
 

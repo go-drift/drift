@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -105,26 +104,20 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 	ctx, cancel := watchContext()
 	defer cancel()
 
+	// Start log streaming before launch so startup logs are captured.
+	if !opts.noLogs {
+		go streamIOSSimulatorLogs(ctx, opts.simulator, cfg.AppID)
+	}
+
+	if err := launchIOSSimulatorApp(cfg.AppID, opts.simulator); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("Application running!")
+	fmt.Println()
+
 	if opts.watch {
-		// In watch mode with logs, launch with --console directly so the
-		// app is not started twice (--terminate-running-process would kill
-		// a non-console launch and relaunch).
-		if !opts.noLogs {
-			go func() {
-				if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true); err != nil {
-					fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
-				}
-			}()
-		} else {
-			if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false); err != nil {
-				return err
-			}
-		}
-
-		fmt.Println()
-		fmt.Println("Application running!")
-		fmt.Println()
-
 		compileCfg := iosCompileConfig{
 			projectRoot: ws.Root,
 			overlayPath: ws.Overlay,
@@ -146,29 +139,14 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 			if err := installIOSSimulatorApp(ws, opts.simulator); err != nil {
 				return err
 			}
-			if !opts.noLogs {
-				// --terminate-running-process kills the old app, which
-				// causes the previous goroutine's cmd.Run() to return.
-				go func() {
-					if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, true); err != nil {
-						fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
-					}
-				}()
-				return nil
-			}
-			return launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, false)
+			return launchIOSSimulatorApp(cfg.AppID, opts.simulator)
 		})
 	}
 
-	// Non-watch mode: launch once. When logs are enabled, use --console so
-	// the app's stdout/stderr stream to the terminal until it exits.
-	console := !opts.noLogs
-	if err := launchIOSSimulatorApp(ctx, cfg.AppID, opts.simulator, console); err != nil {
-		return err
+	if !opts.noLogs {
+		// Block until Ctrl+C; log streaming goroutine handles output.
+		<-ctx.Done()
 	}
-	fmt.Println()
-	fmt.Println("Application running!")
-	fmt.Println()
 	return nil
 }
 
@@ -178,13 +156,13 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 		return fmt.Errorf("xcrun not found; make sure Xcode command line tools are installed")
 	}
 
-	if opts.deviceID == "" {
-		udid, err := detectIOSDevice()
-		if err != nil {
-			return err
-		}
-		opts.deviceID = udid
+	// Resolve the device identifier once for the session. devicectl needs
+	// the device name; go-ios (log streaming) needs the xctrace UDID.
+	resolvedDevice, err := resolveIOSDevice(opts.deviceID)
+	if err != nil {
+		return err
 	}
+	opts.deviceID = resolvedDevice.name
 
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: true, teamID: opts.teamID}
 	if err := buildIOS(ws, buildOpts); err != nil {
@@ -210,31 +188,25 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 	ctx, cancel := watchContext()
 	defer cancel()
 
-	if opts.watch {
-		// Track the console goroutine's context so it can be cancelled
-		// before each rebuild (devicectl --console does not have a
-		// --terminate-running-process equivalent).
-		var consoleCancel context.CancelFunc
-
-		if !opts.noLogs {
-			consoleCtx, cc := context.WithCancel(ctx)
-			consoleCancel = cc
-			go func() {
-				if err := devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true); err != nil {
-					fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
-				}
-			}()
+	// Start log streaming before launch so startup logs are captured.
+	if !opts.noLogs {
+		if resolvedDevice.udid != "" {
+			go streamDeviceLogs(ctx, "Runner", resolvedDevice.udid)
 		} else {
-			fmt.Println("  Launching on device...")
-			if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false); err != nil {
-				return err
-			}
+			fmt.Fprintln(os.Stderr, "Note: log streaming unavailable (device UDID not resolved)")
 		}
+	}
 
-		fmt.Println()
-		fmt.Println("Application running!")
-		fmt.Println()
+	fmt.Println("  Launching on device...")
+	if err := devicectlLaunch(cfg.AppID, opts.deviceID); err != nil {
+		return err
+	}
 
+	fmt.Println()
+	fmt.Println("Application running!")
+	fmt.Println()
+
+	if opts.watch {
 		compileCfg := iosCompileConfig{
 			projectRoot: ws.Root,
 			overlayPath: ws.Overlay,
@@ -244,10 +216,6 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 			noFetch:     noFetch,
 		}
 		return watchAndRun(ctx, ws, func() error {
-			// Cancel the previous console goroutine before rebuilding.
-			if consoleCancel != nil {
-				consoleCancel()
-			}
 			if err := ws.Refresh(); err != nil {
 				return err
 			}
@@ -260,30 +228,14 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 			if err := devicectlInstall(ws, opts); err != nil {
 				return err
 			}
-			if !opts.noLogs {
-				consoleCtx, cc := context.WithCancel(ctx)
-				consoleCancel = cc
-				go func() {
-					if err := devicectlLaunch(consoleCtx, cfg.AppID, opts.deviceID, true); err != nil {
-						fmt.Fprintf(os.Stderr, "Launch failed: %v\n", err)
-					}
-				}()
-				return nil
-			}
-			return devicectlLaunch(ctx, cfg.AppID, opts.deviceID, false)
+			return devicectlLaunch(cfg.AppID, opts.deviceID)
 		})
 	}
 
-	// Non-watch mode: launch once. When logs are enabled, use --console so
-	// the app's stdout/stderr stream to the terminal until it exits.
-	fmt.Println("  Launching on device...")
-	console := !opts.noLogs
-	if err := devicectlLaunch(ctx, cfg.AppID, opts.deviceID, console); err != nil {
-		return err
+	if !opts.noLogs {
+		// Block until Ctrl+C; log streaming goroutine handles output.
+		<-ctx.Done()
 	}
-	fmt.Println()
-	fmt.Println("Application running!")
-	fmt.Println()
 	return nil
 }
 
@@ -343,22 +295,12 @@ func installIOSSimulatorApp(ws *workspace.Workspace, simulator string) error {
 }
 
 // launchIOSSimulatorApp launches the app by bundle ID in the named iOS
-// Simulator using simctl. When console is true, the command uses
-// --console --terminate-running-process to stream stdout/stderr and blocks
-// until the app exits or ctx is cancelled.
-func launchIOSSimulatorApp(ctx context.Context, appID, simulator string, console bool) error {
-	args := []string{"simctl", "launch"}
-	if console {
-		args = append(args, "--console", "--terminate-running-process")
-	}
-	args = append(args, simulator, appID)
-	cmd := exec.CommandContext(ctx, "xcrun", args...)
+// Simulator using simctl.
+func launchIOSSimulatorApp(appID, simulator string) error {
+	cmd := exec.Command("xcrun", "simctl", "launch", simulator, appID)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
 		return fmt.Errorf("failed to launch app: %w", err)
 	}
 	return nil
@@ -404,47 +346,77 @@ func devicectlInstall(ws *workspace.Workspace, opts iosRunOptions) error {
 	return nil
 }
 
-// detectIOSDevice auto-detects a single connected iOS device using
-// connectedIOSDevices. Returns the device UDID, or an error if zero or
-// multiple devices are found.
-func detectIOSDevice() (string, error) {
+// resolveIOSDevice resolves a device identifier (name, UDID, or empty for
+// auto-detect) into an iosDevice with both name and UDID populated.
+// devicectl needs the name; go-ios needs the UDID.
+func resolveIOSDevice(id string) (iosDevice, error) {
 	devices, err := connectedIOSDevices()
 	if err != nil {
-		return "", fmt.Errorf("failed to list devices: %w", err)
+		return iosDevice{}, fmt.Errorf("failed to list devices: %w", err)
 	}
 
-	switch len(devices) {
-	case 0:
-		return "", fmt.Errorf("no connected iOS devices found\nConnect a device via USB, or specify a UDID with --device <UDID>")
-	case 1:
-		fmt.Printf("  Auto-detected device: %s (%s)\n", devices[0].name, devices[0].udid)
-		return devices[0].udid, nil
-	default:
+	if id == "" {
+		switch len(devices) {
+		case 0:
+			return iosDevice{}, fmt.Errorf("no connected iOS devices found\nConnect a device via USB, or specify a device with --device <name-or-udid>")
+		case 1:
+			fmt.Printf("  Auto-detected device: %s (%s)\n", devices[0].name, devices[0].udid)
+			return devices[0], nil
+		default:
+			var lines []string
+			for _, d := range devices {
+				lines = append(lines, fmt.Sprintf("  %s (%s)", d.name, d.udid))
+			}
+			return iosDevice{}, fmt.Errorf("multiple iOS devices connected, specify one with --device <name-or-udid>:\n%s", strings.Join(lines, "\n"))
+		}
+	}
+
+	// Match by name (case-insensitive) or UDID (case-sensitive).
+	for _, d := range devices {
+		if strings.EqualFold(d.name, id) || d.udid == id {
+			return d, nil
+		}
+	}
+
+	// Not found in xctrace listing.
+	if looksLikeUDID(id) {
 		var lines []string
 		for _, d := range devices {
 			lines = append(lines, fmt.Sprintf("  %s (%s)", d.name, d.udid))
 		}
-		return "", fmt.Errorf("multiple iOS devices connected, specify one with --device <UDID>:\n%s", strings.Join(lines, "\n"))
+		listing := "(none)"
+		if len(lines) > 0 {
+			listing = strings.Join(lines, "\n")
+		}
+		return iosDevice{}, fmt.Errorf("device with UDID %s not found\nConnected devices:\n%s", id, listing)
 	}
+
+	// Looks like a name; let devicectl attempt its own resolution.
+	// Log streaming will be unavailable since we don't have a UDID.
+	return iosDevice{name: id, udid: ""}, nil
+}
+
+// looksLikeUDID returns true if s resembles an iOS device UDID (hex digits
+// and dashes, at least 20 characters, no spaces).
+func looksLikeUDID(s string) bool {
+	if strings.ContainsRune(s, ' ') {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') || r == '-') {
+			return false
+		}
+	}
+	return len(s) >= 20
 }
 
 // devicectlLaunch launches the app by bundle ID on a physical iOS device
-// using xcrun devicectl (requires Xcode 15+). When console is true, the
-// command uses --console to stream stdout/stderr and blocks until the app
-// exits or ctx is cancelled.
-func devicectlLaunch(ctx context.Context, appID, deviceID string, console bool) error {
-	args := []string{"devicectl", "device", "process", "launch", "--device", deviceID}
-	if console {
-		args = append(args, "--console")
-	}
-	args = append(args, appID)
-	cmd := exec.CommandContext(ctx, "xcrun", args...)
+// using xcrun devicectl (requires Xcode 15+).
+func devicectlLaunch(appID, deviceID string) error {
+	cmd := exec.Command("xcrun", "devicectl", "device", "process", "launch", "--device", deviceID, appID)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
 		return fmt.Errorf("devicectl launch failed: %w\nMake sure Xcode 15+ is installed and the device is connected", err)
 	}
 	return nil

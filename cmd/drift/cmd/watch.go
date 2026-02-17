@@ -147,8 +147,9 @@ func streamAndroidLogs(ctx context.Context) {
 // streamDeviceLogs streams physical-device logs filtered by process name until
 // ctx is cancelled. Uses go-ios to connect to the syslog relay service
 // directly, so no external tools (like libimobiledevice) are required.
+// processName should be "Runner" for xcodeproj builds or the app name for xtool.
 // Intended to run as a goroutine.
-func streamDeviceLogs(ctx context.Context, appName, deviceID string) {
+func streamDeviceLogs(ctx context.Context, processName, deviceID string) {
 	device, err := ios.GetDevice(deviceID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: could not connect to iOS device: %v\n", err)
@@ -192,7 +193,7 @@ func streamDeviceLogs(ctx context.Context, appName, deviceID string) {
 			if err != nil {
 				continue
 			}
-			if entry.Process == appName {
+			if entry.Process == processName {
 				fmt.Println(entry.Message)
 			}
 		}
