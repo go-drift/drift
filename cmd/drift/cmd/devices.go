@@ -192,14 +192,19 @@ func connectedIOSDevices() ([]iosDevice, error) {
 			continue
 		}
 
+		// The text before the UDID group. iOS devices include a version:
+		//   "Tobys iPhone (26.0.1)" -> has parens -> iOS device
+		//   "Toby's MacBook Pro"    -> no parens -> host Mac, skip
 		rest := strings.TrimSpace(line[:lastOpen])
+		hasVersion := false
 		if versionEnd := strings.LastIndex(rest, ")"); versionEnd != -1 {
 			if versionStart := strings.LastIndex(rest[:versionEnd], "("); versionStart != -1 {
 				rest = strings.TrimSpace(rest[:versionStart])
+				hasVersion = true
 			}
 		}
 
-		if strings.Contains(rest, "Mac") {
+		if !hasVersion {
 			continue
 		}
 
