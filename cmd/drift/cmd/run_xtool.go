@@ -162,7 +162,7 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	fmt.Println()
 
 	if xtoolOpts.watch {
-		ctx, cancel := watchContext()
+		ctx, cancel := signalContext()
 		defer cancel()
 		if !xtoolOpts.noLogs {
 			go streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
@@ -193,7 +193,7 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	}
 
 	if !xtoolOpts.noLogs {
-		ctx, cancel := watchContext()
+		ctx, cancel := signalContext()
 		defer cancel()
 		streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
 	}

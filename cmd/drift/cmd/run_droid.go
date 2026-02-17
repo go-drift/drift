@@ -46,7 +46,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, _ []string, opts 
 	fmt.Println()
 
 	if opts.watch {
-		ctx, cancel := watchContext()
+		ctx, cancel := signalContext()
 		defer cancel()
 		if !opts.noLogs {
 			go streamAndroidLogs(ctx)
@@ -67,7 +67,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, _ []string, opts 
 	}
 
 	if !opts.noLogs {
-		ctx, cancel := watchContext()
+		ctx, cancel := signalContext()
 		defer cancel()
 		streamAndroidLogs(ctx)
 	}

@@ -101,7 +101,7 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 		return err
 	}
 
-	ctx, cancel := watchContext()
+	ctx, cancel := signalContext()
 	defer cancel()
 
 	// Start log streaming before launch so startup logs are captured.
@@ -185,7 +185,7 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 		return err
 	}
 
-	ctx, cancel := watchContext()
+	ctx, cancel := signalContext()
 	defer cancel()
 
 	// Start log streaming before launch so startup logs are captured.

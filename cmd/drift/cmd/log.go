@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
@@ -66,7 +63,7 @@ func runLog(args []string) error {
 func logAndroid() error {
 	fmt.Println("Streaming Android logs (Ctrl+C to stop)...")
 	fmt.Println()
-	ctx, cancel := watchContext()
+	ctx, cancel := signalContext()
 	defer cancel()
 	streamAndroidLogs(ctx)
 	return nil
@@ -86,7 +83,7 @@ func logIOS(cfg *config.Resolved, args []string) error {
 		}
 	}
 
-	ctx, cancel := watchContext()
+	ctx, cancel := signalContext()
 	defer cancel()
 
 	if device {
@@ -112,27 +109,8 @@ func logXtool(cfg *config.Resolved, args []string) error {
 	}
 	fmt.Println("Streaming device logs (Ctrl+C to stop)...")
 	fmt.Println()
-	ctx, cancel := watchContext()
+	ctx, cancel := signalContext()
 	defer cancel()
 	streamDeviceLogs(ctx, cfg.AppName, deviceID)
 	return nil
-}
-
-// streamIOSSimulatorLogs streams logs from a simulator app, filtered by
-// process name and subsystem (bundle ID). simulator should be a simulator
-// name or "booted" for the active simulator.
-func streamIOSSimulatorLogs(ctx context.Context, simulator, appID string) {
-	args := []string{"simctl", "spawn", simulator,
-		"log", "stream",
-		"--process", "Runner",
-		"--level", "debug",
-		"--style", "compact",
-	}
-	if appID != "" && !strings.ContainsAny(appID, `"'\`) {
-		args = append(args, "--predicate", fmt.Sprintf(`subsystem == "%s"`, appID))
-	}
-	cmd := exec.CommandContext(ctx, "xcrun", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run()
 }
