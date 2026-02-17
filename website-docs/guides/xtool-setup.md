@@ -71,6 +71,18 @@ drift run xtool --watch
 
 **Note:** with `--watch`, Drift attempts to relaunch the app automatically after each rebuild. If the relaunch fails (e.g. the device is locked), open the app manually.
 
+### Streaming Logs
+
+You can stream device logs independently of `drift run`:
+
+```bash
+# Stream logs from connected device
+drift log xtool
+
+# Stream logs from a specific device
+drift log xtool --device 00008030-001234567890
+```
+
 ### Listing Connected Devices
 
 ```bash

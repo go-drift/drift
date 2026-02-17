@@ -206,7 +206,12 @@ engine:
 | `drift run ios --simulator "<name>"` | Run on specific iOS simulator |
 | `drift run ios --device --team-id ID` | Run on physical iOS device |
 | `drift run xtool` | Run iOS from Linux via xtool |
+| `drift run xtool --device UDID` | Run on a specific iOS device via xtool |
 | `drift build android\|ios\|xtool` | Build without running |
+| `drift log android` | Stream Android device logs |
+| `drift log ios` | Stream iOS simulator logs |
+| `drift log ios --device` | Stream iOS device logs |
+| `drift log xtool` | Stream xtool device logs |
 | `drift clean` | Clear build cache |
 | `drift fetch-skia` | Download Skia binaries manually |
 
