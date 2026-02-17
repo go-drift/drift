@@ -127,9 +127,9 @@ drift run ios --device --team-id YOUR_TEAM_ID
 ```
 
 Requires:
-- A connected device with developer mode enabled
+- Xcode 15+ with command line tools installed
+- A connected device with developer mode enabled (iOS 17+)
 - Your Apple Developer Team ID (find it in Xcode or Apple Developer portal)
-- `ios-deploy` installed (`brew install ios-deploy`)
 
 ### iOS from Linux (xtool)
 

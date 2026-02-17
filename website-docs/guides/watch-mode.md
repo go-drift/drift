@@ -42,10 +42,12 @@ In watch mode, device logs are streamed to your terminal by default. Suppress th
 drift run android --watch --no-logs
 ```
 
-Log filtering works differently per platform:
+Log streaming works differently per platform:
 
 - **Android**: logs are filtered by Drift-specific logcat tags (`DriftJNI`, `Go`, `AndroidRuntime`, etc.). Tag-based filtering survives app restarts, so logs continue seamlessly across rebuilds.
-- **iOS**: logs are filtered by `os_log` subsystem, which matches your app's bundle ID. This also survives app restarts.
+- **iOS Simulator**: logs are streamed via `simctl launch --console`, which captures the app's stdout/stderr directly. Each rebuild terminates and relaunches the app, restarting the console stream automatically.
+- **iOS Device (Xcode)**: logs are streamed via `devicectl --console`, which works the same way as the simulator path.
+- **iOS Device (xtool)**: logs are streamed via the device syslog, filtered by process name.
 
 ## What Triggers a Rebuild
 
@@ -69,9 +71,9 @@ The watcher skips these directories to avoid unnecessary rebuilds:
 
 In watch mode, Drift detects the connected device's ABI (e.g. `arm64-v8a`) and compiles only for that architecture. This significantly speeds up incremental rebuilds compared to a full multi-ABI build.
 
-## xtool Caveat
+## xtool Notes
 
-When using `drift run xtool --watch`, the app cannot be relaunched automatically on the device. After each rebuild, you must manually close and reopen the app on your iOS device to pick up the changes.
+When using `drift run xtool --watch`, Drift attempts to kill and relaunch the app automatically after each rebuild. If the relaunch times out or fails (e.g. the device is locked), you will need to open the app manually on your device.
 
 ## Next Steps
 

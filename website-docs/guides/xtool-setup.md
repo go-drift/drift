@@ -29,22 +29,7 @@ swift sdk list
 # darwin
 ```
 
-### 2. Install libimobiledevice (for device deployment)
-
-For deploying to physical iOS devices, you need `libimobiledevice-utils` and `ideviceinstaller`:
-
-```bash
-# Ubuntu/Debian
-sudo apt install libimobiledevice-utils ideviceinstaller
-
-# Fedora
-sudo dnf install libimobiledevice-utils ideviceinstaller
-
-# Arch Linux
-sudo pacman -S libimobiledevice ideviceinstaller
-```
-
-### 3. Fetch iOS Skia binaries
+### 2. Fetch iOS Skia binaries
 
 Skia binaries are downloaded automatically on first build, or you can fetch them manually:
 
@@ -84,7 +69,7 @@ drift run xtool --no-logs
 drift run xtool --watch
 ```
 
-**Note:** with `--watch`, the app cannot be relaunched automatically on the device. After each rebuild, close and reopen the app on your iOS device to pick up the changes.
+**Note:** with `--watch`, Drift attempts to relaunch the app automatically after each rebuild. If the relaunch fails (e.g. the device is locked), open the app manually.
 
 ### Listing Connected Devices
 
