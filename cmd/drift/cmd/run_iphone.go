@@ -152,13 +152,12 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 		return fmt.Errorf("xcrun not found; make sure Xcode command line tools are installed")
 	}
 
-	// Resolve the device identifier once for the session. devicectl needs
-	// the device name; go-ios (log streaming) needs the UDID.
+	// Resolve the device identifier once for the session.
 	resolved, err := resolveDevice(opts.deviceID)
 	if err != nil {
 		return err
 	}
-	opts.deviceID = deviceName(resolved)
+	opts.deviceID = resolved.Properties.SerialNumber
 
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: true, teamID: opts.teamID}
 	if err := buildIOS(ws, buildOpts); err != nil {
@@ -208,6 +207,7 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 			noFetch:     noFetch,
 		}
 		return watchAndRun(ctx, ws, func() error {
+			exec.Command("xcrun", "devicectl", "device", "process", "terminate", "--device", opts.deviceID, cfg.AppID).Run()
 			if err := ws.Refresh(); err != nil {
 				return err
 			}
