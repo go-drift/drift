@@ -258,16 +258,22 @@ func resolveDevice(id string) (ios.DeviceEntry, error) {
 	}
 
 	devices := deviceList.DeviceList
+
+	// Resolve names once upfront to avoid redundant USB round-trips.
+	names := make([]string, len(devices))
+	for i, d := range devices {
+		names[i] = deviceName(d)
+	}
+
 	if id == "" {
 		switch len(devices) {
 		case 0:
 			return ios.DeviceEntry{}, fmt.Errorf("no connected iOS devices found\nConnect a device via USB, or specify one with --device <name-or-udid>")
 		case 1:
-			name := deviceName(devices[0])
-			fmt.Printf("  Auto-detected device: %s (%s)\n", name, devices[0].Properties.SerialNumber)
+			fmt.Printf("  Auto-detected device: %s (%s)\n", names[0], devices[0].Properties.SerialNumber)
 			return devices[0], nil
 		default:
-			return ios.DeviceEntry{}, fmt.Errorf("multiple iOS devices connected, specify one with --device <name-or-udid>:\n%s", formatDeviceList(devices))
+			return ios.DeviceEntry{}, fmt.Errorf("multiple iOS devices connected, specify one with --device <name-or-udid>:\n%s", formatDeviceListCached(devices, names))
 		}
 	}
 
@@ -279,13 +285,13 @@ func resolveDevice(id string) (ios.DeviceEntry, error) {
 	}
 
 	// Match by device name (case-insensitive).
-	for _, d := range devices {
-		if strings.EqualFold(deviceName(d), id) {
+	for i, d := range devices {
+		if strings.EqualFold(names[i], id) {
 			return d, nil
 		}
 	}
 
-	listing := formatDeviceList(devices)
+	listing := formatDeviceListCached(devices, names)
 	if len(devices) == 0 {
 		listing = "  (none)"
 	}
@@ -304,12 +310,20 @@ func deviceName(d ios.DeviceEntry) string {
 
 // formatDeviceList formats a list of devices for display in error messages.
 func formatDeviceList(devices []ios.DeviceEntry) string {
+	names := make([]string, len(devices))
+	for i, d := range devices {
+		names[i] = deviceName(d)
+	}
+	return formatDeviceListCached(devices, names)
+}
+
+// formatDeviceListCached formats a list of devices using pre-resolved names.
+func formatDeviceListCached(devices []ios.DeviceEntry, names []string) string {
 	var lines []string
-	for _, d := range devices {
-		name := deviceName(d)
+	for i, d := range devices {
 		udid := d.Properties.SerialNumber
-		if name != udid {
-			lines = append(lines, fmt.Sprintf("  %s (%s)", name, udid))
+		if names[i] != udid {
+			lines = append(lines, fmt.Sprintf("  %s (%s)", names[i], udid))
 		} else {
 			lines = append(lines, fmt.Sprintf("  %s", udid))
 		}

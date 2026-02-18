@@ -54,9 +54,9 @@ func startTunnelAndGetDevice(device ios.DeviceEntry) (ios.DeviceEntry, func() er
 
 	udid := device.Properties.SerialNumber
 
-	// Set userspace TUN fields on the device before the RSD connection so that
-	// ConnectTUNDevice routes through the local TCP proxy instead of trying to
-	// reach the IPv6 tunnel address directly.
+	// Set userspace TUN fields on device so the subsequent NewWithAddrPortDevice
+	// call routes through the local TCP proxy instead of the IPv6 tunnel address.
+	// These fields are also set on the final enriched entry below.
 	device.UserspaceTUN = true
 	device.UserspaceTUNHost = "127.0.0.1"
 	device.UserspaceTUNPort = port
@@ -153,6 +153,8 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	defer cancel()
 
 	if !xtoolOpts.noLogs {
+		// Use baseDevice (plain usbmuxd entry) because syslog connects through
+		// lockdown, not through the CoreDevice tunnel.
 		go streamDeviceLogs(ctx, cfg.AppName, baseDevice)
 	}
 

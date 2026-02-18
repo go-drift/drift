@@ -13,6 +13,12 @@ import (
 	"github.com/danielpaulus/go-ios/ios/syslog"
 )
 
+// signalContext creates a cancellable context that is cancelled on
+// SIGINT or SIGTERM.
+func signalContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+}
+
 // streamAndroidLogs streams tag-filtered logcat output until ctx is
 // cancelled. Tag-based filtering survives app restarts, unlike PID-based.
 // When serial is non-empty, targets that specific device via `-s`.
@@ -118,19 +124,3 @@ func streamIOSSimulatorLogs(ctx context.Context, simulator, appID string) {
 	cmd.Run()
 }
 
-// signalContext creates a cancellable context that is cancelled on
-// SIGINT or SIGTERM.
-func signalContext() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		select {
-		case <-sigChan:
-			cancel()
-		case <-ctx.Done():
-		}
-		signal.Stop(sigChan)
-	}()
-	return ctx, cancel
-}

@@ -45,6 +45,12 @@ func watchAndRun(ctx context.Context, ws *workspace.Workspace, rebuild func() er
 			if !ok {
 				return nil
 			}
+			// Watch newly created directories so changes in new packages are detected.
+			if event.Op&fsnotify.Create != 0 {
+				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+					watcher.Add(event.Name)
+				}
+			}
 			if !isRelevantChange(event) {
 				continue
 			}
