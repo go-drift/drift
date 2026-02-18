@@ -6,6 +6,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -63,7 +64,7 @@ func (s *storageState) InitState() {
 }
 
 func (s *storageState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Storage",
 		sectionTitle("File Picker", colors),
@@ -111,12 +112,11 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 		return widgets.Container{
 			Color:        colors.SurfaceVariant,
 			BorderRadius: 8,
-			Child: widgets.PaddingAll(16,
-				widgets.Text{Content: "No item selected", Style: graphics.TextStyle{
-					Color:    colors.OnSurfaceVariant,
-					FontSize: 14,
-				}},
-			),
+			Padding:      layout.EdgeInsetsAll(16),
+			Child: widgets.Text{Content: "No item selected", Style: graphics.TextStyle{
+				Color:    colors.OnSurfaceVariant,
+				FontSize: 14,
+			}},
 		}
 	}
 
@@ -124,56 +124,54 @@ func (s *storageState) selectedItemCard(colors theme.ColorScheme) core.Widget {
 		return widgets.Container{
 			Color:        colors.SurfaceVariant,
 			BorderRadius: 8,
-			Child: widgets.PaddingAll(16,
-				widgets.Column{
-					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-					CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-					MainAxisSize:       widgets.MainAxisSizeMin,
-					Children: []core.Widget{
-						s.infoRow("Name", file.Name, colors),
-						widgets.VSpace(8),
-						s.infoRow("MIME Type", file.MimeType, colors),
-						widgets.VSpace(8),
-						s.infoRow("Size", formatSize(file.Size), colors),
-						widgets.VSpace(8),
-						widgets.Text{Content: "Path:", Style: graphics.TextStyle{
-							Color:      colors.OnSurfaceVariant,
-							FontSize:   12,
-							FontWeight: graphics.FontWeightBold,
-						}},
-						widgets.VSpace(4),
-						widgets.Text{Content: file.Path, Style: graphics.TextStyle{
-							Color:    colors.OnSurface,
-							FontSize: 12,
-						}},
-					},
+			Padding:      layout.EdgeInsetsAll(16),
+			Child: widgets.Column{
+				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+				MainAxisSize:       widgets.MainAxisSizeMin,
+				Children: []core.Widget{
+					s.infoRow("Name", file.Name, colors),
+					widgets.VSpace(8),
+					s.infoRow("MIME Type", file.MimeType, colors),
+					widgets.VSpace(8),
+					s.infoRow("Size", formatSize(file.Size), colors),
+					widgets.VSpace(8),
+					widgets.Text{Content: "Path:", Style: graphics.TextStyle{
+						Color:      colors.OnSurfaceVariant,
+						FontSize:   12,
+						FontWeight: graphics.FontWeightBold,
+					}},
+					widgets.VSpace(4),
+					widgets.Text{Content: file.Path, Style: graphics.TextStyle{
+						Color:    colors.OnSurface,
+						FontSize: 12,
+					}},
 				},
-			),
+			},
 		}
 	}
 
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Child: widgets.PaddingAll(16,
-			widgets.Column{
-				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-				MainAxisSize:       widgets.MainAxisSizeMin,
-				Children: []core.Widget{
-					widgets.Text{Content: "Directory:", Style: graphics.TextStyle{
-						Color:      colors.OnSurfaceVariant,
-						FontSize:   12,
-						FontWeight: graphics.FontWeightBold,
-					}},
-					widgets.VSpace(4),
-					widgets.Text{Content: path, Style: graphics.TextStyle{
-						Color:    colors.OnSurface,
-						FontSize: 12,
-					}},
-				},
+		Padding:      layout.EdgeInsetsAll(16),
+		Child: widgets.Column{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				widgets.Text{Content: "Directory:", Style: graphics.TextStyle{
+					Color:      colors.OnSurfaceVariant,
+					FontSize:   12,
+					FontWeight: graphics.FontWeightBold,
+				}},
+				widgets.VSpace(4),
+				widgets.Text{Content: path, Style: graphics.TextStyle{
+					Color:    colors.OnSurface,
+					FontSize: 12,
+				}},
 			},
-		),
+		},
 	}
 }
 
@@ -194,14 +192,13 @@ func (s *storageState) appDirectoriesCard(colors theme.ColorScheme) core.Widget 
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Child: widgets.PaddingAll(16,
-			widgets.Column{
-				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-				MainAxisSize:       widgets.MainAxisSizeMin,
-				Children:           rows,
-			},
-		),
+		Padding:      layout.EdgeInsetsAll(16),
+		Child: widgets.Column{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children:           rows,
+		},
 	}
 }
 

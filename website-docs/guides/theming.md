@@ -10,11 +10,12 @@ Drift provides a Material Design 3 inspired theming system.
 
 ## Using Theme
 
-Get all theme parts in one call:
+Query only the parts you need with granular accessors:
 
 ```go
 func (s *myState) Build(ctx core.BuildContext) core.Widget {
-    _, colors, textTheme := theme.UseTheme(ctx)
+    colors := theme.ColorsOf(ctx)
+    textTheme := theme.TextThemeOf(ctx)
 
     return widgets.Container{
         Color:       colors.Surface,
@@ -23,9 +24,7 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-### Individual Accessors
-
-When you only need one part:
+### Available Accessors
 
 ```go
 colors := theme.ColorsOf(ctx)
@@ -306,7 +305,8 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 For widgets without themed constructors (like layout widgets), pull theme values manually:
 
 ```go
-_, colors, textTheme := theme.UseTheme(ctx)
+colors := theme.ColorsOf(ctx)
+textTheme := theme.TextThemeOf(ctx)
 
 widgets.Container{
     Color:   colors.Surface,

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -67,7 +68,7 @@ func (s *formsState) InitState() {
 }
 
 func (s *formsState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Forms",
 		// Form validation section
@@ -217,7 +218,7 @@ func (f formContent) Key() any {
 }
 
 func (f formContent) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 	form := widgets.FormOf(ctx)
 
 	return widgets.ColumnOf(
@@ -298,16 +299,15 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 
 		// Status display
 		widgets.Container{
-			Color: colors.SurfaceVariant,
-			Child: widgets.PaddingAll(12,
-				widgets.Text{
-					Content: f.state.statusText.Get(),
-					Style: graphics.TextStyle{
-						Color:    colors.OnSurfaceVariant,
-						FontSize: 14,
-					},
+			Color:   colors.SurfaceVariant,
+			Padding: layout.EdgeInsetsAll(12),
+			Child: widgets.Text{
+				Content: f.state.statusText.Get(),
+				Style: graphics.TextStyle{
+					Color:    colors.OnSurfaceVariant,
+					FontSize: 14,
 				},
-			),
+			},
 		},
 	)
 }

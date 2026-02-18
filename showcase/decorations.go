@@ -9,7 +9,7 @@ import (
 
 // buildDecorationsPage demonstrates ClipRRect and DecoratedBox.
 func buildDecorationsPage(ctx core.BuildContext) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 	logo := loadGoLogo()
 
 	return demoPage(ctx, "Decorations",

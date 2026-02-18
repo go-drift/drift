@@ -97,7 +97,7 @@ func (s *permissionsState) InitState() {
 }
 
 func (s *permissionsState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 	statuses := s.statuses.Get()
 
 	// Build permission rows
@@ -138,38 +138,37 @@ func (s *permissionsState) permissionRow(name string, status platform.Permission
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Child: widgets.PaddingAll(12,
-			widgets.Row{
-				MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-				Children: []core.Widget{
-					widgets.Column{
-						MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
-						CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-						MainAxisSize:       widgets.MainAxisSizeMin,
-						Children: []core.Widget{
-							widgets.Text{Content: name, Style: graphics.TextStyle{
-								Color:      colors.OnSurface,
-								FontSize:   16,
-								FontWeight: graphics.FontWeightSemibold,
-							}},
-							widgets.VSpace(4),
-							permissionBadge(status, colors),
-						},
-					},
-					widgets.Button{
-						Label: "Request",
-						OnTap: func() {
-							s.requestPermission(name)
-						},
-						Color:        colors.Primary,
-						TextColor:    colors.OnPrimary,
-						Padding:      layout.EdgeInsetsSymmetric(12, 8),
-						BorderRadius: 6,
+		Padding: layout.EdgeInsetsAll(12),
+		Child: widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			Children: []core.Widget{
+				widgets.Column{
+					MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+					CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+					MainAxisSize:       widgets.MainAxisSizeMin,
+					Children: []core.Widget{
+						widgets.Text{Content: name, Style: graphics.TextStyle{
+							Color:      colors.OnSurface,
+							FontSize:   16,
+							FontWeight: graphics.FontWeightSemibold,
+						}},
+						widgets.VSpace(4),
+						permissionBadge(status, colors),
 					},
 				},
+				widgets.Button{
+					Label: "Request",
+					OnTap: func() {
+						s.requestPermission(name)
+					},
+					Color:        colors.Primary,
+					TextColor:    colors.OnPrimary,
+					Padding:      layout.EdgeInsetsSymmetric(12, 8),
+					BorderRadius: 6,
+				},
 			},
-		),
+		},
 	}
 }
 

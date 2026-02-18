@@ -49,7 +49,7 @@ func (s *webViewState) InitState() {
 }
 
 func (s *webViewState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "WebView",
 		widgets.Text{

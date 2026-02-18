@@ -61,7 +61,7 @@ func (s *videoPlayerState) InitState() {
 }
 
 func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Video Player",
 		widgets.Text{

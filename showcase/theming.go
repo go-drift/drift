@@ -3,13 +3,14 @@ package main
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
 // buildThemingPage demonstrates the theming system.
 func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 
 	modeLabel := "Dark Mode"
 	if !isDark {
@@ -129,20 +130,19 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 func colorSwatch(name string, bg, fg graphics.Color) core.Widget {
 	return widgets.Container{
 		Color: bg,
-		Child: widgets.PaddingSym(16, 12,
-			widgets.RowOf(
-				widgets.MainAxisAlignmentSpaceBetween,
-				widgets.CrossAxisAlignmentStart,
-				widgets.MainAxisSizeMax,
-				widgets.Text{Content: name, Style: graphics.TextStyle{
-					Color:    fg,
-					FontSize: 16,
-				}},
-				widgets.Text{Content: colorHex(bg), Style: graphics.TextStyle{
-					Color:    fg,
-					FontSize: 12,
-				}},
-			),
+		Padding: layout.EdgeInsetsSymmetric(16, 12),
+		Child: widgets.RowOf(
+			widgets.MainAxisAlignmentSpaceBetween,
+			widgets.CrossAxisAlignmentStart,
+			widgets.MainAxisSizeMax,
+			widgets.Text{Content: name, Style: graphics.TextStyle{
+				Color:    fg,
+				FontSize: 16,
+			}},
+			widgets.Text{Content: colorHex(bg), Style: graphics.TextStyle{
+				Color:    fg,
+				FontSize: 12,
+			}},
 		),
 	}
 }
@@ -164,22 +164,21 @@ func hexByte(b uint8) string {
 func themeModeCard(mode, platform string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color: colors.Primary,
-		Child: widgets.PaddingAll(16,
-			widgets.ColumnOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMin,
-				widgets.Text{Content: mode, Style: graphics.TextStyle{
-					Color:      colors.OnPrimary,
-					FontSize:   18,
-					FontWeight: graphics.FontWeightBold,
-				}},
-				widgets.VSpace(4),
-				widgets.Text{Content: platform, Style: graphics.TextStyle{
-					Color:    colors.OnPrimary,
-					FontSize: 14,
-				}},
-			),
+		Padding: layout.EdgeInsetsAll(16),
+		Child: widgets.ColumnOf(
+			widgets.MainAxisAlignmentStart,
+			widgets.CrossAxisAlignmentCenter,
+			widgets.MainAxisSizeMin,
+			widgets.Text{Content: mode, Style: graphics.TextStyle{
+				Color:      colors.OnPrimary,
+				FontSize:   18,
+				FontWeight: graphics.FontWeightBold,
+			}},
+			widgets.VSpace(4),
+			widgets.Text{Content: platform, Style: graphics.TextStyle{
+				Color:    colors.OnPrimary,
+				FontSize: 14,
+			}},
 		),
 	}
 }

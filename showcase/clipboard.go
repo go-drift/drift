@@ -36,7 +36,7 @@ func (s *clipboardState) InitState() {
 }
 
 func (s *clipboardState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Clipboard",
 		sectionTitle("Copy & Paste", colors),

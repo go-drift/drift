@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -63,7 +64,7 @@ func (s *audioPlayerState) InitState() {
 }
 
 func (s *audioPlayerState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Audio Player",
 		widgets.Text{
@@ -87,15 +88,14 @@ func (s *audioPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 			widgets.Container{
 				Color:        colors.SurfaceVariant,
 				BorderRadius: 6,
-				Child: widgets.PaddingAll(10,
-					widgets.Text{
-						Content: "SoundHelix Sample Song",
-						Style: graphics.TextStyle{
-							Color:    colors.OnSurfaceVariant,
-							FontSize: 13,
-						},
+				Padding: layout.EdgeInsetsAll(10),
+				Child: widgets.Text{
+					Content: "SoundHelix Sample Song",
+					Style: graphics.TextStyle{
+						Color:    colors.OnSurfaceVariant,
+						FontSize: 13,
 					},
-				),
+				},
 			},
 			widgets.VSpace(12),
 			// Transport controls

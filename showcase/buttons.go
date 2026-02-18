@@ -11,7 +11,7 @@ import (
 
 // buildButtonsPage demonstrates button variants and the builder pattern.
 func buildButtonsPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 	buttonGradient := graphics.NewLinearGradient(
 		graphics.AlignCenterLeft,
 		graphics.AlignCenterRight,

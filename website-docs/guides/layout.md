@@ -14,7 +14,8 @@ Build complex layouts by nesting simple widgets:
 
 ```go
 func (s *myState) Build(ctx core.BuildContext) core.Widget {
-    _, colors, textTheme := theme.UseTheme(ctx)
+    colors := theme.ColorsOf(ctx)
+    textTheme := theme.TextThemeOf(ctx)
 
     return widgets.SafeArea{
         Child: widgets.PaddingAll(20,

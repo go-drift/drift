@@ -47,7 +47,7 @@ func (s *gesturesDemoState) InitState() {
 }
 
 func (s *gesturesDemoState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	items := []core.Widget{
 		// Section 1: Pan Gesture (omnidirectional)

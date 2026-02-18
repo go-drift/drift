@@ -10,7 +10,7 @@ import (
 
 // buildWrapPage demonstrates the Wrap widget for flowing layouts.
 func buildWrapPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Wrap",
 		sectionTitle("Basic Wrap", colors),
@@ -98,12 +98,11 @@ func chip(label string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.PrimaryContainer,
 		BorderRadius: 16,
-		Child: widgets.PaddingSym(12, 8,
-			widgets.Text{Content: label, Style: graphics.TextStyle{
-				Color:    colors.OnPrimaryContainer,
-				FontSize: 14,
-			}},
-		),
+		Padding:      layout.EdgeInsetsSymmetric(12, 8),
+		Child: widgets.Text{Content: label, Style: graphics.TextStyle{
+			Color:    colors.OnPrimaryContainer,
+			FontSize: 14,
+		}},
 	}
 }
 
@@ -143,19 +142,18 @@ func wrapCrossDemo(cross widgets.WrapCrossAlignment, colors theme.ColorScheme) c
 	return widgets.Container{
 		Color:  colors.SurfaceVariant,
 		Height: 64,
-		Child: widgets.PaddingAll(8,
-			widgets.Wrap{
-				Direction:          widgets.WrapAxisHorizontal,
-				CrossAxisAlignment: cross,
-				Spacing:            8,
-				RunSpacing:         8,
-				Children: []core.Widget{
-					tallChip("Short", 32, colors),
-					tallChip("Tall", 48, colors),
-					tallChip("Medium", 40, colors),
-				},
+		Padding: layout.EdgeInsetsAll(8),
+		Child: widgets.Wrap{
+			Direction:          widgets.WrapAxisHorizontal,
+			CrossAxisAlignment: cross,
+			Spacing:            8,
+			RunSpacing:         8,
+			Children: []core.Widget{
+				tallChip("Short", 32, colors),
+				tallChip("Tall", 48, colors),
+				tallChip("Medium", 40, colors),
 			},
-		),
+		},
 	}
 }
 
@@ -165,11 +163,10 @@ func tallChip(label string, height float64, colors theme.ColorScheme) core.Widge
 		Color:        colors.PrimaryContainer,
 		BorderRadius: 16,
 		Height:       height,
-		Child: widgets.PaddingSym(12, 8,
-			widgets.Text{Content: label, Style: graphics.TextStyle{
-				Color:    colors.OnPrimaryContainer,
-				FontSize: 14,
-			}},
-		),
+		Padding:      layout.EdgeInsetsSymmetric(12, 8),
+		Child: widgets.Text{Content: label, Style: graphics.TextStyle{
+			Color:    colors.OnPrimaryContainer,
+			FontSize: 14,
+		}},
 	}
 }

@@ -381,18 +381,17 @@ func statusCard(text string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Child: widgets.PaddingAll(12,
-			widgets.Text{Content: text, Style: graphics.TextStyle{
-				Color:    colors.OnSurfaceVariant,
-				FontSize: 14,
-			}},
-		),
+		Padding:      layout.EdgeInsetsAll(12),
+		Child: widgets.Text{Content: text, Style: graphics.TextStyle{
+			Color:    colors.OnSurfaceVariant,
+			FontSize: 14,
+		}},
 	}
 }
 
 // categoryHubPage creates a standard hub page for a demo category.
 func categoryHubPage(ctx core.BuildContext, category string, title, description string) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	// Build page content: description followed by demo cards
 	items := []core.Widget{

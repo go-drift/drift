@@ -38,7 +38,7 @@ func (s *shareState) InitState() {
 }
 
 func (s *shareState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Share",
 		sectionTitle("Share Text", colors),

@@ -10,7 +10,7 @@ import (
 
 // buildHomePage creates the main landing page with navigation to demos.
 func buildHomePage(ctx core.BuildContext, isDark bool, toggleTheme func()) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return widgets.Expanded{
 		Child: widgets.Container{

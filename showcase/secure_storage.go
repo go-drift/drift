@@ -4,6 +4,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -86,7 +87,7 @@ func (s *secureStorageState) InitState() {
 }
 
 func (s *secureStorageState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Secure Storage",
 		sectionTitle("Key-Value Storage", colors),
@@ -199,22 +200,21 @@ func retrievedValueCard(value string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Child: widgets.PaddingAll(12,
-			widgets.ColumnOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentStart,
-				widgets.MainAxisSizeMin,
-				widgets.Text{Content: "Retrieved Value:", Style: graphics.TextStyle{
-					Color:      colors.OnSurfaceVariant,
-					FontSize:   12,
-					FontWeight: graphics.FontWeightBold,
-				}},
-				widgets.VSpace(4),
-				widgets.Text{Content: displayValue, Style: graphics.TextStyle{
-					Color:    colors.OnSurface,
-					FontSize: 16,
-				}},
-			),
+		Padding:      layout.EdgeInsetsAll(12),
+		Child: widgets.ColumnOf(
+			widgets.MainAxisAlignmentStart,
+			widgets.CrossAxisAlignmentStart,
+			widgets.MainAxisSizeMin,
+			widgets.Text{Content: "Retrieved Value:", Style: graphics.TextStyle{
+				Color:      colors.OnSurfaceVariant,
+				FontSize:   12,
+				FontWeight: graphics.FontWeightBold,
+			}},
+			widgets.VSpace(4),
+			widgets.Text{Content: displayValue, Style: graphics.TextStyle{
+				Color:    colors.OnSurface,
+				FontSize: 16,
+			}},
 		),
 	}
 }

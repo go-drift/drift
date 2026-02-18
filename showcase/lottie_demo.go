@@ -103,7 +103,7 @@ func (s *lottieDemoState) InitState() {
 }
 
 func (s *lottieDemoState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	if s.loadErr != nil {
 		return demoPage(ctx, "Lottie",

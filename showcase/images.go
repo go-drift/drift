@@ -39,7 +39,7 @@ func loadGoLogo() image.Image {
 }
 
 func buildImagesPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 	logo := loadGoLogo()
 
 	return demoPage(ctx, "Images",

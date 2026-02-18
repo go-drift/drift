@@ -10,7 +10,7 @@ import (
 
 // buildRichTextPage demonstrates the RichText widget with inline styled spans.
 func buildRichTextPage(ctx core.BuildContext) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 
 	return demoPage(ctx, "Rich Text",
 		// Section: Basic Inline Styles

@@ -7,6 +7,7 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -96,7 +97,7 @@ func (s *locationState) InitState() {
 }
 
 func (s *locationState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 	isStreaming := s.isStreaming.Get()
 	isEnabled := s.isEnabled.Get()
 
@@ -194,36 +195,34 @@ func (s *locationState) locationCard(colors theme.ColorScheme) core.Widget {
 		return widgets.Container{
 			Color:        colors.SurfaceVariant,
 			BorderRadius: 8,
-			Child: widgets.PaddingAll(16,
-				widgets.Text{Content: "No location data yet", Style: graphics.TextStyle{
-					Color:    colors.OnSurfaceVariant,
-					FontSize: 14,
-				}},
-			),
+			Padding:      layout.EdgeInsetsAll(16),
+			Child: widgets.Text{Content: "No location data yet", Style: graphics.TextStyle{
+				Color:    colors.OnSurfaceVariant,
+				FontSize: 14,
+			}},
 		}
 	}
 
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Child: widgets.PaddingAll(16,
-			widgets.Column{
-				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-				MainAxisSize:       widgets.MainAxisSizeMin,
-				Children: []core.Widget{
-					s.locationRow("Latitude", fmt.Sprintf("%.6f", loc.Latitude), colors),
-					widgets.VSpace(8),
-					s.locationRow("Longitude", fmt.Sprintf("%.6f", loc.Longitude), colors),
-					widgets.VSpace(8),
-					s.locationRow("Accuracy", fmt.Sprintf("%.1f m", loc.Accuracy), colors),
-					widgets.VSpace(8),
-					s.locationRow("Altitude", fmt.Sprintf("%.1f m", loc.Altitude), colors),
-					widgets.VSpace(8),
-					s.locationRow("Timestamp", loc.Timestamp.Format("15:04:05"), colors),
-				},
+		Padding:      layout.EdgeInsetsAll(16),
+		Child: widgets.Column{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				s.locationRow("Latitude", fmt.Sprintf("%.6f", loc.Latitude), colors),
+				widgets.VSpace(8),
+				s.locationRow("Longitude", fmt.Sprintf("%.6f", loc.Longitude), colors),
+				widgets.VSpace(8),
+				s.locationRow("Accuracy", fmt.Sprintf("%.1f m", loc.Accuracy), colors),
+				widgets.VSpace(8),
+				s.locationRow("Altitude", fmt.Sprintf("%.1f m", loc.Altitude), colors),
+				widgets.VSpace(8),
+				s.locationRow("Timestamp", loc.Timestamp.Format("15:04:05"), colors),
 			},
-		),
+		},
 	}
 }
 

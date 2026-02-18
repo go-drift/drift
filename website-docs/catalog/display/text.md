@@ -28,7 +28,7 @@ widgets.Text{
 Read typography styles from the current theme for consistent sizing and weight:
 
 ```go
-_, _, textTheme := theme.UseTheme(ctx)
+textTheme := theme.TextThemeOf(ctx)
 
 widgets.Text{Content: "Headline", Style: textTheme.HeadlineLarge}
 widgets.Text{Content: "Body text", Style: textTheme.BodyLarge}

@@ -10,7 +10,7 @@ import (
 
 // buildScrollPage demonstrates scrollable content with physics.
 func buildScrollPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Scrolling",
 		sectionTitle("ListView", colors),
@@ -73,29 +73,28 @@ func listItem(index int, bgColor graphics.Color, colors theme.ColorScheme) core.
 	return widgets.Container{
 		Color:        bgColor,
 		BorderRadius: 6,
-		Child: widgets.PaddingSym(12, 12,
-			widgets.Row{
-				MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-				Children: []core.Widget{
-					widgets.Container{
-						Color:        colors.PrimaryContainer,
-						BorderRadius: 4,
-						Width:        32,
-						Height:       32,
-						Alignment:    layout.AlignmentCenter,
-						Child: widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
-							Color:    colors.OnPrimaryContainer,
-							FontSize: 14,
-						}},
-					},
-					widgets.HSpace(12),
-					widgets.Text{Content: "Item " + itoa(index), Style: graphics.TextStyle{
-						Color:    colors.OnSurface,
-						FontSize: 15,
+		Padding: layout.EdgeInsetsSymmetric(12, 12),
+		Child: widgets.Row{
+			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			Children: []core.Widget{
+				widgets.Container{
+					Color:        colors.PrimaryContainer,
+					BorderRadius: 4,
+					Width:        32,
+					Height:       32,
+					Alignment:    layout.AlignmentCenter,
+					Child: widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
+						Color:    colors.OnPrimaryContainer,
+						FontSize: 14,
 					}},
 				},
+				widgets.HSpace(12),
+				widgets.Text{Content: "Item " + itoa(index), Style: graphics.TextStyle{
+					Color:    colors.OnSurface,
+					FontSize: 15,
+				}},
 			},
-		),
+		},
 	}
 }

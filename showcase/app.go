@@ -165,7 +165,7 @@ func wrapBuilder(fn func(ctx core.BuildContext) core.Widget) func(core.BuildCont
 
 // buildNotFoundPage shows a 404 error page.
 func buildNotFoundPage(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 	return pageScaffold(ctx, "Not Found", widgets.Container{
 		Color: colors.Background,
 		Child: widgets.Center{
@@ -309,7 +309,7 @@ func (s *showcaseState) toggleTheme() {
 
 // pageScaffold creates a consistent page layout with title and back button.
 func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 
 	// Header needs top safe area padding so it sits below the status bar
 	headerPadding := widgets.SafeAreaPadding(ctx).OnlyTop().Add(16)

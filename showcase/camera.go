@@ -116,7 +116,7 @@ func loadImageFromPath(path string) (image.Image, error) {
 }
 
 func (s *cameraState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Camera",
 		sectionTitle("Permission", colors),

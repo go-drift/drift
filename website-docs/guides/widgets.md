@@ -62,7 +62,7 @@ There are three patterns for creating widgets:
 Use struct literals when you want complete control over all properties:
 
 ```go
-_, colors, _ := theme.UseTheme(ctx)
+colors := theme.ColorsOf(ctx)
 
 button := widgets.Button{
     Label:        "Submit",

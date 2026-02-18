@@ -10,7 +10,7 @@ import (
 
 // buildPositioningPage demonstrates single-child positioning widgets.
 func buildPositioningPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	boxColor := CyanSeed
 
@@ -96,10 +96,9 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 				colorBox(boxColor, "Fixed"),
 				widgets.Expanded{
 					Child: widgets.Container{
-						Color: PinkSeed,
-						Child: widgets.PaddingAll(12,
-							widgets.Text{Content: "Expanded", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
-						),
+						Color:   PinkSeed,
+						Padding: layout.EdgeInsetsAll(12),
+						Child:   widgets.Text{Content: "Expanded", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
 					},
 				},
 				colorBox(boxColor, "Fixed"),
@@ -117,20 +116,18 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 				widgets.Expanded{
 					Flex: 1,
 					Child: widgets.Container{
-						Color: boxColor,
-						Child: widgets.PaddingAll(12,
-							widgets.Text{Content: "Flex 1", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 14}},
-						),
+						Color:   boxColor,
+						Padding: layout.EdgeInsetsAll(12),
+						Child:   widgets.Text{Content: "Flex 1", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 14}},
 					},
 				},
 				widgets.HSpace(8),
 				widgets.Expanded{
 					Flex: 2,
 					Child: widgets.Container{
-						Color: PinkSeed,
-						Child: widgets.PaddingAll(12,
-							widgets.Text{Content: "Flex 2", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
-						),
+						Color:   PinkSeed,
+						Padding: layout.EdgeInsetsAll(12),
+						Child:   widgets.Text{Content: "Flex 2", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
 					},
 				},
 			),
@@ -165,10 +162,9 @@ func alignDemo(label string, alignment layout.Alignment, boxColor graphics.Color
 				Child: widgets.Align{
 					Alignment: alignment,
 					Child: widgets.Container{
-						Color: boxColor,
-						Child: widgets.PaddingAll(8,
-							widgets.Text{Content: "X", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 12}},
-						),
+						Color:   boxColor,
+						Padding: layout.EdgeInsetsAll(8),
+						Child:   widgets.Text{Content: "X", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 12}},
 					},
 				},
 			},

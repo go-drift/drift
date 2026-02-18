@@ -33,7 +33,7 @@ func loadSVGAsset(name string) *svg.Icon {
 }
 
 func buildTabsPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 	iconColor := colors.Primary
 
 	tabs := []navigation.Tab{
@@ -73,7 +73,7 @@ func buildTabSpec(label string, icon *svg.Icon, color graphics.Color) navigation
 }
 
 func buildTabRootPage(ctx core.BuildContext, label string) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 
 	return widgets.Container{
 		Color: colors.Background,
@@ -97,7 +97,7 @@ func buildTabRootPage(ctx core.BuildContext, label string) core.Widget {
 }
 
 func buildTabDetailPage(ctx core.BuildContext, label string) core.Widget {
-	_, colors, textTheme := theme.UseTheme(ctx)
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 
 	content := widgets.Container{
 		Color: colors.Background,

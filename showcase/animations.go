@@ -47,7 +47,7 @@ func (s *animationsDemoState) InitState() {
 }
 
 func (s *animationsDemoState) Build(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	// Available curves
 	curveNames := []string{"Linear", "EaseIn", "EaseOut", "EaseInOut"}

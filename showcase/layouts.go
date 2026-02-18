@@ -10,7 +10,7 @@ import (
 
 // buildLayoutsPage demonstrates Row, Column, Stack, and other layout widgets.
 func buildLayoutsPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	// Distinct colors for layout demos
 	boxA := CyanSeed                    // Cyan
@@ -173,17 +173,19 @@ func columnDemo(label string, cross widgets.CrossAxisAlignment, a, b, c graphics
 // layoutContainer wraps layout demos in a styled container.
 func layoutContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color: colors.SurfaceVariant,
-		Child: widgets.PaddingAll(8, child),
+		Color:   colors.SurfaceVariant,
+		Padding: layout.EdgeInsetsAll(8),
+		Child:   child,
 	}
 }
 
 // crossAxisContainer wraps layout demos with fixed height for cross-axis demos.
 func crossAxisContainer(child core.Widget, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color:  colors.SurfaceVariant,
-		Height: 80,
-		Child:  widgets.PaddingAll(8, child),
+		Color:   colors.SurfaceVariant,
+		Height:  80,
+		Padding: layout.EdgeInsetsAll(8),
+		Child:   child,
 	}
 }
 
@@ -198,26 +200,24 @@ func textColorFor(bg graphics.Color) graphics.Color {
 // colorBox creates a small colored box with a label.
 func colorBox(color graphics.Color, label string) core.Widget {
 	return widgets.Container{
-		Color: color,
-		Child: widgets.PaddingAll(12,
-			widgets.Text{Content: label, Style: graphics.TextStyle{
-				Color:    textColorFor(color),
-				FontSize: 14,
-			}},
-		),
+		Color:   color,
+		Padding: layout.EdgeInsetsAll(12),
+		Child: widgets.Text{Content: label, Style: graphics.TextStyle{
+			Color:    textColorFor(color),
+			FontSize: 14,
+		}},
 	}
 }
 
 // tallBox creates a colored box with specific height for cross-axis demos.
 func tallBox(color graphics.Color, label string, height float64) core.Widget {
 	return widgets.Container{
-		Color:  color,
-		Height: height,
-		Child: widgets.PaddingAll(12,
-			widgets.Text{Content: label, Style: graphics.TextStyle{
-				Color:    textColorFor(color),
-				FontSize: 14,
-			}},
-		),
+		Color:   color,
+		Height:  height,
+		Padding: layout.EdgeInsetsAll(12),
+		Child: widgets.Text{Content: label, Style: graphics.TextStyle{
+			Color:    textColorFor(color),
+			FontSize: 14,
+		}},
 	}
 }

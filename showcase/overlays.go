@@ -12,7 +12,7 @@ import (
 
 // buildOverlaysPage demonstrates the overlay system including modals, tooltips, and barriers.
 func buildOverlaysPage(ctx core.BuildContext) core.Widget {
-	_, colors, _ := theme.UseTheme(ctx)
+	colors := theme.ColorsOf(ctx)
 
 	return demoPage(ctx, "Overlays",
 		// Section: Modal Dialog
