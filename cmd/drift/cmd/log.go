@@ -73,7 +73,7 @@ func logAndroid(args []string) error {
 	fmt.Println()
 	ctx, cancel := signalContext()
 	defer cancel()
-	streamAndroidLogs(ctx, serial)
+	streamAndroidLogs(ctx, adb, serial)
 	return nil
 }
 

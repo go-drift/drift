@@ -308,15 +308,6 @@ func deviceName(d ios.DeviceEntry) string {
 	return d.Properties.SerialNumber
 }
 
-// formatDeviceList formats a list of devices for display in error messages.
-func formatDeviceList(devices []ios.DeviceEntry) string {
-	names := make([]string, len(devices))
-	for i, d := range devices {
-		names[i] = deviceName(d)
-	}
-	return formatDeviceListCached(devices, names)
-}
-
 // formatDeviceListCached formats a list of devices using pre-resolved names.
 func formatDeviceListCached(devices []ios.DeviceEntry, names []string) string {
 	var lines []string

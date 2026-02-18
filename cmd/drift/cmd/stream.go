@@ -23,9 +23,7 @@ func signalContext() (context.Context, context.CancelFunc) {
 // cancelled. Tag-based filtering survives app restarts, unlike PID-based.
 // When serial is non-empty, targets that specific device via `-s`.
 // Intended to run as a goroutine.
-func streamAndroidLogs(ctx context.Context, serial string) {
-	adb := findADB()
-
+func streamAndroidLogs(ctx context.Context, adb, serial string) {
 	// Clear stale logs so the stream starts fresh
 	adbCommand(adb, serial, "logcat", "-c").Run()
 

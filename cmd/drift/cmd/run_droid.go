@@ -55,7 +55,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, args []string, op
 		ctx, cancel := signalContext()
 		defer cancel()
 		if !opts.noLogs {
-			go streamAndroidLogs(ctx, serial)
+			go streamAndroidLogs(ctx, adb, serial)
 		}
 		return watchAndRun(ctx, ws, func() error {
 			adbCommand(adb, serial, "shell", "am", "force-stop", cfg.AppID).Run()
@@ -75,7 +75,7 @@ func runAndroid(ws *workspace.Workspace, cfg *config.Resolved, args []string, op
 	if !opts.noLogs {
 		ctx, cancel := signalContext()
 		defer cancel()
-		streamAndroidLogs(ctx, serial)
+		streamAndroidLogs(ctx, adb, serial)
 	}
 	return nil
 }

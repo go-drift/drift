@@ -122,6 +122,7 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 			noFetch:     noFetch,
 		}
 		return watchAndRun(ctx, ws, func() error {
+			exec.Command("xcrun", "simctl", "terminate", opts.simulator, cfg.AppID).Run()
 			if err := ws.Refresh(); err != nil {
 				return err
 			}
@@ -157,9 +158,7 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 	if err != nil {
 		return err
 	}
-	resolvedName := deviceName(resolved)
-	resolvedUDID := resolved.Properties.SerialNumber
-	opts.deviceID = resolvedName
+	opts.deviceID = deviceName(resolved)
 
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: true, teamID: opts.teamID}
 	if err := buildIOS(ws, buildOpts); err != nil {
@@ -187,11 +186,7 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 
 	// Start log streaming before launch so startup logs are captured.
 	if !opts.noLogs {
-		if resolvedUDID != "" {
-			go streamDeviceLogs(ctx, "Runner", resolved)
-		} else {
-			fmt.Fprintln(os.Stderr, "Note: log streaming unavailable (device UDID not resolved)")
-		}
+		go streamDeviceLogs(ctx, "Runner", resolved)
 	}
 
 	fmt.Println("  Launching on device...")
