@@ -10,21 +10,7 @@ import (
 )
 
 func buildVideoPlayerPage(ctx core.BuildContext) core.Widget {
-	return videoPlayerPage{}
-}
-
-type videoPlayerPage struct{}
-
-func (v videoPlayerPage) CreateElement() core.Element {
-	return core.NewStatefulElement(v, nil)
-}
-
-func (v videoPlayerPage) Key() any {
-	return nil
-}
-
-func (v videoPlayerPage) CreateState() core.State {
-	return &videoPlayerState{}
+	return core.NewStatefulWidget(func() *videoPlayerState { return &videoPlayerState{} })
 }
 
 type videoPlayerState struct {

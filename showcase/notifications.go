@@ -14,21 +14,7 @@ import (
 
 // buildNotificationsPage creates a stateful widget for notification demos.
 func buildNotificationsPage(ctx core.BuildContext) core.Widget {
-	return notificationsPage{}
-}
-
-type notificationsPage struct{}
-
-func (n notificationsPage) CreateElement() core.Element {
-	return core.NewStatefulElement(n, nil)
-}
-
-func (n notificationsPage) Key() any {
-	return nil
-}
-
-func (n notificationsPage) CreateState() core.State {
-	return &notificationsState{}
+	return core.NewStatefulWidget(func() *notificationsState { return &notificationsState{} })
 }
 
 type notificationsState struct {

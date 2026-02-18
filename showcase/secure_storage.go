@@ -12,21 +12,7 @@ import (
 
 // buildSecureStoragePage creates a stateful widget for secure storage demos.
 func buildSecureStoragePage(ctx core.BuildContext) core.Widget {
-	return secureStoragePage{}
-}
-
-type secureStoragePage struct{}
-
-func (s secureStoragePage) CreateElement() core.Element {
-	return core.NewStatefulElement(s, nil)
-}
-
-func (s secureStoragePage) Key() any {
-	return nil
-}
-
-func (s secureStoragePage) CreateState() core.State {
-	return &secureStorageState{}
+	return core.NewStatefulWidget(func() *secureStorageState { return &secureStorageState{} })
 }
 
 type secureStorageState struct {

@@ -10,21 +10,7 @@ import (
 )
 
 func buildPreferencesPage(ctx core.BuildContext) core.Widget {
-	return preferencesPage{}
-}
-
-type preferencesPage struct{}
-
-func (p preferencesPage) CreateElement() core.Element {
-	return core.NewStatefulElement(p, nil)
-}
-
-func (p preferencesPage) Key() any {
-	return nil
-}
-
-func (p preferencesPage) CreateState() core.State {
-	return &preferencesState{}
+	return core.NewStatefulWidget(func() *preferencesState { return &preferencesState{} })
 }
 
 type preferencesState struct {

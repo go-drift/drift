@@ -14,21 +14,7 @@ import (
 
 // buildFormsPage creates a stateful widget for the forms demo.
 func buildFormsPage(ctx core.BuildContext) core.Widget {
-	return formsPage{}
-}
-
-type formsPage struct{}
-
-func (f formsPage) CreateElement() core.Element {
-	return core.NewStatefulElement(f, nil)
-}
-
-func (f formsPage) Key() any {
-	return nil
-}
-
-func (f formsPage) CreateState() core.State {
-	return &formsState{}
+	return core.NewStatefulWidget(func() *formsState { return &formsState{} })
 }
 
 // formData holds the collected form values after validation.

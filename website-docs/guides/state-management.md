@@ -8,6 +8,51 @@ sidebar_position: 6
 
 Drift provides several patterns for managing state in your application, from simple local state to app-wide shared state.
 
+## Reducing Boilerplate with `NewStatefulWidget`
+
+When your widget struct would be empty (no configuration fields), use `NewStatefulWidget` to
+eliminate the widget struct and its three methods (`CreateElement`, `Key`, `CreateState`):
+
+```go
+func buildMyPage(ctx core.BuildContext) core.Widget {
+    return core.NewStatefulWidget(func() *myPageState { return &myPageState{} })
+}
+
+type myPageState struct {
+    core.StateBase
+    count int
+}
+
+func (s *myPageState) Build(ctx core.BuildContext) core.Widget {
+    return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", s.count), func() {
+        s.SetState(func() { s.count++ })
+    })
+}
+```
+
+This is equivalent to defining an empty struct with `CreateElement`, `Key`, and `CreateState`
+methods manually. Use the manual pattern when your widget carries configuration fields that the
+state needs to read.
+
+### Inline State with `Stateful`
+
+For quick, self-contained fragments that don't need lifecycle hooks or `StateBase`, use
+`Stateful` instead:
+
+```go
+core.Stateful(
+    func() int { return 0 },
+    func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
+        return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", count), func() {
+            setState(func(c int) int { return c + 1 })
+        })
+    },
+)
+```
+
+`Stateful` is closure-based: no struct types, no lifecycle methods. Reach for
+`NewStatefulWidget` when you need `ManagedState`, `UseController`, or `Dispose`.
+
 ## The SetState Pattern
 
 The most fundamental pattern is `SetState`. Always mutate state inside a `SetState` call to trigger a rebuild:

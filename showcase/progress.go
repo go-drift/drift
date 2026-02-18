@@ -8,21 +8,7 @@ import (
 
 // buildProgressPage creates a stateful widget for progress indicators demo.
 func buildProgressPage(ctx core.BuildContext) core.Widget {
-	return progressPage{}
-}
-
-type progressPage struct{}
-
-func (p progressPage) CreateElement() core.Element {
-	return core.NewStatefulElement(p, nil)
-}
-
-func (p progressPage) Key() any {
-	return nil
-}
-
-func (p progressPage) CreateState() core.State {
-	return &progressState{}
+	return core.NewStatefulWidget(func() *progressState { return &progressState{} })
 }
 
 type progressState struct {

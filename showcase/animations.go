@@ -13,22 +13,7 @@ import (
 
 // buildAnimationsPage creates the animations demo page.
 func buildAnimationsPage(_ core.BuildContext) core.Widget {
-	return AnimationsDemo{}
-}
-
-// AnimationsDemo showcases implicit animation widgets.
-type AnimationsDemo struct{}
-
-func (a AnimationsDemo) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
-}
-
-func (a AnimationsDemo) Key() any {
-	return nil
-}
-
-func (a AnimationsDemo) CreateState() core.State {
-	return &animationsDemoState{}
+	return core.NewStatefulWidget(func() *animationsDemoState { return &animationsDemoState{} })
 }
 
 type animationsDemoState struct {

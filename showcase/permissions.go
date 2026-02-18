@@ -15,21 +15,7 @@ import (
 
 // buildPermissionsPage creates a stateful widget for permissions demos.
 func buildPermissionsPage(ctx core.BuildContext) core.Widget {
-	return permissionsPage{}
-}
-
-type permissionsPage struct{}
-
-func (p permissionsPage) CreateElement() core.Element {
-	return core.NewStatefulElement(p, nil)
-}
-
-func (p permissionsPage) Key() any {
-	return nil
-}
-
-func (p permissionsPage) CreateState() core.State {
-	return &permissionsState{}
+	return core.NewStatefulWidget(func() *permissionsState { return &permissionsState{} })
 }
 
 // permissionDemo represents a permission to display.

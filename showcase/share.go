@@ -9,21 +9,7 @@ import (
 
 // buildSharePage creates a stateful widget for share demos.
 func buildSharePage(ctx core.BuildContext) core.Widget {
-	return sharePage{}
-}
-
-type sharePage struct{}
-
-func (p sharePage) CreateElement() core.Element {
-	return core.NewStatefulElement(p, nil)
-}
-
-func (p sharePage) Key() any {
-	return nil
-}
-
-func (p sharePage) CreateState() core.State {
-	return &shareState{}
+	return core.NewStatefulWidget(func() *shareState { return &shareState{} })
 }
 
 type shareState struct {

@@ -1,7 +1,54 @@
 // Package core provides the core widget and element framework.
 package core
 
-import "github.com/go-drift/drift/pkg/layout"
+import (
+	"github.com/go-drift/drift/pkg/layout"
+)
+
+// NewStatefulWidget creates a StatefulWidget from a state constructor function,
+// eliminating the need for a dedicated widget struct and its boilerplate methods
+// (CreateElement, Key, CreateState).
+//
+// This is useful for stateful widgets whose widget struct would otherwise be empty.
+// Widgets that carry configuration fields still need the manual pattern.
+//
+// Usage:
+//
+//	core.NewStatefulWidget(func() *myState { return &myState{} })
+//
+// With an optional key:
+//
+//	core.NewStatefulWidget(func() *myState { return &myState{} }, "my-key")
+func NewStatefulWidget[S State](createState func() S, key ...any) StatefulWidget {
+	if len(key) > 1 {
+		panic("NewStatefulWidget accepts at most one key")
+	}
+	var k any
+	if len(key) > 0 {
+		k = key[0]
+	}
+	return &statefulWidget[S]{
+		createStateFn: createState,
+		widgetKey:     k,
+	}
+}
+
+type statefulWidget[S State] struct {
+	createStateFn func() S
+	widgetKey     any
+}
+
+func (w *statefulWidget[S]) CreateElement() Element {
+	return NewStatefulElement(w, nil)
+}
+
+func (w *statefulWidget[S]) Key() any {
+	return w.widgetKey
+}
+
+func (w *statefulWidget[S]) CreateState() State {
+	return w.createStateFn()
+}
 
 // RenderObjectWidget creates a render object directly.
 type RenderObjectWidget interface {
@@ -10,114 +57,65 @@ type RenderObjectWidget interface {
 	UpdateRenderObject(ctx BuildContext, renderObject layout.RenderObject)
 }
 
-// Stateful creates a stateful widget using generics.
-// For more control over lifecycle callbacks, use StatefulBuilder instead.
+// Stateful creates an inline stateful widget using closures.
+// Use this for quick, self-contained UI fragments that don't need
+// lifecycle hooks or StateBase features.
+//
+// For complex widgets with many state fields, lifecycle methods,
+// ManagedState, or UseController, use NewStatefulWidget instead.
 func Stateful[S any](
 	init func() S,
-	build func(state S, setState func(func(S) S)) Widget,
+	build func(state S, ctx BuildContext, setState func(func(S) S)) Widget,
 ) Widget {
-	return &statefulBuilderWidget[S]{
-		config: StatefulBuilder[S]{
-			Init: init,
-			Build: func(state S, _ BuildContext, setState func(func(S) S)) Widget {
-				return build(state, setState)
-			},
-		},
+	return &inlineStatefulWidget[S]{
+		initFn:  init,
+		buildFn: build,
 	}
 }
 
-// StatefulBuilder provides a declarative way to create stateful widgets
-// with full lifecycle support.
-//
-// Example:
-//
-//	core.StatefulBuilder[int]{
-//	    Init: func() int { return 0 },
-//	    Build: func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
-//	        return widgets.GestureDetector{
-//	            OnTap: func() { setState(func(c int) int { return c + 1 }) },
-//	            Child: widgets.Text{Content: fmt.Sprintf("Count: %d", count), ...},
-//	        }
-//	    },
-//	    Dispose: func(count int) {
-//	        // cleanup resources
-//	    },
-//	}.Widget()
-type StatefulBuilder[S any] struct {
-	// Init creates the initial state value. Required.
-	Init func() S
-
-	// Build creates the widget tree. Required.
-	// The setState function updates the state and triggers a rebuild.
-	Build func(state S, ctx BuildContext, setState func(func(S) S)) Widget
-
-	// Dispose is called when the widget is removed from the tree. Optional.
-	Dispose func(state S)
-
-	// DidChangeDependencies is called when inherited widgets change. Optional.
-	DidChangeDependencies func(state S, ctx BuildContext)
-
-	// DidUpdateWidget is called when the widget configuration changes. Optional.
-	DidUpdateWidget func(state S, oldWidget StatefulWidget)
-
-	// WidgetKey is an optional key for the widget.
-	WidgetKey any
+type inlineStatefulWidget[S any] struct {
+	initFn  func() S
+	buildFn func(state S, ctx BuildContext, setState func(func(S) S)) Widget
 }
 
-// Widget returns a Widget that can be used in the widget tree.
-func (b StatefulBuilder[S]) Widget() Widget {
-	return &statefulBuilderWidget[S]{config: b}
+func (w *inlineStatefulWidget[S]) CreateElement() Element {
+	return NewStatefulElement(w, nil)
 }
 
-type statefulBuilderWidget[S any] struct {
-	config StatefulBuilder[S]
+func (w *inlineStatefulWidget[S]) Key() any { return nil }
+
+func (w *inlineStatefulWidget[S]) CreateState() State {
+	return &inlineStatefulState[S]{
+		initFn:  w.initFn,
+		buildFn: w.buildFn,
+	}
 }
 
-func (s *statefulBuilderWidget[S]) CreateElement() Element {
-	return NewStatefulElement(s, nil)
-}
-
-func (s *statefulBuilderWidget[S]) Key() any {
-	return s.config.WidgetKey
-}
-
-func (s *statefulBuilderWidget[S]) CreateState() State {
-	return &statefulBuilderState[S]{config: s.config}
-}
-
-type statefulBuilderState[S any] struct {
+type inlineStatefulState[S any] struct {
 	value   S
-	config  StatefulBuilder[S]
+	initFn  func() S
+	buildFn func(state S, ctx BuildContext, setState func(func(S) S)) Widget
 	element *StatefulElement
 }
 
-// SetElement stores the element reference for triggering rebuilds.
-func (s *statefulBuilderState[S]) SetElement(element *StatefulElement) {
+func (s *inlineStatefulState[S]) SetElement(element *StatefulElement) {
 	s.element = element
 }
 
-// InitState initializes the state value using the init function.
-func (s *statefulBuilderState[S]) InitState() {
-	if s.config.Init != nil {
-		s.value = s.config.Init()
-	}
+func (s *inlineStatefulState[S]) InitState() {
+	s.value = s.initFn()
 }
 
-// Build invokes the build function with the current state and a setState callback.
-func (s *statefulBuilderState[S]) Build(ctx BuildContext) Widget {
-	if s.config.Build != nil {
-		return s.config.Build(s.value, ctx, func(update func(S) S) {
-			s.value = update(s.value)
-			if s.element != nil {
-				s.element.MarkNeedsBuild()
-			}
-		})
-	}
-	return nil
+func (s *inlineStatefulState[S]) Build(ctx BuildContext) Widget {
+	return s.buildFn(s.value, ctx, func(update func(S) S) {
+		s.value = update(s.value)
+		if s.element != nil {
+			s.element.MarkNeedsBuild()
+		}
+	})
 }
 
-// SetState executes the given function and schedules a rebuild.
-func (s *statefulBuilderState[S]) SetState(fn func()) {
+func (s *inlineStatefulState[S]) SetState(fn func()) {
 	if fn != nil {
 		fn()
 	}
@@ -126,23 +124,6 @@ func (s *statefulBuilderState[S]) SetState(fn func()) {
 	}
 }
 
-// Dispose calls the dispose callback if provided.
-func (s *statefulBuilderState[S]) Dispose() {
-	if s.config.Dispose != nil {
-		s.config.Dispose(s.value)
-	}
-}
-
-// DidChangeDependencies calls the callback if provided.
-func (s *statefulBuilderState[S]) DidChangeDependencies() {
-	if s.config.DidChangeDependencies != nil && s.element != nil {
-		s.config.DidChangeDependencies(s.value, s.element)
-	}
-}
-
-// DidUpdateWidget calls the callback if provided.
-func (s *statefulBuilderState[S]) DidUpdateWidget(oldWidget StatefulWidget) {
-	if s.config.DidUpdateWidget != nil {
-		s.config.DidUpdateWidget(s.value, oldWidget)
-	}
-}
+func (s *inlineStatefulState[S]) Dispose()                               {}
+func (s *inlineStatefulState[S]) DidChangeDependencies()                 {}
+func (s *inlineStatefulState[S]) DidUpdateWidget(_ StatefulWidget) {}

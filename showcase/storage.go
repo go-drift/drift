@@ -14,21 +14,7 @@ import (
 
 // buildStoragePage creates a stateful widget for storage demos.
 func buildStoragePage(ctx core.BuildContext) core.Widget {
-	return storagePage{}
-}
-
-type storagePage struct{}
-
-func (p storagePage) CreateElement() core.Element {
-	return core.NewStatefulElement(p, nil)
-}
-
-func (p storagePage) Key() any {
-	return nil
-}
-
-func (p storagePage) CreateState() core.State {
-	return &storageState{}
+	return core.NewStatefulWidget(func() *storageState { return &storageState{} })
 }
 
 type storageState struct {

@@ -14,21 +14,7 @@ import (
 const audioURL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 
 func buildAudioPlayerPage(ctx core.BuildContext) core.Widget {
-	return audioPlayerPage{}
-}
-
-type audioPlayerPage struct{}
-
-func (a audioPlayerPage) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
-}
-
-func (a audioPlayerPage) Key() any {
-	return nil
-}
-
-func (a audioPlayerPage) CreateState() core.State {
-	return &audioPlayerState{}
+	return core.NewStatefulWidget(func() *audioPlayerState { return &audioPlayerState{} })
 }
 
 type audioPlayerState struct {

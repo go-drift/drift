@@ -9,21 +9,7 @@ import (
 
 // buildClipboardPage creates a stateful widget for clipboard demos.
 func buildClipboardPage(ctx core.BuildContext) core.Widget {
-	return clipboardPage{}
-}
-
-type clipboardPage struct{}
-
-func (c clipboardPage) CreateElement() core.Element {
-	return core.NewStatefulElement(c, nil)
-}
-
-func (c clipboardPage) Key() any {
-	return nil
-}
-
-func (c clipboardPage) CreateState() core.State {
-	return &clipboardState{}
+	return core.NewStatefulWidget(func() *clipboardState { return &clipboardState{} })
 }
 
 type clipboardState struct {

@@ -30,19 +30,7 @@ func loadLottieAsset() (*lottie.Animation, error) {
 }
 
 func buildLottiePage(_ core.BuildContext) core.Widget {
-	return lottieDemo{}
-}
-
-type lottieDemo struct{}
-
-func (l lottieDemo) CreateElement() core.Element {
-	return core.NewStatefulElement(l, nil)
-}
-
-func (l lottieDemo) Key() any { return nil }
-
-func (l lottieDemo) CreateState() core.State {
-	return &lottieDemoState{}
+	return core.NewStatefulWidget(func() *lottieDemoState { return &lottieDemoState{} })
 }
 
 type lottieDemoState struct {

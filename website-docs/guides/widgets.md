@@ -183,10 +183,70 @@ func (g Greeting) Build(ctx core.BuildContext) core.Widget {
 
 ## Custom Stateful Widgets
 
-Create a stateful widget when you need to manage mutable state:
+Create a stateful widget when you need to manage mutable state. Drift offers
+two helpers plus a manual pattern, depending on complexity:
+
+| Helper | Best for |
+|--------|----------|
+| `Stateful[S]` | Quick inline fragments (no lifecycle, no `StateBase`) |
+| `NewStatefulWidget[S]` | Pages and complex widgets (full lifecycle, `StateBase`) |
+| Manual pattern | Widgets with configuration fields |
+
+### Inline: `Stateful`
+
+Use `Stateful` for small, self-contained pieces of state where you don't need
+lifecycle hooks, `ManagedState`, or `UseController`:
 
 ```go
-type Counter struct{}
+core.Stateful(
+    func() int { return 0 },
+    func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
+        return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", count), func() {
+            setState(func(c int) int { return c + 1 })
+        })
+    },
+)
+```
+
+The `init` function runs once; `build` is called on every rebuild with the
+current state, a `BuildContext`, and a `setState` callback that applies
+a transform function to the state.
+
+### Struct-based: `NewStatefulWidget`
+
+When your widget struct would be empty (no configuration fields), use `NewStatefulWidget` to skip
+the boilerplate entirely. This gives you full access to `StateBase` features
+like `SetState`, `UseController`, `ManagedState`, and lifecycle methods:
+
+```go
+func buildCounterPage(ctx core.BuildContext) core.Widget {
+    return core.NewStatefulWidget(func() *counterState { return &counterState{} })
+}
+
+type counterState struct {
+    core.StateBase
+    count int
+}
+
+func (s *counterState) Build(ctx core.BuildContext) core.Widget {
+    return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", s.count), func() {
+        s.SetState(func() {
+            s.count++
+        })
+    })
+}
+```
+
+You can also pass an optional key: `core.NewStatefulWidget(func() *myState { return &myState{} }, "my-key")`
+
+### Manual Pattern
+
+Use the manual pattern when your widget struct carries configuration fields:
+
+```go
+type Counter struct {
+    InitialValue int
+}
 
 func (c Counter) CreateElement() core.Element {
     return core.NewStatefulElement(c, nil)

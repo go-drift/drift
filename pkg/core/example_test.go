@@ -334,14 +334,15 @@ func ExampleControllerBase() {
 	// Controller notified
 }
 
-// This example shows how to use StatefulBuilder for inline stateful widgets.
-func ExampleStatefulBuilder() {
-	// StatefulBuilder provides a declarative way to create stateful widgets
-	// without defining separate types for the widget and state.
+// This example shows how to use Stateful for inline stateful widgets.
+func ExampleStateful() {
+	// Stateful creates an inline stateful widget using closures.
+	// Use it for quick, self-contained UI fragments that don't need
+	// lifecycle hooks or StateBase features.
 	//
-	// widget := core.StatefulBuilder[int]{
-	//     Init: func() int { return 0 },
-	//     Build: func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
+	// widget := core.Stateful(
+	//     func() int { return 0 },
+	//     func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
 	//         return widgets.GestureDetector{
 	//             OnTap: func() {
 	//                 setState(func(c int) int { return c + 1 })
@@ -349,11 +350,11 @@ func ExampleStatefulBuilder() {
 	//             Child: widgets.Text{Content: fmt.Sprintf("Count: %d", count)},
 	//         }
 	//     },
-	//     Dispose: func(count int) {
-	//         // Optional: cleanup when removed from tree
-	//     },
-	// }.Widget()
+	// )
 	//
 	// The generic parameter [int] is the state type. setState takes a
 	// function that transforms the current state to a new state.
+	//
+	// For complex widgets with lifecycle methods, ManagedState,
+	// or UseController, use NewStatefulWidget instead.
 }

@@ -18,21 +18,7 @@ import (
 )
 
 func buildCameraPage(ctx core.BuildContext) core.Widget {
-	return cameraPage{}
-}
-
-type cameraPage struct{}
-
-func (c cameraPage) CreateElement() core.Element {
-	return core.NewStatefulElement(c, nil)
-}
-
-func (c cameraPage) Key() any {
-	return nil
-}
-
-func (c cameraPage) CreateState() core.State {
-	return &cameraState{}
+	return core.NewStatefulWidget(func() *cameraState { return &cameraState{} })
 }
 
 type cameraState struct {

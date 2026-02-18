@@ -15,21 +15,7 @@ import (
 
 // buildLocationPage creates a stateful widget for location demos.
 func buildLocationPage(ctx core.BuildContext) core.Widget {
-	return locationPage{}
-}
-
-type locationPage struct{}
-
-func (l locationPage) CreateElement() core.Element {
-	return core.NewStatefulElement(l, nil)
-}
-
-func (l locationPage) Key() any {
-	return nil
-}
-
-func (l locationPage) CreateState() core.State {
-	return &locationState{}
+	return core.NewStatefulWidget(func() *locationState { return &locationState{} })
 }
 
 type locationState struct {

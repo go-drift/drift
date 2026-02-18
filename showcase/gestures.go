@@ -10,20 +10,7 @@ import (
 
 // buildGesturesPage demonstrates drag gestures with axis locking.
 func buildGesturesPage(ctx core.BuildContext) core.Widget {
-	return GesturesDemo{}
-}
-
-// GesturesDemo is the stateful widget for the gestures showcase.
-type GesturesDemo struct{}
-
-func (g GesturesDemo) CreateElement() core.Element {
-	return core.NewStatefulElement(g, nil)
-}
-
-func (g GesturesDemo) Key() any { return nil }
-
-func (g GesturesDemo) CreateState() core.State {
-	return &gesturesDemoState{}
+	return core.NewStatefulWidget(func() *gesturesDemoState { return &gesturesDemoState{} })
 }
 
 type gesturesDemoState struct {

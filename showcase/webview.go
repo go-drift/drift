@@ -8,21 +8,7 @@ import (
 )
 
 func buildWebViewPage(ctx core.BuildContext) core.Widget {
-	return webViewPage{}
-}
-
-type webViewPage struct{}
-
-func (w webViewPage) CreateElement() core.Element {
-	return core.NewStatefulElement(w, nil)
-}
-
-func (w webViewPage) Key() any {
-	return nil
-}
-
-func (w webViewPage) CreateState() core.State {
-	return &webViewState{}
+	return core.NewStatefulWidget(func() *webViewState { return &webViewState{} })
 }
 
 type webViewState struct {
