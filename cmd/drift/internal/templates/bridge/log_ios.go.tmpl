@@ -10,14 +10,19 @@ package main
 #import <Foundation/Foundation.h>
 
 static os_log_t drift_logger = nil;
+static dispatch_once_t drift_logger_once;
+
+static os_log_t driftGetLogger(void) {
+	dispatch_once(&drift_logger_once, ^{
+		NSString *subsystem = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.drift";
+		drift_logger = os_log_create([subsystem UTF8String], "Go");
+	});
+	return drift_logger;
+}
 
 static void driftIOSLog(const char* s) {
 	@autoreleasepool {
-		if (drift_logger == nil) {
-			NSString *subsystem = [[NSBundle mainBundle] bundleIdentifier] ?: @"com.drift";
-			drift_logger = os_log_create([subsystem UTF8String], "Go");
-		}
-		os_log_with_type(drift_logger, OS_LOG_TYPE_DEFAULT, "%{public}s", s);
+		os_log_with_type(driftGetLogger(), OS_LOG_TYPE_DEFAULT, "%{public}s", s);
 	}
 }
 */

@@ -161,12 +161,14 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	}
 	fmt.Println()
 
+	ctx, cancel := signalContext()
+	defer cancel()
+
+	if !xtoolOpts.noLogs {
+		go streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
+	}
+
 	if xtoolOpts.watch {
-		ctx, cancel := signalContext()
-		defer cancel()
-		if !xtoolOpts.noLogs {
-			go streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
-		}
 		return watchAndRun(ctx, ws, func() error {
 			killRunningApp(device, cfg.AppName)
 			if err := ws.Refresh(); err != nil {
@@ -192,11 +194,10 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 		})
 	}
 
-	if !xtoolOpts.noLogs {
-		ctx, cancel := signalContext()
-		defer cancel()
-		streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
+	if xtoolOpts.noLogs {
+		return nil
 	}
+	<-ctx.Done()
 	return nil
 }
 

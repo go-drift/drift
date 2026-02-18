@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	ios "github.com/danielpaulus/go-ios/ios"
 )
 
 func init() {
@@ -16,7 +18,7 @@ func init() {
 
 Shows:
   - Connected Android devices and emulators
-  - Connected iOS devices (macOS only, requires Xcode)
+  - Connected iOS devices (via Xcode on macOS, via usbmuxd on Linux)
   - Available iOS simulators (macOS only)
 
 Use this to find device identifiers for running apps on specific devices.`,
@@ -36,14 +38,19 @@ func runDevices(args []string) error {
 	}
 	fmt.Println()
 
-	// List iOS devices and simulators (macOS only)
+	fmt.Println("iOS Devices:")
 	if runtime.GOOS == "darwin" {
-		fmt.Println("iOS Devices:")
 		if err := listIOSDevices(); err != nil {
 			fmt.Printf("  (Could not list iOS devices: %v)\n", err)
 		}
-		fmt.Println()
+	} else {
+		if err := listIOSDevicesGoIOS(); err != nil {
+			fmt.Printf("  (Could not list iOS devices: %v)\n", err)
+		}
+	}
+	fmt.Println()
 
+	if runtime.GOOS == "darwin" {
 		fmt.Println("iOS Simulators:")
 		if err := listIOSSimulators(); err != nil {
 			fmt.Printf("  (Could not list iOS simulators: %v)\n", err)
@@ -141,6 +148,39 @@ func listIOSDevices() error {
 		fmt.Printf("  Run with: drift run ios --device <UDID>\n")
 	}
 
+	return nil
+}
+
+// listIOSDevicesGoIOS lists connected iOS devices using the go-ios library.
+// Used on Linux where xcrun is not available.
+func listIOSDevicesGoIOS() error {
+	deviceList, err := ios.ListDevices()
+	if err != nil {
+		return err
+	}
+	if len(deviceList.DeviceList) == 0 {
+		fmt.Println("  No devices connected")
+		fmt.Println()
+		fmt.Println("  To connect a device:")
+		fmt.Println("    1. Connect your iOS device via USB")
+		fmt.Println("    2. Trust the computer on your device")
+		fmt.Println("    3. Ensure usbmuxd is running")
+		return nil
+	}
+	for i, d := range deviceList.DeviceList {
+		udid := d.Properties.SerialNumber
+		vals, err := ios.GetValues(d)
+		if err == nil && vals.Value.DeviceName != "" {
+			fmt.Printf("  [%d] %s (%s, %s %s)\n", i+1,
+				vals.Value.DeviceName, vals.Value.ProductType,
+				vals.Value.ProductName, vals.Value.ProductVersion)
+			fmt.Printf("      UDID: %s\n", udid)
+		} else {
+			fmt.Printf("  [%d] %s\n", i+1, udid)
+		}
+	}
+	fmt.Println()
+	fmt.Printf("  Run with: drift run xtool --device <UDID>\n")
 	return nil
 }
 

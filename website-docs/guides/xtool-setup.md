@@ -86,9 +86,7 @@ drift log xtool --device 00008030-001234567890
 ### Listing Connected Devices
 
 ```bash
-idevice_id -l
-
-ideviceinfo
+drift devices
 ```
 
 ## Troubleshooting
@@ -119,7 +117,7 @@ swift sdk list
 
 3. Check device connection:
    ```bash
-   idevice_id -l
+   drift devices
    ```
 
 For additional troubleshooting, see the [xtool documentation](https://xtool.sh).
