@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
 )
@@ -119,6 +120,19 @@ type androidCompileConfig struct {
 	overlayPath string
 	jniLibsDir  string
 	noFetch     bool
+	targetABI   string // when set, compile only this ABI (e.g. "arm64-v8a")
+}
+
+// findADB locates the adb binary, checking ANDROID_SDK_ROOT and
+// ANDROID_HOME before falling back to bare "adb" on PATH.
+func findADB() string {
+	if sdkRoot := os.Getenv("ANDROID_SDK_ROOT"); sdkRoot != "" {
+		return filepath.Join(sdkRoot, "platform-tools", "adb")
+	}
+	if androidHome := os.Getenv("ANDROID_HOME"); androidHome != "" {
+		return filepath.Join(androidHome, "platform-tools", "adb")
+	}
+	return "adb"
 }
 
 // compileGoForAndroid compiles Go code to shared libraries for all Android ABIs.
@@ -154,7 +168,27 @@ func compileGoForAndroid(cfg androidCompileConfig) error {
 		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
 	}
 
+	if cfg.targetABI != "" {
+		found := false
+		for _, abi := range abis {
+			if abi.abi == cfg.targetABI {
+				found = true
+				break
+			}
+		}
+		if !found {
+			supported := make([]string, len(abis))
+			for i, abi := range abis {
+				supported[i] = abi.abi
+			}
+			return fmt.Errorf("unsupported Android ABI %q (supported: %s)", cfg.targetABI, strings.Join(supported, ", "))
+		}
+	}
+
 	for _, abi := range abis {
+		if cfg.targetABI != "" && abi.abi != cfg.targetABI {
+			continue
+		}
 		fmt.Printf("  Compiling for %s...\n", abi.abi)
 
 		_, skiaDir, err := findSkiaLib(cfg.projectRoot, "android", abi.skiaArch, cfg.noFetch)

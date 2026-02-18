@@ -127,9 +127,9 @@ drift run ios --device --team-id YOUR_TEAM_ID
 ```
 
 Requires:
-- A connected device with developer mode enabled
+- Xcode 15+ with command line tools installed
+- A connected device with developer mode enabled (iOS 17+)
 - Your Apple Developer Team ID (find it in Xcode or Apple Developer portal)
-- `ios-deploy` installed (`brew install ios-deploy`)
 
 ### iOS from Linux (xtool)
 
@@ -155,11 +155,19 @@ func App() core.Widget {
 }
 ```
 
-Run again to see your change:
+The fastest way to see your change is with watch mode, which rebuilds and relaunches automatically:
+
+```bash
+drift run android --watch  # or ios --watch, xtool --watch
+```
+
+You can also re-run manually without `--watch`:
 
 ```bash
 drift run android  # or your target
 ```
+
+See the [Watch Mode](/docs/guides/watch-mode) guide for details.
 
 ## Configuration (Optional)
 
@@ -192,12 +200,21 @@ engine:
 | Command | Description |
 |---------|-------------|
 | `drift init <directory> [module-path]` | Create a new project |
+| `drift devices` | List connected devices and simulators |
 | `drift run android` | Run on Android device/emulator |
+| `drift run android --device <name or serial>` | Run on a specific Android device |
+| `drift run android --watch` | Run with automatic rebuild on changes |
 | `drift run ios` | Run on iOS simulator (default: iPhone 15) |
 | `drift run ios --simulator "<name>"` | Run on specific iOS simulator |
 | `drift run ios --device --team-id ID` | Run on physical iOS device |
 | `drift run xtool` | Run iOS from Linux via xtool |
+| `drift run xtool --device UDID` | Run on a specific iOS device via xtool |
 | `drift build android\|ios\|xtool` | Build without running |
+| `drift log android` | Stream Android device logs |
+| `drift log android --device <name or serial>` | Stream logs from a specific Android device |
+| `drift log ios` | Stream iOS simulator logs |
+| `drift log ios --device` | Stream iOS device logs |
+| `drift log xtool` | Stream xtool device logs |
 | `drift clean` | Clear build cache |
 | `drift fetch-skia` | Download Skia binaries manually |
 

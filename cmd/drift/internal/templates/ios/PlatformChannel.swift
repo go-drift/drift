@@ -979,7 +979,7 @@ enum DeepLinkHandler {
             return
         }
         lastLink = urlString
-        DriftLog.deeplink.info("Received deep link: \(urlString) (source=\(source))")
+        DriftLog.deeplink.log("Received deep link: \(urlString) (source=\(source))")
         let payload: [String: Any] = [
             "url": urlString,
             "source": source,
