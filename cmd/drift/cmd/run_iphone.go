@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
@@ -27,17 +26,13 @@ func parseIOSRunArgs(args []string) iosRunOptions {
 	opts := iosRunOptions{
 		simulator: "iPhone 15",
 	}
+	id, present := parseDeviceFlag(args)
+	if present {
+		opts.device = true
+		opts.deviceID = id
+	}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--no-logs":
-			opts.noLogs = true
-		case "--device":
-			opts.device = true
-			// Check if next arg is a UDID (not another flag)
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-				opts.deviceID = args[i+1]
-				i++
-			}
 		case "--simulator":
 			if i+1 < len(args) {
 				opts.simulator = args[i+1]
@@ -157,12 +152,14 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 	}
 
 	// Resolve the device identifier once for the session. devicectl needs
-	// the device name; go-ios (log streaming) needs the xctrace UDID.
-	resolvedDevice, err := resolveIOSDevice(opts.deviceID)
+	// the device name; go-ios (log streaming) needs the UDID.
+	resolved, err := resolveDevice(opts.deviceID)
 	if err != nil {
 		return err
 	}
-	opts.deviceID = resolvedDevice.name
+	resolvedName := deviceName(resolved)
+	resolvedUDID := resolved.Properties.SerialNumber
+	opts.deviceID = resolvedName
 
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: true, teamID: opts.teamID}
 	if err := buildIOS(ws, buildOpts); err != nil {
@@ -190,8 +187,8 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 
 	// Start log streaming before launch so startup logs are captured.
 	if !opts.noLogs {
-		if resolvedDevice.udid != "" {
-			go streamDeviceLogs(ctx, "Runner", resolvedDevice.udid)
+		if resolvedUDID != "" {
+			go streamDeviceLogs(ctx, "Runner", resolved)
 		} else {
 			fmt.Fprintln(os.Stderr, "Note: log streaming unavailable (device UDID not resolved)")
 		}
@@ -344,70 +341,6 @@ func devicectlInstall(ws *workspace.Workspace, opts iosRunOptions) error {
 		return fmt.Errorf("devicectl install failed: %w\nMake sure Xcode 15+ is installed and the device is connected", err)
 	}
 	return nil
-}
-
-// resolveIOSDevice resolves a device identifier (name, UDID, or empty for
-// auto-detect) into an iosDevice with both name and UDID populated.
-// devicectl needs the name; go-ios needs the UDID.
-func resolveIOSDevice(id string) (iosDevice, error) {
-	devices, err := connectedIOSDevices()
-	if err != nil {
-		return iosDevice{}, fmt.Errorf("failed to list devices: %w", err)
-	}
-
-	if id == "" {
-		switch len(devices) {
-		case 0:
-			return iosDevice{}, fmt.Errorf("no connected iOS devices found\nConnect a device via USB, or specify a device with --device <name-or-udid>")
-		case 1:
-			fmt.Printf("  Auto-detected device: %s (%s)\n", devices[0].name, devices[0].udid)
-			return devices[0], nil
-		default:
-			var lines []string
-			for _, d := range devices {
-				lines = append(lines, fmt.Sprintf("  %s (%s)", d.name, d.udid))
-			}
-			return iosDevice{}, fmt.Errorf("multiple iOS devices connected, specify one with --device <name-or-udid>:\n%s", strings.Join(lines, "\n"))
-		}
-	}
-
-	// Match by name (case-insensitive) or UDID (case-sensitive).
-	for _, d := range devices {
-		if strings.EqualFold(d.name, id) || d.udid == id {
-			return d, nil
-		}
-	}
-
-	// Not found in xctrace listing.
-	if looksLikeUDID(id) {
-		var lines []string
-		for _, d := range devices {
-			lines = append(lines, fmt.Sprintf("  %s (%s)", d.name, d.udid))
-		}
-		listing := "(none)"
-		if len(lines) > 0 {
-			listing = strings.Join(lines, "\n")
-		}
-		return iosDevice{}, fmt.Errorf("device with UDID %s not found\nConnected devices:\n%s", id, listing)
-	}
-
-	// Looks like a name; let devicectl attempt its own resolution.
-	// Log streaming will be unavailable since we don't have a UDID.
-	return iosDevice{name: id, udid: ""}, nil
-}
-
-// looksLikeUDID returns true if s resembles an iOS device UDID (hex digits
-// and dashes, at least 20 characters, no spaces).
-func looksLikeUDID(s string) bool {
-	if strings.ContainsRune(s, ' ') {
-		return false
-	}
-	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') || r == '-') {
-			return false
-		}
-	}
-	return len(s) >= 20
 }
 
 // devicectlLaunch launches the app by bundle ID on a physical iOS device

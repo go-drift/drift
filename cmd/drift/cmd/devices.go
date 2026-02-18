@@ -18,7 +18,7 @@ func init() {
 
 Shows:
   - Connected Android devices and emulators
-  - Connected iOS devices (via Xcode on macOS, via usbmuxd on Linux)
+  - Connected iOS devices (via usbmuxd)
   - Available iOS simulators (macOS only)
 
 Use this to find device identifiers for running apps on specific devices.`,
@@ -39,14 +39,8 @@ func runDevices(args []string) error {
 	fmt.Println()
 
 	fmt.Println("iOS Devices:")
-	if runtime.GOOS == "darwin" {
-		if err := listIOSDevices(); err != nil {
-			fmt.Printf("  (Could not list iOS devices: %v)\n", err)
-		}
-	} else {
-		if err := listIOSDevicesGoIOS(); err != nil {
-			fmt.Printf("  (Could not list iOS devices: %v)\n", err)
-		}
+	if err := listIOSDevices(); err != nil {
+		fmt.Printf("  (Could not list iOS devices: %v)\n", err)
 	}
 	fmt.Println()
 
@@ -122,38 +116,104 @@ func listAndroidDevices() error {
 		fmt.Println()
 		fmt.Println("  To start an emulator:")
 		fmt.Println("    emulator -avd <avd-name>")
-	}
-
-	return nil
-}
-
-func listIOSDevices() error {
-	devices, err := connectedIOSDevices()
-	if err != nil {
-		return err
-	}
-
-	if len(devices) == 0 {
-		fmt.Println("  No devices connected")
-		fmt.Println()
-		fmt.Println("  To connect a device:")
-		fmt.Println("    1. Connect your iOS device via USB")
-		fmt.Println("    2. Trust the computer on your device")
-		fmt.Println("    3. Ensure device is unlocked")
 	} else {
-		for i, d := range devices {
-			fmt.Printf("  [%d] %s (%s)\n", i+1, d.name, d.udid)
-		}
 		fmt.Println()
-		fmt.Printf("  Run with: drift run ios --device <UDID>\n")
+		fmt.Println("  Run with: drift run android --device <name or serial>")
 	}
 
 	return nil
 }
 
-// listIOSDevicesGoIOS lists connected iOS devices using the go-ios library.
-// Used on Linux where xcrun is not available.
-func listIOSDevicesGoIOS() error {
+// androidDevice holds the parsed fields from an `adb devices -l` line.
+type androidDevice struct {
+	serial string
+	model  string
+}
+
+// resolveAndroidDevice resolves a device identifier (name, serial, or empty
+// for auto-detect) into an adb serial string. Runs `adb devices -l` and
+// matches by serial (exact) or model name (case-insensitive).
+func resolveAndroidDevice(adb, id string) (string, error) {
+	cmd := exec.Command(adb, "devices", "-l")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to list Android devices: %w", err)
+	}
+
+	var devices []androidDevice
+	for _, line := range strings.Split(out.String(), "\n")[1:] {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 || parts[1] != "device" {
+			continue
+		}
+		d := androidDevice{serial: parts[0]}
+		for _, p := range parts[2:] {
+			if after, ok := strings.CutPrefix(p, "model:"); ok {
+				d.model = after
+				break
+			}
+		}
+		devices = append(devices, d)
+	}
+
+	if id == "" {
+		switch len(devices) {
+		case 0:
+			return "", fmt.Errorf("no connected Android devices found\nConnect a device via USB, or specify one with --device <name or serial>")
+		case 1:
+			d := devices[0]
+			if d.model != "" {
+				fmt.Printf("  Auto-detected device: %s (%s)\n", d.model, d.serial)
+			} else {
+				fmt.Printf("  Auto-detected device: %s\n", d.serial)
+			}
+			return d.serial, nil
+		default:
+			return "", fmt.Errorf("multiple Android devices connected, specify one with --device <name or serial>:\n%s", formatAndroidDeviceList(devices))
+		}
+	}
+
+	// Exact serial match.
+	for _, d := range devices {
+		if d.serial == id {
+			return d.serial, nil
+		}
+	}
+
+	// Case-insensitive model match.
+	for _, d := range devices {
+		if d.model != "" && strings.EqualFold(d.model, id) {
+			return d.serial, nil
+		}
+	}
+
+	listing := formatAndroidDeviceList(devices)
+	if len(devices) == 0 {
+		listing = "  (none)"
+	}
+	return "", fmt.Errorf("device %q not found\nConnected devices:\n%s", id, listing)
+}
+
+func formatAndroidDeviceList(devices []androidDevice) string {
+	var lines []string
+	for _, d := range devices {
+		if d.model != "" {
+			lines = append(lines, fmt.Sprintf("  %s (%s)", d.model, d.serial))
+		} else {
+			lines = append(lines, fmt.Sprintf("  %s", d.serial))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// listIOSDevices lists connected iOS devices using the go-ios library.
+func listIOSDevices() error {
 	deviceList, err := ios.ListDevices()
 	if err != nil {
 		return err
@@ -180,78 +240,81 @@ func listIOSDevicesGoIOS() error {
 		}
 	}
 	fmt.Println()
-	fmt.Printf("  Run with: drift run xtool --device <UDID>\n")
+	if runtime.GOOS == "darwin" {
+		fmt.Println("  Run with: drift run ios --device <name or UDID>")
+	} else {
+		fmt.Println("  Run with: drift run xtool --device <name or UDID>")
+	}
 	return nil
 }
 
-// iosDevice holds the name and UDID of a connected iOS device.
-type iosDevice struct {
-	name string
-	udid string
+// resolveDevice resolves a device identifier (name, UDID, or empty for
+// auto-detect) into an ios.DeviceEntry. Uses go-ios to enumerate connected
+// devices and match by UDID or device name (case-insensitive).
+func resolveDevice(id string) (ios.DeviceEntry, error) {
+	deviceList, err := ios.ListDevices()
+	if err != nil {
+		return ios.DeviceEntry{}, fmt.Errorf("could not list iOS devices: %w", err)
+	}
+
+	devices := deviceList.DeviceList
+	if id == "" {
+		switch len(devices) {
+		case 0:
+			return ios.DeviceEntry{}, fmt.Errorf("no connected iOS devices found\nConnect a device via USB, or specify one with --device <name-or-udid>")
+		case 1:
+			name := deviceName(devices[0])
+			fmt.Printf("  Auto-detected device: %s (%s)\n", name, devices[0].Properties.SerialNumber)
+			return devices[0], nil
+		default:
+			return ios.DeviceEntry{}, fmt.Errorf("multiple iOS devices connected, specify one with --device <name-or-udid>:\n%s", formatDeviceList(devices))
+		}
+	}
+
+	// Match by UDID first (case-sensitive).
+	for _, d := range devices {
+		if d.Properties.SerialNumber == id {
+			return d, nil
+		}
+	}
+
+	// Match by device name (case-insensitive).
+	for _, d := range devices {
+		if strings.EqualFold(deviceName(d), id) {
+			return d, nil
+		}
+	}
+
+	listing := formatDeviceList(devices)
+	if len(devices) == 0 {
+		listing = "  (none)"
+	}
+	return ios.DeviceEntry{}, fmt.Errorf("device %q not found\nConnected devices:\n%s", id, listing)
 }
 
-// connectedIOSDevices returns the list of physical iOS devices reported by
-// xcrun xctrace list devices, excluding simulators and the host Mac.
-func connectedIOSDevices() ([]iosDevice, error) {
-	cmd := exec.Command("xcrun", "xctrace", "list", "devices")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	if err := cmd.Run(); err != nil {
-		return nil, err
+// deviceName returns the user-visible name of a device, falling back to the
+// UDID if the name cannot be retrieved.
+func deviceName(d ios.DeviceEntry) string {
+	vals, err := ios.GetValues(d)
+	if err == nil && vals.Value.DeviceName != "" {
+		return vals.Value.DeviceName
 	}
+	return d.Properties.SerialNumber
+}
 
-	var devices []iosDevice
-	lines := strings.Split(out.String(), "\n")
-	inDeviceSection := false
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		if line == "== Devices ==" {
-			inDeviceSection = true
-			continue
+// formatDeviceList formats a list of devices for display in error messages.
+func formatDeviceList(devices []ios.DeviceEntry) string {
+	var lines []string
+	for _, d := range devices {
+		name := deviceName(d)
+		udid := d.Properties.SerialNumber
+		if name != udid {
+			lines = append(lines, fmt.Sprintf("  %s (%s)", name, udid))
+		} else {
+			lines = append(lines, fmt.Sprintf("  %s", udid))
 		}
-		if line == "== Simulators ==" {
-			break
-		}
-		if !inDeviceSection || line == "" {
-			continue
-		}
-
-		// Format: DeviceName (Version) (UDID)
-		lastOpen := strings.LastIndex(line, "(")
-		lastClose := strings.LastIndex(line, ")")
-		if lastOpen == -1 || lastClose == -1 || lastClose <= lastOpen {
-			continue
-		}
-
-		udid := line[lastOpen+1 : lastClose]
-		if strings.Count(udid, ".") >= 2 {
-			continue
-		}
-
-		// The text before the UDID group. iOS devices include a version:
-		//   "Tobys iPhone (26.0.1)" -> has parens -> iOS device
-		//   "Toby's MacBook Pro"    -> no parens -> host Mac, skip
-		rest := strings.TrimSpace(line[:lastOpen])
-		hasVersion := false
-		if versionEnd := strings.LastIndex(rest, ")"); versionEnd != -1 {
-			if versionStart := strings.LastIndex(rest[:versionEnd], "("); versionStart != -1 {
-				rest = strings.TrimSpace(rest[:versionStart])
-				hasVersion = true
-			}
-		}
-
-		if !hasVersion {
-			continue
-		}
-
-		devices = append(devices, iosDevice{name: rest, udid: udid})
 	}
-
-	return devices, nil
+	return strings.Join(lines, "\n")
 }
 
 func listIOSSimulators() error {

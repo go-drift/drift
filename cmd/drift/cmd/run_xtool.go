@@ -25,18 +25,8 @@ type xtoolRunOptions struct {
 // returns the resolved options.
 func parseXtoolRunArgs(args []string) xtoolRunOptions {
 	opts := xtoolRunOptions{}
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--no-logs":
-			opts.noLogs = true
-		case "--device":
-			// Check if next arg is a UDID (not another flag)
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-				opts.deviceID = args[i+1]
-				i++
-			}
-		}
-	}
+	id, _ := parseDeviceFlag(args)
+	opts.deviceID = id
 	return opts
 }
 
@@ -45,12 +35,7 @@ func parseXtoolRunArgs(args []string) xtoolRunOptions {
 // close function must be called to tear down the tunnel when done. For pre-17.4
 // devices (where CoreDeviceProxy is unavailable), the tunnel step fails and the
 // plain usbmuxd device entry is returned with a nil closer.
-func startTunnelAndGetDevice(deviceID string) (ios.DeviceEntry, func() error, error) {
-	device, err := ios.GetDevice(deviceID)
-	if err != nil {
-		return ios.DeviceEntry{}, nil, fmt.Errorf("no iOS device found. Is a device connected and trusted? (usbmuxd: %v)", err)
-	}
-
+func startTunnelAndGetDevice(device ios.DeviceEntry) (ios.DeviceEntry, func() error, error) {
 	// Pick a free port for the userspace TUN listener.
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -113,8 +98,15 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	}
 	xtoolOpts.watch = opts.watch
 
+	// Resolve the device once for the entire session.
+	baseDevice, err := resolveDevice(xtoolOpts.deviceID)
+	if err != nil {
+		return err
+	}
+	xtoolOpts.deviceID = baseDevice.Properties.SerialNumber
+
 	// Start the tunnel once for the entire session.
-	device, closeTunnel, err := startTunnelAndGetDevice(xtoolOpts.deviceID)
+	device, closeTunnel, err := startTunnelAndGetDevice(baseDevice)
 	if err != nil {
 		return err
 	}
@@ -138,10 +130,6 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 
 	// Resolve the actual on-device bundle ID. xtool signs with a team ID prefix
 	// (e.g. "ABCDE12345.com.example.app"), so the config bundle ID won't match.
-	baseDevice, err := ios.GetDevice(xtoolOpts.deviceID)
-	if err != nil {
-		return fmt.Errorf("could not reconnect to device: %w", err)
-	}
 	installedBundleID, err := resolveInstalledBundleID(baseDevice, cfg.AppID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\nWarning: could not resolve installed bundle ID: %v\n", err)
@@ -165,7 +153,7 @@ func runXtool(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts
 	defer cancel()
 
 	if !xtoolOpts.noLogs {
-		go streamDeviceLogs(ctx, cfg.AppName, xtoolOpts.deviceID)
+		go streamDeviceLogs(ctx, cfg.AppName, baseDevice)
 	}
 
 	if xtoolOpts.watch {
@@ -285,7 +273,7 @@ func xtoolDevRun(ws *workspace.Workspace, opts xtoolRunOptions) error {
 
 	runArgs := []string{"dev", "run"}
 	if opts.deviceID != "" {
-		runArgs = append(runArgs, "--device", opts.deviceID)
+		runArgs = append(runArgs, "--udid", opts.deviceID)
 	}
 
 	cmd := exec.Command(xtoolPath, runArgs...)

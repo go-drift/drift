@@ -15,14 +15,15 @@ import (
 
 // streamAndroidLogs streams tag-filtered logcat output until ctx is
 // cancelled. Tag-based filtering survives app restarts, unlike PID-based.
+// When serial is non-empty, targets that specific device via `-s`.
 // Intended to run as a goroutine.
-func streamAndroidLogs(ctx context.Context) {
+func streamAndroidLogs(ctx context.Context, serial string) {
 	adb := findADB()
 
 	// Clear stale logs so the stream starts fresh
-	exec.Command(adb, "logcat", "-c").Run()
+	adbCommand(adb, serial, "logcat", "-c").Run()
 
-	cmd := exec.CommandContext(ctx, adb, "logcat", "-v", "time",
+	logcatArgs := []string{"logcat", "-v", "time",
 		"DriftJNI:*",
 		"DriftAccessibility:*",
 		"DriftDeepLink:*",
@@ -34,7 +35,11 @@ func streamAndroidLogs(ctx context.Context) {
 		"Go:*",
 		"AndroidRuntime:E",
 		"*:S",
-	)
+	}
+	if serial != "" {
+		logcatArgs = append([]string{"-s", serial}, logcatArgs...)
+	}
+	cmd := exec.CommandContext(ctx, adb, logcatArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run() // exits when ctx is cancelled
@@ -45,13 +50,7 @@ func streamAndroidLogs(ctx context.Context) {
 // directly, so no external tools (like libimobiledevice) are required.
 // processName should be "Runner" for xcodeproj builds or the app name for xtool.
 // Intended to run as a goroutine.
-func streamDeviceLogs(ctx context.Context, processName, deviceID string) {
-	device, err := ios.GetDevice(deviceID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: could not connect to iOS device: %v\n", err)
-		return
-	}
-
+func streamDeviceLogs(ctx context.Context, processName string, device ios.DeviceEntry) {
 	conn, err := syslog.New(device)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: could not start syslog stream: %v\n", err)

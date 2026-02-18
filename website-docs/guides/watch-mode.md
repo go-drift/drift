@@ -53,6 +53,7 @@ You can also stream logs independently of `drift run` using the `drift log` comm
 
 ```bash
 drift log android              # Stream Android logs
+drift log android --device ID  # Stream logs from a specific Android device
 drift log ios                  # Stream iOS simulator logs
 drift log ios --device         # Stream iOS device logs
 drift log ios --device <UDID>  # Stream logs from a specific iOS device

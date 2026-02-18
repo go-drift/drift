@@ -28,12 +28,14 @@ Flags:
   --watch            Watch for file changes and rebuild automatically
   --no-logs          Launch without streaming logs
   --no-fetch         Disable auto-download of missing Skia libraries
-  --device [UDID]    Run on a physical iOS device (optional: specify UDID)
+  --device [ID]      Target a specific device by name, serial, or UDID
   --simulator NAME   Run on a specific iOS simulator (default: iPhone 15)
   --team-id TEAM_ID  Apple Developer Team ID for code signing (required for --device)
 
-For Android, you can specify a device with ADB:
-  ANDROID_SERIAL=<device-id> drift run android
+For Android devices:
+  drift run android                              Auto-detect single device
+  drift run android --device emulator-5554       Target by serial
+  drift run android --device sdk_gphone64_x86_64 Target by model name
 
 For iOS simulators:
   drift run ios --simulator "iPhone 15"
@@ -109,4 +111,20 @@ func parseRunArgs(args []string) ([]string, runOptions) {
 		}
 	}
 	return filtered, opts
+}
+
+// parseDeviceFlag extracts the --device flag and its optional value from an
+// argument list. Returns the device identifier (empty when --device was given
+// without a value) and whether the flag was present at all.
+func parseDeviceFlag(args []string) (id string, present bool) {
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--device" {
+			present = true
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				id = args[i+1]
+			}
+			return
+		}
+	}
+	return
 }

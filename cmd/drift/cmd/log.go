@@ -20,11 +20,12 @@ For xtool, this streams syslog from a connected device.
 
 Usage:
   drift log android              # Stream Android logs
+  drift log android --device ID  # Stream logs from a specific Android device
   drift log ios                  # Stream iOS simulator logs
   drift log ios --device         # Stream iOS device logs
   drift log ios --device <UDID>  # Stream logs from a specific device
   drift log xtool                # Stream xtool device logs
-  drift log xtool --device <UDID>`,
+  drift log xtool --device <UDID or name>`,
 		Usage: "drift log <platform>",
 		Run:   runLog,
 	})
@@ -49,7 +50,7 @@ func runLog(args []string) error {
 
 	switch platform {
 	case "android":
-		return logAndroid()
+		return logAndroid(args[1:])
 	case "ios":
 		return logIOS(cfg, args[1:])
 	case "xtool":
@@ -60,36 +61,37 @@ func runLog(args []string) error {
 }
 
 // logAndroid streams logs from Android device.
-func logAndroid() error {
+func logAndroid(args []string) error {
+	adb := findADB()
+	deviceID, _ := parseDeviceFlag(args)
+	serial, err := resolveAndroidDevice(adb, deviceID)
+	if err != nil {
+		return err
+	}
+
 	fmt.Println("Streaming Android logs (Ctrl+C to stop)...")
 	fmt.Println()
 	ctx, cancel := signalContext()
 	defer cancel()
-	streamAndroidLogs(ctx)
+	streamAndroidLogs(ctx, serial)
 	return nil
 }
 
 // logIOS streams logs from iOS simulator or physical device.
 func logIOS(cfg *config.Resolved, args []string) error {
-	var deviceID string
-	device := false
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--device" {
-			device = true
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-				deviceID = args[i+1]
-				i++
-			}
-		}
-	}
+	deviceID, device := parseDeviceFlag(args)
 
 	ctx, cancel := signalContext()
 	defer cancel()
 
 	if device {
+		resolved, err := resolveDevice(deviceID)
+		if err != nil {
+			return err
+		}
 		fmt.Println("Streaming iOS device logs (Ctrl+C to stop)...")
 		fmt.Println()
-		streamDeviceLogs(ctx, "Runner", deviceID)
+		streamDeviceLogs(ctx, "Runner", resolved)
 	} else {
 		fmt.Println("Streaming iOS simulator logs (Ctrl+C to stop)...")
 		fmt.Println()
@@ -100,19 +102,17 @@ func logIOS(cfg *config.Resolved, args []string) error {
 
 // logXtool streams logs from a device built with xtool.
 func logXtool(cfg *config.Resolved, args []string) error {
-	var deviceID string
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--device" {
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
-				deviceID = args[i+1]
-				i++
-			}
-		}
+	deviceID, _ := parseDeviceFlag(args)
+
+	resolved, err := resolveDevice(deviceID)
+	if err != nil {
+		return err
 	}
+
 	fmt.Println("Streaming device logs (Ctrl+C to stop)...")
 	fmt.Println()
 	ctx, cancel := signalContext()
 	defer cancel()
-	streamDeviceLogs(ctx, cfg.AppName, deviceID)
+	streamDeviceLogs(ctx, cfg.AppName, resolved)
 	return nil
 }

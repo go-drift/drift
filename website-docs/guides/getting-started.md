@@ -200,7 +200,9 @@ engine:
 | Command | Description |
 |---------|-------------|
 | `drift init <directory> [module-path]` | Create a new project |
+| `drift devices` | List connected devices and simulators |
 | `drift run android` | Run on Android device/emulator |
+| `drift run android --device <name or serial>` | Run on a specific Android device |
 | `drift run android --watch` | Run with automatic rebuild on changes |
 | `drift run ios` | Run on iOS simulator (default: iPhone 15) |
 | `drift run ios --simulator "<name>"` | Run on specific iOS simulator |
@@ -209,6 +211,7 @@ engine:
 | `drift run xtool --device UDID` | Run on a specific iOS device via xtool |
 | `drift build android\|ios\|xtool` | Build without running |
 | `drift log android` | Stream Android device logs |
+| `drift log android --device <name or serial>` | Stream logs from a specific Android device |
 | `drift log ios` | Stream iOS simulator logs |
 | `drift log ios --device` | Stream iOS device logs |
 | `drift log xtool` | Stream xtool device logs |
