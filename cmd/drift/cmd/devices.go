@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -332,43 +333,39 @@ func listIOSSimulators() error {
 		return err
 	}
 
-	// Simple parsing - look for device names and states
-	output := out.String()
+	var result struct {
+		Devices map[string][]struct {
+			Name  string `json:"name"`
+			State string `json:"state"`
+			UDID  string `json:"udid"`
+		} `json:"devices"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		return fmt.Errorf("failed to parse simctl output: %w", err)
+	}
 
-	// Find booted devices first
 	bootedCount := 0
 	fmt.Println("  Booted:")
-
-	// Parse the output looking for booted devices
-	lines := strings.Split(output, "\n")
-	inDevices := false
-	currentRuntime := ""
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Track runtime sections
-		if strings.Contains(line, "iOS") && strings.Contains(line, ":") {
-			currentRuntime = strings.Trim(strings.TrimSuffix(line, ":"), `"`)
-			inDevices = true
+	for runtime, devices := range result.Devices {
+		if !strings.Contains(runtime, "iOS") {
 			continue
 		}
-
-		if inDevices && strings.Contains(line, `"name"`) {
-			// Extract device name
-			name := extractJSONString(line, "name")
-			// Look ahead for state
-			stateIdx := strings.Index(output, line)
-			if stateIdx != -1 {
-				chunk := output[stateIdx:min(stateIdx+500, len(output))]
-				if strings.Contains(chunk, `"state" : "Booted"`) {
-					bootedCount++
-					fmt.Printf("    [%d] %s (%s)\n", bootedCount, name, currentRuntime)
-				}
+		// Extract a readable runtime name (e.g. "iOS 17.2") from the identifier.
+		runtimeName := runtime
+		if i := strings.LastIndex(runtime, "SimRuntime."); i != -1 {
+			runtimeName = strings.ReplaceAll(runtime[i+len("SimRuntime."):], "-", " ")
+			// Collapse "iOS 17 2" into "iOS 17.2": put a dot before the last segment.
+			if parts := strings.SplitN(runtimeName, " ", 3); len(parts) == 3 {
+				runtimeName = parts[0] + " " + parts[1] + "." + parts[2]
+			}
+		}
+		for _, d := range devices {
+			if d.State == "Booted" {
+				bootedCount++
+				fmt.Printf("    [%d] %s (%s)\n", bootedCount, d.Name, runtimeName)
 			}
 		}
 	}
-
 	if bootedCount == 0 {
 		fmt.Println("    (none)")
 	}
@@ -376,19 +373,15 @@ func listIOSSimulators() error {
 	fmt.Println()
 	fmt.Println("  Available (run with 'drift run ios --simulator \"<name>\"'):")
 
-	// List some common available simulators
 	availableCount := 0
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, `"name"`) {
-			name := extractJSONString(line, "name")
-			if strings.Contains(name, "iPhone") && availableCount < 5 {
+	for _, devices := range result.Devices {
+		for _, d := range devices {
+			if strings.Contains(d.Name, "iPhone") && availableCount < 5 {
 				availableCount++
-				fmt.Printf("    • %s\n", name)
+				fmt.Printf("    • %s\n", d.Name)
 			}
 		}
 	}
-
 	if availableCount == 0 {
 		fmt.Println("    (none)")
 	} else {
@@ -396,26 +389,4 @@ func listIOSSimulators() error {
 	}
 
 	return nil
-}
-
-func extractJSONString(line, key string) string {
-	// Simple extraction: "key" : "value"
-	keyPattern := fmt.Sprintf(`"%s"`, key)
-	_, after, ok := strings.Cut(line, keyPattern)
-	if !ok {
-		return ""
-	}
-
-	rest := after
-	// Find the value
-	start := strings.Index(rest, `"`)
-	if start == -1 {
-		return ""
-	}
-	rest = rest[start+1:]
-	before, _, ok := strings.Cut(rest, `"`)
-	if !ok {
-		return ""
-	}
-	return before
 }
