@@ -170,6 +170,11 @@ final class DriftViewController: UIViewController {
     /// running even during UI tracking (e.g., scrolling).
     private func startDisplayLink() {
         let link = CADisplayLink(target: self, selector: #selector(drawFrame))
+        if #available(iOS 15.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 60, preferred: 60)
+        } else {
+            link.preferredFramesPerSecond = 60
+        }
         link.add(to: .main, forMode: .common)
         link.isPaused = true
         displayLink = link

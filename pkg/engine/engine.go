@@ -77,6 +77,7 @@ const semanticsDeferralTimeout = 500 * time.Millisecond
 var frameLock sync.Mutex
 
 var app = newAppRunner()
+var platformFrameScheduled atomic.Bool
 
 // SetDeviceScale updates the device pixel scale factor used for rendering and input.
 func SetDeviceScale(scale float64) {
@@ -88,10 +89,17 @@ func RequestFrame() {
 	if frameLock.TryLock() {
 		defer frameLock.Unlock()
 		app.requestFrameLocked()
-		notifyPlatform()
+		schedulePlatformFrame()
 		return
 	}
 	app.pendingFrameRequest.Store(true)
+	schedulePlatformFrame()
+}
+
+func schedulePlatformFrame() {
+	if platformFrameScheduled.Swap(true) {
+		return
+	}
 	notifyPlatform()
 }
 
@@ -1008,6 +1016,8 @@ func compositeLayerTree(canvas graphics.Canvas, root layout.RenderObject) {
 func (a *appRunner) StepFrame(size graphics.Size) (*FrameSnapshot, error) {
 	frameLock.Lock()
 	defer frameLock.Unlock()
+	// A frame callback is now running, so allow scheduling of a future callback.
+	platformFrameScheduled.Store(false)
 
 	if core.DebugMode {
 		defer a.recoverFromFramePanic()()

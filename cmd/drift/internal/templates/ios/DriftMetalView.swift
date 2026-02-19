@@ -103,6 +103,7 @@ final class DriftMetalView: UIView {
     /// Closure that provides accessibility elements from the AccessibilityBridge.
     /// Set by AccessibilityHandler during initialization.
     var accessibilityElementsProvider: (() -> [Any]?)?
+    private var lastPlatformGeometrySignature: Int?
 
     // MARK: - Accessibility Container
 
@@ -244,9 +245,10 @@ final class DriftMetalView: UIView {
         // Keep the Go engine scale in sync with the view's scale factor.
         DriftSetDeviceScale(Double(contentScaleFactor))
 
-        // Request and render a frame so the engine re-renders at the new size.
+        // Request a frame so the engine re-renders at the new size.
+        // Avoid rendering immediately from layout to reduce drawable contention;
+        // the display link will render on cadence.
         DriftRequestFrame()
-        renderFrame()
     }
 
     /// Set by the view controller during rotation transitions to force
@@ -275,14 +277,18 @@ final class DriftMetalView: UIView {
         // Step 1: Run the engine pipeline and capture platform view geometry.
         let snapshot = renderer.stepAndSnapshot(width: width, height: height)
 
+        let snapshotViews = snapshot?.views ?? []
+        let geometryChangedThisFrame = didPlatformGeometryChange(snapshotViews)
+
         // Step 2: Apply geometry synchronously before compositing.
-        if let views = snapshot?.views, !views.isEmpty {
-            PlatformViewHandler.applySnapshot(views)
+        if !snapshotViews.isEmpty {
+            PlatformViewHandler.applySnapshot(snapshotViews)
         }
 
-        // Synchronize Metal presentation with Core Animation when platform
-        // views are active or during rotation.
-        let syncPresentation = PlatformViewHandler.hasPlatformViews || syncPresentationForRotation
+        // Synchronize presentation only when needed:
+        // - rotation transitions
+        // - platform view geometry changed this frame
+        let syncPresentation = syncPresentationForRotation || geometryChangedThisFrame
         metalLayer.presentsWithTransaction = syncPresentation
 
         // Step 3: Acquire drawable and composite into it.
@@ -295,6 +301,50 @@ final class DriftMetalView: UIView {
             synchronous: syncPresentation
         )
         return true
+    }
+
+    private func didPlatformGeometryChange(_ views: [ViewSnapshot]) -> Bool {
+        let signature = platformGeometrySignature(views)
+        defer { lastPlatformGeometrySignature = signature }
+        guard let previous = lastPlatformGeometrySignature else {
+            return !views.isEmpty
+        }
+        return previous != signature
+    }
+
+    private func platformGeometrySignature(_ views: [ViewSnapshot]) -> Int {
+        var hasher = Hasher()
+        let sorted = views.sorted { $0.viewId < $1.viewId }
+        hasher.combine(sorted.count)
+        for view in sorted {
+            hasher.combine(view.viewId)
+            hasher.combine(view.x.bitPattern)
+            hasher.combine(view.y.bitPattern)
+            hasher.combine(view.width.bitPattern)
+            hasher.combine(view.height.bitPattern)
+            hasher.combine(view.visible)
+            if let clipLeft = view.clipLeft {
+                hasher.combine(clipLeft.bitPattern)
+            } else {
+                hasher.combine(UInt64.max)
+            }
+            if let clipTop = view.clipTop {
+                hasher.combine(clipTop.bitPattern)
+            } else {
+                hasher.combine(UInt64.max - 1)
+            }
+            if let clipRight = view.clipRight {
+                hasher.combine(clipRight.bitPattern)
+            } else {
+                hasher.combine(UInt64.max - 2)
+            }
+            if let clipBottom = view.clipBottom {
+                hasher.combine(clipBottom.bitPattern)
+            } else {
+                hasher.combine(UInt64.max - 3)
+            }
+        }
+        return hasher.finalize()
     }
 
     // MARK: - Touch Handling
