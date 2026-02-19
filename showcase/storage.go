@@ -12,10 +12,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// storagePage is the storage demo widget.
+type storagePage struct{ core.StatefulBase }
+
+func (storagePage) CreateState() core.State { return &storageState{} }
+
 // buildStoragePage creates a stateful widget for storage demos.
-func buildStoragePage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *storageState { return &storageState{} })
-}
+func buildStoragePage(_ core.BuildContext) core.Widget { return storagePage{} }
 
 type storageState struct {
 	core.StateBase

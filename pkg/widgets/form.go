@@ -50,20 +50,14 @@ import (
 //	    },
 //	}
 type Form struct {
+	core.StatefulBase
+
 	// Child is the form content.
 	Child core.Widget
 	// Autovalidate runs validators when fields change.
 	Autovalidate bool
 	// OnChanged is called when any field changes.
 	OnChanged func()
-}
-
-func (f Form) CreateElement() core.Element {
-	return core.NewStatefulElement(f, nil)
-}
-
-func (f Form) Key() any {
-	return nil
 }
 
 func (f Form) CreateState() core.State {
@@ -318,34 +312,19 @@ func (s *formFieldStateBase) resetState() {
 }
 
 type formScope struct {
+	core.InheritedBase
 	state      *FormState
 	generation int
 	child      core.Widget
 }
 
-func (f formScope) CreateElement() core.Element {
-	return core.NewInheritedElement(f, nil)
-}
-
-func (f formScope) Key() any {
-	return nil
-}
-
-func (f formScope) ChildWidget() core.Widget {
-	return f.child
-}
+func (f formScope) ChildWidget() core.Widget { return f.child }
 
 func (f formScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(formScope); ok {
 		return f.generation != old.generation
 	}
 	return true
-}
-
-// UpdateShouldNotifyDependent returns true for any aspects since formScope
-// doesn't support granular aspect tracking yet.
-func (f formScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return f.UpdateShouldNotify(oldWidget)
 }
 
 var formScopeType = reflect.TypeFor[formScope]()
@@ -388,6 +367,8 @@ var formScopeType = reflect.TypeFor[formScope]()
 //	    },
 //	}
 type FormField[T any] struct {
+	core.StatefulBase
+
 	// InitialValue is the field's starting value.
 	InitialValue T
 	// Builder renders the field using its state.
@@ -402,14 +383,6 @@ type FormField[T any] struct {
 	Disabled bool
 	// Autovalidate enables validation when the value changes.
 	Autovalidate bool
-}
-
-func (f FormField[T]) CreateElement() core.Element {
-	return core.NewStatefulElement(f, nil)
-}
-
-func (f FormField[T]) Key() any {
-	return nil
 }
 
 func (f FormField[T]) CreateState() core.State {

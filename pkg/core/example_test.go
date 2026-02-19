@@ -153,21 +153,16 @@ func ExampleManaged() {
 // This example shows how to create a stateless widget.
 func ExampleStatelessWidget() {
 	// A stateless widget is a struct that implements StatelessWidget.
-	// It builds UI based purely on its configuration (struct fields).
+	// Embed StatelessBase to get CreateElement and Key for free.
 	//
 	// type Greeting struct {
+	//     core.StatelessBase
 	//     Name string
 	// }
 	//
 	// func (g Greeting) Build(ctx core.BuildContext) core.Widget {
 	//     return widgets.Text{Content: "Hello, " + g.Name}
 	// }
-	//
-	// func (g Greeting) CreateElement() core.Element {
-	//     return core.NewStatelessElement(g, nil)
-	// }
-	//
-	// func (g Greeting) Key() any { return nil }
 	//
 	// Usage:
 	//     Greeting{Name: "World"}
@@ -176,29 +171,20 @@ func ExampleStatelessWidget() {
 // This example shows how to create a stateful widget.
 func ExampleStatefulWidget() {
 	// A stateful widget maintains mutable state across rebuilds.
+	// Embed StatefulBase to get CreateElement and Key for free.
 	//
-	// type Counter struct{}
-	//
-	// func (c Counter) CreateElement() core.Element {
-	//     return core.NewStatefulElement(c, nil)
+	// type Counter struct {
+	//     core.StatefulBase
 	// }
 	//
-	// func (c Counter) Key() any { return nil }
-	//
-	// func (c Counter) CreateState() core.State {
+	// func (Counter) CreateState() core.State {
 	//     return &counterState{}
 	// }
 	//
 	// type counterState struct {
-	//     element *core.StatefulElement
-	//     count   int
+	//     core.StateBase
+	//     count int
 	// }
-	//
-	// func (s *counterState) SetElement(e *core.StatefulElement) {
-	//     s.element = e
-	// }
-	//
-	// func (s *counterState) InitState() { s.count = 0 }
 	//
 	// func (s *counterState) Build(ctx core.BuildContext) core.Widget {
 	//     return widgets.Button{
@@ -208,15 +194,6 @@ func ExampleStatefulWidget() {
 	//         },
 	//     }
 	// }
-	//
-	// func (s *counterState) SetState(fn func()) {
-	//     if fn != nil { fn() }
-	//     if s.element != nil { s.element.MarkNeedsBuild() }
-	// }
-	//
-	// func (s *counterState) Dispose() {}
-	// func (s *counterState) DidChangeDependencies() {}
-	// func (s *counterState) DidUpdateWidget(old core.StatefulWidget) {}
 }
 
 // This example shows how to create and use an inherited widget.
@@ -355,6 +332,6 @@ func ExampleStateful() {
 	// The generic parameter [int] is the state type. setState takes a
 	// function that transforms the current state to a new state.
 	//
-	// For complex widgets with lifecycle methods, ManagedState,
-	// or UseController, use NewStatefulWidget instead.
+	// For complex widgets with lifecycle methods, Managed,
+	// or UseController, embed StatefulBase in a named struct instead.
 }

@@ -36,6 +36,8 @@ import (
 // Icon renders the glyph as a Text widget with MaxLines: 1 and the specified
 // size and color. Use Weight to control font weight if needed.
 type Icon struct {
+	core.StatelessBase
+
 	// Glyph is the text glyph to render.
 	Glyph string
 	// Size is the font size for the icon. Zero means zero size (not rendered).
@@ -44,14 +46,6 @@ type Icon struct {
 	Color graphics.Color
 	// Weight sets the font weight if non-zero.
 	Weight graphics.FontWeight
-}
-
-func (i Icon) CreateElement() core.Element {
-	return core.NewStatelessElement(i, nil)
-}
-
-func (i Icon) Key() any {
-	return nil
 }
 
 func (i Icon) Build(ctx core.BuildContext) core.Widget {

@@ -18,17 +18,11 @@ func App() core.Widget {
 	return app{}
 }
 
-type app struct{}
-
-func (a app) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
+type app struct {
+	core.StatefulBase
 }
 
-func (a app) Key() any {
-	return nil
-}
-
-func (a app) CreateState() core.State {
+func (app) CreateState() core.State {
 	return &appState{}
 }
 

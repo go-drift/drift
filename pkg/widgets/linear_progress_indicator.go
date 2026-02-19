@@ -38,6 +38,8 @@ import (
 //	theme.LinearProgressIndicatorOf(ctx, nil)  // indeterminate
 //	theme.LinearProgressIndicatorOf(ctx, &progress)  // determinate
 type LinearProgressIndicator struct {
+	core.StatefulBase
+
 	// Value is the progress value (0.0 to 1.0). Nil means indeterminate.
 	Value *float64
 
@@ -55,14 +57,6 @@ type LinearProgressIndicator struct {
 
 	// MinWidth is the minimum width for the indicator. Zero uses constraints.
 	MinWidth float64
-}
-
-func (l LinearProgressIndicator) CreateElement() core.Element {
-	return core.NewStatefulElement(l, nil)
-}
-
-func (l LinearProgressIndicator) Key() any {
-	return nil
 }
 
 func (l LinearProgressIndicator) CreateState() core.State {
@@ -146,7 +140,7 @@ type linearProgressRender struct {
 }
 
 func (l linearProgressRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(l, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (l linearProgressRender) Key() any {

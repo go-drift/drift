@@ -38,6 +38,8 @@ import (
 //	theme.CircularProgressIndicatorOf(ctx, nil)  // indeterminate
 //	theme.CircularProgressIndicatorOf(ctx, &progress)  // determinate
 type CircularProgressIndicator struct {
+	core.StatefulBase
+
 	// Value is the progress value (0.0 to 1.0). Nil means indeterminate.
 	Value *float64
 
@@ -52,14 +54,6 @@ type CircularProgressIndicator struct {
 
 	// Size is the diameter of the indicator. Zero means zero size (not rendered).
 	Size float64
-}
-
-func (c CircularProgressIndicator) CreateElement() core.Element {
-	return core.NewStatefulElement(c, nil)
-}
-
-func (c CircularProgressIndicator) Key() any {
-	return nil
 }
 
 func (c CircularProgressIndicator) CreateState() core.State {
@@ -160,7 +154,7 @@ type circularProgressRender struct {
 }
 
 func (c circularProgressRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(c, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (c circularProgressRender) Key() any {

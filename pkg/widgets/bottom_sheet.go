@@ -332,6 +332,8 @@ func DefaultBottomSheetTheme() BottomSheetTheme {
 // BottomSheet is the widget for rendering a bottom sheet with animations and gestures.
 // Use BottomSheetController to programmatically dismiss or snap the sheet.
 type BottomSheet struct {
+	core.StatefulBase
+
 	// Builder creates the sheet content.
 	Builder func(ctx core.BuildContext) core.Widget
 	// Controller allows programmatic control of the sheet.
@@ -357,14 +359,6 @@ type BottomSheet struct {
 	SnapBehavior SnapBehavior
 	// OnDismiss fires after the sheet finishes its dismiss animation.
 	OnDismiss func(result any)
-}
-
-func (b BottomSheet) CreateElement() core.Element {
-	return core.NewStatefulElement(b, nil)
-}
-
-func (b BottomSheet) Key() any {
-	return nil
 }
 
 func (b BottomSheet) CreateState() core.State {
@@ -962,16 +956,10 @@ func (s *bottomSheetState) buildHandle() core.Widget {
 // bottomSheetScopeBuilder wraps the content builder in a scope widget.
 // This allows the builder to be called with a context that has the scope as an ancestor.
 type bottomSheetScopeBuilder struct {
+	core.StatelessBase
+
 	controller *BottomSheetController
 	builder    func(core.BuildContext) core.Widget
-}
-
-func (b bottomSheetScopeBuilder) CreateElement() core.Element {
-	return core.NewStatelessElement(b, nil)
-}
-
-func (b bottomSheetScopeBuilder) Key() any {
-	return nil
 }
 
 func (b bottomSheetScopeBuilder) Build(ctx core.BuildContext) core.Widget {
@@ -985,15 +973,9 @@ func (b bottomSheetScopeBuilder) Build(ctx core.BuildContext) core.Widget {
 
 // bottomSheetContentBuilder calls the user's builder.
 type bottomSheetContentBuilder struct {
+	core.StatelessBase
+
 	builder func(core.BuildContext) core.Widget
-}
-
-func (b bottomSheetContentBuilder) CreateElement() core.Element {
-	return core.NewStatelessElement(b, nil)
-}
-
-func (b bottomSheetContentBuilder) Key() any {
-	return nil
 }
 
 func (b bottomSheetContentBuilder) Build(ctx core.BuildContext) core.Widget {
@@ -1005,31 +987,18 @@ func (b bottomSheetContentBuilder) Build(ctx core.BuildContext) core.Widget {
 
 // bottomSheetScope is an InheritedWidget that provides the controller to descendants.
 type bottomSheetScope struct {
+	core.InheritedBase
 	controller *BottomSheetController
 	child      core.Widget
 }
 
-func (b bottomSheetScope) CreateElement() core.Element {
-	return core.NewInheritedElement(b, nil)
-}
-
-func (b bottomSheetScope) Key() any {
-	return nil
-}
-
-func (b bottomSheetScope) ChildWidget() core.Widget {
-	return b.child
-}
+func (b bottomSheetScope) ChildWidget() core.Widget { return b.child }
 
 func (b bottomSheetScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(bottomSheetScope); ok {
 		return b.controller != old.controller
 	}
 	return true
-}
-
-func (b bottomSheetScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return b.UpdateShouldNotify(oldWidget)
 }
 
 var bottomSheetScopeType = reflect.TypeFor[bottomSheetScope]()
@@ -1065,16 +1034,10 @@ func (BottomSheetScope) Of(ctx core.BuildContext) *BottomSheetController {
 //		},
 //	}
 type BottomSheetScrollable struct {
+	core.StatefulBase
+
 	Controller *ScrollController
 	Builder    func(controller *ScrollController) core.Widget
-}
-
-func (b BottomSheetScrollable) CreateElement() core.Element {
-	return core.NewStatefulElement(b, nil)
-}
-
-func (b BottomSheetScrollable) Key() any {
-	return nil
 }
 
 func (b BottomSheetScrollable) CreateState() core.State {

@@ -12,10 +12,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// formsPage is the forms demo widget.
+type formsPage struct{ core.StatefulBase }
+
+func (formsPage) CreateState() core.State { return &formsState{} }
+
 // buildFormsPage creates a stateful widget for the forms demo.
-func buildFormsPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *formsState { return &formsState{} })
-}
+func buildFormsPage(_ core.BuildContext) core.Widget { return formsPage{} }
 
 // formData holds the collected form values after validation.
 type formData struct {
@@ -192,15 +195,8 @@ func (s *formsState) handleReset(form *widgets.FormState) {
 
 // formContent is a separate widget so it can access FormOf(ctx).
 type formContent struct {
+	core.StatelessBase
 	state *formsState
-}
-
-func (f formContent) CreateElement() core.Element {
-	return core.NewStatelessElement(f, nil)
-}
-
-func (f formContent) Key() any {
-	return nil
 }
 
 func (f formContent) Build(ctx core.BuildContext) core.Widget {

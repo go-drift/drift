@@ -18,7 +18,7 @@ type IgnorePointer struct {
 }
 
 func (ip IgnorePointer) CreateElement() core.Element {
-	return core.NewRenderObjectElement(ip, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (ip IgnorePointer) Key() any {

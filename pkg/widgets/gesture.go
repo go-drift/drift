@@ -53,7 +53,7 @@ type GestureDetector struct {
 }
 
 func (g GestureDetector) CreateElement() core.Element {
-	return core.NewRenderObjectElement(g, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (g GestureDetector) Key() any {

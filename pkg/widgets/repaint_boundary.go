@@ -15,7 +15,7 @@ type RepaintBoundary struct {
 }
 
 func (r RepaintBoundary) CreateElement() core.Element {
-	return core.NewRenderObjectElement(r, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (r RepaintBoundary) Key() any {

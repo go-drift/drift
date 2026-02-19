@@ -63,6 +63,8 @@ import (
 //	    }},
 //	}}
 type Radio[T any] struct {
+	core.StatelessBase
+
 	// Value is the value for this radio.
 	Value T
 	// GroupValue is the current group selection.
@@ -87,14 +89,6 @@ type Radio[T any] struct {
 	// DisabledInactiveColor is the unselected border color when disabled.
 	// If zero, falls back to 0.5 opacity on the normal colors.
 	DisabledInactiveColor graphics.Color
-}
-
-func (r Radio[T]) CreateElement() core.Element {
-	return core.NewStatelessElement(r, nil)
-}
-
-func (r Radio[T]) Key() any {
-	return nil
 }
 
 func (r Radio[T]) Build(ctx core.BuildContext) core.Widget {
@@ -161,7 +155,7 @@ type radioRender[T any] struct {
 }
 
 func (r radioRender[T]) CreateElement() core.Element {
-	return core.NewRenderObjectElement(r, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (r radioRender[T]) Key() any {

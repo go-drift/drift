@@ -75,15 +75,8 @@ func TestOverlayEntry_Remove_BeforeInsert(t *testing.T) {
 
 // testOverlayWidget is a test helper that captures the overlay state.
 type testOverlayWidget struct {
+	core.StatelessBase
 	onReady func(OverlayState)
-}
-
-func (t testOverlayWidget) CreateElement() core.Element {
-	return core.NewStatelessElement(t, nil)
-}
-
-func (t testOverlayWidget) Key() any {
-	return nil
 }
 
 func (t testOverlayWidget) Build(ctx core.BuildContext) core.Widget {
@@ -666,17 +659,10 @@ func TestOverlay_OnOverlayReady_PostFrame(t *testing.T) {
 
 // testBuildTrackerWidget wraps an overlay and tracks build phase.
 type testBuildTrackerWidget struct {
+	core.StatelessBase
 	onReady      func(state OverlayState)
 	onBuildStart func()
 	onBuildEnd   func()
-}
-
-func (w testBuildTrackerWidget) CreateElement() core.Element {
-	return core.NewStatelessElement(w, nil)
-}
-
-func (w testBuildTrackerWidget) Key() any {
-	return nil
 }
 
 func (w testBuildTrackerWidget) Build(ctx core.BuildContext) core.Widget {

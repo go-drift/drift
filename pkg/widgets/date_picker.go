@@ -60,6 +60,8 @@ type InputDecoration struct {
 
 // DatePicker displays a date selection field that opens a native date picker modal.
 type DatePicker struct {
+	core.StatefulBase
+
 	// Value is the current selected date (nil = no selection).
 	Value *time.Time
 
@@ -89,14 +91,6 @@ type DatePicker struct {
 
 	// Child overrides the default rendering for full customization.
 	Child core.Widget
-}
-
-func (d DatePicker) CreateElement() core.Element {
-	return core.NewStatefulElement(d, nil)
-}
-
-func (d DatePicker) Key() any {
-	return nil
 }
 
 func (d DatePicker) CreateState() core.State {

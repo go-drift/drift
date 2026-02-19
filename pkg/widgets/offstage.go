@@ -18,7 +18,7 @@ type Offstage struct {
 }
 
 func (o Offstage) CreateElement() core.Element {
-	return core.NewRenderObjectElement(o, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (o Offstage) Key() any {

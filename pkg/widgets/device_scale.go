@@ -8,33 +8,18 @@ import (
 
 // DeviceScale provides the current device pixel scale factor to descendants.
 type DeviceScale struct {
+	core.InheritedBase
 	Scale float64
 	Child core.Widget
 }
 
-func (d DeviceScale) CreateElement() core.Element {
-	return core.NewInheritedElement(d, nil)
-}
-
-func (d DeviceScale) Key() any {
-	return nil
-}
-
-func (d DeviceScale) ChildWidget() core.Widget {
-	return d.Child
-}
+func (d DeviceScale) ChildWidget() core.Widget { return d.Child }
 
 func (d DeviceScale) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(DeviceScale); ok {
 		return d.Scale != old.Scale
 	}
 	return true
-}
-
-// UpdateShouldNotifyDependent returns true for any aspects since DeviceScale
-// doesn't support granular aspect tracking yet.
-func (d DeviceScale) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return d.UpdateShouldNotify(oldWidget)
 }
 
 var deviceScaleType = reflect.TypeFor[DeviceScale]()

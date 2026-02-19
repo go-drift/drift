@@ -46,6 +46,8 @@ import (
 // For scrollable lists, consider [ListView] or [ListViewBuilder] which provide
 // additional features like item-based layout and virtualization.
 type ScrollView struct {
+	core.StatelessBase
+
 	Child core.Widget
 	// ScrollDirection is the axis along which the view scrolls.
 	// Defaults to AxisVertical (the zero value).
@@ -53,14 +55,6 @@ type ScrollView struct {
 	Controller      *ScrollController
 	Physics         ScrollPhysics
 	Padding         layout.EdgeInsets
-}
-
-func (s ScrollView) CreateElement() core.Element {
-	return core.NewStatelessElement(s, nil)
-}
-
-func (s ScrollView) Key() any {
-	return nil
 }
 
 func (s ScrollView) Build(ctx core.BuildContext) core.Widget {
@@ -89,7 +83,7 @@ type scrollViewCore struct {
 }
 
 func (s scrollViewCore) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s scrollViewCore) Key() any {

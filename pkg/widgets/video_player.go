@@ -42,7 +42,7 @@ type VideoPlayer struct {
 
 // CreateElement creates the element for this render object widget.
 func (v VideoPlayer) CreateElement() core.Element {
-	return core.NewRenderObjectElement(v, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns the widget key.

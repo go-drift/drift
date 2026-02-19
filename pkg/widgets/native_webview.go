@@ -34,7 +34,7 @@ type NativeWebView struct {
 
 // CreateElement creates the element for this render object widget.
 func (n NativeWebView) CreateElement() core.Element {
-	return core.NewRenderObjectElement(n, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns the widget key.

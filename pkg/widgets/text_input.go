@@ -56,6 +56,8 @@ import (
 // Skia renders the visual chrome (background, borders) while the platform view
 // handles the actual text rendering and cursor.
 type TextInput struct {
+	core.StatefulBase
+
 	// Controller manages the text content and selection.
 	Controller *platform.TextEditingController
 
@@ -176,16 +178,6 @@ func (n TextInput) WithPadding(padding layout.EdgeInsets) TextInput {
 func (n TextInput) WithBorderWidth(width float64) TextInput {
 	n.BorderWidth = width
 	return n
-}
-
-// CreateElement creates the element for the stateful widget.
-func (n TextInput) CreateElement() core.Element {
-	return core.NewStatefulElement(n, nil)
-}
-
-// Key returns the widget key.
-func (n TextInput) Key() any {
-	return nil
 }
 
 // CreateState creates the state for this widget.
@@ -590,7 +582,7 @@ type textInputRender struct {
 }
 
 func (n textInputRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(n, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (n textInputRender) Key() any {

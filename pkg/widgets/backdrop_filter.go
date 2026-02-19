@@ -25,7 +25,7 @@ func NewBackdropFilter(sigma float64, child core.Widget) BackdropFilter {
 }
 
 func (b BackdropFilter) CreateElement() core.Element {
-	return core.NewRenderObjectElement(b, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (b BackdropFilter) Key() any {

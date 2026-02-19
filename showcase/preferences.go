@@ -9,9 +9,12 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-func buildPreferencesPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *preferencesState { return &preferencesState{} })
-}
+// preferencesPage is the preferences demo widget.
+type preferencesPage struct{ core.StatefulBase }
+
+func (preferencesPage) CreateState() core.State { return &preferencesState{} }
+
+func buildPreferencesPage(_ core.BuildContext) core.Widget { return preferencesPage{} }
 
 type preferencesState struct {
 	core.StateBase

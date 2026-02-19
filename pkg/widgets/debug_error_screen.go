@@ -22,16 +22,10 @@ import (
 // The restart button calls [engine.RestartApp] to unmount the entire widget
 // tree and re-mount from scratch, clearing all state.
 type DebugErrorScreen struct {
+	core.StatelessBase
+
 	// Error is the boundary error to display. If nil, shows "Unknown error".
 	Error *errors.BoundaryError
-}
-
-func (d DebugErrorScreen) CreateElement() core.Element {
-	return core.NewStatelessElement(d, nil)
-}
-
-func (d DebugErrorScreen) Key() any {
-	return nil
 }
 
 func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {

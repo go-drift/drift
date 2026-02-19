@@ -779,15 +779,8 @@ func containsEntry(entries []layout.RenderObject, target any) bool {
 }
 
 type engineApp struct {
+	core.StatelessBase
 	runner *appRunner
-}
-
-func (e engineApp) CreateElement() core.Element {
-	return core.NewStatelessElement(e, nil)
-}
-
-func (e engineApp) Key() any {
-	return nil
 }
 
 func (e engineApp) Build(ctx core.BuildContext) core.Widget {
@@ -855,16 +848,9 @@ func (e engineApp) Build(ctx core.BuildContext) core.Widget {
 
 // diagnosticsHUDPositioner reads safe area from context and positions the HUD accordingly.
 type diagnosticsHUDPositioner struct {
+	core.StatelessBase
 	position DiagnosticsPosition
 	hud      core.Widget
-}
-
-func (d diagnosticsHUDPositioner) CreateElement() core.Element {
-	return core.NewStatelessElement(d, nil)
-}
-
-func (d diagnosticsHUDPositioner) Key() any {
-	return nil
 }
 
 func (d diagnosticsHUDPositioner) Build(ctx core.BuildContext) core.Widget {
@@ -884,14 +870,8 @@ func (d diagnosticsHUDPositioner) Build(ctx core.BuildContext) core.Widget {
 }
 
 // defaultPlaceholder is shown when no app is registered via SetApp.
-type defaultPlaceholder struct{}
-
-func (d defaultPlaceholder) CreateElement() core.Element {
-	return core.NewStatelessElement(d, nil)
-}
-
-func (d defaultPlaceholder) Key() any {
-	return nil
+type defaultPlaceholder struct {
+	core.StatelessBase
 }
 
 func (d defaultPlaceholder) Build(ctx core.BuildContext) core.Widget {

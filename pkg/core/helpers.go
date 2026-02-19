@@ -5,50 +5,66 @@ import (
 	"github.com/go-drift/drift/pkg/layout"
 )
 
-// NewStatefulWidget creates a StatefulWidget from a state constructor function,
-// eliminating the need for a dedicated widget struct and its boilerplate methods
-// (CreateElement, Key, CreateState).
+// StatelessBase provides default CreateElement and Key implementations for
+// stateless widgets. Embed it in your widget struct to satisfy the Widget
+// interface without boilerplate:
 //
-// This is useful for stateful widgets whose widget struct would otherwise be empty.
-// Widgets that carry configuration fields still need the manual pattern.
+//	type Greeting struct {
+//	    core.StatelessBase
+//	    Name string
+//	}
 //
-// Usage:
-//
-//	core.NewStatefulWidget(func() *myState { return &myState{} })
-//
-// With an optional key:
-//
-//	core.NewStatefulWidget(func() *myState { return &myState{} }, "my-key")
-func NewStatefulWidget[S State](createState func() S, key ...any) StatefulWidget {
-	if len(key) > 1 {
-		panic("NewStatefulWidget accepts at most one key")
-	}
-	var k any
-	if len(key) > 0 {
-		k = key[0]
-	}
-	return &statefulWidget[S]{
-		createStateFn: createState,
-		widgetKey:     k,
-	}
-}
+//	func (g Greeting) Build(ctx core.BuildContext) core.Widget {
+//	    return widgets.Text{Content: "Hello, " + g.Name}
+//	}
+type StatelessBase struct{}
 
-type statefulWidget[S State] struct {
-	createStateFn func() S
-	widgetKey     any
-}
+// CreateElement returns a new StatelessElement.
+func (StatelessBase) CreateElement() Element { return NewStatelessElement() }
 
-func (w *statefulWidget[S]) CreateElement() Element {
-	return NewStatefulElement(w, nil)
-}
+// Key returns nil (no key).
+func (StatelessBase) Key() any { return nil }
 
-func (w *statefulWidget[S]) Key() any {
-	return w.widgetKey
-}
+// StatefulBase provides default CreateElement and Key implementations for
+// stateful widgets. Embed it in your widget struct to satisfy the Widget
+// interface without boilerplate:
+//
+//	type Counter struct {
+//	    core.StatefulBase
+//	}
+//
+//	func (Counter) CreateState() core.State { return &counterState{} }
+type StatefulBase struct{}
 
-func (w *statefulWidget[S]) CreateState() State {
-	return w.createStateFn()
-}
+// CreateElement returns a new StatefulElement.
+func (StatefulBase) CreateElement() Element { return NewStatefulElement() }
+
+// Key returns nil (no key).
+func (StatefulBase) Key() any { return nil }
+
+// InheritedBase provides default CreateElement and Key implementations for
+// inherited widgets. Embed it in your widget struct along with a Child field
+// and implement [InheritedWidget.UpdateShouldNotify] and
+// [InheritedWidget.ChildWidget]:
+//
+//	type UserScope struct {
+//	    core.InheritedBase
+//	    User  *User
+//	    Child core.Widget
+//	}
+//
+//	func (u UserScope) ChildWidget() core.Widget { return u.Child }
+//
+//	func (u UserScope) UpdateShouldNotify(old core.InheritedWidget) bool {
+//	    return u.User != old.(UserScope).User
+//	}
+type InheritedBase struct{}
+
+// CreateElement returns a new InheritedElement.
+func (InheritedBase) CreateElement() Element { return NewInheritedElement() }
+
+// Key returns nil (no key).
+func (InheritedBase) Key() any { return nil }
 
 // RenderObjectWidget creates a render object directly.
 type RenderObjectWidget interface {
@@ -62,7 +78,7 @@ type RenderObjectWidget interface {
 // lifecycle hooks or StateBase features.
 //
 // For complex widgets with many state fields, lifecycle methods,
-// `Managed`, or UseController, use NewStatefulWidget instead.
+// Managed, or UseController, embed [StatefulBase] in a named struct instead.
 func Stateful[S any](
 	init func() S,
 	build func(state S, ctx BuildContext, setState func(func(S) S)) Widget,
@@ -79,7 +95,7 @@ type inlineStatefulWidget[S any] struct {
 }
 
 func (w *inlineStatefulWidget[S]) CreateElement() Element {
-	return NewStatefulElement(w, nil)
+	return NewStatefulElement()
 }
 
 func (w *inlineStatefulWidget[S]) Key() any { return nil }
@@ -124,6 +140,6 @@ func (s *inlineStatefulState[S]) SetState(fn func()) {
 	}
 }
 
-func (s *inlineStatefulState[S]) Dispose()                               {}
-func (s *inlineStatefulState[S]) DidChangeDependencies()                 {}
+func (s *inlineStatefulState[S]) Dispose()                         {}
+func (s *inlineStatefulState[S]) DidChangeDependencies()           {}
 func (s *inlineStatefulState[S]) DidUpdateWidget(_ StatefulWidget) {}

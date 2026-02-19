@@ -11,6 +11,8 @@ import (
 // Uses GestureDetector for tap handling and Semantics for accessibility.
 // Always absorbs all hit tests (even when Dismissible=false).
 type ModalBarrier struct {
+	core.StatelessBase
+
 	// Color is the barrier's background color (typically semi-transparent black).
 	Color graphics.Color
 
@@ -23,14 +25,6 @@ type ModalBarrier struct {
 
 	// SemanticLabel for accessibility (e.g., "Dismiss dialog").
 	SemanticLabel string
-}
-
-func (b ModalBarrier) CreateElement() core.Element {
-	return core.NewStatelessElement(b, nil)
-}
-
-func (b ModalBarrier) Key() any {
-	return nil
 }
 
 func (b ModalBarrier) Build(ctx core.BuildContext) core.Widget {
@@ -78,7 +72,7 @@ type barrierRender struct {
 }
 
 func (b barrierRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(b, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (b barrierRender) Key() any {

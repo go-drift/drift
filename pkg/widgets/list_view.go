@@ -27,6 +27,8 @@ import (
 //	    },
 //	}
 type ListView struct {
+	core.StatelessBase
+
 	// Children are the widgets to display in the list.
 	Children []core.Widget
 	// ScrollDirection is the axis along which the list scrolls. Defaults to vertical.
@@ -69,6 +71,8 @@ type ListView struct {
 //	    },
 //	}
 type ListViewBuilder struct {
+	core.StatefulBase
+
 	// ItemCount is the total number of items in the list.
 	ItemCount int
 	// ItemBuilder creates widgets for visible items. Called with the build context and item index.
@@ -91,14 +95,6 @@ type ListViewBuilder struct {
 	MainAxisSize MainAxisSize
 }
 
-func (l ListView) CreateElement() core.Element {
-	return core.NewStatelessElement(l, nil)
-}
-
-func (l ListView) Key() any {
-	return nil
-}
-
 func (l ListView) Build(ctx core.BuildContext) core.Widget {
 	content := l.buildContent()
 	if l.Padding != (layout.EdgeInsets{}) {
@@ -111,14 +107,6 @@ func (l ListView) Build(ctx core.BuildContext) core.Widget {
 		Controller:      l.Controller,
 		Physics:         l.Physics,
 	}
-}
-
-func (l ListViewBuilder) CreateElement() core.Element {
-	return core.NewStatefulElement(l, nil)
-}
-
-func (l ListViewBuilder) Key() any {
-	return nil
 }
 
 func (l ListViewBuilder) CreateState() core.State {

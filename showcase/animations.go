@@ -11,10 +11,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// animationsPage is the animations demo page widget.
+type animationsPage struct{ core.StatefulBase }
+
+func (animationsPage) CreateState() core.State { return &animationsDemoState{} }
+
 // buildAnimationsPage creates the animations demo page.
-func buildAnimationsPage(_ core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *animationsDemoState { return &animationsDemoState{} })
-}
+func buildAnimationsPage(_ core.BuildContext) core.Widget { return animationsPage{} }
 
 type animationsDemoState struct {
 	core.StateBase

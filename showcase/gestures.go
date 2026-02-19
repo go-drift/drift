@@ -8,10 +8,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-// buildGesturesPage demonstrates drag gestures with axis locking.
-func buildGesturesPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *gesturesDemoState { return &gesturesDemoState{} })
-}
+// gesturesPage demonstrates drag gestures with axis locking.
+type gesturesPage struct{ core.StatefulBase }
+
+func (gesturesPage) CreateState() core.State { return &gesturesDemoState{} }
+
+// buildGesturesPage creates the gestures demo page.
+func buildGesturesPage(_ core.BuildContext) core.Widget { return gesturesPage{} }
 
 type gesturesDemoState struct {
 	core.StateBase

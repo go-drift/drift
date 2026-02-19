@@ -53,7 +53,7 @@ type Divider struct {
 }
 
 func (d Divider) CreateElement() core.Element {
-	return core.NewRenderObjectElement(d, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (d Divider) Key() any {
@@ -171,7 +171,7 @@ type VerticalDivider struct {
 }
 
 func (d VerticalDivider) CreateElement() core.Element {
-	return core.NewRenderObjectElement(d, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (d VerticalDivider) Key() any {

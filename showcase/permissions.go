@@ -13,10 +13,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// permissionsPage is the permissions demo widget.
+type permissionsPage struct{ core.StatefulBase }
+
+func (permissionsPage) CreateState() core.State { return &permissionsState{} }
+
 // buildPermissionsPage creates a stateful widget for permissions demos.
-func buildPermissionsPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *permissionsState { return &permissionsState{} })
-}
+func buildPermissionsPage(_ core.BuildContext) core.Widget { return permissionsPage{} }
 
 // permissionDemo represents a permission to display.
 type permissionDemo struct {
@@ -124,7 +127,7 @@ func (s *permissionsState) permissionRow(name string, status platform.Permission
 	return widgets.Container{
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
-		Padding: layout.EdgeInsetsAll(12),
+		Padding:      layout.EdgeInsetsAll(12),
 		Child: widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,

@@ -48,6 +48,8 @@ import (
 // For native platform toggles (UISwitch on iOS, SwitchCompat on Android),
 // use [Switch] instead.
 type Toggle struct {
+	core.StatelessBase
+
 	// Value indicates the current on/off state.
 	Value bool
 	// OnChanged is called when the toggle switches.
@@ -76,14 +78,6 @@ type Toggle struct {
 	// DisabledThumbColor is the thumb color when disabled.
 	// If zero, falls back to 0.5 opacity on the normal colors.
 	DisabledThumbColor graphics.Color
-}
-
-func (s Toggle) CreateElement() core.Element {
-	return core.NewStatelessElement(s, nil)
-}
-
-func (s Toggle) Key() any {
-	return nil
 }
 
 func (s Toggle) Build(ctx core.BuildContext) core.Widget {
@@ -155,7 +149,7 @@ type toggleRender struct {
 }
 
 func (s toggleRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s toggleRender) Key() any {

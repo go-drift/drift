@@ -130,6 +130,8 @@ func SimpleBuilder(build func(core.BuildContext) core.Widget) func(core.BuildCon
 //	router := navigation.RouterOf(ctx)
 //	router.Go("/products/123", nil)
 type Router struct {
+	core.StatefulBase
+
 	// Routes defines the route tree.
 	// Use [RouteConfig] for regular routes and [ShellRoute] for persistent layouts.
 	Routes []RouteConfigurer
@@ -159,16 +161,6 @@ type Router struct {
 	// Connect this to auth state changes to automatically redirect users
 	// when they log in or out.
 	RefreshListenable core.Listenable
-}
-
-// CreateElement returns a StatefulElement for this Router.
-func (r Router) CreateElement() core.Element {
-	return core.NewStatefulElement(r, nil)
-}
-
-// Key returns nil (no key).
-func (r Router) Key() any {
-	return nil
 }
 
 // CreateState creates the RouterState.
@@ -453,31 +445,18 @@ func (s *routerState) Replace(path string, args any) {
 
 // routerInherited provides RouterState to descendants.
 type routerInherited struct {
+	core.InheritedBase
 	state *routerState
 	child core.Widget
 }
 
-func (r routerInherited) CreateElement() core.Element {
-	return core.NewInheritedElement(r, nil)
-}
-
-func (r routerInherited) Key() any {
-	return nil
-}
-
-func (r routerInherited) ChildWidget() core.Widget {
-	return r.child
-}
+func (r routerInherited) ChildWidget() core.Widget { return r.child }
 
 func (r routerInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(routerInherited); ok {
 		return r.state != old.state
 	}
 	return true
-}
-
-func (r routerInherited) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return r.UpdateShouldNotify(oldWidget)
 }
 
 var routerInheritedType = reflect.TypeFor[routerInherited]()

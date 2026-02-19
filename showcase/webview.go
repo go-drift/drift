@@ -7,9 +7,12 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-func buildWebViewPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *webViewState { return &webViewState{} })
-}
+// webViewPage is the webview demo widget.
+type webViewPage struct{ core.StatefulBase }
+
+func (webViewPage) CreateState() core.State { return &webViewState{} }
+
+func buildWebViewPage(_ core.BuildContext) core.Widget { return webViewPage{} }
 
 type webViewState struct {
 	core.StateBase

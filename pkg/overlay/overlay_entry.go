@@ -70,11 +70,8 @@ func (e *OverlayEntry) MarkNeedsBuild() {
 
 // overlayEntryWidget is an internal widget that wraps each entry.
 type overlayEntryWidget struct {
+	core.StatefulBase
 	entry *OverlayEntry
-}
-
-func (w overlayEntryWidget) CreateElement() core.Element {
-	return core.NewStatefulElement(w, nil)
 }
 
 func (w overlayEntryWidget) Key() any {

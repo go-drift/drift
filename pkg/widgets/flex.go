@@ -206,7 +206,7 @@ type Row struct {
 }
 
 func (r Row) CreateElement() core.Element {
-	return core.NewRenderObjectElement(r, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (r Row) Key() any {
@@ -276,7 +276,7 @@ type Column struct {
 }
 
 func (c Column) CreateElement() core.Element {
-	return core.NewRenderObjectElement(c, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (c Column) Key() any {

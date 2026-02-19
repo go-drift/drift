@@ -20,22 +20,14 @@ const (
 )
 
 // SafeAreaData provides safe area insets to descendants via InheritedWidget.
+// It implements [core.AspectAwareInheritedWidget] for granular per-edge tracking.
 type SafeAreaData struct {
+	core.InheritedBase
 	Insets layout.EdgeInsets
 	Child  core.Widget
 }
 
-func (s SafeAreaData) CreateElement() core.Element {
-	return core.NewInheritedElement(s, nil)
-}
-
-func (s SafeAreaData) Key() any {
-	return nil
-}
-
-func (s SafeAreaData) ChildWidget() core.Widget {
-	return s.Child
-}
+func (s SafeAreaData) ChildWidget() core.Widget { return s.Child }
 
 func (s SafeAreaData) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(SafeAreaData); ok {
@@ -76,15 +68,9 @@ func (s SafeAreaData) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget
 // and provides SafeAreaData to descendants. This scopes rebuilds to only the provider
 // and widgets that depend on safe area data, instead of rebuilding the entire tree.
 type SafeAreaProvider struct {
+	core.StatefulBase
+
 	Child core.Widget
-}
-
-func (s SafeAreaProvider) CreateElement() core.Element {
-	return core.NewStatefulElement(s, nil)
-}
-
-func (s SafeAreaProvider) Key() any {
-	return nil
 }
 
 func (s SafeAreaProvider) CreateState() core.State {
@@ -164,6 +150,8 @@ func (s *safeAreaProviderState) Build(ctx core.BuildContext) core.Widget {
 	}
 }
 
+var _ core.AspectAwareInheritedWidget = SafeAreaData{}
+
 var safeAreaDataType = reflect.TypeFor[SafeAreaData]()
 
 // SafeAreaOf returns the current safe area insets from context.
@@ -240,19 +228,13 @@ func SafeAreaPadding(ctx core.BuildContext) layout.EdgeInsets {
 
 // SafeArea is a convenience widget that applies safe area insets as padding.
 type SafeArea struct {
+	core.StatelessBase
+
 	Top    bool
 	Bottom bool
 	Left   bool
 	Right  bool
 	Child  core.Widget
-}
-
-func (s SafeArea) CreateElement() core.Element {
-	return core.NewStatelessElement(s, nil)
-}
-
-func (s SafeArea) Key() any {
-	return nil
 }
 
 func (s SafeArea) Build(ctx core.BuildContext) core.Widget {

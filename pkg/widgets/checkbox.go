@@ -56,6 +56,8 @@ import (
 //	    },
 //	}
 type Checkbox struct {
+	core.StatelessBase
+
 	// Value indicates whether the checkbox is checked.
 	Value bool
 
@@ -125,14 +127,6 @@ func (c Checkbox) WithBackgroundColor(color graphics.Color) Checkbox {
 	return c
 }
 
-func (c Checkbox) CreateElement() core.Element {
-	return core.NewStatelessElement(c, nil)
-}
-
-func (c Checkbox) Key() any {
-	return nil
-}
-
 func (c Checkbox) Build(ctx core.BuildContext) core.Widget {
 	// Use field values directly — zero means zero.
 	activeColor := c.ActiveColor
@@ -200,7 +194,7 @@ type checkboxRender struct {
 }
 
 func (c checkboxRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(c, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (c checkboxRender) Key() any {

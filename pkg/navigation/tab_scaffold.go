@@ -94,20 +94,14 @@ func NewTab(item widgets.TabItem, builder func(ctx core.BuildContext) core.Widge
 // Accessibility: Inactive tabs are automatically excluded from the accessibility
 // tree using [widgets.ExcludeSemantics].
 type TabScaffold struct {
+	core.StatefulBase
+
 	// Tabs defines the tab configuration. At least one tab is required.
 	Tabs []Tab
 
 	// Controller optionally provides programmatic control over tab selection.
 	// If nil, a default controller starting at index 0 is created.
 	Controller *TabController
-}
-
-func (t TabScaffold) CreateElement() core.Element {
-	return core.NewStatefulElement(t, nil)
-}
-
-func (t TabScaffold) Key() any {
-	return nil
 }
 
 func (t TabScaffold) CreateState() core.State {
@@ -296,32 +290,20 @@ func (s *tabScaffoldState) onTabChanged(index int) {
 
 // tabNavigatorScope provides a way for child navigators to register with TabScaffold.
 type tabNavigatorScope struct {
+	core.InheritedBase
 	scaffoldState *tabScaffoldState
 	tabIndex      int
 	child         core.Widget
 }
 
-func (t tabNavigatorScope) CreateElement() core.Element {
-	return core.NewInheritedElement(t, nil)
-}
-
-func (t tabNavigatorScope) Key() any {
-	return t.tabIndex
-}
-
-func (t tabNavigatorScope) ChildWidget() core.Widget {
-	return t.child
-}
+func (t tabNavigatorScope) Key() any              { return t.tabIndex }
+func (t tabNavigatorScope) ChildWidget() core.Widget { return t.child }
 
 func (t tabNavigatorScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(tabNavigatorScope); ok {
 		return t.tabIndex != old.tabIndex || t.scaffoldState != old.scaffoldState
 	}
 	return true
-}
-
-func (t tabNavigatorScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return t.UpdateShouldNotify(oldWidget)
 }
 
 var tabNavigatorScopeType = reflect.TypeFor[tabNavigatorScope]()

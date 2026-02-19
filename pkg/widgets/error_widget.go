@@ -26,20 +26,14 @@ func init() {
 // This is the default fallback widget used by [ErrorBoundary] when no
 // FallbackBuilder is provided.
 type ErrorWidget struct {
+	core.StatelessBase
+
 	// Error is the boundary error that occurred. If nil, shows "Unknown error".
 	Error *errors.BoundaryError
 	// Verbose overrides DebugMode for this widget instance.
 	// When true, shows detailed error messages. When false, shows generic text.
 	// If nil (default), uses core.DebugMode.
 	Verbose *bool
-}
-
-func (e ErrorWidget) CreateElement() core.Element {
-	return core.NewStatelessElement(e, nil)
-}
-
-func (e ErrorWidget) Key() any {
-	return nil
 }
 
 func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
@@ -115,14 +109,8 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 
 // errorRestartButton is a stateful widget for the restart button.
 // It's separated to import the engine package lazily and avoid circular imports.
-type errorRestartButton struct{}
-
-func (b errorRestartButton) CreateElement() core.Element {
-	return core.NewStatefulElement(b, nil)
-}
-
-func (b errorRestartButton) Key() any {
-	return nil
+type errorRestartButton struct {
+	core.StatefulBase
 }
 
 func (b errorRestartButton) CreateState() core.State {

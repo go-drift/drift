@@ -28,6 +28,8 @@ import (
 //	    Child: child,
 //	}
 type AnimatedContainer struct {
+	core.StatefulBase
+
 	// Duration is the length of the animation.
 	Duration time.Duration
 	// Curve transforms the animation progress. If nil, uses linear interpolation.
@@ -43,14 +45,6 @@ type AnimatedContainer struct {
 	Gradient  *graphics.Gradient
 	Alignment layout.Alignment
 	Child     core.Widget
-}
-
-func (a AnimatedContainer) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
-}
-
-func (a AnimatedContainer) Key() any {
-	return nil
 }
 
 func (a AnimatedContainer) CreateState() core.State {
@@ -199,6 +193,8 @@ func (s *animatedContainerState) Build(ctx core.BuildContext) core.Widget {
 //	    Child: child,
 //	}
 type AnimatedOpacity struct {
+	core.StatefulBase
+
 	// Duration is the length of the animation.
 	Duration time.Duration
 	// Curve transforms the animation progress. If nil, uses linear interpolation.
@@ -210,14 +206,6 @@ type AnimatedOpacity struct {
 	Opacity float64
 	// Child is the widget to which opacity is applied.
 	Child core.Widget
-}
-
-func (a AnimatedOpacity) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
-}
-
-func (a AnimatedOpacity) Key() any {
-	return nil
 }
 
 func (a AnimatedOpacity) CreateState() core.State {

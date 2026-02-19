@@ -14,7 +14,7 @@ type LayoutBox struct {
 }
 
 func (b LayoutBox) CreateElement() core.Element {
-	return core.NewRenderObjectElement(b, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (b LayoutBox) Key() any { return nil }

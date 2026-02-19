@@ -62,7 +62,7 @@ func (r RichText) WithAlign(align graphics.TextAlign) RichText {
 }
 
 func (r RichText) CreateElement() core.Element {
-	return core.NewRenderObjectElement(r, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (r RichText) Key() any {

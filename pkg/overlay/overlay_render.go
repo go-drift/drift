@@ -14,7 +14,7 @@ type overlayRender struct {
 }
 
 func (o overlayRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(o, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (o overlayRender) Key() any {

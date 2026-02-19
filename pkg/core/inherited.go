@@ -22,9 +22,9 @@ var dependOnAllAspects = &struct{}{}
 //
 // InheritedElement supports granular dependency tracking via aspects. When a
 // dependent registers with a specific aspect (non-nil), it's stored in that
-// dependent's aspect set. On update, [InheritedWidget.UpdateShouldNotifyDependent]
-// is called for each dependent to determine if it should rebuild based on its
-// registered aspects.
+// dependent's aspect set. On update, if the widget implements
+// [AspectAwareInheritedWidget], UpdateShouldNotifyDependent is called for each
+// dependent to determine if it should rebuild based on its registered aspects.
 //
 // Note: Aspect sets only grow during an element's lifetime. If a widget stops
 // depending on an aspect across rebuilds, the old aspect remains registered.
@@ -35,15 +35,12 @@ type InheritedElement struct {
 	dependents map[Element]map[any]struct{} // aspects per dependent
 }
 
-// NewInheritedElement creates an InheritedElement for the given widget.
-func NewInheritedElement(widget InheritedWidget, owner *BuildOwner) *InheritedElement {
-	element := &InheritedElement{
+// NewInheritedElement creates an InheritedElement.
+// The widget and build owner are set later by the framework during inflation.
+func NewInheritedElement() *InheritedElement {
+	return &InheritedElement{
 		dependents: make(map[Element]map[any]struct{}),
 	}
-	element.widget = widget
-	element.buildOwner = owner
-	element.setSelf(element)
-	return element
 }
 
 func (e *InheritedElement) Mount(parent Element, slot any) {
@@ -70,24 +67,26 @@ func (e *InheritedElement) Update(newWidget Widget) {
 	newInherited := newWidget.(InheritedWidget)
 
 	// UpdateShouldNotify acts as a coarse-grained gate. If it returns false,
-	// no dependents are notified. For aspect-based filtering to work, implementations
-	// should return true from UpdateShouldNotify when *any* aspect might have changed,
-	// then use UpdateShouldNotifyDependent for fine-grained per-dependent filtering.
+	// no dependents are notified.
 	if !newInherited.UpdateShouldNotify(oldWidget) {
 		e.MarkNeedsBuild()
 		return
 	}
 
-	// Check each dependent's aspects for granular notification
+	// If the widget supports aspect-based filtering, use per-dependent checks.
+	// Otherwise, notify all dependents unconditionally.
+	aspectAware, hasAspects := newInherited.(AspectAwareInheritedWidget)
 	for dependent, aspects := range e.dependents {
+		if !hasAspects {
+			notifyDependent(dependent)
+			continue
+		}
 		// Check for sentinel indicating "all changes" dependency
 		if _, dependsOnAll := aspects[dependOnAllAspects]; dependsOnAll {
 			notifyDependent(dependent)
 			continue
 		}
-		// Empty aspects (shouldn't happen with sentinel, but defensive)
-		// or aspect-specific check
-		if len(aspects) == 0 || newInherited.UpdateShouldNotifyDependent(oldWidget, aspects) {
+		if len(aspects) == 0 || aspectAware.UpdateShouldNotifyDependent(oldWidget, aspects) {
 			notifyDependent(dependent)
 		}
 	}

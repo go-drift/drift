@@ -34,7 +34,7 @@ type SizedBox struct {
 }
 
 func (s SizedBox) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s SizedBox) Key() any {

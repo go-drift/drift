@@ -10,10 +10,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// secureStoragePage is the secure storage demo widget.
+type secureStoragePage struct{ core.StatefulBase }
+
+func (secureStoragePage) CreateState() core.State { return &secureStorageState{} }
+
 // buildSecureStoragePage creates a stateful widget for secure storage demos.
-func buildSecureStoragePage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *secureStorageState { return &secureStorageState{} })
-}
+func buildSecureStoragePage(_ core.BuildContext) core.Widget { return secureStoragePage{} }
 
 type secureStorageState struct {
 	core.StateBase

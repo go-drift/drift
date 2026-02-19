@@ -140,8 +140,8 @@ func wrapSpacingDemo(spacing, runSpacing float64, colors theme.ColorScheme) core
 // wrapCrossDemo shows Wrap with different cross-axis alignments using varied heights.
 func wrapCrossDemo(cross widgets.WrapCrossAlignment, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color:  colors.SurfaceVariant,
-		Height: 64,
+		Color:   colors.SurfaceVariant,
+		Height:  64,
 		Padding: layout.EdgeInsetsAll(8),
 		Child: widgets.Wrap{
 			Direction:          widgets.WrapAxisHorizontal,

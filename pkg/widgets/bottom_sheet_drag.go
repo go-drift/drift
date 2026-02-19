@@ -21,7 +21,7 @@ type sheetDragRegion struct {
 }
 
 func (s sheetDragRegion) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s sheetDragRegion) Key() any {

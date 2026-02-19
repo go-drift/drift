@@ -24,7 +24,7 @@ type Padding struct {
 }
 
 func (p Padding) CreateElement() core.Element {
-	return core.NewRenderObjectElement(p, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (p Padding) Key() any {

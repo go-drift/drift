@@ -28,7 +28,7 @@ type bottomSheetPositioner struct {
 }
 
 func (b bottomSheetPositioner) CreateElement() core.Element {
-	return core.NewRenderObjectElement(b, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (b bottomSheetPositioner) Key() any {
@@ -233,7 +233,7 @@ type bottomSheetBody struct {
 }
 
 func (b bottomSheetBody) CreateElement() core.Element {
-	return core.NewRenderObjectElement(b, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (b bottomSheetBody) Key() any {

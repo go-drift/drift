@@ -215,14 +215,9 @@ func TestLayoutBuilder_ComponentElementChild(t *testing.T) {
 // Used to test that LayoutBuilder works when its child is a component
 // element (not a direct renderObjectHost).
 type wrappedSizedBox struct {
+	core.StatelessBase
 	width, height float64
 }
-
-func (w wrappedSizedBox) CreateElement() core.Element {
-	return core.NewStatelessElement(w, nil)
-}
-
-func (w wrappedSizedBox) Key() any { return nil }
 
 func (w wrappedSizedBox) Build(ctx core.BuildContext) core.Widget {
 	return widgets.SizedBox{Width: w.width, Height: w.height}

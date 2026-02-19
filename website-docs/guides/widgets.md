@@ -160,18 +160,14 @@ Themed widgets use disabled colors from theme data. Explicit widgets without
 
 ## Custom Stateless Widgets
 
-Create a stateless widget for UI that depends only on its configuration:
+Create a stateless widget for UI that depends only on its configuration.
+Embed `core.StatelessBase` to get `CreateElement` and `Key` for free:
 
 ```go
 type Greeting struct {
+    core.StatelessBase
     Name string
 }
-
-func (g Greeting) CreateElement() core.Element {
-    return core.NewStatelessElement(g, nil)
-}
-
-func (g Greeting) Key() any { return nil }
 
 func (g Greeting) Build(ctx core.BuildContext) core.Widget {
     return widgets.Text{Content: "Hello, " + g.Name, Style: theme.TextThemeOf(ctx).BodyLarge}
@@ -180,14 +176,13 @@ func (g Greeting) Build(ctx core.BuildContext) core.Widget {
 
 ## Custom Stateful Widgets
 
-Create a stateful widget when you need to manage mutable state. Drift offers
-two helpers plus a manual pattern, depending on complexity:
+Create a stateful widget when you need to manage mutable state. There are two
+patterns, depending on complexity:
 
-| Helper | Best for |
-|--------|----------|
+| Pattern | Best for |
+|---------|----------|
 | `Stateful[S]` | Quick inline fragments (no lifecycle, no `StateBase`) |
-| `NewStatefulWidget[S]` | Pages and complex widgets (full lifecycle, `StateBase`) |
-| Manual pattern | Widgets with configuration fields |
+| `StatefulBase` embedding | All other stateful widgets (full lifecycle, `StateBase`) |
 
 ### Inline: `Stateful`
 
@@ -209,59 +204,29 @@ The `init` function runs once; `build` is called on every rebuild with the
 current state, a `BuildContext`, and a `setState` callback that applies
 a transform function to the state.
 
-### Struct-based: `NewStatefulWidget`
+### Struct-based: `StatefulBase`
 
-When your widget struct would be empty (no configuration fields), use `NewStatefulWidget` to skip
-the boilerplate entirely. This gives you full access to `StateBase` features
-like `SetState`, `UseController`, `Managed`, and lifecycle methods:
-
-```go
-func buildCounterPage(ctx core.BuildContext) core.Widget {
-    return core.NewStatefulWidget(func() *counterState { return &counterState{} })
-}
-
-type counterState struct {
-    core.StateBase
-    count int
-}
-
-func (s *counterState) Build(ctx core.BuildContext) core.Widget {
-    return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", s.count), func() {
-        s.SetState(func() {
-            s.count++
-        })
-    })
-}
-```
-
-You can also pass an optional key: `core.NewStatefulWidget(func() *myState { return &myState{} }, "my-key")`
-
-### Manual Pattern
-
-Use the manual pattern when your widget struct carries configuration fields:
+Embed `core.StatefulBase` in your widget struct to get `CreateElement` and `Key`
+for free. This works whether or not your widget carries configuration fields:
 
 ```go
 type Counter struct {
+    core.StatefulBase
     InitialValue int
 }
 
-func (c Counter) CreateElement() core.Element {
-    return core.NewStatefulElement(c, nil)
-}
-
-func (c Counter) Key() any { return nil }
-
 func (c Counter) CreateState() core.State {
-    return &counterState{}
+    return &counterState{initial: c.InitialValue}
 }
 
 type counterState struct {
     core.StateBase
-    count int
+    initial int
+    count   int
 }
 
 func (s *counterState) InitState() {
-    s.count = 0
+    s.count = s.initial
 }
 
 func (s *counterState) Build(ctx core.BuildContext) core.Widget {

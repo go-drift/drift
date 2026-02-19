@@ -47,6 +47,8 @@ import (
 //	    },
 //	}
 type TextFormField struct {
+	core.StatefulBase
+
 	// TextField provides styling defaults. If set, its styling properties are used
 	// as a base, with individual properties below taking precedence if non-zero.
 	// This enables: TextFormField{TextField: theme.TextFieldOf(ctx, nil), ...}
@@ -202,16 +204,6 @@ func (t TextFormField) WithObscure(obscure bool) TextFormField {
 func (t TextFormField) WithDisabled(disabled bool) TextFormField {
 	t.Disabled = disabled
 	return t
-}
-
-// CreateElement creates the element for the stateful widget.
-func (t TextFormField) CreateElement() core.Element {
-	return core.NewStatefulElement(t, nil)
-}
-
-// Key returns the widget key.
-func (t TextFormField) Key() any {
-	return nil
 }
 
 // CreateState creates the state for this widget.

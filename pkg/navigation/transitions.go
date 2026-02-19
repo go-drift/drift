@@ -65,7 +65,7 @@ type SlideTransition struct {
 
 // CreateElement returns a RenderObjectElement for this SlideTransition.
 func (s SlideTransition) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).
@@ -213,7 +213,7 @@ type BackgroundSlideTransition struct {
 
 // CreateElement returns a RenderObjectElement for this BackgroundSlideTransition.
 func (b BackgroundSlideTransition) CreateElement() core.Element {
-	return core.NewRenderObjectElement(b, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).
@@ -335,7 +335,7 @@ type FadeTransition struct {
 
 // CreateElement returns a RenderObjectElement for this FadeTransition.
 func (f FadeTransition) CreateElement() core.Element {
-	return core.NewRenderObjectElement(f, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).

@@ -8,17 +8,34 @@ import (
 	"github.com/go-drift/drift/pkg/layout"
 )
 
+// newTestStatelessElement creates a StatelessElement with widget pre-set for tests.
+func newTestStatelessElement(widget StatelessWidget, owner *BuildOwner) *StatelessElement {
+	e := NewStatelessElement()
+	e.widget = widget
+	e.buildOwner = owner
+	return e
+}
+
+// newTestStatefulElement creates a StatefulElement with widget pre-set for tests.
+func newTestStatefulElement(widget StatefulWidget, owner *BuildOwner) *StatefulElement {
+	e := NewStatefulElement()
+	e.widget = widget
+	e.buildOwner = owner
+	return e
+}
+
+// newTestInheritedElement creates an InheritedElement with widget pre-set for tests.
+func newTestInheritedElement(widget InheritedWidget, owner *BuildOwner) *InheritedElement {
+	e := NewInheritedElement()
+	e.widget = widget
+	e.buildOwner = owner
+	return e
+}
+
 // testStatelessWidget is a simple stateless widget for testing.
 type testStatelessWidget struct {
+	StatelessBase
 	buildFn func(BuildContext) Widget
-}
-
-func (w testStatelessWidget) CreateElement() Element {
-	return NewStatelessElement(w, nil)
-}
-
-func (w testStatelessWidget) Key() any {
-	return nil
 }
 
 func (w testStatelessWidget) Build(ctx BuildContext) Widget {
@@ -30,15 +47,8 @@ func (w testStatelessWidget) Build(ctx BuildContext) Widget {
 
 // testStatefulWidget is a simple stateful widget for testing.
 type testStatefulWidget struct {
+	StatefulBase
 	createStateFn func() State
-}
-
-func (w testStatefulWidget) CreateElement() Element {
-	return NewStatefulElement(w, nil)
-}
-
-func (w testStatefulWidget) Key() any {
-	return nil
 }
 
 func (w testStatefulWidget) CreateState() State {
@@ -82,7 +92,7 @@ func TestStatelessElement_BuildPanic_ReportsError(t *testing.T) {
 	}
 
 	owner := NewBuildOwner()
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if len(handler.boundaryErrors) != 1 {
@@ -120,7 +130,7 @@ func TestStatefulElement_BuildPanic_ReportsError(t *testing.T) {
 	}
 
 	owner := NewBuildOwner()
-	element := NewStatefulElement(widget, owner)
+	element := newTestStatefulElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if len(handler.boundaryErrors) != 1 {
@@ -152,7 +162,7 @@ func TestSafeBuild_ReturnsErrorPlaceholder_WhenNoBuilder(t *testing.T) {
 	}
 
 	owner := NewBuildOwner()
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 	element.Mount(nil, nil)
 
 	// The child should be an errorPlaceholder
@@ -191,7 +201,7 @@ func TestSafeBuild_UsesCustomBuilder(t *testing.T) {
 	}
 
 	owner := NewBuildOwner()
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if capturedErr == nil {
@@ -270,7 +280,7 @@ func TestStatelessElement_NormalBuild_NoError(t *testing.T) {
 	}
 
 	owner := NewBuildOwner()
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if !buildCalled {
@@ -299,7 +309,7 @@ func TestStatefulElement_NormalBuild_NoError(t *testing.T) {
 	}
 
 	owner := NewBuildOwner()
-	element := NewStatefulElement(widget, owner)
+	element := newTestStatefulElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if !buildCalled {
@@ -314,12 +324,9 @@ func TestStatefulElement_NormalBuild_NoError(t *testing.T) {
 
 // keyedStatelessWidget is a stateless widget with a configurable key.
 type keyedStatelessWidget struct {
+	StatelessBase
 	key     any
 	buildFn func(BuildContext) Widget
-}
-
-func (w keyedStatelessWidget) CreateElement() Element {
-	return NewStatelessElement(w, nil)
 }
 
 func (w keyedStatelessWidget) Key() any {
@@ -365,7 +372,7 @@ type testMultiChildWidget struct {
 }
 
 func (w testMultiChildWidget) CreateElement() Element {
-	return NewRenderObjectElement(w, nil)
+	return NewRenderObjectElement()
 }
 
 func (w testMultiChildWidget) Key() any {
@@ -390,7 +397,7 @@ type testSingleChildWidget struct {
 }
 
 func (w testSingleChildWidget) CreateElement() Element {
-	return NewRenderObjectElement(w, nil)
+	return NewRenderObjectElement()
 }
 
 func (w testSingleChildWidget) Key() any {
@@ -415,7 +422,7 @@ type testLeafWidget struct {
 }
 
 func (w testLeafWidget) CreateElement() Element {
-	return NewRenderObjectElement(w, nil)
+	return NewRenderObjectElement()
 }
 
 func (w testLeafWidget) Key() any {
@@ -431,7 +438,7 @@ func (w testLeafWidget) UpdateRenderObject(ctx BuildContext, renderObject layout
 func TestSlotThreading_Mount(t *testing.T) {
 	owner := NewBuildOwner()
 	widget := testStatelessWidget{}
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 
 	slot := IndexedSlot{Index: 5, PreviousSibling: nil}
 	element.Mount(nil, slot)
@@ -444,10 +451,10 @@ func TestSlotThreading_Mount(t *testing.T) {
 func TestSlotThreading_MountWithParent(t *testing.T) {
 	owner := NewBuildOwner()
 
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
-	child := NewStatelessElement(testStatelessWidget{}, owner)
+	child := newTestStatelessElement(testStatelessWidget{}, owner)
 	slot := IndexedSlot{Index: 3, PreviousSibling: parent}
 	child.Mount(parent, slot)
 
@@ -464,7 +471,7 @@ func TestSlotThreading_MountWithParent(t *testing.T) {
 func TestUpdateSlot_StatelessElement(t *testing.T) {
 	owner := NewBuildOwner()
 	widget := testStatelessWidget{}
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 
 	element.Mount(nil, IndexedSlot{Index: 0})
 
@@ -479,7 +486,7 @@ func TestUpdateSlot_StatelessElement(t *testing.T) {
 func TestUpdateSlot_StatefulElement(t *testing.T) {
 	owner := NewBuildOwner()
 	widget := testStatefulWidget{}
-	element := NewStatefulElement(widget, owner)
+	element := newTestStatefulElement(widget, owner)
 
 	element.Mount(nil, IndexedSlot{Index: 0})
 
@@ -493,7 +500,7 @@ func TestUpdateSlot_StatefulElement(t *testing.T) {
 
 func TestUpdateChild_UpdatesSlot(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial child with slot 0
@@ -519,7 +526,7 @@ func TestUpdateChild_UpdatesSlot(t *testing.T) {
 
 func TestUpdateChildren_TopSync(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial children
@@ -557,7 +564,7 @@ func TestUpdateChildren_TopSync(t *testing.T) {
 
 func TestUpdateChildren_KeyedReorder(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial keyed children: [A, B, C]
@@ -614,7 +621,7 @@ func TestUpdateChildren_KeyedReorder(t *testing.T) {
 
 func TestUpdateChildren_KeyRemoved_Unmounts(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial keyed children: [A, B, C]
@@ -651,7 +658,7 @@ func TestUpdateChildren_KeyRemoved_Unmounts(t *testing.T) {
 
 func TestUpdateChildren_KeyAdded_Mounts(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial keyed children: [A, C]
@@ -692,7 +699,7 @@ func TestUpdateChildren_KeyAdded_Mounts(t *testing.T) {
 
 func TestUpdateChildren_BottomSync(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial keyed children: [A, B, C]
@@ -735,7 +742,7 @@ func TestUpdateChildren_BottomSync(t *testing.T) {
 
 func TestUpdateChildren_MixedKeyedNonKeyed(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create mixed keyed/non-keyed children
@@ -779,7 +786,7 @@ func TestUpdateChildren_MixedKeyedNonKeyed(t *testing.T) {
 
 func TestUpdateChildren_EmptyToNonEmpty(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Start with empty
@@ -806,7 +813,7 @@ func TestUpdateChildren_EmptyToNonEmpty(t *testing.T) {
 
 func TestUpdateChildren_NonEmptyToEmpty(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create initial children
@@ -843,7 +850,7 @@ func TestUpdateChildren_NonEmptyToEmpty(t *testing.T) {
 
 func TestIndexedSlot_PreviousSibling(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create keyed children
@@ -933,7 +940,7 @@ type sliceKeyWidget struct {
 }
 
 func (w sliceKeyWidget) CreateElement() Element {
-	return NewRenderObjectElement(w, nil)
+	return NewRenderObjectElement()
 }
 
 func (w sliceKeyWidget) Key() any {
@@ -948,7 +955,7 @@ func (w sliceKeyWidget) UpdateRenderObject(ctx BuildContext, renderObject layout
 
 func TestUpdateChildren_NonComparableKey_TreatedAsNonKeyed(t *testing.T) {
 	owner := NewBuildOwner()
-	parent := NewStatelessElement(testStatelessWidget{}, owner)
+	parent := newTestStatelessElement(testStatelessWidget{}, owner)
 	parent.Mount(nil, nil)
 
 	// Create children with non-comparable keys (slices)
@@ -977,4 +984,96 @@ func TestUpdateChildren_NonComparableKey_TreatedAsNonKeyed(t *testing.T) {
 
 	// Non-comparable keys are treated as non-keyed, so elements should be reused in order
 	// (not by key lookup, which would panic)
+}
+
+// --- AspectAwareInheritedWidget tests ---
+
+// aspectInherited is a test inherited widget that implements AspectAwareInheritedWidget.
+type aspectInherited struct {
+	InheritedBase
+	value int
+	child Widget
+}
+
+func (a aspectInherited) ChildWidget() Widget { return a.child }
+func (a aspectInherited) UpdateShouldNotify(old InheritedWidget) bool {
+	return a.value != old.(aspectInherited).value
+}
+func (a aspectInherited) UpdateShouldNotifyDependent(old InheritedWidget, aspects map[any]struct{}) bool {
+	oldVal := old.(aspectInherited)
+	if _, ok := aspects["value"]; ok {
+		return a.value != oldVal.value
+	}
+	return false
+}
+
+var _ AspectAwareInheritedWidget = aspectInherited{}
+
+// nonAspectInherited is a test inherited widget without aspect-based tracking.
+type nonAspectInherited struct {
+	InheritedBase
+	value int
+	child Widget
+}
+
+func (n nonAspectInherited) ChildWidget() Widget { return n.child }
+func (n nonAspectInherited) UpdateShouldNotify(old InheritedWidget) bool {
+	return n.value != old.(nonAspectInherited).value
+}
+
+func TestInheritedElement_Update_AspectAware_FiltersPerDependent(t *testing.T) {
+	owner := NewBuildOwner()
+
+	oldWidget := aspectInherited{value: 1}
+	element := newTestInheritedElement(oldWidget, owner)
+
+	// Simulate a dependent registered with the "value" aspect
+	valueDep := newTestStatelessElement(testStatelessWidget{}, owner)
+	valueDep.Mount(nil, nil)
+	element.AddDependent(valueDep, "value")
+
+	// Simulate a dependent registered with a different aspect
+	otherDep := newTestStatelessElement(testStatelessWidget{}, owner)
+	otherDep.Mount(nil, nil)
+	element.AddDependent(otherDep, "other")
+
+	// Update with changed value: only "value" dependent should be notified
+	newWidget := aspectInherited{value: 2}
+	element.Update(newWidget)
+
+	// valueDep should be dirty (notified)
+	if !valueDep.dirty {
+		t.Error("expected value-aspect dependent to be marked dirty")
+	}
+	// otherDep should NOT be dirty (filtered out by UpdateShouldNotifyDependent)
+	if otherDep.dirty {
+		t.Error("expected other-aspect dependent to NOT be marked dirty")
+	}
+}
+
+func TestInheritedElement_Update_NonAspectAware_NotifiesAll(t *testing.T) {
+	owner := NewBuildOwner()
+
+	oldWidget := nonAspectInherited{value: 1}
+	element := newTestInheritedElement(oldWidget, owner)
+
+	// Simulate two dependents with different aspects
+	dep1 := newTestStatelessElement(testStatelessWidget{}, owner)
+	dep1.Mount(nil, nil)
+	element.AddDependent(dep1, "a")
+
+	dep2 := newTestStatelessElement(testStatelessWidget{}, owner)
+	dep2.Mount(nil, nil)
+	element.AddDependent(dep2, "b")
+
+	// Update with changed value: both should be notified (no aspect filtering)
+	newWidget := nonAspectInherited{value: 2}
+	element.Update(newWidget)
+
+	if !dep1.dirty {
+		t.Error("expected dep1 to be marked dirty (non-aspect-aware notifies all)")
+	}
+	if !dep2.dirty {
+		t.Error("expected dep2 to be marked dirty (non-aspect-aware notifies all)")
+	}
 }

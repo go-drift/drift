@@ -77,7 +77,7 @@ type Text struct {
 }
 
 func (t Text) CreateElement() core.Element {
-	return core.NewRenderObjectElement(t, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (t Text) Key() any {

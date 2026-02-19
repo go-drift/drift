@@ -7,10 +7,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// sharePage is the share demo widget.
+type sharePage struct{ core.StatefulBase }
+
+func (sharePage) CreateState() core.State { return &shareState{} }
+
 // buildSharePage creates a stateful widget for share demos.
-func buildSharePage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *shareState { return &shareState{} })
-}
+func buildSharePage(_ core.BuildContext) core.Widget { return sharePage{} }
 
 type shareState struct {
 	core.StateBase

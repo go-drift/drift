@@ -10,15 +10,10 @@ import (
 
 // Counter is a stateful widget that displays a count and increments on tap.
 type Counter struct {
+	core.StatefulBase
 	Initial int
 	OnTap   func(count int)
 }
-
-func (c Counter) CreateElement() core.Element {
-	return core.NewStatefulElement(c, nil)
-}
-
-func (c Counter) Key() any { return nil }
 
 func (c Counter) CreateState() core.State {
 	return &counterState{}

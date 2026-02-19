@@ -64,6 +64,8 @@ import (
 //	    state.Reset() // Clear error and retry
 //	}
 type ErrorBoundary struct {
+	core.StatefulBase
+
 	// Child is the widget tree to wrap with error handling.
 	Child core.Widget
 	// FallbackBuilder creates a widget to show when an error is caught.
@@ -74,10 +76,6 @@ type ErrorBoundary struct {
 	// WidgetKey is an optional key for the widget. Changing the key forces
 	// the ErrorBoundary to recreate its state, clearing any captured error.
 	WidgetKey any
-}
-
-func (e ErrorBoundary) CreateElement() core.Element {
-	return core.NewStatefulElement(e, nil)
 }
 
 func (e ErrorBoundary) Key() any {
@@ -151,28 +149,20 @@ func (s *errorBoundaryState) captureBoundaryError(err *errors.BoundaryError) {
 // errorBoundaryScope is an InheritedWidget that marks the boundary in the tree.
 // Child elements can find this to report errors to the boundary.
 type errorBoundaryScope struct {
+	core.InheritedBase
 	state *errorBoundaryState
 	child core.Widget
 }
 
+// CreateElement overrides InheritedBase to use a custom element wrapper.
 func (e errorBoundaryScope) CreateElement() core.Element {
-	return newErrorBoundaryScopeElement(e)
+	return newErrorBoundaryScopeElement()
 }
 
-func (e errorBoundaryScope) Key() any {
-	return nil
-}
-
-func (e errorBoundaryScope) ChildWidget() core.Widget {
-	return e.child
-}
+func (e errorBoundaryScope) ChildWidget() core.Widget { return e.child }
 
 func (e errorBoundaryScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	return false // Scope widget never notifies - it's just for tree marking
-}
-
-func (e errorBoundaryScope) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return false
 }
 
 // errorBoundaryScopeElement wraps InheritedElement and implements ErrorBoundaryCapture.
@@ -183,8 +173,8 @@ type errorBoundaryScopeElement struct {
 	self core.Element // Keep reference to self for parent passing
 }
 
-func newErrorBoundaryScopeElement(widget errorBoundaryScope) *errorBoundaryScopeElement {
-	inherited := core.NewInheritedElement(widget, nil)
+func newErrorBoundaryScopeElement() *errorBoundaryScopeElement {
+	inherited := core.NewInheritedElement()
 	element := &errorBoundaryScopeElement{
 		InheritedElement: inherited,
 	}
@@ -241,7 +231,7 @@ type errorBoundaryRenderWidget struct {
 }
 
 func (e errorBoundaryRenderWidget) CreateElement() core.Element {
-	return core.NewRenderObjectElement(e, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (e errorBoundaryRenderWidget) Key() any {

@@ -70,6 +70,10 @@ func (e *elementBase) setSelf(self Element) {
 	e.self = self
 }
 
+func (e *elementBase) setWidget(widget Widget) {
+	e.widget = widget
+}
+
 func (e *elementBase) setBuildOwner(owner *BuildOwner) {
 	e.buildOwner = owner
 }
@@ -158,15 +162,8 @@ func (e *elementBase) findErrorBoundary() ErrorBoundaryCapture {
 // errorPlaceholder is a minimal fallback widget shown when build fails
 // and no error widget builder is configured.
 type errorPlaceholder struct {
+	StatelessBase
 	err *errors.BoundaryError
-}
-
-func (p errorPlaceholder) CreateElement() Element {
-	return NewStatelessElement(p, nil)
-}
-
-func (p errorPlaceholder) Key() any {
-	return nil
 }
 
 func (p errorPlaceholder) Build(ctx BuildContext) Widget {
@@ -180,12 +177,8 @@ type StatelessElement struct {
 	child Element
 }
 
-func NewStatelessElement(widget StatelessWidget, owner *BuildOwner) *StatelessElement {
-	element := &StatelessElement{}
-	element.widget = widget
-	element.buildOwner = owner
-	element.setSelf(element)
-	return element
+func NewStatelessElement() *StatelessElement {
+	return &StatelessElement{}
 }
 
 func (e *StatelessElement) Mount(parent Element, slot any) {
@@ -272,12 +265,8 @@ type StatefulElement struct {
 	state State
 }
 
-func NewStatefulElement(widget StatefulWidget, owner *BuildOwner) *StatefulElement {
-	element := &StatefulElement{}
-	element.widget = widget
-	element.buildOwner = owner
-	element.setSelf(element)
-	return element
+func NewStatefulElement() *StatefulElement {
+	return &StatefulElement{}
 }
 
 func (e *StatefulElement) Mount(parent Element, slot any) {
@@ -376,12 +365,8 @@ type RenderObjectElement struct {
 	children     []Element
 }
 
-func NewRenderObjectElement(widget RenderObjectWidget, owner *BuildOwner) *RenderObjectElement {
-	element := &RenderObjectElement{}
-	element.widget = widget
-	element.buildOwner = owner
-	element.setSelf(element)
-	return element
+func NewRenderObjectElement() *RenderObjectElement {
+	return &RenderObjectElement{}
 }
 
 func (e *RenderObjectElement) Mount(parent Element, slot any) {
@@ -751,6 +736,9 @@ func inflateWidget(widget Widget, owner *BuildOwner) Element {
 		return nil
 	}
 	element := widget.CreateElement()
+	if setter, ok := element.(interface{ setWidget(Widget) }); ok {
+		setter.setWidget(widget)
+	}
 	if setter, ok := element.(interface{ setBuildOwner(*BuildOwner) }); ok {
 		setter.setBuildOwner(owner)
 	}

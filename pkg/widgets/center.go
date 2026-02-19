@@ -25,7 +25,7 @@ type Center struct {
 }
 
 func (c Center) CreateElement() core.Element {
-	return core.NewRenderObjectElement(c, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (c Center) Key() any {

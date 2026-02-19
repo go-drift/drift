@@ -31,21 +31,16 @@ type Widget interface {
 // its parent rebuilds with different configuration or when an inherited dependency
 // changes.
 //
-// Example:
+// Embed [StatelessBase] to satisfy the Widget interface automatically:
 //
 //	type Greeting struct {
+//	    core.StatelessBase
 //	    Name string
 //	}
 //
 //	func (g Greeting) Build(ctx core.BuildContext) core.Widget {
 //	    return widgets.Text{Content: "Hello, " + g.Name}
 //	}
-//
-//	func (g Greeting) CreateElement() core.Element {
-//	    return core.NewStatelessElement(g, nil)
-//	}
-//
-//	func (g Greeting) Key() any { return nil }
 type StatelessWidget interface {
 	Widget
 	// Build creates the widget tree for this widget's portion of the UI.
@@ -62,17 +57,17 @@ type StatelessWidget interface {
 // persists even when the widget is rebuilt with new configuration, allowing it
 // to maintain continuity.
 //
-// Example:
+// Embed [StatefulBase] to satisfy the Widget interface automatically:
 //
-//	type Counter struct{}
-//
-//	func (c Counter) CreateState() core.State {
-//	    return &counterState{}
+//	type Counter struct {
+//	    core.StatefulBase
 //	}
 //
+//	func (Counter) CreateState() core.State { return &counterState{} }
+//
 //	type counterState struct {
-//	    element *core.StatefulElement
-//	    count   int
+//	    core.StateBase
+//	    count int
 //	}
 //
 //	func (s *counterState) Build(ctx core.BuildContext) core.Widget {
@@ -166,44 +161,43 @@ type State interface {
 //
 // # Custom Implementation
 //
-// For advanced cases like aspect-based selective rebuilds, implement InheritedWidget
-// directly:
+// Embed [InheritedBase] and implement only UpdateShouldNotify:
 //
-//	type MyTheme struct {
-//	    Colors     ColorScheme
-//	    Typography TextTheme
-//	    Child      core.Widget
+//	type UserScope struct {
+//	    core.InheritedBase
+//	    User *User
 //	}
 //
-//	func (t MyTheme) UpdateShouldNotify(old core.InheritedWidget) bool {
-//	    return true // Check any aspect changed
+//	func (u UserScope) UpdateShouldNotify(old core.InheritedWidget) bool {
+//	    return u.User != old.(UserScope).User
 //	}
 //
-//	func (t MyTheme) UpdateShouldNotifyDependent(old core.InheritedWidget, aspects map[any]struct{}) bool {
-//	    oldTheme := old.(MyTheme)
-//	    if _, ok := aspects["colors"]; ok && t.Colors != oldTheme.Colors {
-//	        return true
-//	    }
-//	    if _, ok := aspects["typography"]; ok && t.Typography != oldTheme.Typography {
-//	        return true
-//	    }
-//	    return false
-//	}
-//
-// Dependents register aspects via [BuildContext.DependOnInherited] with a non-nil aspect.
+// When [UpdateShouldNotify] returns true, all dependents are notified. For
+// fine-grained per-dependent filtering based on registered aspects, implement
+// the optional [AspectAwareInheritedWidget] interface.
 type InheritedWidget interface {
 	Widget
 	// ChildWidget returns the child widget tree.
 	ChildWidget() Widget
-	// UpdateShouldNotify returns true if dependents should potentially rebuild
-	// when this widget is updated. This is a coarse-grained gate - if it returns
-	// false, no dependents are notified. Return true when any aspect might have
-	// changed, then use UpdateShouldNotifyDependent for fine-grained filtering.
+	// UpdateShouldNotify returns true if dependents should rebuild when this
+	// widget is updated. When true, all dependents are notified unless the widget
+	// also implements [AspectAwareInheritedWidget] for per-dependent filtering.
 	UpdateShouldNotify(oldWidget InheritedWidget) bool
-	// UpdateShouldNotifyDependent returns true if a specific dependent should rebuild
-	// based on the aspects it registered via DependOnInherited. This enables granular
-	// rebuild optimization where dependents only rebuild when their specific aspects
-	// change. The aspects map contains all aspects the dependent registered.
+}
+
+// AspectAwareInheritedWidget is implemented by inherited widgets that support
+// granular per-dependent rebuild filtering based on registered aspects.
+// Most inherited widgets do not need this; the default behavior notifies all
+// dependents when [InheritedWidget.UpdateShouldNotify] returns true.
+//
+// When implemented, [UpdateShouldNotifyDependent] is called for each dependent
+// that registered specific aspects via [BuildContext.DependOnInherited]. Dependents
+// that registered with a nil aspect (depending on all changes) are always notified.
+type AspectAwareInheritedWidget interface {
+	InheritedWidget
+	// UpdateShouldNotifyDependent returns true if a specific dependent should
+	// rebuild based on the aspects it registered. The aspects map contains all
+	// aspects the dependent registered via [BuildContext.DependOnInherited].
 	UpdateShouldNotifyDependent(oldWidget InheritedWidget, aspects map[any]struct{}) bool
 }
 

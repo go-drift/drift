@@ -17,9 +17,12 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-func buildCameraPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *cameraState { return &cameraState{} })
-}
+// cameraPage is the camera demo widget.
+type cameraPage struct{ core.StatefulBase }
+
+func (cameraPage) CreateState() core.State { return &cameraState{} }
+
+func buildCameraPage(_ core.BuildContext) core.Widget { return cameraPage{} }
 
 type cameraState struct {
 	core.StateBase

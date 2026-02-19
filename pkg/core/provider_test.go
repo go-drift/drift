@@ -18,15 +18,8 @@ type testSettings struct {
 
 // providerConsumerWidget is a stateless widget that captures a value from a provider.
 type providerConsumerWidget[T any] struct {
+	StatelessBase
 	onBuild func(value T, ok bool)
-}
-
-func (w providerConsumerWidget[T]) CreateElement() Element {
-	return NewStatelessElement(w, nil)
-}
-
-func (w providerConsumerWidget[T]) Key() any {
-	return nil
 }
 
 func (w providerConsumerWidget[T]) Build(ctx BuildContext) Widget {
@@ -54,8 +47,7 @@ func TestInheritedProvider_BasicProvideConsume(t *testing.T) {
 		},
 	}
 
-	element := widget.CreateElement()
-	element.(*InheritedElement).buildOwner = owner
+	element := newTestInheritedElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if !capturedOK {
@@ -80,7 +72,7 @@ func TestInheritedProvider_NotFound(t *testing.T) {
 		},
 	}
 
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if capturedOK {
@@ -110,8 +102,7 @@ func TestInheritedProvider_NestedOverride(t *testing.T) {
 		},
 	}
 
-	element := widget.CreateElement()
-	element.(*InheritedElement).buildOwner = owner
+	element := newTestInheritedElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if capturedUser != innerUser {
@@ -140,8 +131,7 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 		},
 	}
 
-	element := widget.CreateElement()
-	element.(*InheritedElement).buildOwner = owner
+	element := newTestInheritedElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if !userOK || capturedUser != user {
@@ -169,8 +159,7 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 		},
 	}
 
-	element2 := widget2.CreateElement()
-	element2.(*InheritedElement).buildOwner = owner
+	element2 := newTestInheritedElement(widget2, owner)
 	element2.Mount(nil, nil)
 
 	if !userOK || capturedUser != user {
@@ -287,8 +276,7 @@ func TestMustProviderOf_Found(t *testing.T) {
 		},
 	}
 
-	element := widget.CreateElement()
-	element.(*InheritedElement).buildOwner = owner
+	element := newTestInheritedElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if capturedUser != user {
@@ -311,7 +299,7 @@ func TestMustProviderOf_Panics(t *testing.T) {
 		},
 	}
 
-	element := NewStatelessElement(widget, owner)
+	element := newTestStatelessElement(widget, owner)
 	element.Mount(nil, nil)
 
 	if panicValue == nil {
@@ -360,22 +348,6 @@ func TestInheritedProvider_ChildWidget(t *testing.T) {
 	}
 	if returnedChild.id != "test-child" {
 		t.Errorf("expected child id 'test-child', got %q", returnedChild.id)
-	}
-}
-
-func TestInheritedProvider_UpdateShouldNotifyDependent(t *testing.T) {
-	oldWidget := InheritedProvider[int]{Value: 42}
-	newWidget := InheritedProvider[int]{Value: 43}
-
-	// UpdateShouldNotifyDependent should delegate to UpdateShouldNotify
-	aspects := map[any]struct{}{"aspect1": {}}
-	if !newWidget.UpdateShouldNotifyDependent(oldWidget, aspects) {
-		t.Error("expected UpdateShouldNotifyDependent to return true when value changed")
-	}
-
-	sameWidget := InheritedProvider[int]{Value: 42}
-	if sameWidget.UpdateShouldNotifyDependent(oldWidget, aspects) {
-		t.Error("expected UpdateShouldNotifyDependent to return false when value unchanged")
 	}
 }
 

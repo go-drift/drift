@@ -11,18 +11,13 @@ import (
 
 // AnimatedBox animates its width between From and To over Duration.
 type AnimatedBox struct {
+	core.StatefulBase
 	Duration time.Duration
 	From     float64
 	To       float64
 	Height   float64
 	Color    graphics.Color
 }
-
-func (a AnimatedBox) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
-}
-
-func (a AnimatedBox) Key() any { return nil }
 
 func (a AnimatedBox) CreateState() core.State {
 	return &animatedBoxState{}

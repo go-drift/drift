@@ -6,10 +6,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// progressPage is the progress indicators demo widget.
+type progressPage struct{ core.StatefulBase }
+
+func (progressPage) CreateState() core.State { return &progressState{} }
+
 // buildProgressPage creates a stateful widget for progress indicators demo.
-func buildProgressPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *progressState { return &progressState{} })
-}
+func buildProgressPage(_ core.BuildContext) core.Widget { return progressPage{} }
 
 type progressState struct {
 	core.StateBase

@@ -12,10 +12,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// notificationsPage is the notifications demo widget.
+type notificationsPage struct{ core.StatefulBase }
+
+func (notificationsPage) CreateState() core.State { return &notificationsState{} }
+
 // buildNotificationsPage creates a stateful widget for notification demos.
-func buildNotificationsPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *notificationsState { return &notificationsState{} })
-}
+func buildNotificationsPage(_ core.BuildContext) core.Widget { return notificationsPage{} }
 
 type notificationsState struct {
 	core.StateBase

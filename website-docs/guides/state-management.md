@@ -8,15 +8,17 @@ sidebar_position: 6
 
 Drift provides several patterns for managing state in your application, from simple local state to app-wide shared state.
 
-## Reducing Boilerplate with `NewStatefulWidget`
+## Reducing Boilerplate with `StatefulBase`
 
-When your widget struct would be empty (no configuration fields), use `NewStatefulWidget` to
-eliminate the widget struct and its three methods (`CreateElement`, `Key`, `CreateState`):
+Embed `core.StatefulBase` in your widget struct to get `CreateElement` and `Key`
+for free. This works whether or not the widget carries configuration fields:
 
 ```go
-func buildMyPage(ctx core.BuildContext) core.Widget {
-    return core.NewStatefulWidget(func() *myPageState { return &myPageState{} })
+type myPage struct {
+    core.StatefulBase
 }
+
+func (myPage) CreateState() core.State { return &myPageState{} }
 
 type myPageState struct {
     core.StateBase
@@ -30,9 +32,7 @@ func (s *myPageState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-This is equivalent to defining an empty struct with `CreateElement`, `Key`, and `CreateState`
-methods manually. Use the manual pattern when your widget carries configuration fields that the
-state needs to read.
+Similarly, embed `core.StatelessBase` for stateless widgets.
 
 ### Inline State with `Stateful`
 
@@ -51,7 +51,7 @@ core.Stateful(
 ```
 
 `Stateful` is closure-based: no struct types, no lifecycle methods. Reach for
-`NewStatefulWidget` when you need `Managed`, `UseController`, or `Dispose`.
+`StatefulBase` embedding when you need `Managed`, `UseController`, or `Dispose`.
 
 ## The SetState Pattern
 
@@ -71,13 +71,15 @@ s.count++  // UI won't update!
 ### Example: Counter
 
 ```go
+type counter struct {
+    core.StatefulBase
+}
+
+func (counter) CreateState() core.State { return &counterState{} }
+
 type counterState struct {
     core.StateBase
     count int
-}
-
-func (s *counterState) InitState() {
-    s.count = 0
 }
 
 func (s *counterState) Build(ctx core.BuildContext) core.Widget {
@@ -314,20 +316,16 @@ core.InheritedProvider[*User]{
 
 ### Custom InheritedWidget
 
-For advanced use cases like aspect-based dependency tracking, implement a custom `InheritedWidget`:
+For advanced use cases, implement a custom `InheritedWidget`. Embed `core.InheritedBase`
+to get `CreateElement` and `Key` for free, then implement `ChildWidget` and
+`UpdateShouldNotify`:
 
 ```go
-// Define the inherited widget
 type UserProvider struct {
-    User        *User
-    Child       core.Widget
+    core.InheritedBase
+    User  *User
+    Child core.Widget
 }
-
-func (u UserProvider) CreateElement() core.Element {
-    return core.NewInheritedElement(u, nil)
-}
-
-func (u UserProvider) Key() any { return nil }
 
 func (u UserProvider) ChildWidget() core.Widget { return u.Child }
 
@@ -338,13 +336,6 @@ func (u UserProvider) UpdateShouldNotify(old core.InheritedWidget) bool {
         return u.User != prev.User
     }
     return true
-}
-
-// UpdateShouldNotifyDependent enables fine-grained control per dependent.
-// The aspects map contains the aspects each dependent registered interest in.
-// For simple cases, just delegate to UpdateShouldNotify.
-func (u UserProvider) UpdateShouldNotifyDependent(old core.InheritedWidget, _ map[any]struct{}) bool {
-    return u.UpdateShouldNotify(old)
 }
 
 // Access from anywhere in the subtree

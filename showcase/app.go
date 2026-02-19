@@ -24,17 +24,9 @@ func App() core.Widget {
 
 // ShowcaseApp is the main demo application widget.
 // It manages theme state and sets up navigation.
-type ShowcaseApp struct{}
+type ShowcaseApp struct{ core.StatefulBase }
 
-func (s ShowcaseApp) CreateElement() core.Element {
-	return core.NewStatefulElement(s, nil)
-}
-
-func (s ShowcaseApp) Key() any {
-	return nil
-}
-
-func (s ShowcaseApp) CreateState() core.State {
+func (ShowcaseApp) CreateState() core.State {
 	return &showcaseState{}
 }
 

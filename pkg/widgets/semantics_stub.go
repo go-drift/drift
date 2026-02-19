@@ -40,7 +40,7 @@ type Semantics struct {
 }
 
 func (s Semantics) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s Semantics) Key() any {
@@ -106,7 +106,7 @@ type MergeSemantics struct {
 }
 
 func (m MergeSemantics) CreateElement() core.Element {
-	return core.NewRenderObjectElement(m, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (m MergeSemantics) Key() any {
@@ -178,7 +178,7 @@ func NewExcludeSemantics(child core.Widget) ExcludeSemantics {
 }
 
 func (e ExcludeSemantics) CreateElement() core.Element {
-	return core.NewRenderObjectElement(e, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (e ExcludeSemantics) Key() any {

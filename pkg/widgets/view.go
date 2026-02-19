@@ -12,7 +12,7 @@ type View struct {
 }
 
 func (v View) CreateElement() core.Element {
-	return core.NewRenderObjectElement(v, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (v View) Key() any {

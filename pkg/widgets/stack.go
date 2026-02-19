@@ -73,7 +73,7 @@ func StackOf(children ...core.Widget) Stack {
 
 // CreateElement returns a RenderObjectElement for this Stack.
 func (s Stack) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).
@@ -495,7 +495,7 @@ type IndexedStack struct {
 }
 
 func (s IndexedStack) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s IndexedStack) Key() any {
@@ -732,7 +732,7 @@ func (p positioned) At(left, top float64) positioned {
 
 // CreateElement returns a RenderObjectElement for this positioned.
 func (p positioned) CreateElement() core.Element {
-	return core.NewRenderObjectElement(p, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).

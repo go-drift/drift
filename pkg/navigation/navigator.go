@@ -171,6 +171,8 @@ func RootNavigator() NavigatorState {
 //	    OnGenerateRoute: generateRoute,
 //	}
 type Navigator struct {
+	core.StatefulBase
+
 	// InitialRoute is the name of the first route to display.
 	InitialRoute string
 
@@ -196,16 +198,6 @@ type Navigator struct {
 	// RefreshListenable triggers redirect re-evaluation when notified.
 	// Use this when auth state changes to re-check if the current route is still accessible.
 	RefreshListenable core.Listenable
-}
-
-// CreateElement returns a StatefulElement for this Navigator.
-func (n Navigator) CreateElement() core.Element {
-	return core.NewStatefulElement(n, nil)
-}
-
-// Key returns nil (no key).
-func (n Navigator) Key() any {
-	return nil
 }
 
 // CreateState creates the NavigatorState.
@@ -849,12 +841,9 @@ func disposeRouteController(route Route) {
 
 // routeBuilder wraps a route for building.
 type routeBuilder struct {
+	core.StatelessBase
 	route Route
 	isTop bool
-}
-
-func (r routeBuilder) CreateElement() core.Element {
-	return core.NewStatelessElement(r, nil)
 }
 
 func (r routeBuilder) Key() any {
@@ -867,33 +856,18 @@ func (r routeBuilder) Build(ctx core.BuildContext) core.Widget {
 
 // navigatorInherited provides NavigatorState to descendants.
 type navigatorInherited struct {
+	core.InheritedBase
 	state *navigatorState
 	child core.Widget
 }
 
-func (n navigatorInherited) CreateElement() core.Element {
-	return core.NewInheritedElement(n, nil)
-}
-
-func (n navigatorInherited) Key() any {
-	return nil
-}
-
-func (n navigatorInherited) ChildWidget() core.Widget {
-	return n.child
-}
+func (n navigatorInherited) ChildWidget() core.Widget { return n.child }
 
 func (n navigatorInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(navigatorInherited); ok {
 		return n.state != old.state
 	}
 	return true
-}
-
-// UpdateShouldNotifyDependent returns true for any aspects since navigatorInherited
-// doesn't support granular aspect tracking yet.
-func (n navigatorInherited) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return n.UpdateShouldNotify(oldWidget)
 }
 
 var navigatorInheritedType = reflect.TypeFor[navigatorInherited]()

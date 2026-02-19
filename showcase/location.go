@@ -13,10 +13,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// locationPage is the location demo widget.
+type locationPage struct{ core.StatefulBase }
+
+func (locationPage) CreateState() core.State { return &locationState{} }
+
 // buildLocationPage creates a stateful widget for location demos.
-func buildLocationPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *locationState { return &locationState{} })
-}
+func buildLocationPage(_ core.BuildContext) core.Widget { return locationPage{} }
 
 type locationState struct {
 	core.StateBase

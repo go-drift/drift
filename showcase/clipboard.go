@@ -7,10 +7,13 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
+// clipboardPage is the clipboard demo widget.
+type clipboardPage struct{ core.StatefulBase }
+
+func (clipboardPage) CreateState() core.State { return &clipboardState{} }
+
 // buildClipboardPage creates a stateful widget for clipboard demos.
-func buildClipboardPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *clipboardState { return &clipboardState{} })
-}
+func buildClipboardPage(_ core.BuildContext) core.Widget { return clipboardPage{} }
 
 type clipboardState struct {
 	core.StateBase

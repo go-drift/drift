@@ -11,6 +11,8 @@ import (
 // Overlay manages a stack of overlay entries above its child.
 // Use OverlayOf(ctx) to access the nearest overlay's state.
 type Overlay struct {
+	core.StatefulBase
+
 	Child          core.Widget
 	InitialEntries []*OverlayEntry
 
@@ -19,14 +21,6 @@ type Overlay struct {
 	// post-frame callback to avoid re-entrancy during build.
 	// Use this to store OverlayState for later use (e.g., in Navigator).
 	OnOverlayReady func(state OverlayState)
-}
-
-func (o Overlay) CreateElement() core.Element {
-	return core.NewStatefulElement(o, nil)
-}
-
-func (o Overlay) Key() any {
-	return nil
 }
 
 func (o Overlay) CreateState() core.State {
@@ -279,31 +273,18 @@ func (s *overlayState) doRemoveEntry(entry *OverlayEntry) {
 
 // overlayInherited provides OverlayState to descendants.
 type overlayInherited struct {
+	core.InheritedBase
 	state *overlayState
 	child core.Widget
 }
 
-func (o overlayInherited) CreateElement() core.Element {
-	return core.NewInheritedElement(o, nil)
-}
-
-func (o overlayInherited) Key() any {
-	return nil
-}
-
-func (o overlayInherited) ChildWidget() core.Widget {
-	return o.child
-}
+func (o overlayInherited) ChildWidget() core.Widget { return o.child }
 
 func (o overlayInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(overlayInherited); ok {
 		return o.state != old.state
 	}
 	return true
-}
-
-func (o overlayInherited) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return o.UpdateShouldNotify(oldWidget)
 }
 
 var overlayInheritedType = reflect.TypeFor[overlayInherited]()

@@ -58,7 +58,7 @@ type DecoratedBox struct {
 }
 
 func (d DecoratedBox) CreateElement() core.Element {
-	return core.NewRenderObjectElement(d, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (d DecoratedBox) Key() any {

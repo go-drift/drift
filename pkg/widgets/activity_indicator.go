@@ -24,6 +24,8 @@ const (
 // ActivityIndicator displays a native platform spinner.
 // Uses UIActivityIndicatorView on iOS and ProgressBar on Android.
 type ActivityIndicator struct {
+	core.StatefulBase
+
 	// Animating controls whether the indicator is spinning.
 	// Defaults to true.
 	Animating bool
@@ -34,14 +36,6 @@ type ActivityIndicator struct {
 
 	// Color is the spinner color (optional, uses system default if not set).
 	Color graphics.Color
-}
-
-func (a ActivityIndicator) CreateElement() core.Element {
-	return core.NewStatefulElement(a, nil)
-}
-
-func (a ActivityIndicator) Key() any {
-	return nil
 }
 
 func (a ActivityIndicator) CreateState() core.State {
@@ -143,7 +137,7 @@ type activityIndicatorRender struct {
 }
 
 func (a activityIndicatorRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(a, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (a activityIndicatorRender) Key() any {

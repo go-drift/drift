@@ -63,6 +63,8 @@ type DropdownItem[T any] struct {
 // Each [DropdownItem] can have a custom Child instead of a text Label.
 // Items can be individually disabled by setting Disabled: true.
 type Dropdown[T any] struct {
+	core.StatefulBase
+
 	// Value is the current selected value.
 	Value T
 	// Items are the available selections.
@@ -145,14 +147,6 @@ func (d Dropdown[T]) WithItemPadding(padding layout.EdgeInsets) Dropdown[T] {
 func (d Dropdown[T]) WithHint(hint string) Dropdown[T] {
 	d.Hint = hint
 	return d
-}
-
-func (d Dropdown[T]) CreateElement() core.Element {
-	return core.NewStatefulElement(d, nil)
-}
-
-func (d Dropdown[T]) Key() any {
-	return nil
 }
 
 func (d Dropdown[T]) CreateState() core.State {
@@ -468,7 +462,7 @@ type dropdownScope struct {
 }
 
 func (d dropdownScope) CreateElement() core.Element {
-	return core.NewRenderObjectElement(d, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (d dropdownScope) Key() any {
@@ -505,7 +499,7 @@ type dropdownChevron struct {
 }
 
 func (d dropdownChevron) CreateElement() core.Element {
-	return core.NewRenderObjectElement(d, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (d dropdownChevron) Key() any {

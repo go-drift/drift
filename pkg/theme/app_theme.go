@@ -86,24 +86,13 @@ func (a *AppThemeData) Copy() *AppThemeData {
 
 // AppTheme provides unified theme data via InheritedWidget.
 type AppTheme struct {
+	core.InheritedBase
 	Data  *AppThemeData
 	Child core.Widget
 }
 
-// CreateElement returns an InheritedElement for this AppTheme.
-func (a AppTheme) CreateElement() core.Element {
-	return core.NewInheritedElement(a, nil)
-}
-
-// Key returns nil (no key).
-func (a AppTheme) Key() any {
-	return nil
-}
-
 // ChildWidget returns the child widget.
-func (a AppTheme) ChildWidget() core.Widget {
-	return a.Child
-}
+func (a AppTheme) ChildWidget() core.Widget { return a.Child }
 
 // UpdateShouldNotify returns true if the theme data has changed.
 func (a AppTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
@@ -111,19 +100,12 @@ func (a AppTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if !ok {
 		return true
 	}
-	// Handle nil Data safely
 	if a.Data == nil || old.Data == nil {
 		return a.Data != old.Data
 	}
 	return a.Data.Platform != old.Data.Platform ||
 		a.Data.Material != old.Data.Material ||
 		a.Data.Cupertino != old.Data.Cupertino
-}
-
-// UpdateShouldNotifyDependent returns true for any aspects since AppTheme
-// doesn't support granular aspect tracking yet.
-func (a AppTheme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return a.UpdateShouldNotify(oldWidget)
 }
 
 var appThemeType = reflect.TypeFor[AppTheme]()

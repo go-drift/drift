@@ -33,6 +33,8 @@ import (
 //
 // For a Drift-rendered toggle with full styling control, use [Toggle] instead.
 type Switch struct {
+	core.StatefulBase
+
 	// Value indicates the current on/off state.
 	Value bool
 	// OnChanged is called when the switch toggles.
@@ -43,14 +45,6 @@ type Switch struct {
 	OnTintColor graphics.Color
 	// ThumbColor is the thumb color (optional).
 	ThumbColor graphics.Color
-}
-
-func (s Switch) CreateElement() core.Element {
-	return core.NewStatefulElement(s, nil)
-}
-
-func (s Switch) Key() any {
-	return nil
 }
 
 func (s Switch) CreateState() core.State {
@@ -171,7 +165,7 @@ type switchRender struct {
 }
 
 func (s switchRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s switchRender) Key() any {

@@ -50,6 +50,8 @@ import (
 // For form validation support, use [TextFormField] instead, which wraps TextField
 // and integrates with [Form] for validation, save, and reset operations.
 type TextField struct {
+	core.StatelessBase
+
 	// Controller manages the text content and selection.
 	Controller *platform.TextEditingController
 	// Label is shown above the field.
@@ -175,14 +177,6 @@ func (t TextField) WithHelperText(helper string) TextField {
 func (t TextField) WithBorderWidth(width float64) TextField {
 	t.BorderWidth = width
 	return t
-}
-
-func (t TextField) CreateElement() core.Element {
-	return core.NewStatelessElement(t, nil)
-}
-
-func (t TextField) Key() any {
-	return nil
 }
 
 func (t TextField) Build(ctx core.BuildContext) core.Widget {

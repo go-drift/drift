@@ -65,7 +65,7 @@ type Flexible struct {
 
 // CreateElement returns a RenderObjectElement for this Flexible.
 func (f Flexible) CreateElement() core.Element {
-	return core.NewRenderObjectElement(f, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).

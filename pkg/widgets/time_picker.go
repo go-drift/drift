@@ -10,6 +10,8 @@ import (
 
 // TimePicker displays a time selection field that opens a native time picker modal.
 type TimePicker struct {
+	core.StatefulBase
+
 	// Hour is the current selected hour (0-23).
 	Hour int
 
@@ -44,14 +46,6 @@ type TimePicker struct {
 
 	// Child overrides the default rendering for full customization.
 	Child core.Widget
-}
-
-func (t TimePicker) CreateElement() core.Element {
-	return core.NewStatefulElement(t, nil)
-}
-
-func (t TimePicker) Key() any {
-	return nil
 }
 
 func (t TimePicker) CreateState() core.State {

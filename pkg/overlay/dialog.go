@@ -33,19 +33,13 @@ import (
 //
 // For a pre-built title/content/actions layout, use [AlertDialog] instead.
 type Dialog struct {
+	core.StatelessBase
+
 	// Child is the dialog content widget.
 	Child core.Widget
 	// Width constrains the dialog to an explicit width in pixels.
 	// Zero means the dialog shrinks to fit its content.
 	Width float64
-}
-
-func (d Dialog) CreateElement() core.Element {
-	return core.NewStatelessElement(d, nil)
-}
-
-func (d Dialog) Key() any {
-	return nil
 }
 
 func (d Dialog) Build(ctx core.BuildContext) core.Widget {
@@ -106,6 +100,8 @@ func (d Dialog) Build(ctx core.BuildContext) core.Widget {
 //	    },
 //	})
 type AlertDialog struct {
+	core.StatelessBase
+
 	// Title is the heading widget, typically themed text using
 	// [theme.TextOf] with HeadlineSmall.
 	Title core.Widget
@@ -118,14 +114,6 @@ type AlertDialog struct {
 	// Width is the dialog width in pixels. Zero defaults to
 	// [theme.DialogThemeData.AlertDialogWidth] (280).
 	Width float64
-}
-
-func (a AlertDialog) CreateElement() core.Element {
-	return core.NewStatelessElement(a, nil)
-}
-
-func (a AlertDialog) Key() any {
-	return nil
 }
 
 func (a AlertDialog) Build(ctx core.BuildContext) core.Widget {

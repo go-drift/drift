@@ -56,6 +56,8 @@ import (
 //   - Accessibility support (label announced by screen readers)
 //   - Disabled state handling (when Disabled is true)
 type Button struct {
+	core.StatelessBase
+
 	// Label is the text displayed on the button.
 	Label string
 
@@ -139,14 +141,6 @@ func (b Button) WithDisabled(disabled bool) Button {
 func (b Button) WithBorderRadius(radius float64) Button {
 	b.BorderRadius = radius
 	return b
-}
-
-func (b Button) CreateElement() core.Element {
-	return core.NewStatelessElement(b, nil)
-}
-
-func (b Button) Key() any {
-	return nil
 }
 
 func (b Button) Build(ctx core.BuildContext) core.Widget {

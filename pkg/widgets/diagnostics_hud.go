@@ -22,6 +22,8 @@ type DiagnosticsHUDDataSource interface {
 
 // DiagnosticsHUD displays performance metrics overlay.
 type DiagnosticsHUD struct {
+	core.StatelessBase
+
 	// DataSource provides frame timing data.
 	DataSource DiagnosticsHUDDataSource
 	// TargetTime is the target frame duration for coloring the graph.
@@ -34,14 +36,6 @@ type DiagnosticsHUD struct {
 	ShowFPS bool
 	// ShowFrameGraph controls whether to display the frame time graph.
 	ShowFrameGraph bool
-}
-
-func (d DiagnosticsHUD) CreateElement() core.Element {
-	return core.NewStatelessElement(d, nil)
-}
-
-func (d DiagnosticsHUD) Key() any {
-	return nil
 }
 
 func (d DiagnosticsHUD) Build(ctx core.BuildContext) core.Widget {
@@ -74,7 +68,7 @@ type diagnosticsHUDRender struct {
 }
 
 func (d diagnosticsHUDRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(d, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (d diagnosticsHUDRender) Key() any {

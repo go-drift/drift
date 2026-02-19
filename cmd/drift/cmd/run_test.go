@@ -35,7 +35,7 @@ func TestParseDeviceFlag(t *testing.T) {
 
 func TestIsRelevantChange(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		event fsnotify.Event
 		want  bool
 	}{

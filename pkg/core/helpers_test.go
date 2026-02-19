@@ -5,79 +5,183 @@ import (
 	"testing"
 )
 
-// testStateA is a minimal State implementation for testing.
+// --- StatelessBase tests ---
+
+type testStatelessBaseWidget struct {
+	StatelessBase
+	label string
+}
+
+func (w testStatelessBaseWidget) Build(ctx BuildContext) Widget { return nil }
+
+func TestStatelessBase_SatisfiesInterface(t *testing.T) {
+	var w any = testStatelessBaseWidget{label: "hello"}
+	if _, ok := w.(StatelessWidget); !ok {
+		t.Error("widget embedding StatelessBase should satisfy StatelessWidget")
+	}
+}
+
+func TestStatelessBase_DefaultKey(t *testing.T) {
+	w := testStatelessBaseWidget{}
+	if w.Key() != nil {
+		t.Errorf("expected nil key, got %v", w.Key())
+	}
+}
+
+func TestStatelessBase_CreateElement(t *testing.T) {
+	w := testStatelessBaseWidget{}
+	elem := w.CreateElement()
+	if elem == nil {
+		t.Fatal("CreateElement should return non-nil element")
+	}
+	if _, ok := elem.(*StatelessElement); !ok {
+		t.Errorf("expected *StatelessElement, got %T", elem)
+	}
+}
+
+type keyedStatelessBaseWidget struct {
+	StatelessBase
+	myKey string
+}
+
+func (w keyedStatelessBaseWidget) Build(ctx BuildContext) Widget { return nil }
+func (w keyedStatelessBaseWidget) Key() any                      { return w.myKey }
+
+func TestStatelessBase_KeyOverride(t *testing.T) {
+	w := keyedStatelessBaseWidget{myKey: "custom"}
+	if w.Key() != "custom" {
+		t.Errorf("expected key 'custom', got %v", w.Key())
+	}
+}
+
+// --- StatefulBase tests ---
+
+type testStatefulBaseWidget struct {
+	StatefulBase
+}
+
 type testStateA struct {
 	StateBase
 }
 
 func (s *testStateA) Build(ctx BuildContext) Widget { return nil }
 
-// testStateB is a different State type for reconciliation testing.
+func (testStatefulBaseWidget) CreateState() State { return &testStateA{} }
+
+func TestStatefulBase_SatisfiesInterface(t *testing.T) {
+	var w any = testStatefulBaseWidget{}
+	if _, ok := w.(StatefulWidget); !ok {
+		t.Error("widget embedding StatefulBase should satisfy StatefulWidget")
+	}
+}
+
+func TestStatefulBase_DefaultKey(t *testing.T) {
+	w := testStatefulBaseWidget{}
+	if w.Key() != nil {
+		t.Errorf("expected nil key, got %v", w.Key())
+	}
+}
+
+func TestStatefulBase_CreateElement(t *testing.T) {
+	w := testStatefulBaseWidget{}
+	elem := w.CreateElement()
+	if elem == nil {
+		t.Fatal("CreateElement should return non-nil element")
+	}
+	if _, ok := elem.(*StatefulElement); !ok {
+		t.Errorf("expected *StatefulElement, got %T", elem)
+	}
+}
+
+type keyedStatefulBaseWidget struct {
+	StatefulBase
+	myKey string
+}
+
+func (keyedStatefulBaseWidget) CreateState() State { return &testStateA{} }
+func (w keyedStatefulBaseWidget) Key() any         { return w.myKey }
+
+func TestStatefulBase_KeyOverride(t *testing.T) {
+	w := keyedStatefulBaseWidget{myKey: "my-key"}
+	if w.Key() != "my-key" {
+		t.Errorf("expected key 'my-key', got %v", w.Key())
+	}
+}
+
 type testStateB struct {
 	StateBase
 }
 
 func (s *testStateB) Build(ctx BuildContext) Widget { return nil }
 
-func TestNewStatefulWidget_SatisfiesInterface(t *testing.T) {
-	var w any = NewStatefulWidget(func() *testStateA { return &testStateA{} })
+func TestStatefulBase_DifferentOuterTypes(t *testing.T) {
+	type widgetA struct {
+		StatefulBase
+	}
+	type widgetB struct {
+		StatefulBase
+	}
 
-	if _, ok := w.(StatefulWidget); !ok {
-		t.Error("NewStatefulWidget should return a StatefulWidget")
+	typeA := reflect.TypeOf(widgetA{})
+	typeB := reflect.TypeOf(widgetB{})
+
+	if typeA == typeB {
+		t.Error("different outer struct types should produce different reflect.TypeOf results")
 	}
 }
 
-func TestNewStatefulWidget_CreateState(t *testing.T) {
-	w := NewStatefulWidget(func() *testStateA { return &testStateA{} })
+// --- InheritedBase tests ---
 
-	state1 := w.CreateState()
-	if state1 == nil {
-		t.Fatal("CreateState should return non-nil state")
-	}
-	if _, ok := state1.(*testStateA); !ok {
-		t.Errorf("CreateState should return *testStateA, got %T", state1)
-	}
+type testInheritedBaseWidget struct {
+	InheritedBase
+	value int
+	child Widget
+}
 
-	state2 := w.CreateState()
-	if state1 == state2 {
-		t.Error("CreateState should return a new instance on each call")
+func (w testInheritedBaseWidget) ChildWidget() Widget { return w.child }
+func (w testInheritedBaseWidget) UpdateShouldNotify(old InheritedWidget) bool {
+	return w.value != old.(testInheritedBaseWidget).value
+}
+
+func TestInheritedBase_SatisfiesInterface(t *testing.T) {
+	var w any = testInheritedBaseWidget{value: 1}
+	if _, ok := w.(InheritedWidget); !ok {
+		t.Error("widget embedding InheritedBase should satisfy InheritedWidget")
 	}
 }
 
-func TestNewStatefulWidget_CreateElement(t *testing.T) {
-	w := NewStatefulWidget(func() *testStateA { return &testStateA{} })
+func TestInheritedBase_DefaultKey(t *testing.T) {
+	w := testInheritedBaseWidget{}
+	if w.Key() != nil {
+		t.Errorf("expected nil key, got %v", w.Key())
+	}
+}
 
+func TestInheritedBase_CreateElement(t *testing.T) {
+	w := testInheritedBaseWidget{}
 	elem := w.CreateElement()
 	if elem == nil {
 		t.Fatal("CreateElement should return non-nil element")
 	}
-}
-
-func TestNewStatefulWidget_KeyDefault(t *testing.T) {
-	w := NewStatefulWidget(func() *testStateA { return &testStateA{} })
-
-	if w.Key() != nil {
-		t.Errorf("Key should be nil by default, got %v", w.Key())
+	if _, ok := elem.(*InheritedElement); !ok {
+		t.Errorf("expected *InheritedElement, got %T", elem)
 	}
 }
 
-func TestNewStatefulWidget_KeyProvided(t *testing.T) {
-	w := NewStatefulWidget(func() *testStateA { return &testStateA{} }, "my-key")
-
-	if w.Key() != "my-key" {
-		t.Errorf("Key should be 'my-key', got %v", w.Key())
-	}
+type keyedInheritedBaseWidget struct {
+	InheritedBase
+	myKey string
+	child Widget
 }
 
-func TestNewStatefulWidget_DifferentTypesProduceDifferentReflectTypes(t *testing.T) {
-	wA := NewStatefulWidget(func() *testStateA { return &testStateA{} })
-	wB := NewStatefulWidget(func() *testStateB { return &testStateB{} })
+func (w keyedInheritedBaseWidget) Key() any              { return w.myKey }
+func (w keyedInheritedBaseWidget) ChildWidget() Widget   { return w.child }
+func (w keyedInheritedBaseWidget) UpdateShouldNotify(InheritedWidget) bool { return false }
 
-	typeA := reflect.TypeOf(wA)
-	typeB := reflect.TypeOf(wB)
-
-	if typeA == typeB {
-		t.Errorf("Different state types should produce different reflect.TypeOf results: %v vs %v", typeA, typeB)
+func TestInheritedBase_KeyOverride(t *testing.T) {
+	w := keyedInheritedBaseWidget{myKey: "custom"}
+	if w.Key() != "custom" {
+		t.Errorf("expected key 'custom', got %v", w.Key())
 	}
 }
 
@@ -173,9 +277,9 @@ func TestStateful_KeyIsNil(t *testing.T) {
 // mockBuildContext satisfies BuildContext for testing.
 type mockBuildContext struct{}
 
-func (m *mockBuildContext) Widget() Widget                                                    { return nil }
-func (m *mockBuildContext) FindAncestor(predicate func(Element) bool) Element                 { return nil }
-func (m *mockBuildContext) DependOnInherited(inheritedType reflect.Type, aspect any) any       { return nil }
+func (m *mockBuildContext) Widget() Widget                                               { return nil }
+func (m *mockBuildContext) FindAncestor(predicate func(Element) bool) Element            { return nil }
+func (m *mockBuildContext) DependOnInherited(inheritedType reflect.Type, aspect any) any { return nil }
 func (m *mockBuildContext) DependOnInheritedWithAspects(inheritedType reflect.Type, aspects ...any) any {
 	return nil
 }

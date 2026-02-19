@@ -57,7 +57,7 @@ type Expanded struct {
 
 // CreateElement returns a RenderObjectElement for this Expanded.
 func (e Expanded) CreateElement() core.Element {
-	return core.NewRenderObjectElement(e, nil)
+	return core.NewRenderObjectElement()
 }
 
 // Key returns nil (no key).

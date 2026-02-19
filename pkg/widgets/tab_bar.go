@@ -49,6 +49,8 @@ type TabItem struct {
 //	theme.TabBarOf(ctx, items, currentIndex, onTap)
 //	// Pre-filled with theme colors, height, padding, indicator
 type TabBar struct {
+	core.StatelessBase
+
 	// Items are the tab entries.
 	Items []TabItem
 	// CurrentIndex is the selected tab index.
@@ -71,14 +73,6 @@ type TabBar struct {
 	Height float64
 	// LabelStyle is the text style for labels.
 	LabelStyle graphics.TextStyle
-}
-
-func (t TabBar) CreateElement() core.Element {
-	return core.NewStatelessElement(t, nil)
-}
-
-func (t TabBar) Key() any {
-	return nil
 }
 
 func (t TabBar) Build(ctx core.BuildContext) core.Widget {

@@ -13,9 +13,12 @@ import (
 
 const audioURL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 
-func buildAudioPlayerPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *audioPlayerState { return &audioPlayerState{} })
-}
+// audioPlayerPage is the audio player demo widget.
+type audioPlayerPage struct{ core.StatefulBase }
+
+func (audioPlayerPage) CreateState() core.State { return &audioPlayerState{} }
+
+func buildAudioPlayerPage(_ core.BuildContext) core.Widget { return audioPlayerPage{} }
 
 type audioPlayerState struct {
 	core.StateBase
@@ -74,7 +77,7 @@ func (s *audioPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 			widgets.Container{
 				Color:        colors.SurfaceVariant,
 				BorderRadius: 6,
-				Padding: layout.EdgeInsetsAll(10),
+				Padding:      layout.EdgeInsetsAll(10),
 				Child: widgets.Text{
 					Content: "SoundHelix Sample Song",
 					Style: graphics.TextStyle{

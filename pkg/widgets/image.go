@@ -112,7 +112,7 @@ func (i Image) WithAlignment(alignment layout.Alignment) Image {
 }
 
 func (i Image) CreateElement() core.Element {
-	return core.NewRenderObjectElement(i, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (i Image) Key() any {

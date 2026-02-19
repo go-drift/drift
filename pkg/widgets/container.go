@@ -136,7 +136,7 @@ func (c Container) WithBorderGradient(gradient *graphics.Gradient) Container {
 }
 
 func (c Container) CreateElement() core.Element {
-	return core.NewRenderObjectElement(c, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (c Container) Key() any {

@@ -76,6 +76,8 @@ const (
 // references it. Do not call [lottie.Animation.Destroy] while widgets may
 // still render the animation.
 type Lottie struct {
+	core.StatefulBase
+
 	// Source is the pre-loaded Lottie animation to render. Use [lottie.Load],
 	// [lottie.LoadBytes], or [lottie.LoadFile] to create one. If nil, the
 	// widget renders nothing.
@@ -100,14 +102,6 @@ type Lottie struct {
 	// OnComplete is called when the animation finishes playing.
 	// Only called in LottiePlayOnce mode without an external Controller.
 	OnComplete func()
-}
-
-func (l Lottie) CreateElement() core.Element {
-	return core.NewStatefulElement(l, nil)
-}
-
-func (l Lottie) Key() any {
-	return nil
 }
 
 func (l Lottie) CreateState() core.State {
@@ -275,7 +269,7 @@ type lottieRender struct {
 }
 
 func (l lottieRender) CreateElement() core.Element {
-	return core.NewRenderObjectElement(l, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (l lottieRender) Key() any {

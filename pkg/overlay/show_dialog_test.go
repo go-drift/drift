@@ -19,14 +19,9 @@ import (
 // The onBuild callback receives a valid BuildContext and should call
 // ShowDialog/ShowAlertDialog. It fires once on first build.
 type dialogTestWidget struct {
+	core.StatelessBase
 	onBuild func(ctx core.BuildContext)
 }
-
-func (w dialogTestWidget) CreateElement() core.Element {
-	return core.NewStatelessElement(w, nil)
-}
-
-func (w dialogTestWidget) Key() any { return nil }
 
 func (w dialogTestWidget) Build(ctx core.BuildContext) core.Widget {
 	return Overlay{
@@ -37,14 +32,9 @@ func (w dialogTestWidget) Build(ctx core.BuildContext) core.Widget {
 // dialogTrigger is the Overlay's child. Its BuildContext is below the
 // overlayInherited, so OverlayOf(ctx) works correctly.
 type dialogTrigger struct {
+	core.StatefulBase
 	onBuild func(ctx core.BuildContext)
 }
-
-func (d dialogTrigger) CreateElement() core.Element {
-	return core.NewStatefulElement(d, nil)
-}
-
-func (d dialogTrigger) Key() any { return nil }
 
 func (d dialogTrigger) CreateState() core.State {
 	return &dialogTriggerState{}
@@ -372,13 +362,9 @@ func TestShowDialog_NoOverlay(t *testing.T) {
 }
 
 // noOverlayShowDialog is a widget that calls ShowDialog without an overlay.
-type noOverlayShowDialog struct{}
-
-func (n noOverlayShowDialog) CreateElement() core.Element {
-	return core.NewStatelessElement(n, nil)
+type noOverlayShowDialog struct {
+	core.StatelessBase
 }
-
-func (n noOverlayShowDialog) Key() any { return nil }
 
 func (n noOverlayShowDialog) Build(ctx core.BuildContext) core.Widget {
 	dismiss := ShowDialog(ctx, DialogOptions{

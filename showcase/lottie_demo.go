@@ -29,9 +29,12 @@ func loadLottieAsset() (*lottie.Animation, error) {
 	return lottieAssetAnim, lottieAssetErr
 }
 
-func buildLottiePage(_ core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *lottieDemoState { return &lottieDemoState{} })
-}
+// lottiePage is the Lottie animation demo widget.
+type lottiePage struct{ core.StatefulBase }
+
+func (lottiePage) CreateState() core.State { return &lottieDemoState{} }
+
+func buildLottiePage(_ core.BuildContext) core.Widget { return lottiePage{} }
 
 type lottieDemoState struct {
 	core.StateBase

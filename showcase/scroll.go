@@ -73,7 +73,7 @@ func listItem(index int, bgColor graphics.Color, colors theme.ColorScheme) core.
 	return widgets.Container{
 		Color:        bgColor,
 		BorderRadius: 6,
-		Padding: layout.EdgeInsetsSymmetric(12, 12),
+		Padding:      layout.EdgeInsetsSymmetric(12, 12),
 		Child: widgets.Row{
 			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,

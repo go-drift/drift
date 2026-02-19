@@ -32,7 +32,7 @@ type Opacity struct {
 }
 
 func (o Opacity) CreateElement() core.Element {
-	return core.NewRenderObjectElement(o, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (o Opacity) Key() any {

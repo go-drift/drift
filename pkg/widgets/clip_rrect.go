@@ -13,7 +13,7 @@ type ClipRRect struct {
 }
 
 func (c ClipRRect) CreateElement() core.Element {
-	return core.NewRenderObjectElement(c, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (c ClipRRect) Key() any {

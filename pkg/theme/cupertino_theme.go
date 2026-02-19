@@ -8,26 +8,15 @@ import (
 
 // CupertinoTheme provides CupertinoThemeData to descendant widgets via InheritedWidget.
 type CupertinoTheme struct {
+	core.InheritedBase
 	// Data is the Cupertino theme configuration.
 	Data *CupertinoThemeData
 	// Child is the child widget tree.
 	Child core.Widget
 }
 
-// CreateElement returns an InheritedElement for this CupertinoTheme.
-func (t CupertinoTheme) CreateElement() core.Element {
-	return core.NewInheritedElement(t, nil)
-}
-
-// Key returns nil (no key).
-func (t CupertinoTheme) Key() any {
-	return nil
-}
-
 // ChildWidget returns the child widget.
-func (t CupertinoTheme) ChildWidget() core.Widget {
-	return t.Child
-}
+func (t CupertinoTheme) ChildWidget() core.Widget { return t.Child }
 
 // UpdateShouldNotify returns true if the theme data has changed.
 func (t CupertinoTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
@@ -35,12 +24,6 @@ func (t CupertinoTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool 
 		return t.Data != old.Data
 	}
 	return true
-}
-
-// UpdateShouldNotifyDependent returns true for any aspects since CupertinoTheme
-// doesn't support granular aspect tracking yet.
-func (t CupertinoTheme) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
-	return t.UpdateShouldNotify(oldWidget)
 }
 
 var cupertinoThemeType = reflect.TypeFor[CupertinoTheme]()

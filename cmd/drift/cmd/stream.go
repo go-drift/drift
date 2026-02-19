@@ -121,4 +121,3 @@ func streamIOSSimulatorLogs(ctx context.Context, simulator, appID string) {
 	cmd.Stderr = os.Stderr
 	cmd.Run()
 }
-

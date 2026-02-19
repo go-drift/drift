@@ -9,9 +9,12 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-func buildVideoPlayerPage(ctx core.BuildContext) core.Widget {
-	return core.NewStatefulWidget(func() *videoPlayerState { return &videoPlayerState{} })
-}
+// videoPlayerPage is the video player demo widget.
+type videoPlayerPage struct{ core.StatefulBase }
+
+func (videoPlayerPage) CreateState() core.State { return &videoPlayerState{} }
+
+func buildVideoPlayerPage(_ core.BuildContext) core.Widget { return videoPlayerPage{} }
 
 type videoPlayerState struct {
 	core.StateBase

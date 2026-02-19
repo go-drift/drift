@@ -209,7 +209,7 @@ func WrapOf(spacing, runSpacing float64, children ...core.Widget) Wrap {
 }
 
 func (w Wrap) CreateElement() core.Element {
-	return core.NewRenderObjectElement(w, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (w Wrap) Key() any {

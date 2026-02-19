@@ -51,7 +51,7 @@ type InheritedProvider[T any] struct {
 
 // CreateElement implements Widget.
 func (p InheritedProvider[T]) CreateElement() Element {
-	return NewInheritedElement(p, nil)
+	return NewInheritedElement()
 }
 
 // Key implements Widget.
@@ -80,13 +80,6 @@ func (p InheritedProvider[T]) UpdateShouldNotify(oldWidget InheritedWidget) bool
 	// For pointers, this is pointer equality.
 	// For value types, this is value equality.
 	return any(old.Value) != any(p.Value)
-}
-
-// UpdateShouldNotifyDependent implements InheritedWidget.
-// InheritedProvider does not support aspect-based tracking, so this
-// delegates to UpdateShouldNotify.
-func (p InheritedProvider[T]) UpdateShouldNotifyDependent(oldWidget InheritedWidget, _ map[any]struct{}) bool {
-	return p.UpdateShouldNotify(oldWidget)
 }
 
 // ProviderOf finds and depends on the nearest ancestor InheritedProvider[T].

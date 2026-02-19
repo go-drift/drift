@@ -78,7 +78,7 @@ type SvgImage struct {
 }
 
 func (s SvgImage) CreateElement() core.Element {
-	return core.NewRenderObjectElement(s, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (s SvgImage) Key() any {

@@ -30,7 +30,7 @@ type Align struct {
 }
 
 func (a Align) CreateElement() core.Element {
-	return core.NewRenderObjectElement(a, nil)
+	return core.NewRenderObjectElement()
 }
 
 func (a Align) Key() any {
