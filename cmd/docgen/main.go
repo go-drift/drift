@@ -276,6 +276,7 @@ func processMarkdown(pkg Package, content string) string {
 	var result []string
 	skipNext := false
 	inIndex := false
+	inCodeBlock := false
 
 	for i, line := range lines {
 		// Skip the first header line since we add our own title
@@ -298,11 +299,18 @@ func processMarkdown(pkg Package, content string) string {
 			}
 		}
 
+		// Track code block state for language tagging below.
+		// A line starting with ``` followed by a language tag opens a block.
+		if strings.HasPrefix(line, "```") && line != "```" {
+			inCodeBlock = true
+		}
+
 		// Skip "import" lines that show the import path
 		if strings.HasPrefix(line, "```go") && i+1 < len(lines) && strings.Contains(lines[i+1], "import") {
 			skipNext = true
 		}
 		if skipNext && line == "```" {
+			inCodeBlock = false
 			skipNext = false
 			continue
 		}
@@ -323,6 +331,20 @@ func processMarkdown(pkg Package, content string) string {
 		// Skip </details>, <p>, and </p> tags from gomarkdoc
 		if line == "</details>" || line == "<p>" || line == "</p>" {
 			continue
+		}
+
+		// Tag bare code fences from doc comments as Go for syntax highlighting.
+		// gomarkdoc emits ``` (no language) for indented code blocks in doc
+		// comments, but ```go for Example function bodies. Docusaurus/Prism
+		// only highlights fences with an explicit language tag.
+		if line == "```" {
+			if inCodeBlock {
+				inCodeBlock = false
+			} else {
+				inCodeBlock = true
+				result = append(result, "```go")
+				continue
+			}
 		}
 
 		result = append(result, line)
