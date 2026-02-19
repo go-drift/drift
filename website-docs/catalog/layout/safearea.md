@@ -47,14 +47,14 @@ widgets.SafeArea{
 func (s *myState) Build(ctx core.BuildContext) core.Widget {
     return widgets.SafeArea{
         Child: widgets.PaddingAll(20,
-            widgets.ColumnOf(
-                widgets.MainAxisAlignmentStart,
-                widgets.CrossAxisAlignmentStart,
-                widgets.MainAxisSizeMin,
-                header,
-                widgets.VSpace(16),
-                content,
-            ),
+            widgets.Column{
+                MainAxisSize: widgets.MainAxisSizeMin,
+                Children: []core.Widget{
+                    header,
+                    widgets.VSpace(16),
+                    content,
+                },
+            },
         ),
     }
 }

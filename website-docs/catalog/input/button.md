@@ -67,13 +67,14 @@ widgets.Button{
 ### Button Row
 
 ```go
-widgets.RowOf(
-    widgets.MainAxisAlignmentSpaceEvenly,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMax,
-    theme.ButtonOf(ctx, "Cancel", handleCancel),
-    theme.ButtonOf(ctx, "Save", handleSave),
-)
+widgets.Row{
+    MainAxisAlignment:  widgets.MainAxisAlignmentSpaceEvenly,
+    CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+    Children: []core.Widget{
+        theme.ButtonOf(ctx, "Cancel", handleCancel),
+        theme.ButtonOf(ctx, "Save", handleSave),
+    },
+}
 ```
 
 ## Related

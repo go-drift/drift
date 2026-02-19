@@ -922,23 +922,24 @@ func (d defaultPlaceholder) Build(ctx core.BuildContext) core.Widget {
 			Child: widgets.Container{
 				Color: colors.Background,
 				Child: widgets.Centered(
-					widgets.ColumnOf(
-						widgets.MainAxisAlignmentCenter,
-						widgets.CrossAxisAlignmentStart,
-						widgets.MainAxisSizeMin,
-						widgets.Text{Content: "Drift", Style: graphics.TextStyle{
-							Color:      colors.Primary,
-							FontSize:   48,
-							FontWeight: graphics.FontWeightBold,
-						}},
-						widgets.VSpace(16),
-						widgets.Text{Content: "No app registered", Style: textTheme.BodyLarge},
-						widgets.VSpace(8),
-						widgets.Text{Content: "Call drift.NewApp(...).Run() to set your root widget", Style: graphics.TextStyle{
-							Color:    colors.OnSurfaceVariant,
-							FontSize: 14,
-						}},
-					),
+					widgets.Column{
+						MainAxisAlignment: widgets.MainAxisAlignmentCenter,
+						MainAxisSize:      widgets.MainAxisSizeMin,
+						Children: []core.Widget{
+							widgets.Text{Content: "Drift", Style: graphics.TextStyle{
+								Color:      colors.Primary,
+								FontSize:   48,
+								FontWeight: graphics.FontWeightBold,
+							}},
+							widgets.VSpace(16),
+							widgets.Text{Content: "No app registered", Style: textTheme.BodyLarge},
+							widgets.VSpace(8),
+							widgets.Text{Content: "Call drift.NewApp(...).Run() to set your root widget", Style: graphics.TextStyle{
+								Color:    colors.OnSurfaceVariant,
+								FontSize: 14,
+							}},
+						},
+					},
 				),
 			},
 		},

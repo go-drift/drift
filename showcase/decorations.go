@@ -41,21 +41,21 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 			BorderWidth:  1,
 			BorderRadius: 16,
 			Child: widgets.PaddingAll(16,
-				widgets.ColumnOf(
-					widgets.MainAxisAlignmentStart,
-					widgets.CrossAxisAlignmentStart,
-					widgets.MainAxisSizeMin,
-					widgets.Text{Content: "Card title", Style: graphics.TextStyle{
-						Color:      colors.OnSurface,
-						FontSize:   16,
-						FontWeight: graphics.FontWeightBold,
-					}},
-					widgets.VSpace(8),
-					widgets.Text{Content: "Use border radius for cards and panels.", Style: graphics.TextStyle{
-						Color:    colors.OnSurfaceVariant,
-						FontSize: 14,
-					}},
-				),
+				widgets.Column{
+					MainAxisSize: widgets.MainAxisSizeMin,
+					Children: []core.Widget{
+						widgets.Text{Content: "Card title", Style: graphics.TextStyle{
+							Color:      colors.OnSurface,
+							FontSize:   16,
+							FontWeight: graphics.FontWeightBold,
+						}},
+						widgets.VSpace(8),
+						widgets.Text{Content: "Use border radius for cards and panels.", Style: graphics.TextStyle{
+							Color:    colors.OnSurfaceVariant,
+							FontSize: 14,
+						}},
+					},
+				},
 			),
 		},
 		widgets.VSpace(24),
@@ -87,18 +87,19 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Text{Content: "Material elevation levels 1-5 using BoxShadowElevation.", Style: labelStyle(colors)},
 		widgets.VSpace(16),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-			elevationBox("1", 1, colors),
-			widgets.HSpace(16),
-			elevationBox("2", 2, colors),
-			widgets.HSpace(16),
-			elevationBox("3", 3, colors),
-			widgets.HSpace(16),
-			elevationBox("5", 5, colors),
-		),
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				elevationBox("1", 1, colors),
+				widgets.HSpace(16),
+				elevationBox("2", 2, colors),
+				widgets.HSpace(16),
+				elevationBox("3", 3, colors),
+				widgets.HSpace(16),
+				elevationBox("5", 5, colors),
+			},
+		},
 		widgets.VSpace(24),
 		sectionTitle("Backdrop Blur", colors),
 		widgets.VSpace(12),
@@ -147,42 +148,41 @@ func buildDecorationsPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		widgets.Text{Content: "Drop shadows for text elements.", Style: labelStyle(colors)},
 		widgets.VSpace(16),
-		widgets.ColumnOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMin,
-			widgets.Text{Content: "Hard Shadow", Style: graphics.TextStyle{
-				Color:      colors.OnSurface,
-				FontSize:   24,
-				FontWeight: graphics.FontWeightBold,
-				Shadow: &graphics.TextShadow{
-					Color:  colors.Primary.WithAlpha(0.31),
-					Offset: graphics.Offset{X: 2, Y: 2},
-				},
+		widgets.Column{
+			MainAxisSize: widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				widgets.Text{Content: "Hard Shadow", Style: graphics.TextStyle{
+					Color:      colors.OnSurface,
+					FontSize:   24,
+					FontWeight: graphics.FontWeightBold,
+					Shadow: &graphics.TextShadow{
+						Color:  colors.Primary.WithAlpha(0.31),
+						Offset: graphics.Offset{X: 2, Y: 2},
+					},
+				}},
+				widgets.VSpace(16),
+				widgets.Text{Content: "Soft Shadow", Style: graphics.TextStyle{
+					Color:      colors.OnSurface,
+					FontSize:   24,
+					FontWeight: graphics.FontWeightBold,
+					Shadow: &graphics.TextShadow{
+						Color:      colors.Primary.WithAlpha(0.39),
+						Offset:     graphics.Offset{X: 2, Y: 3},
+						BlurRadius: 4,
+					},
+				}},
+				widgets.VSpace(16),
+				widgets.Text{Content: "Glow Effect", Style: graphics.TextStyle{
+					Color:      colors.Primary,
+					FontSize:   24,
+					FontWeight: graphics.FontWeightBold,
+					Shadow: &graphics.TextShadow{
+						Color:      colors.Tertiary.WithAlpha(0.9),
+						Offset:     graphics.Offset{X: 0, Y: 0},
+						BlurRadius: 8,
+					},
+				}},
 			}},
-			widgets.VSpace(16),
-			widgets.Text{Content: "Soft Shadow", Style: graphics.TextStyle{
-				Color:      colors.OnSurface,
-				FontSize:   24,
-				FontWeight: graphics.FontWeightBold,
-				Shadow: &graphics.TextShadow{
-					Color:      colors.Primary.WithAlpha(0.39),
-					Offset:     graphics.Offset{X: 2, Y: 3},
-					BlurRadius: 4,
-				},
-			}},
-			widgets.VSpace(16),
-			widgets.Text{Content: "Glow Effect", Style: graphics.TextStyle{
-				Color:      colors.Primary,
-				FontSize:   24,
-				FontWeight: graphics.FontWeightBold,
-				Shadow: &graphics.TextShadow{
-					Color:      colors.Tertiary.WithAlpha(0.9),
-					Offset:     graphics.Offset{X: 0, Y: 0},
-					BlurRadius: 8,
-				},
-			}},
-		),
 		widgets.VSpace(40),
 	)
 }

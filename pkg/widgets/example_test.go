@@ -67,16 +67,18 @@ func ExampleColumn() {
 	_ = column
 }
 
-// This example shows the helper function for creating columns.
-func ExampleColumnOf() {
-	column := widgets.ColumnOf(
-		widgets.MainAxisAlignmentCenter,
-		widgets.CrossAxisAlignmentCenter,
-		widgets.MainAxisSizeMin,
-		widgets.Text{Content: "Hello"},
-		widgets.VSpace(16),
-		widgets.Text{Content: "World"},
-	)
+// This example shows creating a column with struct literal.
+func ExampleColumn_centered() {
+	column := widgets.Column{
+		MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+		CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+		MainAxisSize:       widgets.MainAxisSizeMin,
+		Children: []core.Widget{
+			widgets.Text{Content: "Hello"},
+			widgets.VSpace(16),
+			widgets.Text{Content: "World"},
+		},
+	}
 	_ = column
 }
 

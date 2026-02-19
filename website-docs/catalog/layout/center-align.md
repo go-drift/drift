@@ -53,14 +53,16 @@ Align expands to fill available space, then positions the child. Center is equiv
 ```go
 widgets.SafeArea{
     Child: widgets.Center{
-        Child: widgets.ColumnOf(
-            widgets.MainAxisAlignmentCenter,
-            widgets.CrossAxisAlignmentCenter,
-            widgets.MainAxisSizeMin,
-            logo,
-            widgets.VSpace(16),
-            title,
-        ),
+        Child: widgets.Column{
+            MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+            CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+            MainAxisSize:       widgets.MainAxisSizeMin,
+            Children: []core.Widget{
+                logo,
+                widgets.VSpace(16),
+                title,
+            },
+        },
     },
 }
 ```

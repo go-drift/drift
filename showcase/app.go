@@ -160,14 +160,16 @@ func buildNotFoundPage(ctx core.BuildContext, settings navigation.RouteSettings)
 	return pageScaffold(ctx, "Not Found", widgets.Container{
 		Color: colors.Background,
 		Child: widgets.Center{
-			Child: widgets.ColumnOf(
-				widgets.MainAxisAlignmentCenter,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMin,
-				widgets.Text{Content: "404", Style: textTheme.DisplayLarge},
-				widgets.VSpace(16),
-				widgets.Text{Content: "Page not found: " + settings.Name, Style: textTheme.BodyLarge},
-			),
+			Child: widgets.Column{
+				MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				MainAxisSize:       widgets.MainAxisSizeMin,
+				Children: []core.Widget{
+					widgets.Text{Content: "404", Style: textTheme.DisplayLarge},
+					widgets.VSpace(16),
+					widgets.Text{Content: "Page not found: " + settings.Name, Style: textTheme.BodyLarge},
+				},
+			},
 		},
 	})
 }
@@ -308,42 +310,41 @@ func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core
 	return widgets.Expanded{
 		Child: widgets.Container{
 			Color: colors.Background,
-			Child: widgets.ColumnOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentStart,
-				widgets.MainAxisSizeMax,
-				// Header
-				widgets.Container{
-					Color: colors.Surface,
-					Child: widgets.Padding{
-						Padding: headerPadding,
-						Child: widgets.RowOf(
-							widgets.MainAxisAlignmentStart,
-							widgets.CrossAxisAlignmentCenter,
-							widgets.MainAxisSizeMax,
-							widgets.Button{
-								Label: "Back",
-								OnTap: func() {
-									nav := navigation.NavigatorOf(ctx)
-									if nav != nil {
-										nav.Pop(nil)
-									}
+			Child: widgets.Column{
+				Children: []core.Widget{
+					// Header
+					widgets.Container{
+						Color: colors.Surface,
+						Child: widgets.Padding{
+							Padding: headerPadding,
+							Child: widgets.Row{
+								CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+								Children: []core.Widget{
+									widgets.Button{
+										Label: "Back",
+										OnTap: func() {
+											nav := navigation.NavigatorOf(ctx)
+											if nav != nil {
+												nav.Pop(nil)
+											}
+										},
+										Color:        colors.SurfaceContainerHigh,
+										TextColor:    colors.OnSurface,
+										Padding:      layout.EdgeInsetsSymmetric(16, 10),
+										BorderRadius: 8,
+										FontSize:     14,
+										Haptic:       true,
+									},
+									widgets.HSpace(16),
+									widgets.Text{Content: title, Style: textTheme.HeadlineMedium},
 								},
-								Color:        colors.SurfaceContainerHigh,
-								TextColor:    colors.OnSurface,
-								Padding:      layout.EdgeInsetsSymmetric(16, 10),
-								BorderRadius: 8,
-								FontSize:     14,
-								Haptic:       true,
 							},
-							widgets.HSpace(16),
-							widgets.Text{Content: title, Style: textTheme.HeadlineMedium},
-						),
+						},
 					},
+					// Content
+					widgets.Expanded{Child: content},
 				},
-				// Content
-				widgets.Expanded{Child: content},
-			),
+			},
 		},
 	}
 }

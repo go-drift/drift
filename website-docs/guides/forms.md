@@ -32,51 +32,51 @@ type loginForm struct {
 func (f loginForm) Build(ctx core.BuildContext) core.Widget {
     form := widgets.FormOf(ctx)
 
-    return widgets.ColumnOf(
-        widgets.MainAxisAlignmentStart,
-        widgets.CrossAxisAlignmentStretch,
-        widgets.MainAxisSizeMin,
+    return widgets.Column{
+        CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
+        MainAxisSize:       widgets.MainAxisSizeMin,
+        Children: []core.Widget{
+            // Themed form field (recommended)
+            theme.TextFormFieldOf(ctx).
+                WithLabel("Email").
+                WithPlaceholder("you@example.com").
+                WithValidator(func(value string) string {
+                    if value == "" {
+                        return "Email is required"
+                    }
+                    if !strings.Contains(value, "@") {
+                        return "Please enter a valid email"
+                    }
+                    return ""
+                }).
+                WithOnSaved(func(value string) {
+                    f.state.email = value
+                }),
+            widgets.VSpace(16),
 
-        // Themed form field (recommended)
-        theme.TextFormFieldOf(ctx).
-            WithLabel("Email").
-            WithPlaceholder("you@example.com").
-            WithValidator(func(value string) string {
-                if value == "" {
-                    return "Email is required"
+            theme.TextFormFieldOf(ctx).
+                WithLabel("Password").
+                WithPlaceholder("Enter password").
+                WithObscure(true).
+                WithValidator(func(value string) string {
+                    if len(value) < 8 {
+                        return "Password must be at least 8 characters"
+                    }
+                    return ""
+                }).
+                WithOnSaved(func(value string) {
+                    f.state.password = value
+                }),
+            widgets.VSpace(24),
+
+            theme.ButtonOf(ctx, "Submit", func() {
+                if form.Validate() {
+                    form.Save()
+                    // Use f.state.email and f.state.password
                 }
-                if !strings.Contains(value, "@") {
-                    return "Please enter a valid email"
-                }
-                return ""
-            }).
-            WithOnSaved(func(value string) {
-                f.state.email = value
             }),
-        widgets.VSpace(16),
-
-        theme.TextFormFieldOf(ctx).
-            WithLabel("Password").
-            WithPlaceholder("Enter password").
-            WithObscure(true).
-            WithValidator(func(value string) string {
-                if len(value) < 8 {
-                    return "Password must be at least 8 characters"
-                }
-                return ""
-            }).
-            WithOnSaved(func(value string) {
-                f.state.password = value
-            }),
-        widgets.VSpace(24),
-
-        theme.ButtonOf(ctx, "Submit", func() {
-            if form.Validate() {
-                form.Save()
-                // Use f.state.email and f.state.password
-            }
-        }),
-    )
+        },
+    }
 }
 ```
 

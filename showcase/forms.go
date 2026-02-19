@@ -72,71 +72,71 @@ func (s *formsState) Build(ctx core.BuildContext) core.Widget {
 		// Selection controls
 		sectionTitle("Selection Controls", colors),
 		widgets.VSpace(12),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			theme.CheckboxOf(ctx, s.acceptTerms.Value(), func(value bool) {
-				s.acceptTerms.Set(value)
-			}),
-			widgets.HSpace(10),
-			widgets.Text{Content: "Accept terms of service", Style: labelStyle(colors)},
-		),
-		widgets.VSpace(12),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			widgets.Switch{
-				OnTintColor: colors.Primary,
-				Value:       s.enableAlerts.Value(),
-				OnChanged: func(value bool) {
-					s.enableAlerts.Set(value)
-				},
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				theme.CheckboxOf(ctx, s.acceptTerms.Value(), func(value bool) {
+					s.acceptTerms.Set(value)
+				}),
+				widgets.HSpace(10),
+				widgets.Text{Content: "Accept terms of service", Style: labelStyle(colors)},
 			},
-			widgets.HSpace(10),
-			widgets.Text{Content: "Native Switch", Style: labelStyle(colors)},
-		),
+		},
 		widgets.VSpace(12),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			theme.ToggleOf(ctx, s.enableAlerts.Value(), func(value bool) {
-				s.enableAlerts.Set(value)
-			}),
-			widgets.HSpace(10),
-			widgets.Text{Content: "Skia Toggle", Style: labelStyle(colors)},
-		),
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				widgets.Switch{
+					OnTintColor: colors.Primary,
+					Value:       s.enableAlerts.Value(),
+					OnChanged: func(value bool) {
+						s.enableAlerts.Set(value)
+					},
+				},
+				widgets.HSpace(10),
+				widgets.Text{Content: "Native Switch", Style: labelStyle(colors)},
+			},
+		},
+		widgets.VSpace(12),
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				theme.ToggleOf(ctx, s.enableAlerts.Value(), func(value bool) {
+					s.enableAlerts.Set(value)
+				}),
+				widgets.HSpace(10),
+				widgets.Text{Content: "Skia Toggle", Style: labelStyle(colors)},
+			},
+		},
 		widgets.VSpace(16),
 		widgets.Text{Content: "Contact preference", Style: labelStyle(colors)},
 		widgets.VSpace(8),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			theme.RadioOf(ctx, "email", s.contactMethod.Value(), func(value string) {
-				s.contactMethod.Set(value)
-			}),
-			widgets.HSpace(10),
-			widgets.Text{Content: "Email", Style: labelStyle(colors)},
-		),
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				theme.RadioOf(ctx, "email", s.contactMethod.Value(), func(value string) {
+					s.contactMethod.Set(value)
+				}),
+				widgets.HSpace(10),
+				widgets.Text{Content: "Email", Style: labelStyle(colors)},
+			},
+		},
 		widgets.VSpace(6),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-
-			theme.RadioOf(ctx, "sms", s.contactMethod.Value(), func(value string) {
-				s.contactMethod.Set(value)
-			}),
-			widgets.HSpace(10),
-			widgets.Text{Content: "SMS", Style: labelStyle(colors)},
-		),
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				theme.RadioOf(ctx, "sms", s.contactMethod.Value(), func(value string) {
+					s.contactMethod.Set(value)
+				}),
+				widgets.HSpace(10),
+				widgets.Text{Content: "SMS", Style: labelStyle(colors)},
+			},
+		},
 		widgets.VSpace(16),
 		widgets.Text{Content: "Plan", Style: labelStyle(colors)},
 		widgets.VSpace(8),
@@ -207,93 +207,92 @@ func (f formContent) Build(ctx core.BuildContext) core.Widget {
 	colors := theme.ColorsOf(ctx)
 	form := widgets.FormOf(ctx)
 
-	return widgets.ColumnOf(
-		widgets.MainAxisAlignmentStart,
-		widgets.CrossAxisAlignmentStretch,
-		widgets.MainAxisSizeMin,
+	return widgets.Column{
+		CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
+		MainAxisSize:       widgets.MainAxisSizeMin,
+		Children: []core.Widget{
+			// Username field with validation
+			theme.TextFormFieldOf(ctx).
+				WithLabel("Username").
+				WithPlaceholder("Enter username").
+				WithHelperText("Letters and numbers only").
+				WithValidator(func(value string) string {
+					if value == "" {
+						return "Username is required"
+					}
+					if len(value) < 3 {
+						return "Username must be at least 3 characters"
+					}
+					return ""
+				}).
+				WithOnSaved(func(value string) {
+					f.state.data.Username = value
+				}),
+			widgets.VSpace(16),
 
-		// Username field with validation
-		theme.TextFormFieldOf(ctx).
-			WithLabel("Username").
-			WithPlaceholder("Enter username").
-			WithHelperText("Letters and numbers only").
-			WithValidator(func(value string) string {
-				if value == "" {
-					return "Username is required"
+			// Email field with validation
+			theme.TextFormFieldOf(ctx).
+				WithLabel("Email").
+				WithPlaceholder("you@example.com").
+				WithValidator(func(value string) string {
+					if value == "" {
+						return "Email is required"
+					}
+					if !strings.Contains(value, "@") || !strings.Contains(value, ".") {
+						return "Please enter a valid email"
+					}
+					return ""
+				}).
+				WithOnSaved(func(value string) {
+					f.state.data.Email = value
+				}),
+			widgets.VSpace(16),
+
+			// Password field with validation
+			theme.TextFormFieldOf(ctx).
+				WithLabel("Password").
+				WithPlaceholder("Enter password").
+				WithHelperText("Minimum 8 characters").
+				WithObscure(true).
+				WithValidator(func(value string) string {
+					if value == "" {
+						return "Password is required"
+					}
+					if len(value) < 8 {
+						return "Password must be at least 8 characters"
+					}
+					return ""
+				}).
+				WithOnSaved(func(value string) {
+					f.state.data.Password = value
+				}),
+			widgets.VSpace(24),
+
+			// Buttons
+			theme.ButtonOf(ctx, "Submit", func() {
+				if form != nil {
+					f.state.handleSubmit(form)
 				}
-				if len(value) < 3 {
-					return "Username must be at least 3 characters"
-				}
-				return ""
-			}).
-			WithOnSaved(func(value string) {
-				f.state.data.Username = value
 			}),
-		widgets.VSpace(16),
-
-		// Email field with validation
-		theme.TextFormFieldOf(ctx).
-			WithLabel("Email").
-			WithPlaceholder("you@example.com").
-			WithValidator(func(value string) string {
-				if value == "" {
-					return "Email is required"
+			widgets.VSpace(8),
+			theme.ButtonOf(ctx, "Reset", func() {
+				if form != nil {
+					f.state.handleReset(form)
 				}
-				if !strings.Contains(value, "@") || !strings.Contains(value, ".") {
-					return "Please enter a valid email"
-				}
-				return ""
-			}).
-			WithOnSaved(func(value string) {
-				f.state.data.Email = value
-			}),
-		widgets.VSpace(16),
+			}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
+			widgets.VSpace(16),
 
-		// Password field with validation
-		theme.TextFormFieldOf(ctx).
-			WithLabel("Password").
-			WithPlaceholder("Enter password").
-			WithHelperText("Minimum 8 characters").
-			WithObscure(true).
-			WithValidator(func(value string) string {
-				if value == "" {
-					return "Password is required"
-				}
-				if len(value) < 8 {
-					return "Password must be at least 8 characters"
-				}
-				return ""
-			}).
-			WithOnSaved(func(value string) {
-				f.state.data.Password = value
-			}),
-		widgets.VSpace(24),
-
-		// Buttons
-		theme.ButtonOf(ctx, "Submit", func() {
-			if form != nil {
-				f.state.handleSubmit(form)
-			}
-		}),
-		widgets.VSpace(8),
-		theme.ButtonOf(ctx, "Reset", func() {
-			if form != nil {
-				f.state.handleReset(form)
-			}
-		}).WithColor(colors.SurfaceVariant, colors.OnSurfaceVariant),
-		widgets.VSpace(16),
-
-		// Status display
-		widgets.Container{
-			Color:   colors.SurfaceVariant,
-			Padding: layout.EdgeInsetsAll(12),
-			Child: widgets.Text{
-				Content: f.state.statusText.Value(),
-				Style: graphics.TextStyle{
-					Color:    colors.OnSurfaceVariant,
-					FontSize: 14,
+			// Status display
+			widgets.Container{
+				Color:   colors.SurfaceVariant,
+				Padding: layout.EdgeInsetsAll(12),
+				Child: widgets.Text{
+					Content: f.state.statusText.Value(),
+					Style: graphics.TextStyle{
+						Color:    colors.OnSurfaceVariant,
+						FontSize: 14,
+					},
 				},
 			},
-		},
-	)
+		}}
 }

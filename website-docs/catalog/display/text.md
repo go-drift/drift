@@ -53,14 +53,14 @@ widgets.Text{
 ### Text in a Layout
 
 ```go
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    widgets.Text{Content: title, Style: textTheme.TitleMedium},
-    widgets.VSpace(4),
-    widgets.Text{Content: subtitle, Style: textTheme.BodySmall},
-)
+widgets.Column{
+    MainAxisSize: widgets.MainAxisSizeMin,
+    Children: []core.Widget{
+        widgets.Text{Content: title, Style: textTheme.TitleMedium},
+        widgets.VSpace(4),
+        widgets.Text{Content: subtitle, Style: textTheme.BodySmall},
+    },
+}
 ```
 
 ## Related

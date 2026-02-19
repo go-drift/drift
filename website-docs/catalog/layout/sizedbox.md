@@ -40,14 +40,14 @@ widgets.SizedBox{Height: 16}
 ### Fixed-Size Spacer
 
 ```go
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    header,
-    widgets.SizedBox{Height: 16},
-    body,
-)
+widgets.Column{
+    MainAxisSize: widgets.MainAxisSizeMin,
+    Children: []core.Widget{
+        header,
+        widgets.SizedBox{Height: 16},
+        body,
+    },
+}
 ```
 
 The `VSpace` and `HSpace` helpers are shorthand for this pattern:

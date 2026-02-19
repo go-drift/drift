@@ -88,20 +88,17 @@ description := widgets.Text{
 
 ### 2. Layout Helpers
 
-Layout helpers like `ColumnOf`, `RowOf`, and `Centered` remain for ergonomics:
+Convenience helpers like `Centered`, `VSpace`, and `HSpace` remain for ergonomics:
 
 ```go
 // Centered wraps a child in a Center widget
 centered := widgets.Centered(child)
 
-// ColumnOf/RowOf avoid verbose struct initialization
-col := widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    child1,
-    child2,
-)
+// Row and Column use struct literals
+col := widgets.Column{
+    MainAxisSize: widgets.MainAxisSizeMin,
+    Children:     []core.Widget{child1, child2},
+}
 ```
 
 ### 3. `theme.XxxOf(ctx, ...)` (Themed)

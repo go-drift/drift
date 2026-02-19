@@ -78,20 +78,20 @@ func buildTabRootPage(ctx core.BuildContext, label string) core.Widget {
 	return widgets.Container{
 		Color: colors.Background,
 		Child: widgets.Centered(
-			widgets.ColumnOf(
-				widgets.MainAxisAlignmentCenter,
-				widgets.CrossAxisAlignmentStart,
-				widgets.MainAxisSizeMin,
-
-				widgets.Text{Content: label + " Tab", Style: textTheme.HeadlineMedium},
-				widgets.VSpace(16),
-				theme.ButtonOf(ctx, "Open details", func() {
-					nav := navigation.NavigatorOf(ctx)
-					if nav != nil {
-						nav.PushNamed("/detail", nil)
-					}
-				}),
-			),
+			widgets.Column{
+				MainAxisAlignment: widgets.MainAxisAlignmentCenter,
+				MainAxisSize:      widgets.MainAxisSizeMin,
+				Children: []core.Widget{
+					widgets.Text{Content: label + " Tab", Style: textTheme.HeadlineMedium},
+					widgets.VSpace(16),
+					theme.ButtonOf(ctx, "Open details", func() {
+						nav := navigation.NavigatorOf(ctx)
+						if nav != nil {
+							nav.PushNamed("/detail", nil)
+						}
+					}),
+				},
+			},
 		),
 	}
 }

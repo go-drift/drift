@@ -47,23 +47,25 @@ func (s *appState) Build(ctx core.BuildContext) core.Widget {
 	return widgets.Container{
 		Color: colors.Background,
 		Child: widgets.Centered(
-			widgets.ColumnOf(
-				widgets.MainAxisAlignmentCenter,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMin,
-				widgets.Text{Content: "Hello from Drift!", Style: textTheme.HeadlineMedium},
-				widgets.VSpace(16),
-				theme.ButtonOf(ctx, "Increment Counter", func() {
-					s.SetState(func() {
-						s.counter = s.counter + 1
-					})
-				}),
-				widgets.VSpace(16),
-				widgets.Text{
-					Content: fmt.Sprintf("You have tapped the button %d times", s.counter),
-					Style:   graphics.TextStyle{Color: colors.OnBackground, FontSize: 16},
+			widgets.Column{
+				MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				MainAxisSize:       widgets.MainAxisSizeMin,
+				Children: []core.Widget{
+					widgets.Text{Content: "Hello from Drift!", Style: textTheme.HeadlineMedium},
+					widgets.VSpace(16),
+					theme.ButtonOf(ctx, "Increment Counter", func() {
+						s.SetState(func() {
+							s.counter = s.counter + 1
+						})
+					}),
+					widgets.VSpace(16),
+					widgets.Text{
+						Content: fmt.Sprintf("You have tapped the button %d times", s.counter),
+						Style:   graphics.TextStyle{Color: colors.OnBackground, FontSize: 16},
+					},
 				},
-			),
+			},
 		),
 	}
 }

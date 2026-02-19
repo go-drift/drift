@@ -33,23 +33,21 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(8),
 		widgets.Text{Content: "Position child with any alignment:", Style: labelStyle(colors)},
 		widgets.VSpace(12),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMax,
-			alignDemo("TopLeft", layout.AlignmentTopLeft, boxColor, colors),
-			widgets.HSpace(8),
-			alignDemo("TopRight", layout.AlignmentTopRight, boxColor, colors),
-		),
+		widgets.Row{
+			Children: []core.Widget{
+				alignDemo("TopLeft", layout.AlignmentTopLeft, boxColor, colors),
+				widgets.HSpace(8),
+				alignDemo("TopRight", layout.AlignmentTopRight, boxColor, colors),
+			},
+		},
 		widgets.VSpace(8),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMax,
-			alignDemo("BottomLeft", layout.AlignmentBottomLeft, boxColor, colors),
-			widgets.HSpace(8),
-			alignDemo("BottomRight", layout.AlignmentBottomRight, boxColor, colors),
-		),
+		widgets.Row{
+			Children: []core.Widget{
+				alignDemo("BottomLeft", layout.AlignmentBottomLeft, boxColor, colors),
+				widgets.HSpace(8),
+				alignDemo("BottomRight", layout.AlignmentBottomRight, boxColor, colors),
+			},
+		},
 		widgets.VSpace(24),
 
 		// SizedBox
@@ -57,28 +55,28 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(8),
 		widgets.Text{Content: "Constrain child to specific dimensions:", Style: labelStyle(colors)},
 		widgets.VSpace(12),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentEnd,
-			widgets.MainAxisSizeMax,
-			sizedBoxDemo("50x50", 50, 50, boxColor, colors),
-			widgets.HSpace(8),
-			sizedBoxDemo("100x30", 100, 30, boxColor, colors),
-			widgets.HSpace(8),
-			sizedBoxDemo("60x80", 60, 80, boxColor, colors),
-		),
+		widgets.Row{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentEnd,
+			Children: []core.Widget{
+				sizedBoxDemo("50x50", 50, 50, boxColor, colors),
+				widgets.HSpace(8),
+				sizedBoxDemo("100x30", 100, 30, boxColor, colors),
+				widgets.HSpace(8),
+				sizedBoxDemo("60x80", 60, 80, boxColor, colors),
+			},
+		},
 		widgets.VSpace(16),
 		widgets.Text{Content: "Also useful as spacers (no child):", Style: labelStyle(colors)},
 		widgets.VSpace(8),
 		layoutContainer(
-			widgets.RowOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMax,
-				colorBox(boxColor, "A"),
-				widgets.SizedBox{Width: 40}, // Horizontal spacer
-				colorBox(PinkSeed, "B"),
-			),
+			widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				Children: []core.Widget{
+					colorBox(boxColor, "A"),
+					widgets.SizedBox{Width: 40}, // Horizontal spacer
+					colorBox(PinkSeed, "B"),
+				},
+			},
 			colors,
 		),
 		widgets.VSpace(24),
@@ -89,48 +87,48 @@ func buildPositioningPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "Fill remaining space in Row/Column:", Style: labelStyle(colors)},
 		widgets.VSpace(12),
 		layoutContainer(
-			widgets.RowOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMax,
-				colorBox(boxColor, "Fixed"),
-				widgets.Expanded{
-					Child: widgets.Container{
-						Color:   PinkSeed,
-						Padding: layout.EdgeInsetsAll(12),
-						Child:   widgets.Text{Content: "Expanded", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
+			widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				Children: []core.Widget{
+					colorBox(boxColor, "Fixed"),
+					widgets.Expanded{
+						Child: widgets.Container{
+							Color:   PinkSeed,
+							Padding: layout.EdgeInsetsAll(12),
+							Child:   widgets.Text{Content: "Expanded", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
+						},
 					},
+					colorBox(boxColor, "Fixed"),
 				},
-				colorBox(boxColor, "Fixed"),
-			),
+			},
 			colors,
 		),
 		widgets.VSpace(16),
 		widgets.Text{Content: "With flex factors (1:2 ratio):", Style: labelStyle(colors)},
 		widgets.VSpace(8),
 		layoutContainer(
-			widgets.RowOf(
-				widgets.MainAxisAlignmentStart,
-				widgets.CrossAxisAlignmentCenter,
-				widgets.MainAxisSizeMax,
-				widgets.Expanded{
-					Flex: 1,
-					Child: widgets.Container{
-						Color:   boxColor,
-						Padding: layout.EdgeInsetsAll(12),
-						Child:   widgets.Text{Content: "Flex 1", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 14}},
+			widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				Children: []core.Widget{
+					widgets.Expanded{
+						Flex: 1,
+						Child: widgets.Container{
+							Color:   boxColor,
+							Padding: layout.EdgeInsetsAll(12),
+							Child:   widgets.Text{Content: "Flex 1", Style: graphics.TextStyle{Color: graphics.ColorBlack, FontSize: 14}},
+						},
+					},
+					widgets.HSpace(8),
+					widgets.Expanded{
+						Flex: 2,
+						Child: widgets.Container{
+							Color:   PinkSeed,
+							Padding: layout.EdgeInsetsAll(12),
+							Child:   widgets.Text{Content: "Flex 2", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
+						},
 					},
 				},
-				widgets.HSpace(8),
-				widgets.Expanded{
-					Flex: 2,
-					Child: widgets.Container{
-						Color:   PinkSeed,
-						Padding: layout.EdgeInsetsAll(12),
-						Child:   widgets.Text{Content: "Flex 2", Style: graphics.TextStyle{Color: graphics.ColorWhite, FontSize: 14}},
-					},
-				},
-			),
+			},
 			colors,
 		),
 		widgets.VSpace(40),

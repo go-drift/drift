@@ -129,21 +129,21 @@ func buildThemingPage(ctx core.BuildContext, isDark bool, isCupertino bool) core
 // colorSwatch displays a color with its name.
 func colorSwatch(name string, bg, fg graphics.Color) core.Widget {
 	return widgets.Container{
-		Color: bg,
+		Color:   bg,
 		Padding: layout.EdgeInsetsSymmetric(16, 12),
-		Child: widgets.RowOf(
-			widgets.MainAxisAlignmentSpaceBetween,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMax,
-			widgets.Text{Content: name, Style: graphics.TextStyle{
-				Color:    fg,
-				FontSize: 16,
-			}},
-			widgets.Text{Content: colorHex(bg), Style: graphics.TextStyle{
-				Color:    fg,
-				FontSize: 12,
-			}},
-		),
+		Child: widgets.Row{
+			MainAxisAlignment: widgets.MainAxisAlignmentSpaceBetween,
+			Children: []core.Widget{
+				widgets.Text{Content: name, Style: graphics.TextStyle{
+					Color:    fg,
+					FontSize: 16,
+				}},
+				widgets.Text{Content: colorHex(bg), Style: graphics.TextStyle{
+					Color:    fg,
+					FontSize: 12,
+				}},
+			},
+		},
 	}
 }
 
@@ -163,22 +163,23 @@ func hexByte(b uint8) string {
 // themeModeCard displays the current theme mode and platform.
 func themeModeCard(mode, platform string, colors theme.ColorScheme) core.Widget {
 	return widgets.Container{
-		Color: colors.Primary,
+		Color:   colors.Primary,
 		Padding: layout.EdgeInsetsAll(16),
-		Child: widgets.ColumnOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentCenter,
-			widgets.MainAxisSizeMin,
-			widgets.Text{Content: mode, Style: graphics.TextStyle{
-				Color:      colors.OnPrimary,
-				FontSize:   18,
-				FontWeight: graphics.FontWeightBold,
-			}},
-			widgets.VSpace(4),
-			widgets.Text{Content: platform, Style: graphics.TextStyle{
-				Color:    colors.OnPrimary,
-				FontSize: 14,
-			}},
-		),
+		Child: widgets.Column{
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			MainAxisSize:       widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				widgets.Text{Content: mode, Style: graphics.TextStyle{
+					Color:      colors.OnPrimary,
+					FontSize:   18,
+					FontWeight: graphics.FontWeightBold,
+				}},
+				widgets.VSpace(4),
+				widgets.Text{Content: platform, Style: graphics.TextStyle{
+					Color:    colors.OnPrimary,
+					FontSize: 14,
+				}},
+			},
+		},
 	}
 }

@@ -27,8 +27,9 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "Start:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		layoutContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentStart, widgets.CrossAxisAlignmentStart, widgets.MainAxisSizeMax,
-				colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")),
+			widgets.Row{
+				Children: []core.Widget{colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")},
+			},
 			colors,
 		),
 		widgets.VSpace(8),
@@ -36,8 +37,10 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "Center:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		layoutContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentCenter, widgets.CrossAxisAlignmentStart, widgets.MainAxisSizeMax,
-				colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")),
+			widgets.Row{
+				MainAxisAlignment: widgets.MainAxisAlignmentCenter,
+				Children:          []core.Widget{colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")},
+			},
 			colors,
 		),
 		widgets.VSpace(8),
@@ -45,8 +48,10 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "SpaceBetween:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		layoutContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentSpaceBetween, widgets.CrossAxisAlignmentStart, widgets.MainAxisSizeMax,
-				colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")),
+			widgets.Row{
+				MainAxisAlignment: widgets.MainAxisAlignmentSpaceBetween,
+				Children:          []core.Widget{colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")},
+			},
 			colors,
 		),
 		widgets.VSpace(8),
@@ -54,8 +59,10 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "SpaceEvenly:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		layoutContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentSpaceEvenly, widgets.CrossAxisAlignmentStart, widgets.MainAxisSizeMax,
-				colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")),
+			widgets.Row{
+				MainAxisAlignment: widgets.MainAxisAlignmentSpaceEvenly,
+				Children:          []core.Widget{colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")},
+			},
 			colors,
 		),
 		widgets.VSpace(24),
@@ -69,8 +76,9 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "Start:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		crossAxisContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentStart, widgets.CrossAxisAlignmentStart, widgets.MainAxisSizeMax,
-				tallBox(boxA, "A", 60), tallBox(boxB, "B", 40), tallBox(boxC, "C", 50)),
+			widgets.Row{
+				Children: []core.Widget{tallBox(boxA, "A", 60), tallBox(boxB, "B", 40), tallBox(boxC, "C", 50)},
+			},
 			colors,
 		),
 		widgets.VSpace(8),
@@ -78,8 +86,10 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "Center:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		crossAxisContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentStart, widgets.CrossAxisAlignmentCenter, widgets.MainAxisSizeMax,
-				tallBox(boxA, "A", 60), tallBox(boxB, "B", 40), tallBox(boxC, "C", 50)),
+			widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				Children:           []core.Widget{tallBox(boxA, "A", 60), tallBox(boxB, "B", 40), tallBox(boxC, "C", 50)},
+			},
 			colors,
 		),
 		widgets.VSpace(8),
@@ -87,8 +97,10 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "End:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		crossAxisContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentStart, widgets.CrossAxisAlignmentEnd, widgets.MainAxisSizeMax,
-				tallBox(boxA, "A", 60), tallBox(boxB, "B", 40), tallBox(boxC, "C", 50)),
+			widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentEnd,
+				Children:           []core.Widget{tallBox(boxA, "A", 60), tallBox(boxB, "B", 40), tallBox(boxC, "C", 50)},
+			},
 			colors,
 		),
 		widgets.VSpace(8),
@@ -96,8 +108,10 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.Text{Content: "Stretch:", Style: labelStyle(colors)},
 		widgets.VSpace(4),
 		crossAxisContainer(
-			widgets.RowOf(widgets.MainAxisAlignmentStart, widgets.CrossAxisAlignmentStretch, widgets.MainAxisSizeMax,
-				colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")),
+			widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
+				Children:           []core.Widget{colorBox(boxA, "A"), colorBox(boxB, "B"), colorBox(boxC, "C")},
+			},
 			colors,
 		),
 		widgets.VSpace(24),
@@ -107,16 +121,15 @@ func buildLayoutsPage(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(8),
 		widgets.Text{Content: "Same alignments work vertically:", Style: labelStyle(colors)},
 		widgets.VSpace(12),
-		widgets.RowOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMax,
-			columnDemo("Start", widgets.CrossAxisAlignmentStart, boxA, boxB, boxC, colors),
-			widgets.HSpace(12),
-			columnDemo("Center", widgets.CrossAxisAlignmentCenter, boxA, boxB, boxC, colors),
-			widgets.HSpace(12),
-			columnDemo("End", widgets.CrossAxisAlignmentEnd, boxA, boxB, boxC, colors),
-		),
+		widgets.Row{
+			Children: []core.Widget{
+				columnDemo("Start", widgets.CrossAxisAlignmentStart, boxA, boxB, boxC, colors),
+				widgets.HSpace(12),
+				columnDemo("Center", widgets.CrossAxisAlignmentCenter, boxA, boxB, boxC, colors),
+				widgets.HSpace(12),
+				columnDemo("End", widgets.CrossAxisAlignmentEnd, boxA, boxB, boxC, colors),
+			},
+		},
 		widgets.VSpace(24),
 
 		// Stack section

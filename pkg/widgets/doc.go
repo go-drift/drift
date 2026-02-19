@@ -24,16 +24,9 @@
 //
 // # Tier 2: Layout Helpers (ergonomics for layout widgets)
 //
-// Layout helpers remain for ergonomic creation of Row, Column, and Stack:
+// Convenience helpers for common layout patterns:
 //
-//	col := ColumnOf(
-//	    MainAxisAlignmentCenter,
-//	    CrossAxisAlignmentCenter,
-//	    MainAxisSizeMax,
-//	    child1, child2,
-//	)
-//
-// Also: RowOf, StackOf, VSpace, HSpace, Centered.
+//	StackOf, VSpace, HSpace, Centered.
 //
 // # WithX Chaining (for themed widgets)
 //
@@ -48,21 +41,16 @@
 // # API Rules
 //
 //   - Canonical = struct literal. Always works, always documented.
-//   - Layout helpers (ColumnOf, RowOf, StackOf) exist for ergonomics.
+//   - Layout helpers (StackOf, VSpace, HSpace, Centered) exist for ergonomics.
 //   - For themed widgets, use theme.XxxOf constructors from pkg/theme.
 //   - WithX returns copies. Doc comment must state "returns a copy".
 //
 // # Layout Widgets
 //
-// Use Row and Column for horizontal and vertical layouts:
+// Use Row and Column struct literals for horizontal and vertical layouts:
 //
 //	widgets.Row{Children: []core.Widget{...}}
 //	widgets.Column{Children: []core.Widget{...}}
-//
-// Helper functions provide a more concise syntax:
-//
-//	widgets.RowOf(alignment, crossAlignment, size, child1, child2, child3)
-//	widgets.ColumnOf(alignment, crossAlignment, size, child1, child2, child3)
 //
 // # Input Widgets
 //

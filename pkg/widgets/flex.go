@@ -205,17 +205,6 @@ type Row struct {
 	MainAxisSize       MainAxisSize
 }
 
-// RowOf creates a horizontal layout with the specified alignments and sizing behavior.
-// This is a convenience helper for the common case of creating a Row with children.
-func RowOf(alignment MainAxisAlignment, crossAlignment CrossAxisAlignment, size MainAxisSize, children ...core.Widget) Row {
-	return Row{
-		Children:           children,
-		MainAxisAlignment:  alignment,
-		CrossAxisAlignment: crossAlignment,
-		MainAxisSize:       size,
-	}
-}
-
 func (r Row) CreateElement() core.Element {
 	return core.NewRenderObjectElement(r, nil)
 }
@@ -284,17 +273,6 @@ type Column struct {
 	MainAxisAlignment  MainAxisAlignment
 	CrossAxisAlignment CrossAxisAlignment
 	MainAxisSize       MainAxisSize
-}
-
-// ColumnOf creates a vertical layout with the specified alignments and sizing behavior.
-// This is a convenience helper for the common case of creating a Column with children.
-func ColumnOf(alignment MainAxisAlignment, crossAlignment CrossAxisAlignment, size MainAxisSize, children ...core.Widget) Column {
-	return Column{
-		Children:           children,
-		MainAxisAlignment:  alignment,
-		CrossAxisAlignment: crossAlignment,
-		MainAxisSize:       size,
-	}
 }
 
 func (c Column) CreateElement() core.Element {

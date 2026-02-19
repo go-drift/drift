@@ -187,20 +187,20 @@ func retrievedValueCard(value string, colors theme.ColorScheme) core.Widget {
 		Color:        colors.SurfaceVariant,
 		BorderRadius: 8,
 		Padding:      layout.EdgeInsetsAll(12),
-		Child: widgets.ColumnOf(
-			widgets.MainAxisAlignmentStart,
-			widgets.CrossAxisAlignmentStart,
-			widgets.MainAxisSizeMin,
-			widgets.Text{Content: "Retrieved Value:", Style: graphics.TextStyle{
-				Color:      colors.OnSurfaceVariant,
-				FontSize:   12,
-				FontWeight: graphics.FontWeightBold,
-			}},
-			widgets.VSpace(4),
-			widgets.Text{Content: displayValue, Style: graphics.TextStyle{
-				Color:    colors.OnSurface,
-				FontSize: 16,
-			}},
-		),
+		Child: widgets.Column{
+			MainAxisSize: widgets.MainAxisSizeMin,
+			Children: []core.Widget{
+				widgets.Text{Content: "Retrieved Value:", Style: graphics.TextStyle{
+					Color:      colors.OnSurfaceVariant,
+					FontSize:   12,
+					FontWeight: graphics.FontWeightBold,
+				}},
+				widgets.VSpace(4),
+				widgets.Text{Content: displayValue, Style: graphics.TextStyle{
+					Color:    colors.OnSurface,
+					FontSize: 16,
+				}},
+			},
+		},
 	}
 }

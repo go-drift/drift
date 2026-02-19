@@ -244,5 +244,8 @@ func (t TextField) Build(ctx core.BuildContext) core.Widget {
 		children = append(children, Text{Content: t.HelperText, Style: t.HelperStyle})
 	}
 
-	return ColumnOf(MainAxisAlignmentStart, CrossAxisAlignmentStart, MainAxisSizeMin, children...)
+	return Column{
+		MainAxisSize: MainAxisSizeMin,
+		Children:     children,
+	}
 }

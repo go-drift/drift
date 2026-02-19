@@ -76,14 +76,14 @@ widgets.Radio[string]{
 ### Radio Group
 
 ```go
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    theme.RadioOf(ctx, "email", contactMethod, setContactMethod),
-    theme.RadioOf(ctx, "phone", contactMethod, setContactMethod),
-    theme.RadioOf(ctx, "mail", contactMethod, setContactMethod),
-)
+widgets.Column{
+    MainAxisSize: widgets.MainAxisSizeMin,
+    Children: []core.Widget{
+        theme.RadioOf(ctx, "email", contactMethod, setContactMethod),
+        theme.RadioOf(ctx, "phone", contactMethod, setContactMethod),
+        theme.RadioOf(ctx, "mail", contactMethod, setContactMethod),
+    },
+}
 ```
 
 ## Related

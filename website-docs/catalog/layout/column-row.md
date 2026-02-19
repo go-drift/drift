@@ -94,27 +94,10 @@ Controls how much space the flex container takes:
 `MainAxisSizeMax` is the zero value, so `Row{}` and `Column{}` expand to fill their parent by default. Set `MainAxisSizeMin` explicitly when you want shrink-wrap behavior.
 
 ```go
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,  // Only as tall as content
-    items...,
-)
-```
-
-## Helper Functions
-
-Use `RowOf` and `ColumnOf` for concise layout:
-
-```go
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    title,
-    subtitle,
-    description,
-)
+widgets.Column{
+    MainAxisSize: widgets.MainAxisSizeMin,  // Only as tall as content
+    Children:     items,
+}
 ```
 
 ## Spacing
@@ -122,25 +105,26 @@ widgets.ColumnOf(
 Use `VSpace` and `HSpace` for consistent gaps:
 
 ```go
-widgets.ColumnOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentStart,
-    widgets.MainAxisSizeMin,
-    header,
-    widgets.VSpace(16),  // 16px vertical gap
-    body,
-    widgets.VSpace(24),
-    footer,
-)
+widgets.Column{
+    MainAxisSize: widgets.MainAxisSizeMin,
+    Children: []core.Widget{
+        header,
+        widgets.VSpace(16),  // 16px vertical gap
+        body,
+        widgets.VSpace(24),
+        footer,
+    },
+}
 
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMin,
-    icon,
-    widgets.HSpace(8),   // 8px horizontal gap
-    label,
-)
+widgets.Row{
+    CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+    MainAxisSize:       widgets.MainAxisSizeMin,
+    Children: []core.Widget{
+        icon,
+        widgets.HSpace(8),   // 8px horizontal gap
+        label,
+    },
+}
 ```
 
 ## Related

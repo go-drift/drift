@@ -313,13 +313,14 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		s.requestParentLayout()
 	}
 
-	triggerContent := RowOf(
-		MainAxisAlignmentSpaceBetween,
-		CrossAxisAlignmentCenter,
-		MainAxisSizeMax,
-		Padding{Padding: layout.EdgeInsetsOnly(0, 0, 8, 0), Child: displayChild},
-		SizedBox{Width: iconSize + 8, Child: dropdownChevron{size: iconSize * 0.6, color: textStyle.Color}},
-	)
+	triggerContent := Row{
+		MainAxisAlignment:  MainAxisAlignmentSpaceBetween,
+		CrossAxisAlignment: CrossAxisAlignmentCenter,
+		Children: []core.Widget{
+			Padding{Padding: layout.EdgeInsetsOnly(0, 0, 8, 0), Child: displayChild},
+			SizedBox{Width: iconSize + 8, Child: dropdownChevron{size: iconSize * 0.6, color: textStyle.Color}},
+		},
+	}
 
 	trigger := GestureDetector{
 		OnTap: toggle,
@@ -426,12 +427,10 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 					Child: SizedBox{
 						Width:  width,
 						Height: itemHeight,
-						Child: RowOf(
-							MainAxisAlignmentStart,
-							CrossAxisAlignmentCenter,
-							MainAxisSizeMax,
-							Padding{Padding: contentPadding, Child: itemChild},
-						),
+						Child: Row{
+							CrossAxisAlignment: CrossAxisAlignmentCenter,
+							Children:           []core.Widget{Padding{Padding: contentPadding, Child: itemChild}},
+						},
 					},
 				},
 			},
@@ -443,17 +442,22 @@ func (s *dropdownState[T]) Build(ctx core.BuildContext) core.Widget {
 		BorderColor:  menuBorderColor,
 		BorderWidth:  1,
 		BorderRadius: borderRadius,
-		Child:        ColumnOf(MainAxisAlignmentStart, CrossAxisAlignmentStretch, MainAxisSizeMin, menuItems...),
+		Child: Column{
+			CrossAxisAlignment: CrossAxisAlignmentStretch,
+			MainAxisSize:       MainAxisSizeMin,
+			Children:           menuItems,
+		},
 	}
 
-	content := ColumnOf(
-		MainAxisAlignmentStart,
-		CrossAxisAlignmentStretch,
-		MainAxisSizeMin,
-		triggerBox,
-		VSpace(6),
-		SizedBox{Width: width, Child: menu},
-	)
+	content := Column{
+		CrossAxisAlignment: CrossAxisAlignmentStretch,
+		MainAxisSize:       MainAxisSizeMin,
+		Children: []core.Widget{
+			triggerBox,
+			VSpace(6),
+			SizedBox{Width: width, Child: menu},
+		},
+	}
 
 	return dropdownScope{owner: s, child: content}
 }

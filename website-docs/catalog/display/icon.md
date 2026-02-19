@@ -30,14 +30,15 @@ widgets.Icon{
 ### Icon in a Row
 
 ```go
-widgets.RowOf(
-    widgets.MainAxisAlignmentStart,
-    widgets.CrossAxisAlignmentCenter,
-    widgets.MainAxisSizeMin,
-    widgets.Icon{Icon: icons.Email, Size: 20, Color: colors.OnSurfaceVariant},
-    widgets.HSpace(8),
-    widgets.Text{Content: "user@example.com", Style: textTheme.BodyMedium},
-)
+widgets.Row{
+    CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+    MainAxisSize:       widgets.MainAxisSizeMin,
+    Children: []core.Widget{
+        widgets.Icon{Icon: icons.Email, Size: 20, Color: colors.OnSurfaceVariant},
+        widgets.HSpace(8),
+        widgets.Text{Content: "user@example.com", Style: textTheme.BodyMedium},
+    },
+}
 ```
 
 ## Related

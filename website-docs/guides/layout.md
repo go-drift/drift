@@ -19,31 +19,32 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 
     return widgets.SafeArea{
         Child: widgets.PaddingAll(20,
-            widgets.ColumnOf(
-                widgets.MainAxisAlignmentStart,
-                widgets.CrossAxisAlignmentStart,
-                widgets.MainAxisSizeMin,
-                // Header
-                widgets.Text{Content: "Settings", Style: textTheme.HeadlineLarge},
-                widgets.VSpace(24),
-                // Content
-                widgets.RowOf(
-                    widgets.MainAxisAlignmentSpaceBetween,
-                    widgets.CrossAxisAlignmentCenter,
-                    widgets.MainAxisSizeMax,
-                    widgets.Text{Content: "Dark Mode", Style: textTheme.BodyLarge},
-                    widgets.Switch{Value: s.isDark, OnChanged: s.setDarkMode},
-                ),
-                widgets.VSpace(16),
-                // Action
-                widgets.Button{
-                    Label:     "Save",
-                    OnTap:     s.handleSave,
-                    Color:     colors.Primary,
-                    TextColor: colors.OnPrimary,
-                    Haptic:    true,
+            widgets.Column{
+                MainAxisSize: widgets.MainAxisSizeMin,
+                Children: []core.Widget{
+                    // Header
+                    widgets.Text{Content: "Settings", Style: textTheme.HeadlineLarge},
+                    widgets.VSpace(24),
+                    // Content
+                    widgets.Row{
+                        MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
+                        CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+                        Children: []core.Widget{
+                            widgets.Text{Content: "Dark Mode", Style: textTheme.BodyLarge},
+                            widgets.Switch{Value: s.isDark, OnChanged: s.setDarkMode},
+                        },
+                    },
+                    widgets.VSpace(16),
+                    // Action
+                    widgets.Button{
+                        Label:     "Save",
+                        OnTap:     s.handleSave,
+                        Color:     colors.Primary,
+                        TextColor: colors.OnPrimary,
+                        Haptic:    true,
+                    },
                 },
-            ),
+            },
         ),
     }
 }
@@ -156,14 +157,14 @@ widgets.DecoratedBox{
         Children: []core.Widget{
             image,  // clipped to parent's rounded corners
             widgets.PaddingAll(16,
-                widgets.ColumnOf(
-                    widgets.MainAxisAlignmentStart,
-                    widgets.CrossAxisAlignmentStart,
-                    widgets.MainAxisSizeMin,
-                    widgets.Text{Content: title, Style: textTheme.TitleMedium},
-                    widgets.VSpace(4),
-                    widgets.Text{Content: subtitle, Style: textTheme.BodySmall},
-                ),
+                widgets.Column{
+                    MainAxisSize: widgets.MainAxisSizeMin,
+                    Children: []core.Widget{
+                        widgets.Text{Content: title, Style: textTheme.TitleMedium},
+                        widgets.VSpace(4),
+                        widgets.Text{Content: subtitle, Style: textTheme.BodySmall},
+                    },
+                },
             ),
         },
     },
@@ -177,22 +178,23 @@ widgets.DecoratedBox{
     Color:        colors.Surface,
     BorderRadius: 12,
     Child: widgets.PaddingAll(24,
-        widgets.ColumnOf(
-            widgets.MainAxisAlignmentStart,
-            widgets.CrossAxisAlignmentStretch,
-            widgets.MainAxisSizeMin,
-            widgets.Text{
-                Content: "Welcome",
-                Style:   textTheme.HeadlineLarge,
-                Align:   graphics.TextAlignCenter,
+        widgets.Column{
+            CrossAxisAlignment: widgets.CrossAxisAlignmentStretch,
+            MainAxisSize:       widgets.MainAxisSizeMin,
+            Children: []core.Widget{
+                widgets.Text{
+                    Content: "Welcome",
+                    Style:   textTheme.HeadlineLarge,
+                    Align:   graphics.TextAlignCenter,
+                },
+                widgets.VSpace(8),
+                widgets.Text{
+                    Content: "A cross-platform UI framework for Go",
+                    Style:   textTheme.BodyMedium,
+                    Align:   graphics.TextAlignCenter,
+                },
             },
-            widgets.VSpace(8),
-            widgets.Text{
-                Content: "A cross-platform UI framework for Go",
-                Style:   textTheme.BodyMedium,
-                Align:   graphics.TextAlignCenter,
-            },
-        ),
+        },
     ),
 }
 ```
