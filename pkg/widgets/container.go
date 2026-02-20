@@ -277,6 +277,13 @@ func (r *renderContainer) Paint(ctx *layout.PaintContext) {
 	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	r.painter.paint(ctx, rect)
 
+	// Emit occlusion for this container's opaque area. Platform views painted
+	// earlier in z-order will be clipped beneath this region. The occlusion op
+	// is a no-op when replayed on canvases that don't implement OcclusionCanvas.
+	if p := r.OcclusionPath(); p != nil {
+		ctx.OccludePlatformViews(p)
+	}
+
 	if r.child == nil {
 		return
 	}
@@ -292,9 +299,8 @@ func (r *renderContainer) Paint(ctx *layout.PaintContext) {
 }
 
 // OcclusionPath returns a path representing the opaque area this container
-// paints, accounting for border radius. Used by Stack to emit shape-accurate
-// occlusion masks for platform views. Returns nil if the container has no
-// opaque background.
+// paints, accounting for border radius. Returns nil if the container has no
+// opaque background. Called during Paint() to emit occlusion for platform views.
 func (r *renderContainer) OcclusionPath() *graphics.Path {
 	if r.painter.color == graphics.ColorTransparent || r.painter.color.Alpha() < 1.0 {
 		return nil

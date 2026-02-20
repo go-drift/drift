@@ -234,13 +234,6 @@ func (op opEmbedPlatformView) execute(canvas Canvas) {
 	canvas.EmbedPlatformView(op.viewID, op.size)
 }
 
-// occludePlatformViewsCanvas is an optional interface for canvases that support
-// platform view occlusion regions. GeometryCanvas implements this to track
-// z-order occlusion during the geometry compositing pass.
-type occludePlatformViewsCanvas interface {
-	OccludePlatformViews(mask *Path)
-}
-
 // opOccludePlatformViews records a region that occludes platform views painted
 // before it. During the geometry pass, this region is subtracted from platform
 // view visible areas.
@@ -249,7 +242,7 @@ type opOccludePlatformViews struct {
 }
 
 func (op opOccludePlatformViews) execute(canvas Canvas) {
-	if c, ok := canvas.(occludePlatformViewsCanvas); ok {
+	if c, ok := canvas.(OcclusionCanvas); ok {
 		c.OccludePlatformViews(op.mask)
 	}
 }

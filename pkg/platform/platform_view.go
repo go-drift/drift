@@ -15,7 +15,7 @@ type CapturedViewGeometry struct {
 	ViewID         int64
 	Offset         graphics.Offset
 	Size           graphics.Size
-	ClipBounds     *graphics.Rect   // collapsed single-rect (Android fallback)
+	ClipBounds     *graphics.Rect   // collapsed single-rect after occlusion subtraction (Android fallback); nil if unclipped
 	VisibleRect    graphics.Rect    // view bounds intersected with parent clips; {0,0,0,0} if hidden
 	OcclusionPaths []*graphics.Path // path-based occlusion masks; [] if none
 }

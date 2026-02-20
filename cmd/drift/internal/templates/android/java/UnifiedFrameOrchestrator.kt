@@ -89,21 +89,26 @@ class UnifiedFrameOrchestrator(
                     emptyList()
                 }
 
+                val x = v.getDouble("x").toFloat()
+                val y = v.getDouble("y").toFloat()
+                val width = v.getDouble("width").toFloat()
+                val height = v.getDouble("height").toFloat()
+
                 views.add(ViewSnapshot(
                     viewId = v.getLong("viewId"),
-                    x = v.getDouble("x").toFloat(),
-                    y = v.getDouble("y").toFloat(),
-                    width = v.getDouble("width").toFloat(),
-                    height = v.getDouble("height").toFloat(),
+                    x = x,
+                    y = y,
+                    width = width,
+                    height = height,
                     clipLeft = if (hasClip) v.getDouble("clipLeft").toFloat() else null,
                     clipTop = if (hasClip) v.getDouble("clipTop").toFloat() else null,
                     clipRight = if (hasClip) v.getDouble("clipRight").toFloat() else null,
                     clipBottom = if (hasClip) v.getDouble("clipBottom").toFloat() else null,
                     visible = v.optBoolean("visible", true),
-                    visibleLeft = v.optDouble("visibleLeft", 0.0).toFloat(),
-                    visibleTop = v.optDouble("visibleTop", 0.0).toFloat(),
-                    visibleRight = v.optDouble("visibleRight", 0.0).toFloat(),
-                    visibleBottom = v.optDouble("visibleBottom", 0.0).toFloat(),
+                    visibleLeft = v.optDouble("visibleLeft", x.toDouble()).toFloat(),
+                    visibleTop = v.optDouble("visibleTop", y.toDouble()).toFloat(),
+                    visibleRight = v.optDouble("visibleRight", (x + width).toDouble()).toFloat(),
+                    visibleBottom = v.optDouble("visibleBottom", (y + height).toDouble()).toFloat(),
                     occlusionPaths = occPaths
                 ))
             }

@@ -142,104 +142,13 @@ func (r *renderStack) PerformLayout() {
 }
 
 // Paint paints all children in order (first = bottom, last = top).
-//
-// Children after the first emit occlusion regions so that platform views
-// painted by earlier siblings are clipped or hidden beneath later content.
-// When a child provides its own OcclusionPath (e.g. a Container with
-// border radius), that shape is used. Otherwise, the child's bounding
-// rectangle is used as a conservative fallback.
+// Occlusion of platform views is handled by individual widgets: opaque
+// widgets (Container, DecoratedBox) emit occlusion regions during their
+// own Paint() calls, so the Stack doesn't need to inspect children.
 func (r *renderStack) Paint(ctx *layout.PaintContext) {
-	for i, child := range r.children {
-		offset := getChildOffset(child)
-		if i > 0 {
-			mask := childOcclusionMask(child, offset, ctx)
-			if mask != nil {
-				ctx.OccludePlatformViews(mask)
-			}
-		}
-		ctx.PaintChildWithLayer(child, offset)
+	for _, child := range r.children {
+		ctx.PaintChildWithLayer(child, getChildOffset(child))
 	}
-}
-
-// occlusionShaper is an optional interface for render objects that know
-// the shape of their opaque painted area (e.g. Container with border radius).
-type occlusionShaper interface {
-	OcclusionPath() *graphics.Path
-}
-
-// childOcclusionMask returns the occlusion path for a child, offset to
-// the child's position. It traverses through single-child wrappers
-// (Positioned, Padding, GestureDetector, etc.) to find a render object
-// that provides a custom OcclusionPath. Falls back to the child's
-// bounding rect clipped to the current drawable area.
-func childOcclusionMask(child layout.RenderBox, offset graphics.Offset, ctx *layout.PaintContext) *graphics.Path {
-	childSize := child.Size()
-	if childSize.Width <= 0 || childSize.Height <= 0 {
-		return nil
-	}
-
-	// Walk through the render tree to find a shape provider.
-	// Accumulate offsets as we traverse through positioned wrappers.
-	if p := findOcclusionPath(child); p != nil {
-		return p.Translate(offset.X, offset.Y)
-	}
-
-	// Fallback: bounding rect clipped to the current drawable area.
-	bounds := graphics.RectFromLTWH(offset.X, offset.Y, childSize.Width, childSize.Height)
-	if clip, ok := ctx.CurrentClipBounds(); ok {
-		t := ctx.CurrentTransform()
-		localClip := clip.Translate(-t.X, -t.Y)
-		bounds = bounds.Intersect(localClip)
-	}
-	if bounds.IsEmpty() {
-		return nil
-	}
-	mask := graphics.NewPath()
-	mask.AddRect(bounds)
-	return mask
-}
-
-// findOcclusionPath walks through single-child render objects to find
-// one that implements OcclusionPath. Returns nil if none found.
-// Accumulates child offsets for correct positioning.
-func findOcclusionPath(ro layout.RenderBox) *graphics.Path {
-	var dx, dy float64
-	current := ro
-	for depth := 0; depth < 12; depth++ {
-		if shaper, ok := current.(occlusionShaper); ok {
-			if p := shaper.OcclusionPath(); p != nil {
-				if dx != 0 || dy != 0 {
-					return p.Translate(dx, dy)
-				}
-				return p
-			}
-		}
-		// Try to get the single child. We look for the common interfaces.
-		type singleChildGetter interface {
-			layout.RenderObject
-			VisitChildren(func(layout.RenderObject))
-		}
-		getter, ok := current.(singleChildGetter)
-		if !ok {
-			return nil
-		}
-		var children []layout.RenderObject
-		getter.VisitChildren(func(c layout.RenderObject) {
-			children = append(children, c)
-		})
-		if len(children) != 1 {
-			return nil // Multi-child or no-child: stop
-		}
-		box, ok := children[0].(layout.RenderBox)
-		if !ok {
-			return nil
-		}
-		childOffset := getChildOffset(box)
-		dx += childOffset.X
-		dy += childOffset.Y
-		current = box
-	}
-	return nil
 }
 
 // HitTest tests children in reverse order (topmost first).

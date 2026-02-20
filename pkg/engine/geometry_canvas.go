@@ -29,7 +29,7 @@ type pendingViewGeometry struct {
 	viewID     int64
 	offset     graphics.Offset
 	size       graphics.Size
-	clipBounds *graphics.Rect
+	parentClip *graphics.Rect // parent clip region at embed time
 	seqIndex   int
 }
 
@@ -85,12 +85,12 @@ func (c *GeometryCanvas) DrawLottie(_ unsafe.Pointer, _ graphics.Rect, _ float64
 // a z-order sequence index for later occlusion processing.
 func (c *GeometryCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
 	offset := c.tracker.transform
-	clipBounds := c.tracker.currentClip()
+	parentClip := c.tracker.currentClip()
 	c.views = append(c.views, pendingViewGeometry{
 		viewID:     viewID,
 		offset:     offset,
 		size:       size,
-		clipBounds: clipBounds,
+		parentClip: parentClip,
 		seqIndex:   c.seqCounter,
 	})
 	c.seqCounter++
@@ -120,10 +120,10 @@ func (c *GeometryCanvas) FlushToSink() {
 		for _, v := range c.views {
 			viewBounds := graphics.RectFromLTWH(v.offset.X, v.offset.Y, v.size.Width, v.size.Height)
 			visibleRect := viewBounds
-			if v.clipBounds != nil {
-				visibleRect = viewBounds.Intersect(*v.clipBounds)
+			if v.parentClip != nil {
+				visibleRect = viewBounds.Intersect(*v.parentClip)
 			}
-			c.sink.UpdateViewGeometry(v.viewID, v.offset, v.size, v.clipBounds, visibleRect, []*graphics.Path{})
+			c.sink.UpdateViewGeometry(v.viewID, v.offset, v.size, v.parentClip, visibleRect, []*graphics.Path{})
 		}
 		return
 	}
@@ -134,8 +134,8 @@ func (c *GeometryCanvas) FlushToSink() {
 
 		// Compute visibleRect: view bounds intersected with parent clip.
 		visibleRect := viewBounds
-		if v.clipBounds != nil {
-			visibleRect = viewBounds.Intersect(*v.clipBounds)
+		if v.parentClip != nil {
+			visibleRect = viewBounds.Intersect(*v.parentClip)
 		}
 
 		// Collect intersecting occlusion paths from higher z-order items.
@@ -161,24 +161,24 @@ func (c *GeometryCanvas) FlushToSink() {
 		// Cap at 8 paths; collapse to bounding rect path if exceeded.
 		occlusionPaths = capOcclusionPaths(occlusionPaths)
 
-		// Compute collapsed clipBounds via iterative subtractRect (Android fallback).
-		collapsedRect := visibleRect
+		// Compute collapsed clip via iterative subtractRect (Android fallback).
+		collapsedClip := visibleRect
 		hidden := false
 		for _, occ := range c.occlusions {
 			if occ.seqIndex <= v.seqIndex {
 				continue
 			}
-			collapsedRect, hidden = subtractRect(collapsedRect, occ.path.Bounds())
+			collapsedClip, hidden = subtractRect(collapsedClip, occ.path.Bounds())
 			if hidden {
 				break
 			}
 		}
 
-		if hidden || collapsedRect.IsEmpty() {
+		if hidden || collapsedClip.IsEmpty() {
 			emptyClip := graphics.Rect{}
 			c.sink.UpdateViewGeometry(v.viewID, v.offset, v.size, &emptyClip, visibleRect, occlusionPaths)
 		} else {
-			c.sink.UpdateViewGeometry(v.viewID, v.offset, v.size, &collapsedRect, visibleRect, occlusionPaths)
+			c.sink.UpdateViewGeometry(v.viewID, v.offset, v.size, &collapsedClip, visibleRect, occlusionPaths)
 		}
 	}
 }

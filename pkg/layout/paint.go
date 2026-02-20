@@ -33,6 +33,19 @@ type PlatformViewOwner interface {
 	PlatformViewID() int64
 }
 
+// OcclusionShaper is an optional interface for render objects that know the shape
+// of their opaque painted area (e.g. Container with a background color or border
+// radius). The returned path is in the render object's local coordinates.
+//
+// Implementors should call ctx.OccludePlatformViews(path) during their Paint()
+// method when OcclusionPath() returns a non-nil path. This ensures platform
+// views painted earlier in z-order are clipped beneath the opaque region.
+// The occlusion op is a no-op on canvases that don't implement OcclusionCanvas
+// (e.g. Skia), so there is no overhead outside the geometry compositing pass.
+type OcclusionShaper interface {
+	OcclusionPath() *graphics.Path
+}
+
 // PaintContext provides the canvas and state tracking for painting render objects.
 // It maintains transform and clip stacks for culling and platform view geometry,
 // and supports layer-based recording when RecordingLayer is set.
@@ -61,10 +74,7 @@ func (p *PaintContext) EmbedPlatformView(viewID int64, size graphics.Size) {
 // transformed to global coordinates during the geometry compositing pass.
 // If the canvas does not support occlusion tracking, this is a no-op.
 func (p *PaintContext) OccludePlatformViews(mask *graphics.Path) {
-	type occluder interface {
-		OccludePlatformViews(mask *graphics.Path)
-	}
-	if c, ok := p.Canvas.(occluder); ok {
+	if c, ok := p.Canvas.(graphics.OcclusionCanvas); ok {
 		c.OccludePlatformViews(mask)
 	}
 }

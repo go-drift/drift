@@ -145,23 +145,25 @@ func (r *renderOverlay) PerformLayout() {
 }
 
 // Paint paints the child first (bottom), then entries in order (first = bottom, last = top).
-// Before painting each overlay entry, an occlusion region is emitted so that
-// platform views rendered earlier in the frame are clipped or hidden behind
-// the overlay content.
+// Entries at or above the opaque index emit occlusion regions so that platform
+// views rendered earlier in the frame are clipped or hidden behind opaque
+// overlay content. Non-opaque entries (e.g. semi-transparent barriers) do not
+// occlude to avoid incorrectly hiding platform views.
 func (r *renderOverlay) Paint(ctx *layout.PaintContext) {
 	// Paint child first (bottom)
 	if r.child != nil {
 		ctx.PaintChildWithLayer(r.child, graphics.Offset{})
 	}
 	// Paint entries in order (first = bottom, last = top)
-	for _, entry := range r.entries {
+	for i, entry := range r.entries {
 		offset := getChildOffset(entry)
-		entrySize := entry.Size()
-		// Emit occlusion region in local coordinates (relative to current transform).
-		// The geometry canvas transforms this to global coordinates.
-		mask := graphics.NewPath()
-		mask.AddRect(graphics.RectFromLTWH(offset.X, offset.Y, entrySize.Width, entrySize.Height))
-		ctx.OccludePlatformViews(mask)
+		// Only emit occlusion for entries at or above the opaque threshold.
+		if r.opaqueIndex >= 0 && i >= r.opaqueIndex {
+			entrySize := entry.Size()
+			mask := graphics.NewPath()
+			mask.AddRect(graphics.RectFromLTWH(offset.X, offset.Y, entrySize.Width, entrySize.Height))
+			ctx.OccludePlatformViews(mask)
+		}
 		ctx.PaintChildWithLayer(entry, offset)
 	}
 }

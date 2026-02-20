@@ -64,6 +64,17 @@
     },
     {
       "op": "restore"
+    },
+    {
+      "op": "occludePlatformViews",
+      "params": {
+        "bounds": {
+          "bottom": 50,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
     }
   ]
 }

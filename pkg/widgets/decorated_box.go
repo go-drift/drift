@@ -151,6 +151,12 @@ func (r *renderDecoratedBox) Paint(ctx *layout.PaintContext) {
 	rect := graphics.RectFromLTWH(0, 0, size.Width, size.Height)
 	r.painter.paint(ctx, rect)
 
+	// Emit occlusion for this box's opaque area. Platform views painted
+	// earlier in z-order will be clipped beneath this region.
+	if p := r.OcclusionPath(); p != nil {
+		ctx.OccludePlatformViews(p)
+	}
+
 	if r.child == nil {
 		return
 	}
