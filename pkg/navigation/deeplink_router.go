@@ -22,8 +22,8 @@ type DeepLinkRoute struct {
 // uses [TabScaffold] at the top level, wrap it in a Router or Navigator:
 //
 //	navigation.Router{
-//	    Routes: []navigation.RouteConfigurer{
-//	        navigation.RouteConfig{Path: "/", Builder: buildTabScaffold},
+//	    Routes: []navigation.ScreenRoute{
+//	        {Path: "/", Screen: buildTabScaffold},
 //	    },
 //	}
 //

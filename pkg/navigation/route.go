@@ -28,9 +28,9 @@
 //
 //	navigation.Router{
 //	    InitialPath: "/",
-//	    Routes: []navigation.RouteConfigurer{
-//	        navigation.RouteConfig{Path: "/", Builder: buildHome},
-//	        navigation.RouteConfig{Path: "/products/:id", Builder: buildProduct},
+//	    Routes: []navigation.ScreenRoute{
+//	        {Path: "/", Screen: buildHome},
+//	        {Path: "/products/:id", Screen: buildProduct},
 //	    },
 //	    ErrorBuilder: build404Page,
 //	}

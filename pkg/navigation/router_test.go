@@ -9,10 +9,10 @@ import (
 func TestRouter_RouteIndex_Basic(t *testing.T) {
 	// Create a router state and manually build the index
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/"},
-			RouteConfig{Path: "/products"},
-			RouteConfig{Path: "/settings"},
+		Routes: []ScreenRoute{
+			{Path: "/", Screen: stubScreen},
+			{Path: "/products", Screen: stubScreen},
+			{Path: "/settings", Screen: stubScreen},
 		},
 	}
 
@@ -34,13 +34,14 @@ func TestRouter_RouteIndex_Basic(t *testing.T) {
 
 func TestRouter_RouteIndex_NestedRoutes(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/"},
-			RouteConfig{
-				Path: "/products",
-				Routes: []RouteConfigurer{
-					RouteConfig{Path: "/:id"},
-					RouteConfig{Path: "/:id/reviews"},
+		Routes: []ScreenRoute{
+			{Path: "/", Screen: stubScreen},
+			{
+				Path:   "/products",
+				Screen: stubScreen,
+				Children: []ScreenRoute{
+					{Path: "/:id", Screen: stubScreen},
+					{Path: "/:id/reviews", Screen: stubScreen},
 				},
 			},
 		},
@@ -73,14 +74,17 @@ func TestRouter_RouteIndex_NestedRoutes(t *testing.T) {
 	}
 }
 
-func TestRouter_RouteIndex_ShellRoute(t *testing.T) {
+func TestRouter_RouteIndex_Wrap(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/login"},
-			ShellRoute{
-				Routes: []RouteConfigurer{
-					RouteConfig{Path: "/home"},
-					RouteConfig{Path: "/profile"},
+		Routes: []ScreenRoute{
+			{Path: "/login", Screen: stubScreen},
+			{
+				Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
+					return child
+				},
+				Children: []ScreenRoute{
+					{Path: "/home", Screen: stubScreen},
+					{Path: "/profile", Screen: stubScreen},
 				},
 			},
 		},
@@ -89,7 +93,7 @@ func TestRouter_RouteIndex_ShellRoute(t *testing.T) {
 	state := &routerState{router: router}
 	index := state.buildRouteIndex()
 
-	// ShellRoute doesn't add patterns, just its children
+	// Wrap-only route doesn't add patterns, just its children
 	if len(index.patterns) != 3 {
 		t.Errorf("Expected 3 patterns, got %d", len(index.patterns))
 	}
@@ -109,10 +113,10 @@ func TestRouter_RouteIndex_ShellRoute(t *testing.T) {
 
 func TestRouter_FindRoute_Basic(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/"},
-			RouteConfig{Path: "/products"},
-			RouteConfig{Path: "/products/:id"},
+		Routes: []ScreenRoute{
+			{Path: "/", Screen: stubScreen},
+			{Path: "/products", Screen: stubScreen},
+			{Path: "/products/:id", Screen: stubScreen},
 		},
 	}
 
@@ -152,8 +156,8 @@ func TestRouter_FindRoute_Basic(t *testing.T) {
 
 func TestRouter_FindRoute_WithQuery(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/search"},
+		Routes: []ScreenRoute{
+			{Path: "/search", Screen: stubScreen},
 		},
 	}
 
@@ -176,8 +180,8 @@ func TestRouter_FindRoute_WithQuery(t *testing.T) {
 func TestRouter_FindRoute_TrailingSlash(t *testing.T) {
 	// Default behavior: strip trailing slash
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/products/:id"},
+		Routes: []ScreenRoute{
+			{Path: "/products/:id", Screen: stubScreen},
 		},
 	}
 
@@ -192,8 +196,8 @@ func TestRouter_FindRoute_TrailingSlash(t *testing.T) {
 	// Strict mode
 	routerStrict := Router{
 		TrailingSlashBehavior: TrailingSlashStrict,
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/products/:id"},
+		Routes: []ScreenRoute{
+			{Path: "/products/:id", Screen: stubScreen},
 		},
 	}
 
@@ -214,8 +218,8 @@ func TestRouter_FindRoute_TrailingSlash(t *testing.T) {
 func TestRouter_FindRoute_CaseSensitivity(t *testing.T) {
 	// Default: case sensitive
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/Products"},
+		Routes: []ScreenRoute{
+			{Path: "/Products", Screen: stubScreen},
 		},
 	}
 
@@ -235,8 +239,8 @@ func TestRouter_FindRoute_CaseSensitivity(t *testing.T) {
 	// Case insensitive
 	routerInsensitive := Router{
 		CaseSensitivity: CaseInsensitive,
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/Products"},
+		Routes: []ScreenRoute{
+			{Path: "/Products", Screen: stubScreen},
 		},
 	}
 
@@ -257,10 +261,10 @@ func TestRouter_ApplyRedirect_GlobalRedirect(t *testing.T) {
 			}
 			return NoRedirect()
 		},
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/"},
-			RouteConfig{Path: "/login"},
-			RouteConfig{Path: "/protected"},
+		Routes: []ScreenRoute{
+			{Path: "/", Screen: stubScreen},
+			{Path: "/login", Screen: stubScreen},
+			{Path: "/protected", Screen: stubScreen},
 		},
 	}
 
@@ -282,10 +286,11 @@ func TestRouter_ApplyRedirect_GlobalRedirect(t *testing.T) {
 
 func TestRouter_ApplyRedirect_RouteLevel(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/"},
-			RouteConfig{
-				Path: "/admin",
+		Routes: []ScreenRoute{
+			{Path: "/", Screen: stubScreen},
+			{
+				Path:   "/admin",
+				Screen: stubScreen,
 				Redirect: func(ctx RedirectContext) RedirectResult {
 					return RedirectTo("/login")
 				},
@@ -315,9 +320,10 @@ func TestRouter_ApplyRedirect_GlobalOverridesRoute(t *testing.T) {
 			// Global redirect always sends to /maintenance
 			return RedirectTo("/maintenance")
 		},
-		Routes: []RouteConfigurer{
-			RouteConfig{
-				Path: "/admin",
+		Routes: []ScreenRoute{
+			{
+				Path:   "/admin",
+				Screen: stubScreen,
 				Redirect: func(ctx RedirectContext) RedirectResult {
 					return RedirectTo("/login")
 				},
@@ -335,20 +341,60 @@ func TestRouter_ApplyRedirect_GlobalOverridesRoute(t *testing.T) {
 	}
 }
 
+func TestRouter_ApplyRedirect_GroupRedirect(t *testing.T) {
+	router := Router{
+		Routes: []ScreenRoute{
+			{
+				// Group-level redirect guards all children
+				Redirect: func(ctx RedirectContext) RedirectResult {
+					return RedirectTo("/login")
+				},
+				Children: []ScreenRoute{
+					{Path: "/admin/users", Screen: stubScreen},
+					{Path: "/admin/settings", Screen: stubScreen},
+				},
+			},
+			{Path: "/public", Screen: stubScreen},
+		},
+	}
+
+	state := &routerState{router: router}
+	state.routeIndex = state.buildRouteIndex()
+
+	// Children of the guarded group should redirect
+	result := state.applyRedirect(RedirectContext{ToPath: "/admin/users"})
+	if result.Path != "/login" {
+		t.Errorf("Expected redirect to /login, got %q", result.Path)
+	}
+
+	result = state.applyRedirect(RedirectContext{ToPath: "/admin/settings"})
+	if result.Path != "/login" {
+		t.Errorf("Expected redirect to /login, got %q", result.Path)
+	}
+
+	// Route outside the group should not redirect
+	result = state.applyRedirect(RedirectContext{ToPath: "/public"})
+	if result.Path != "" {
+		t.Errorf("Expected no redirect, got %q", result.Path)
+	}
+}
+
 func TestRouter_DeeplyNestedRoutes(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			RouteConfig{
-				Path: "/api",
-				Routes: []RouteConfigurer{
-					RouteConfig{
-						Path: "/v1",
-						Routes: []RouteConfigurer{
-							RouteConfig{Path: "/users"},
-							RouteConfig{Path: "/users/:id"},
+		Routes: []ScreenRoute{
+			{
+				Path:   "/api",
+				Screen: stubScreen,
+				Children: []ScreenRoute{
+					{
+						Path:   "/v1",
+						Screen: stubScreen,
+						Children: []ScreenRoute{
+							{Path: "/users", Screen: stubScreen},
+							{Path: "/users/:id", Screen: stubScreen},
 						},
 					},
-					RouteConfig{Path: "/v2"},
+					{Path: "/v2", Screen: stubScreen},
 				},
 			},
 		},
@@ -380,69 +426,69 @@ func TestRouter_DeeplyNestedRoutes(t *testing.T) {
 	}
 }
 
-func TestRouter_ShellRoute_ShellsTracked(t *testing.T) {
+func TestRouter_Wrap_WrapsTracked(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			ShellRoute{
-				Builder: func(ctx core.BuildContext, child core.Widget) core.Widget {
+		Routes: []ScreenRoute{
+			{
+				Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
 					return child // Simplified for test
 				},
-				Routes: []RouteConfigurer{
-					RouteConfig{Path: "/home"},
-					RouteConfig{Path: "/profile"},
+				Children: []ScreenRoute{
+					{Path: "/home", Screen: stubScreen},
+					{Path: "/profile", Screen: stubScreen},
 				},
 			},
-			RouteConfig{Path: "/login"}, // Outside shell
+			{Path: "/login", Screen: stubScreen}, // Outside wrap
 		},
 	}
 
 	state := &routerState{router: router}
 	state.routeIndex = state.buildRouteIndex()
 
-	// Routes inside shell should have shell tracked
+	// Routes inside wrap should have wrap tracked
 	ir, _ := state.findRoute("/home")
 	if ir == nil {
 		t.Fatal("Should find /home")
 	}
-	if len(ir.shells) != 1 {
-		t.Errorf("/home should have 1 shell, got %d", len(ir.shells))
+	if len(ir.wraps) != 1 {
+		t.Errorf("/home should have 1 wrap, got %d", len(ir.wraps))
 	}
 
 	ir, _ = state.findRoute("/profile")
 	if ir == nil {
 		t.Fatal("Should find /profile")
 	}
-	if len(ir.shells) != 1 {
-		t.Errorf("/profile should have 1 shell, got %d", len(ir.shells))
+	if len(ir.wraps) != 1 {
+		t.Errorf("/profile should have 1 wrap, got %d", len(ir.wraps))
 	}
 
-	// Route outside shell should have no shells
+	// Route outside wrap should have no wraps
 	ir, _ = state.findRoute("/login")
 	if ir == nil {
 		t.Fatal("Should find /login")
 	}
-	if len(ir.shells) != 0 {
-		t.Errorf("/login should have 0 shells, got %d", len(ir.shells))
+	if len(ir.wraps) != 0 {
+		t.Errorf("/login should have 0 wraps, got %d", len(ir.wraps))
 	}
 }
 
-func TestRouter_ShellRoute_NestedShells(t *testing.T) {
+func TestRouter_Wrap_NestedWraps(t *testing.T) {
 	router := Router{
-		Routes: []RouteConfigurer{
-			ShellRoute{
-				Builder: func(ctx core.BuildContext, child core.Widget) core.Widget {
-					return child // Outer shell
+		Routes: []ScreenRoute{
+			{
+				Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
+					return child // Outer wrap
 				},
-				Routes: []RouteConfigurer{
-					ShellRoute{
-						Builder: func(ctx core.BuildContext, child core.Widget) core.Widget {
-							return child // Inner shell
+				Children: []ScreenRoute{
+					{
+						Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
+							return child // Inner wrap
 						},
-						Routes: []RouteConfigurer{
-							RouteConfig{Path: "/nested"},
+						Children: []ScreenRoute{
+							{Path: "/nested", Screen: stubScreen},
 						},
 					},
-					RouteConfig{Path: "/single-shell"},
+					{Path: "/single-wrap", Screen: stubScreen},
 				},
 			},
 		},
@@ -451,22 +497,62 @@ func TestRouter_ShellRoute_NestedShells(t *testing.T) {
 	state := &routerState{router: router}
 	state.routeIndex = state.buildRouteIndex()
 
-	// Route in nested shells should have both shells
+	// Route in nested wraps should have both wraps
 	ir, _ := state.findRoute("/nested")
 	if ir == nil {
 		t.Fatal("Should find /nested")
 	}
-	if len(ir.shells) != 2 {
-		t.Errorf("/nested should have 2 shells, got %d", len(ir.shells))
+	if len(ir.wraps) != 2 {
+		t.Errorf("/nested should have 2 wraps, got %d", len(ir.wraps))
 	}
 
-	// Route in single shell should have 1 shell
-	ir, _ = state.findRoute("/single-shell")
+	// Route in single wrap should have 1 wrap
+	ir, _ = state.findRoute("/single-wrap")
 	if ir == nil {
-		t.Fatal("Should find /single-shell")
+		t.Fatal("Should find /single-wrap")
 	}
-	if len(ir.shells) != 1 {
-		t.Errorf("/single-shell should have 1 shell, got %d", len(ir.shells))
+	if len(ir.wraps) != 1 {
+		t.Errorf("/single-wrap should have 1 wrap, got %d", len(ir.wraps))
+	}
+}
+
+func TestRouter_Wrap_ScreenAndWrapCombined(t *testing.T) {
+	// A route with both Screen and Wrap: the Screen is indexed with the
+	// parent's wraps (not its own), while Children get this route's Wrap.
+	router := Router{
+		Routes: []ScreenRoute{
+			{
+				Path:   "/dashboard",
+				Screen: stubScreen,
+				Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
+					return child
+				},
+				Children: []ScreenRoute{
+					{Path: "/stats", Screen: stubScreen},
+				},
+			},
+		},
+	}
+
+	state := &routerState{router: router}
+	state.routeIndex = state.buildRouteIndex()
+
+	// /dashboard itself should have no wraps (Wrap applies to children only)
+	ir, _ := state.findRoute("/dashboard")
+	if ir == nil {
+		t.Fatal("Should find /dashboard")
+	}
+	if len(ir.wraps) != 0 {
+		t.Errorf("/dashboard should have 0 wraps, got %d", len(ir.wraps))
+	}
+
+	// /dashboard/stats should be wrapped
+	ir, _ = state.findRoute("/dashboard/stats")
+	if ir == nil {
+		t.Fatal("Should find /dashboard/stats")
+	}
+	if len(ir.wraps) != 1 {
+		t.Errorf("/dashboard/stats should have 1 wrap, got %d", len(ir.wraps))
 	}
 }
 
@@ -474,9 +560,9 @@ func TestRouter_TrailingSlash_RequiresTrailingSlash(t *testing.T) {
 	// In strict mode, pattern ending with / should require trailing slash
 	router := Router{
 		TrailingSlashBehavior: TrailingSlashStrict,
-		Routes: []RouteConfigurer{
-			RouteConfig{Path: "/products/"}, // Requires trailing slash
-			RouteConfig{Path: "/users"},     // No trailing slash
+		Routes: []ScreenRoute{
+			{Path: "/products/", Screen: stubScreen}, // Requires trailing slash
+			{Path: "/users", Screen: stubScreen},     // No trailing slash
 		},
 	}
 
@@ -505,3 +591,6 @@ func TestRouter_TrailingSlash_RequiresTrailingSlash(t *testing.T) {
 		t.Error("Should NOT match /users/ with trailing slash when pattern doesn't have it")
 	}
 }
+
+// stubScreen is a minimal Screen builder for tests that only need route indexing/matching.
+func stubScreen(_ core.BuildContext, _ RouteSettings) core.Widget { return nil }

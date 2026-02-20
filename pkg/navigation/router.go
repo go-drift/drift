@@ -7,14 +7,10 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 )
 
-// RouteConfigurer is the interface implemented by route configuration types.
-// The two implementations are [RouteConfig] for regular routes and [ShellRoute]
-// for persistent layouts that wrap child routes.
-type RouteConfigurer interface {
-	routeConfig() // marker method
-}
-
-// RouteConfig defines a single route in the declarative [Router].
+// ScreenRoute defines a route in the declarative [Router].
+//
+// A ScreenRoute can serve as a leaf route (with Screen), a layout wrapper
+// (with Wrap), or both. Routes with only Children act as prefix groups.
 //
 // Path patterns support:
 //   - Static segments: "/products", "/users/list"
@@ -23,66 +19,97 @@ type RouteConfigurer interface {
 //
 // Example with nested routes:
 //
-//	navigation.RouteConfig{
-//	    Path:    "/products",
-//	    Builder: buildProductList,
-//	    Routes: []navigation.RouteConfigurer{
-//	        navigation.RouteConfig{
-//	            Path:    "/:id",           // Matches /products/:id
-//	            Builder: buildProductDetail,
+//	navigation.ScreenRoute{
+//	    Path:   "/products",
+//	    Screen: buildProductList,
+//	    Children: []navigation.ScreenRoute{
+//	        {
+//	            Path:   "/:id",           // Matches /products/:id
+//	            Screen: buildProductDetail,
 //	        },
-//	        navigation.RouteConfig{
-//	            Path:    "/:id/reviews",   // Matches /products/:id/reviews
-//	            Builder: buildProductReviews,
+//	        {
+//	            Path:   "/:id/reviews",   // Matches /products/:id/reviews
+//	            Screen: buildProductReviews,
 //	        },
 //	    },
 //	}
-type RouteConfig struct {
+//
+// Wrap child routes in a persistent layout (tabs, sidebars, etc.):
+//
+//	navigation.ScreenRoute{
+//	    Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
+//	        return widgets.Column{
+//	            Children: []core.Widget{
+//	                MyNavigationBar{},
+//	                widgets.Expanded{Child: child},
+//	            },
+//	        }
+//	    },
+//	    Children: []navigation.ScreenRoute{
+//	        {Path: "/home", Screen: buildHome},
+//	        {Path: "/profile", Screen: buildProfile},
+//	    },
+//	}
+type ScreenRoute struct {
 	// Path is the URL pattern for this route.
 	// Use :param for path parameters and *param for wildcards.
 	// Nested routes inherit the parent's path as a prefix.
 	Path string
 
-	// Builder creates the widget for this route.
+	// Screen creates the widget for this route.
 	// RouteSettings includes extracted Params and Query from the URL.
-	Builder func(ctx core.BuildContext, settings RouteSettings) core.Widget
+	// Nil for pure wrapper or prefix-group routes.
+	Screen func(ctx core.BuildContext, settings RouteSettings) core.Widget
 
-	// Redirect defines route-specific redirect logic.
+	// Wrap wraps child routes in a persistent layout.
+	// The child parameter is the matched child route's widget.
+	// Wrap applies only to Children, not to this route's own Screen.
+	// Nil for leaf-only routes.
+	Wrap func(ctx core.BuildContext, child core.Widget) core.Widget
+
+	// Redirect defines redirect logic for this route and its descendants.
 	// Checked after the Router's global Redirect callback.
-	// Use for route-specific access control.
+	// Ancestor redirects are evaluated outermost-first before the
+	// matched route's own Redirect.
 	Redirect func(ctx RedirectContext) RedirectResult
 
-	// Routes defines nested child routes.
+	// Children defines nested child routes.
 	// Child paths are concatenated with this route's path.
-	Routes []RouteConfigurer
+	// If Wrap is set, all children are wrapped by it.
+	Children []ScreenRoute
+
+	// Future: StackKey string
+	// Per-subtree navigator isolation for stateful shells. When set,
+	// matched routes within this subtree would render in a dedicated
+	// nested Navigator identified by this key, preserving navigation
+	// history independently (e.g., tab branches). Not implemented in v1;
+	// use TabScaffold for stateful tab navigation.
 }
 
-func (RouteConfig) routeConfig() {}
-
-// SimpleBuilder adapts a plain widget builder to the [RouteConfig.Builder]
+// ScreenOnly adapts a plain widget builder to the [ScreenRoute.Screen]
 // signature. Use this for routes that don't need access to path parameters,
 // query strings, or navigation arguments from [RouteSettings].
 //
-// Without SimpleBuilder, routes that ignore settings require a boilerplate
+// Without ScreenOnly, routes that ignore settings require a boilerplate
 // closure:
 //
-//	navigation.RouteConfig{
+//	navigation.ScreenRoute{
 //	    Path: "/settings",
-//	    Builder: func(ctx core.BuildContext, _ navigation.RouteSettings) core.Widget {
+//	    Screen: func(ctx core.BuildContext, _ navigation.RouteSettings) core.Widget {
 //	        return buildSettings(ctx)
 //	    },
 //	}
 //
-// With SimpleBuilder:
+// With ScreenOnly:
 //
-//	navigation.RouteConfig{
-//	    Path:    "/settings",
-//	    Builder: navigation.SimpleBuilder(buildSettings),
+//	navigation.ScreenRoute{
+//	    Path:   "/settings",
+//	    Screen: navigation.ScreenOnly(buildSettings),
 //	}
 //
 // Routes that read path parameters or query values should use the full
-// [RouteConfig.Builder] signature directly.
-func SimpleBuilder(build func(core.BuildContext) core.Widget) func(core.BuildContext, RouteSettings) core.Widget {
+// [ScreenRoute.Screen] signature directly.
+func ScreenOnly(build func(core.BuildContext) core.Widget) func(core.BuildContext, RouteSettings) core.Widget {
 	return func(ctx core.BuildContext, _ RouteSettings) core.Widget {
 		return build(ctx)
 	}
@@ -104,9 +131,9 @@ func SimpleBuilder(build func(core.BuildContext) core.Widget) func(core.BuildCon
 //
 //	navigation.Router{
 //	    InitialPath: "/",
-//	    Routes: []navigation.RouteConfigurer{
-//	        navigation.RouteConfig{Path: "/", Builder: buildHome},
-//	        navigation.RouteConfig{Path: "/products/:id", Builder: buildProduct},
+//	    Routes: []navigation.ScreenRoute{
+//	        {Path: "/", Screen: buildHome},
+//	        {Path: "/products/:id", Screen: buildProduct},
 //	    },
 //	    ErrorBuilder: build404Page,
 //	}
@@ -133,12 +160,11 @@ type Router struct {
 	core.StatefulBase
 
 	// Routes defines the route tree.
-	// Use [RouteConfig] for regular routes and [ShellRoute] for persistent layouts.
-	Routes []RouteConfigurer
+	Routes []ScreenRoute
 
 	// Redirect is the global redirect callback, checked before every navigation.
 	// Return [NoRedirect] to allow, or [RedirectTo]/[RedirectWithArgs] to redirect.
-	// Route-specific redirects in [RouteConfig.Redirect] are checked after this.
+	// Route-specific redirects in [ScreenRoute.Redirect] are checked after this.
 	Redirect func(ctx RedirectContext) RedirectResult
 
 	// ErrorBuilder creates a widget for unmatched routes (404 pages).
@@ -197,10 +223,11 @@ type routeIndex struct {
 }
 
 type indexedRoute struct {
-	pattern  *PathPattern
-	config   RouteConfig
-	fullPath string
-	shells   []ShellRoute // Shell hierarchy from outermost to innermost
+	pattern   *PathPattern
+	route     ScreenRoute
+	fullPath  string
+	wraps     []func(core.BuildContext, core.Widget) core.Widget
+	redirects []func(RedirectContext) RedirectResult // ancestor redirects, outermost first
 }
 
 type routerState struct {
@@ -221,37 +248,49 @@ func (s *routerState) InitState() {
 
 func (s *routerState) buildRouteIndex() *routeIndex {
 	index := &routeIndex{}
-	s.indexRoutes("", nil, s.router.Routes, index)
+	s.indexRoutes("", indexContext{}, s.router.Routes, index)
 	return index
 }
 
-func (s *routerState) indexRoutes(prefix string, shells []ShellRoute, routes []RouteConfigurer, index *routeIndex) {
-	for _, rc := range routes {
-		switch cfg := rc.(type) {
-		case RouteConfig:
-			fullPath := prefix + cfg.Path
+type indexContext struct {
+	wraps     []func(core.BuildContext, core.Widget) core.Widget
+	redirects []func(RedirectContext) RedirectResult
+}
+
+func (s *routerState) indexRoutes(prefix string, ctx indexContext, routes []ScreenRoute, index *routeIndex) {
+	for _, r := range routes {
+		fullPath := prefix + r.Path
+
+		// If this route has a Screen, index it as a matchable pattern
+		if r.Screen != nil {
 			pattern := NewPathPattern(
 				fullPath,
 				WithTrailingSlash(s.router.TrailingSlashBehavior),
 				WithCaseSensitivity(s.router.CaseSensitivity),
 			)
 			index.patterns = append(index.patterns, &indexedRoute{
-				pattern:  pattern,
-				config:   cfg,
-				fullPath: fullPath,
-				shells:   shells, // Capture current shell hierarchy
+				pattern:   pattern,
+				route:     r,
+				fullPath:  fullPath,
+				wraps:     ctx.wraps,
+				redirects: ctx.redirects,
 			})
+		}
 
-			// Index nested routes (inherit same shells)
-			if len(cfg.Routes) > 0 {
-				s.indexRoutes(fullPath, shells, cfg.Routes, index)
-			}
+		// Build child context: accumulate Wrap and Redirect for children
+		childCtx := ctx
+		if r.Wrap != nil {
+			childCtx.wraps = append([]func(core.BuildContext, core.Widget) core.Widget{}, ctx.wraps...)
+			childCtx.wraps = append(childCtx.wraps, r.Wrap)
+		}
+		if r.Redirect != nil {
+			childCtx.redirects = append([]func(RedirectContext) RedirectResult{}, ctx.redirects...)
+			childCtx.redirects = append(childCtx.redirects, r.Redirect)
+		}
 
-		case ShellRoute:
-			// Shell routes add to the shell hierarchy for their children
-			newShells := append([]ShellRoute{}, shells...)
-			newShells = append(newShells, cfg)
-			s.indexRoutes(prefix, newShells, cfg.Routes, index)
+		// Recurse into children
+		if len(r.Children) > 0 {
+			s.indexRoutes(fullPath, childCtx, r.Children, index)
 		}
 	}
 }
@@ -290,18 +329,17 @@ func (s *routerState) generateRoute(settings RouteSettings) Route {
 	matchedSettings.Arguments = settings.Arguments
 
 	// Capture for closure
-	routeConfig := ir.config
-	shells := ir.shells
+	screen := ir.route.Screen
+	wraps := ir.wraps
 
 	builder := func(ctx core.BuildContext) core.Widget {
 		// Build the route's widget
-		child := routeConfig.Builder(ctx, matchedSettings)
+		child := screen(ctx, matchedSettings)
 
-		// Wrap with shells from innermost to outermost
-		// (shells slice is outermost-first, so iterate in reverse)
-		for i := len(shells) - 1; i >= 0; i-- {
-			shell := shells[i]
-			child = shell.Builder(ctx, child)
+		// Apply wraps from innermost to outermost
+		// (wraps slice is outermost-first, so iterate in reverse)
+		for i := len(wraps) - 1; i >= 0; i-- {
+			child = wraps[i](ctx, child)
 		}
 
 		return child
@@ -331,10 +369,18 @@ func (s *routerState) applyRedirect(ctx RedirectContext) RedirectResult {
 		}
 	}
 
-	// Then check route-level redirect
+	// Then check ancestor redirects (outermost first), then the route itself
 	ir, _ := s.findRoute(ctx.ToPath)
-	if ir != nil && ir.config.Redirect != nil {
-		return ir.config.Redirect(ctx)
+	if ir != nil {
+		for _, redirect := range ir.redirects {
+			result := redirect(ctx)
+			if result.Path != "" {
+				return result
+			}
+		}
+		if ir.route.Redirect != nil {
+			return ir.route.Redirect(ctx)
+		}
 	}
 
 	return NoRedirect()

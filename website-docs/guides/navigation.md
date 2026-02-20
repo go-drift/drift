@@ -384,24 +384,24 @@ For larger applications, use the declarative `Router` API for cleaner route conf
 func App() core.Widget {
     return navigation.Router{
         InitialPath: "/",
-        Routes: []navigation.RouteConfigurer{
-            navigation.RouteConfig{
-                Path:    "/",
-                Builder: buildHome,
+        Routes: []navigation.ScreenRoute{
+            {
+                Path:   "/",
+                Screen: buildHome,
             },
-            navigation.RouteConfig{
-                Path:    "/products",
-                Builder: buildProductList,
-                Routes: []navigation.RouteConfigurer{
-                    navigation.RouteConfig{
-                        Path:    "/:id", // Nested: /products/:id
-                        Builder: buildProductDetail,
+            {
+                Path:   "/products",
+                Screen: buildProductList,
+                Children: []navigation.ScreenRoute{
+                    {
+                        Path:   "/:id", // Nested: /products/:id
+                        Screen: buildProductDetail,
                     },
                 },
             },
-            navigation.RouteConfig{
-                Path:    "/settings",
-                Builder: buildSettings,
+            {
+                Path:   "/settings",
+                Screen: buildSettings,
             },
         },
         ErrorBuilder: buildNotFound,
@@ -419,13 +419,13 @@ Routes that use path parameters or query strings need the full
 `func(core.BuildContext, navigation.RouteSettings) core.Widget` signature, as shown
 with `buildProductDetail` above.
 
-For routes that only need a `BuildContext`, use `navigation.SimpleBuilder` to avoid
+For routes that only need a `BuildContext`, use `navigation.ScreenOnly` to avoid
 writing a wrapper closure:
 
 ```go
-navigation.RouteConfig{
-    Path:    "/settings",
-    Builder: navigation.SimpleBuilder(buildSettings),
+navigation.ScreenRoute{
+    Path:   "/settings",
+    Screen: navigation.ScreenOnly(buildSettings),
 }
 
 func buildSettings(ctx core.BuildContext) core.Widget {
@@ -452,15 +452,16 @@ func handleTap(ctx core.BuildContext) {
 }
 ```
 
-### Shell Routes
+### Layout Wrapping
 
-Wrap routes in a persistent layout (tabs, sidebars, etc.):
+Wrap child routes in a persistent layout (navigation bars, sidebars, etc.)
+using the `Wrap` field:
 
 ```go
 navigation.Router{
-    Routes: []navigation.RouteConfigurer{
-        navigation.ShellRoute{
-            Builder: func(ctx core.BuildContext, child core.Widget) core.Widget {
+    Routes: []navigation.ScreenRoute{
+        {
+            Wrap: func(ctx core.BuildContext, child core.Widget) core.Widget {
                 return widgets.Column{
                     Children: []core.Widget{
                         MyNavigationBar{},
@@ -468,13 +469,13 @@ navigation.Router{
                     },
                 }
             },
-            Routes: []navigation.RouteConfigurer{
-                navigation.RouteConfig{Path: "/home", Builder: buildHome},
-                navigation.RouteConfig{Path: "/profile", Builder: buildProfile},
+            Children: []navigation.ScreenRoute{
+                {Path: "/home", Screen: buildHome},
+                {Path: "/profile", Screen: buildProfile},
             },
         },
-        // Routes outside the shell
-        navigation.RouteConfig{Path: "/login", Builder: buildLogin},
+        // Routes outside the wrapper
+        {Path: "/login", Screen: buildLogin},
     },
 }
 ```
@@ -536,11 +537,11 @@ The controller automatically:
 ```go
 navigation.Router{
     InitialPath: "/",
-    Routes: []navigation.RouteConfigurer{
-        navigation.RouteConfig{Path: "/", Builder: buildTabScaffold},
+    Routes: []navigation.ScreenRoute{
+        {Path: "/", Screen: buildTabScaffold},
         // Deep link routes
-        navigation.RouteConfig{Path: "/product/:id", Builder: buildProduct},
-        navigation.RouteConfig{Path: "/profile/:username", Builder: buildProfile},
+        {Path: "/product/:id", Screen: buildProduct},
+        {Path: "/profile/:username", Screen: buildProfile},
     },
 }
 ```

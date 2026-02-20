@@ -69,76 +69,46 @@ func (s *showcaseState) Build(ctx core.BuildContext) core.Widget {
 }
 
 // buildRoutes constructs the declarative route configuration.
-func (s *showcaseState) buildRoutes() []navigation.RouteConfigurer {
-	routes := []navigation.RouteConfigurer{
+func (s *showcaseState) buildRoutes() []navigation.ScreenRoute {
+	routes := []navigation.ScreenRoute{
 		// Home page
-		navigation.RouteConfig{
+		{
 			Path: "/",
-			Builder: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+			Screen: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
 				return buildHomePage(ctx, s.isDark, s.toggleTheme)
 			},
 		},
 
 		// Theming page (special case needing theme state)
-		navigation.RouteConfig{
+		{
 			Path: "/theming",
-			Builder: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
+			Screen: func(ctx core.BuildContext, settings navigation.RouteSettings) core.Widget {
 				return buildThemingPage(ctx, s.isDark, s.isCupertino)
 			},
 		},
 
 		// Category hub pages
-		navigation.RouteConfig{
-			Path:    "/theming-hub",
-			Builder: navigation.SimpleBuilder(buildThemingHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/layout-hub",
-			Builder: navigation.SimpleBuilder(buildLayoutHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/widgets-hub",
-			Builder: navigation.SimpleBuilder(buildWidgetsHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/motion-hub",
-			Builder: navigation.SimpleBuilder(buildMotionHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/media-hub",
-			Builder: navigation.SimpleBuilder(buildMediaHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/system-hub",
-			Builder: navigation.SimpleBuilder(buildSystemHubPage),
-		},
+		{Path: "/theming-hub", Screen: navigation.ScreenOnly(buildThemingHubPage)},
+		{Path: "/layout-hub", Screen: navigation.ScreenOnly(buildLayoutHubPage)},
+		{Path: "/widgets-hub", Screen: navigation.ScreenOnly(buildWidgetsHubPage)},
+		{Path: "/motion-hub", Screen: navigation.ScreenOnly(buildMotionHubPage)},
+		{Path: "/media-hub", Screen: navigation.ScreenOnly(buildMediaHubPage)},
+		{Path: "/system-hub", Screen: navigation.ScreenOnly(buildSystemHubPage)},
 
 		// Legacy routes (redirect to new hubs)
-		navigation.RouteConfig{
-			Path:    "/foundations",
-			Builder: navigation.SimpleBuilder(buildLayoutHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/components",
-			Builder: navigation.SimpleBuilder(buildWidgetsHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/interactions",
-			Builder: navigation.SimpleBuilder(buildMotionHubPage),
-		},
-		navigation.RouteConfig{
-			Path:    "/platform",
-			Builder: navigation.SimpleBuilder(buildSystemHubPage),
-		},
+		{Path: "/foundations", Screen: navigation.ScreenOnly(buildLayoutHubPage)},
+		{Path: "/components", Screen: navigation.ScreenOnly(buildWidgetsHubPage)},
+		{Path: "/interactions", Screen: navigation.ScreenOnly(buildMotionHubPage)},
+		{Path: "/platform", Screen: navigation.ScreenOnly(buildSystemHubPage)},
 	}
 
 	// Add all demos from registry
 	for _, demo := range demos {
 		if demo.Builder != nil {
 			builder := demo.Builder
-			routes = append(routes, navigation.RouteConfig{
-				Path:    demo.Route,
-				Builder: navigation.SimpleBuilder(builder),
+			routes = append(routes, navigation.ScreenRoute{
+				Path:   demo.Route,
+				Screen: navigation.ScreenOnly(builder),
 			})
 		}
 	}
