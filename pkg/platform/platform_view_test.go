@@ -103,6 +103,8 @@ func TestFlushGeometryBatch_HidesUnseenViews(t *testing.T) {
 		graphics.Offset{X: 10, Y: 20},
 		graphics.Size{Width: 100, Height: 50},
 		&graphics.Rect{Left: 0, Top: 0, Right: 100, Bottom: 50},
+		graphics.Rect{Left: 0, Top: 0, Right: 100, Bottom: 50},
+		[]*graphics.Path{},
 	)
 	reg.FlushGeometryBatch()
 	captured := reg.TakeCapturedSnapshot()
@@ -132,8 +134,10 @@ func TestFlushGeometryBatch_AllViewsSeen(t *testing.T) {
 	reg := newTestRegistry(1, 2)
 
 	reg.BeginGeometryBatch()
-	reg.UpdateViewGeometry(1, graphics.Offset{X: 10, Y: 20}, graphics.Size{Width: 100, Height: 50}, nil)
-	reg.UpdateViewGeometry(2, graphics.Offset{X: 10, Y: 80}, graphics.Size{Width: 100, Height: 50}, nil)
+	reg.UpdateViewGeometry(1, graphics.Offset{X: 10, Y: 20}, graphics.Size{Width: 100, Height: 50}, nil,
+		graphics.Rect{Left: 10, Top: 20, Right: 110, Bottom: 70}, []*graphics.Path{})
+	reg.UpdateViewGeometry(2, graphics.Offset{X: 10, Y: 80}, graphics.Size{Width: 100, Height: 50}, nil,
+		graphics.Rect{Left: 10, Top: 80, Right: 110, Bottom: 130}, []*graphics.Path{})
 	reg.FlushGeometryBatch()
 	captured := reg.TakeCapturedSnapshot()
 
@@ -169,6 +173,8 @@ func TestFlushGeometryBatch_HiddenViewRestoresOnNextFrame(t *testing.T) {
 		graphics.Offset{X: 10, Y: 20},
 		graphics.Size{Width: 100, Height: 50},
 		&graphics.Rect{Left: 0, Top: 0, Right: 100, Bottom: 50},
+		graphics.Rect{Left: 0, Top: 0, Right: 100, Bottom: 50},
+		[]*graphics.Path{},
 	)
 	reg.FlushGeometryBatch()
 	captured = reg.TakeCapturedSnapshot()
@@ -201,13 +207,15 @@ func TestFlushGeometryBatch_ViewSeenNotHidden(t *testing.T) {
 
 	// Frame 1: initial geometry.
 	reg.BeginGeometryBatch()
-	reg.UpdateViewGeometry(1, pos, size, nil)
+	reg.UpdateViewGeometry(1, pos, size, nil,
+		graphics.Rect{Left: 10, Top: 20, Right: 110, Bottom: 70}, []*graphics.Path{})
 	reg.FlushGeometryBatch()
 	reg.TakeCapturedSnapshot()
 
 	// Frame 2: same geometry, view still seen.
 	reg.BeginGeometryBatch()
-	reg.UpdateViewGeometry(1, pos, size, nil)
+	reg.UpdateViewGeometry(1, pos, size, nil,
+		graphics.Rect{Left: 10, Top: 20, Right: 110, Bottom: 70}, []*graphics.Path{})
 	reg.FlushGeometryBatch()
 	captured := reg.TakeCapturedSnapshot()
 
@@ -227,9 +235,11 @@ func TestFlushGeometryBatch_ViewScrollsOutAndBack(t *testing.T) {
 	size := graphics.Size{Width: 200, Height: 40}
 	clip := &graphics.Rect{Left: 0, Top: 0, Right: 200, Bottom: 600}
 
+	visRect := graphics.Rect{Left: 10, Top: 200, Right: 200, Bottom: 240}
+
 	// Frame 1: view visible.
 	reg.BeginGeometryBatch()
-	reg.UpdateViewGeometry(1, pos, size, clip)
+	reg.UpdateViewGeometry(1, pos, size, clip, visRect, []*graphics.Path{})
 	reg.FlushGeometryBatch()
 	reg.TakeCapturedSnapshot()
 
@@ -249,7 +259,7 @@ func TestFlushGeometryBatch_ViewScrollsOutAndBack(t *testing.T) {
 	// The hide in frame 2 updated the geometry cache, so this should
 	// appear as a real update (cache holds hidden state, real geometry differs).
 	reg.BeginGeometryBatch()
-	reg.UpdateViewGeometry(1, pos, size, clip)
+	reg.UpdateViewGeometry(1, pos, size, clip, visRect, []*graphics.Path{})
 	reg.FlushGeometryBatch()
 	captured = reg.TakeCapturedSnapshot()
 

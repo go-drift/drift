@@ -136,6 +136,98 @@ func (p *Path) Clear() {
 	p.Commands = p.Commands[:0]
 }
 
+// AddRect appends a clockwise rectangle (M + 3L + Z) to the path.
+func (p *Path) AddRect(r Rect) {
+	p.MoveTo(r.Left, r.Top)
+	p.LineTo(r.Right, r.Top)
+	p.LineTo(r.Right, r.Bottom)
+	p.LineTo(r.Left, r.Bottom)
+	p.Close()
+}
+
+// AddRRect appends a rounded rectangle to the path using cubic bezier curves
+// for the corners. Each corner radius is handled independently, matching the
+// RRect's per-corner Radius values. Straight edges use LineTo; corners use
+// CubicTo with the standard circular approximation constant (kappa).
+func (p *Path) AddRRect(rr RRect) {
+	// Kappa: cubic bezier approximation constant for quarter-circle arcs.
+	const k = 0.5522847498
+
+	r := rr.Rect
+	tl := rr.TopLeft
+	tr := rr.TopRight
+	br := rr.BottomRight
+	bl := rr.BottomLeft
+
+	// Start at the top edge, after the top-left corner.
+	p.MoveTo(r.Left+tl.X, r.Top)
+
+	// Top edge, then top-right corner.
+	p.LineTo(r.Right-tr.X, r.Top)
+	if tr.X > 0 || tr.Y > 0 {
+		p.CubicTo(r.Right-tr.X+tr.X*k, r.Top, r.Right, r.Top+tr.Y-tr.Y*k, r.Right, r.Top+tr.Y)
+	}
+
+	// Right edge, then bottom-right corner.
+	p.LineTo(r.Right, r.Bottom-br.Y)
+	if br.X > 0 || br.Y > 0 {
+		p.CubicTo(r.Right, r.Bottom-br.Y+br.Y*k, r.Right-br.X+br.X*k, r.Bottom, r.Right-br.X, r.Bottom)
+	}
+
+	// Bottom edge, then bottom-left corner.
+	p.LineTo(r.Left+bl.X, r.Bottom)
+	if bl.X > 0 || bl.Y > 0 {
+		p.CubicTo(r.Left+bl.X-bl.X*k, r.Bottom, r.Left, r.Bottom-bl.Y+bl.Y*k, r.Left, r.Bottom-bl.Y)
+	}
+
+	// Left edge, then top-left corner.
+	p.LineTo(r.Left, r.Top+tl.Y)
+	if tl.X > 0 || tl.Y > 0 {
+		p.CubicTo(r.Left, r.Top+tl.Y-tl.Y*k, r.Left+tl.X-tl.X*k, r.Top, r.Left+tl.X, r.Top)
+	}
+
+	p.Close()
+}
+
+// Translate returns a new path with all coordinates offset by (dx, dy).
+func (p *Path) Translate(dx, dy float64) *Path {
+	if p == nil {
+		return nil
+	}
+	out := &Path{
+		Commands: make([]PathCommand, len(p.Commands)),
+		FillRule: p.FillRule,
+	}
+	for i, cmd := range p.Commands {
+		args := make([]float64, len(cmd.Args))
+		for j := 0; j+1 < len(cmd.Args); j += 2 {
+			args[j] = cmd.Args[j] + dx
+			args[j+1] = cmd.Args[j+1] + dy
+		}
+		out.Commands[i] = PathCommand{Op: cmd.Op, Args: args}
+	}
+	return out
+}
+
+// CopyPath creates a fully independent copy of a Path, including all
+// command arguments. Returns nil if path is nil.
+func CopyPath(p *Path) *Path {
+	if p == nil {
+		return nil
+	}
+	pathCopy := &Path{
+		Commands: make([]PathCommand, len(p.Commands)),
+		FillRule: p.FillRule,
+	}
+	for i, cmd := range p.Commands {
+		pathCopy.Commands[i] = PathCommand{
+			Op:   cmd.Op,
+			Args: append([]float64(nil), cmd.Args...),
+		}
+	}
+	return pathCopy
+}
+
 // Bounds returns the bounding rectangle of the path.
 // Returns an empty Rect if the path has no points.
 func (p *Path) Bounds() Rect {

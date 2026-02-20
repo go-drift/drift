@@ -56,6 +56,19 @@ func (p *PaintContext) EmbedPlatformView(viewID int64, size graphics.Size) {
 	p.Canvas.EmbedPlatformView(viewID, size)
 }
 
+// OccludePlatformViews records a path mask that occludes platform views rendered
+// before this point in z-order. The mask is in local coordinates and will be
+// transformed to global coordinates during the geometry compositing pass.
+// If the canvas does not support occlusion tracking, this is a no-op.
+func (p *PaintContext) OccludePlatformViews(mask *graphics.Path) {
+	type occluder interface {
+		OccludePlatformViews(mask *graphics.Path)
+	}
+	if c, ok := p.Canvas.(occluder); ok {
+		c.OccludePlatformViews(mask)
+	}
+}
+
 // PushTranslation adds a translation delta to the stack.
 func (p *PaintContext) PushTranslation(dx, dy float64) {
 	p.transformStack = append(p.transformStack, graphics.Offset{X: dx, Y: dy})

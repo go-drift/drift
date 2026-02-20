@@ -145,6 +145,9 @@ func (r *renderOverlay) PerformLayout() {
 }
 
 // Paint paints the child first (bottom), then entries in order (first = bottom, last = top).
+// Before painting each overlay entry, an occlusion region is emitted so that
+// platform views rendered earlier in the frame are clipped or hidden behind
+// the overlay content.
 func (r *renderOverlay) Paint(ctx *layout.PaintContext) {
 	// Paint child first (bottom)
 	if r.child != nil {
@@ -152,7 +155,14 @@ func (r *renderOverlay) Paint(ctx *layout.PaintContext) {
 	}
 	// Paint entries in order (first = bottom, last = top)
 	for _, entry := range r.entries {
-		ctx.PaintChildWithLayer(entry, getChildOffset(entry))
+		offset := getChildOffset(entry)
+		entrySize := entry.Size()
+		// Emit occlusion region in local coordinates (relative to current transform).
+		// The geometry canvas transforms this to global coordinates.
+		mask := graphics.NewPath()
+		mask.AddRect(graphics.RectFromLTWH(offset.X, offset.Y, entrySize.Width, entrySize.Height))
+		ctx.OccludePlatformViews(mask)
+		ctx.PaintChildWithLayer(entry, offset)
 	}
 }
 

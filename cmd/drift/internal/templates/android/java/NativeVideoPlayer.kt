@@ -32,6 +32,7 @@ class NativeVideoPlayerContainer(
 ) : PlatformViewContainer {
 
     override val view: View
+    override val supportsRegionMask: Boolean get() = true
     private val playerView: PlayerView
     private val player: ExoPlayer
 

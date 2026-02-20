@@ -97,6 +97,20 @@ func (p *decorationPainter) drawShadow(ctx *layout.PaintContext, rect graphics.R
 	ctx.Canvas.DrawRectShadow(rect, shadow)
 }
 
+// occlusionPath returns a path representing the shape this decoration paints
+// within the given rect. Used by parent widgets (Stack, Overlay) to emit
+// shape-accurate occlusion masks for platform views.
+func (p *decorationPainter) occlusionPath(rect graphics.Rect) *graphics.Path {
+	mask := graphics.NewPath()
+	if p.borderRadius > 0 {
+		rrect := graphics.RRectFromRectAndRadius(rect, graphics.CircularRadius(p.borderRadius))
+		mask.AddRRect(rrect)
+	} else {
+		mask.AddRect(rect)
+	}
+	return mask
+}
+
 // shouldClipChildren reports whether children should be clipped to the
 // decoration bounds. Returns true when overflow is OverflowClip.
 func (p *decorationPainter) shouldClipChildren() bool {

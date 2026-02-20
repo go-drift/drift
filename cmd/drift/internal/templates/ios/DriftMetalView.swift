@@ -343,6 +343,23 @@ final class DriftMetalView: UIView {
             } else {
                 hasher.combine(UInt64.max - 3)
             }
+            hasher.combine(view.visibleLeft.bitPattern)
+            hasher.combine(view.visibleTop.bitPattern)
+            hasher.combine(view.visibleRight.bitPattern)
+            hasher.combine(view.visibleBottom.bitPattern)
+            hasher.combine(view.occlusionMasks.count)
+            for mask in view.occlusionMasks {
+                hasher.combine(mask.count)
+                for cmd in mask {
+                    for val in cmd {
+                        if let s = val.stringValue {
+                            hasher.combine(s)
+                        } else if let d = val.doubleValue {
+                            hasher.combine(d.bitPattern)
+                        }
+                    }
+                }
+            }
         }
         return hasher.finalize()
     }

@@ -331,10 +331,11 @@ enum PlatformViewHandler {
                 view: targetView,
                 viewX: CGFloat(snap.x), viewY: CGFloat(snap.y),
                 viewWidth: CGFloat(snap.width), viewHeight: CGFloat(snap.height),
-                clipLeft: snap.clipLeft.map { CGFloat($0) },
-                clipTop: snap.clipTop.map { CGFloat($0) },
-                clipRight: snap.clipRight.map { CGFloat($0) },
-                clipBottom: snap.clipBottom.map { CGFloat($0) }
+                visibleLeft: CGFloat(snap.visibleLeft),
+                visibleTop: CGFloat(snap.visibleTop),
+                visibleRight: CGFloat(snap.visibleRight),
+                visibleBottom: CGFloat(snap.visibleBottom),
+                occlusionMasks: snap.occlusionMasks
             )
             container.onGeometryChanged()
         }
@@ -592,7 +593,8 @@ enum PlatformViewHandler {
         return (nil, nil)
     }
 
-    /// Apply clip bounds to a view using CALayer masking.
+    /// Apply visibility masking to a platform view using visibleRect and occlusion masks.
+    /// Uses CAShapeLayer with even-odd fill to cut holes for occluding overlays.
     /// Clip bounds are in logical points (no density conversion needed on iOS).
     /// Disables implicit CALayer animations internally.
     private static func applyClipBounds(
@@ -600,51 +602,81 @@ enum PlatformViewHandler {
         view: UIView,
         viewX: CGFloat, viewY: CGFloat,
         viewWidth: CGFloat, viewHeight: CGFloat,
-        clipLeft: CGFloat?, clipTop: CGFloat?,
-        clipRight: CGFloat?, clipBottom: CGFloat?
+        visibleLeft: CGFloat, visibleTop: CGFloat,
+        visibleRight: CGFloat, visibleBottom: CGFloat,
+        occlusionMasks: [[[JSONAny]]]
     ) {
         CATransaction.setDisableActions(true)
 
-        // No clip provided - clear any existing mask, but don't change visibility
-        // (visibility is controlled by SetVisible or by full clipping below)
-        guard let clipLeft = clipLeft,
-              let clipTop = clipTop,
-              let clipRight = clipRight,
-              let clipBottom = clipBottom else {
-            view.layer.mask = nil
-            return
-        }
+        // Convert visible rect from global to local view coordinates.
+        let localLeft = max(0, min(visibleLeft - viewX, viewWidth))
+        let localTop = max(0, min(visibleTop - viewY, viewHeight))
+        let localRight = max(0, min(visibleRight - viewX, viewWidth))
+        let localBottom = max(0, min(visibleBottom - viewY, viewHeight))
 
-        // Convert global clip to local view coordinates
-        let localClipLeft = clipLeft - viewX
-        let localClipTop = clipTop - viewY
-        let localClipRight = clipRight - viewX
-        let localClipBottom = clipBottom - viewY
-
-        // Clamp to view bounds
-        let left = max(0, min(localClipLeft, viewWidth))
-        let top = max(0, min(localClipTop, viewHeight))
-        let right = max(0, min(localClipRight, viewWidth))
-        let bottom = max(0, min(localClipBottom, viewHeight))
-
-        // Completely clipped - hide view
-        if left >= right || top >= bottom {
+        // Visible rect is empty: hide view entirely.
+        if localLeft >= localRight || localTop >= localBottom {
             view.isHidden = true
             view.layer.mask = nil
             return
         }
 
-        // Fully visible (clip covers entire view) - no mask needed
-        // Check local values directly to avoid sub-pixel edge exposure
-        if localClipLeft <= 0 && localClipTop <= 0 &&
-           localClipRight >= viewWidth && localClipBottom >= viewHeight {
+        let visibleCGRect = CGRect(
+            x: localLeft, y: localTop,
+            width: localRight - localLeft, height: localBottom - localTop
+        )
+
+        // Fully visible (covers entire view) and no occlusion: clear mask.
+        let coversFullView = localLeft <= 0 && localTop <= 0 &&
+            localRight >= viewWidth && localBottom >= viewHeight
+        if coversFullView && occlusionMasks.isEmpty {
             view.layer.mask = nil
             view.isHidden = false
             return
         }
 
-        // Partial clip - reuse cached mask layer to avoid per-frame allocation
-        let maskPath = UIBezierPath(rect: CGRect(x: left, y: top, width: right - left, height: bottom - top))
+        // Build mask path: outer visible rect, with occlusion paths subtracted.
+        let maskPath = UIBezierPath(rect: visibleCGRect)
+
+        for maskCmds in occlusionMasks {
+            let holePath = UIBezierPath()
+            for cmd in maskCmds {
+                guard let op = cmd.first?.stringValue else { continue }
+                switch op {
+                case "M":
+                    guard cmd.count >= 3,
+                          let x = cmd[1].doubleValue, let y = cmd[2].doubleValue else { continue }
+                    holePath.move(to: CGPoint(x: CGFloat(x) - viewX, y: CGFloat(y) - viewY))
+                case "L":
+                    guard cmd.count >= 3,
+                          let x = cmd[1].doubleValue, let y = cmd[2].doubleValue else { continue }
+                    holePath.addLine(to: CGPoint(x: CGFloat(x) - viewX, y: CGFloat(y) - viewY))
+                case "Q":
+                    guard cmd.count >= 5,
+                          let x1 = cmd[1].doubleValue, let y1 = cmd[2].doubleValue,
+                          let x2 = cmd[3].doubleValue, let y2 = cmd[4].doubleValue else { continue }
+                    holePath.addQuadCurve(
+                        to: CGPoint(x: CGFloat(x2) - viewX, y: CGFloat(y2) - viewY),
+                        controlPoint: CGPoint(x: CGFloat(x1) - viewX, y: CGFloat(y1) - viewY))
+                case "C":
+                    guard cmd.count >= 7,
+                          let x1 = cmd[1].doubleValue, let y1 = cmd[2].doubleValue,
+                          let x2 = cmd[3].doubleValue, let y2 = cmd[4].doubleValue,
+                          let x3 = cmd[5].doubleValue, let y3 = cmd[6].doubleValue else { continue }
+                    holePath.addCurve(
+                        to: CGPoint(x: CGFloat(x3) - viewX, y: CGFloat(y3) - viewY),
+                        controlPoint1: CGPoint(x: CGFloat(x1) - viewX, y: CGFloat(y1) - viewY),
+                        controlPoint2: CGPoint(x: CGFloat(x2) - viewX, y: CGFloat(y2) - viewY))
+                case "Z":
+                    holePath.close()
+                default:
+                    break
+                }
+            }
+            maskPath.append(holePath)
+        }
+
+        // Reuse cached mask layer to avoid per-frame allocation.
         let maskLayer: CAShapeLayer
         if let cached = maskLayers[viewId] {
             maskLayer = cached
@@ -652,6 +684,7 @@ enum PlatformViewHandler {
             maskLayer = CAShapeLayer()
             maskLayers[viewId] = maskLayer
         }
+        maskLayer.fillRule = occlusionMasks.isEmpty ? .nonZero : .evenOdd
         maskLayer.path = maskPath.cgPath
         view.layer.mask = maskLayer
         view.isHidden = false

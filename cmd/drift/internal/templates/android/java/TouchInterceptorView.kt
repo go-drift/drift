@@ -15,6 +15,8 @@
 package {{.PackageName}}
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Path
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
@@ -33,6 +35,28 @@ class TouchInterceptorView(
     var enableUnfocusedTextScrollForwarding: Boolean = true
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
+    /** Set once at creation. True for TextureView-backed views that support
+     *  non-rectangular region clipping via canvas clip operations. */
+    var supportsRegionMask = false
+
+    // Region clip state: a visible rect with rectangular holes subtracted.
+    // Uses native canvas clip operations (clipRect + clipOutRect) which are
+    // hardware-accelerated and reliable, unlike Path.op + clipPath.
+    internal var hasRegionClip = false
+    internal var visRectLeft = 0f
+    internal var visRectTop = 0f
+    internal var visRectRight = 0f
+    internal var visRectBottom = 0f
+    internal val holePaths = ArrayList<Path>(4)
+
+    fun clearRegionClip() {
+        if (hasRegionClip) {
+            hasRegionClip = false
+            holePaths.clear()
+            invalidate()
+        }
+    }
+
     // Touch interception state
     private var blockMode = false        // true when view is obscured
     private var slopTracking = false     // true when tracking unfocused tap-vs-scroll
@@ -40,6 +64,20 @@ class TouchInterceptorView(
     private var touchStartX = 0f
     private var touchStartY = 0f
     private var pendingDownTime = 0L
+
+    override fun dispatchDraw(canvas: Canvas) {
+        if (hasRegionClip) {
+            canvas.save()
+            canvas.clipRect(visRectLeft, visRectTop, visRectRight, visRectBottom)
+            for (hole in holePaths) {
+                canvas.clipOutPath(hole)
+            }
+            super.dispatchDraw(canvas)
+            canvas.restore()
+        } else {
+            super.dispatchDraw(canvas)
+        }
+    }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {

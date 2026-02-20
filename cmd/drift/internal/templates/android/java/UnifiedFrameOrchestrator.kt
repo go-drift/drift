@@ -12,9 +12,11 @@
  */
 package {{.PackageName}}
 
+import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
 import android.view.Choreographer
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -74,6 +76,19 @@ class UnifiedFrameOrchestrator(
             for (i in 0 until viewsArray.length()) {
                 val v = viewsArray.getJSONObject(i)
                 val hasClip = v.optBoolean("hasClip", false)
+                // Occlusion masks: path commands parsed into android.graphics.Path objects.
+                // Most views have no occlusion, so this skips allocation in the common case.
+                val masksArray = v.optJSONArray("occlusionMasks")
+                val occPaths = if (masksArray != null && masksArray.length() > 0) {
+                    ArrayList<Path>(masksArray.length()).also { list ->
+                        for (j in 0 until masksArray.length()) {
+                            list.add(parsePathCommands(masksArray.getJSONArray(j)))
+                        }
+                    }
+                } else {
+                    emptyList()
+                }
+
                 views.add(ViewSnapshot(
                     viewId = v.getLong("viewId"),
                     x = v.getDouble("x").toFloat(),
@@ -84,7 +99,12 @@ class UnifiedFrameOrchestrator(
                     clipTop = if (hasClip) v.getDouble("clipTop").toFloat() else null,
                     clipRight = if (hasClip) v.getDouble("clipRight").toFloat() else null,
                     clipBottom = if (hasClip) v.getDouble("clipBottom").toFloat() else null,
-                    visible = v.optBoolean("visible", true)
+                    visible = v.optBoolean("visible", true),
+                    visibleLeft = v.optDouble("visibleLeft", 0.0).toFloat(),
+                    visibleTop = v.optDouble("visibleTop", 0.0).toFloat(),
+                    visibleRight = v.optDouble("visibleRight", 0.0).toFloat(),
+                    visibleBottom = v.optDouble("visibleBottom", 0.0).toFloat(),
+                    occlusionPaths = occPaths
                 ))
             }
             FrameSnapshot(views)
@@ -97,6 +117,29 @@ class UnifiedFrameOrchestrator(
         if (active && frameScheduled.compareAndSet(false, true)) {
             mainHandler.post(postFrameRunnable)
         }
+    }
+
+    /** Parses a JSON array of path commands into an android.graphics.Path. */
+    private fun parsePathCommands(cmds: JSONArray): Path {
+        val path = Path()
+        for (i in 0 until cmds.length()) {
+            val cmd = cmds.getJSONArray(i)
+            when (cmd.getString(0)) {
+                "M" -> path.moveTo(cmd.getDouble(1).toFloat(), cmd.getDouble(2).toFloat())
+                "L" -> path.lineTo(cmd.getDouble(1).toFloat(), cmd.getDouble(2).toFloat())
+                "Q" -> path.quadTo(
+                    cmd.getDouble(1).toFloat(), cmd.getDouble(2).toFloat(),
+                    cmd.getDouble(3).toFloat(), cmd.getDouble(4).toFloat()
+                )
+                "C" -> path.cubicTo(
+                    cmd.getDouble(1).toFloat(), cmd.getDouble(2).toFloat(),
+                    cmd.getDouble(3).toFloat(), cmd.getDouble(4).toFloat(),
+                    cmd.getDouble(5).toFloat(), cmd.getDouble(6).toFloat()
+                )
+                "Z" -> path.close()
+            }
+        }
+        return path
     }
 
     fun start() {
@@ -128,5 +171,10 @@ data class ViewSnapshot(
     val clipTop: Float?,
     val clipRight: Float?,
     val clipBottom: Float?,
-    val visible: Boolean
+    val visible: Boolean,
+    val visibleLeft: Float,
+    val visibleTop: Float,
+    val visibleRight: Float,
+    val visibleBottom: Float,
+    val occlusionPaths: List<Path>
 )

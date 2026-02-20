@@ -165,6 +165,18 @@ func (r *renderDecoratedBox) Paint(ctx *layout.PaintContext) {
 	}
 }
 
+// OcclusionPath returns a path representing the opaque area this box paints.
+func (r *renderDecoratedBox) OcclusionPath() *graphics.Path {
+	if r.painter.color == graphics.ColorTransparent || r.painter.color.Alpha() < 1.0 {
+		return nil
+	}
+	size := r.Size()
+	if size.Width <= 0 || size.Height <= 0 {
+		return nil
+	}
+	return r.painter.occlusionPath(graphics.RectFromLTWH(0, 0, size.Width, size.Height))
+}
+
 func (r *renderDecoratedBox) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
 	if !withinBounds(position, r.Size()) {
 		return false

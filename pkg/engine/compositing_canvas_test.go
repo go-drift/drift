@@ -14,18 +14,23 @@ type mockSink struct {
 }
 
 type sinkUpdate struct {
-	viewID     int64
-	offset     graphics.Offset
-	size       graphics.Size
-	clipBounds *graphics.Rect
+	viewID         int64
+	offset         graphics.Offset
+	size           graphics.Size
+	clipBounds     *graphics.Rect
+	visibleRect    graphics.Rect
+	occlusionPaths []*graphics.Path
 }
 
-func (s *mockSink) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) error {
+func (s *mockSink) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size,
+	clipBounds *graphics.Rect, visibleRect graphics.Rect, occlusionPaths []*graphics.Path) error {
 	s.updates = append(s.updates, sinkUpdate{
-		viewID:     viewID,
-		offset:     offset,
-		size:       size,
-		clipBounds: clipBounds,
+		viewID:         viewID,
+		offset:         offset,
+		size:           size,
+		clipBounds:     clipBounds,
+		visibleRect:    visibleRect,
+		occlusionPaths: occlusionPaths,
 	})
 	return nil
 }

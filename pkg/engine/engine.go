@@ -1063,7 +1063,9 @@ func (a *appRunner) StepFrame(size graphics.Size) (*FrameSnapshot, error) {
 			compositeStart = time.Now()
 		}
 		geoCanvas := NewGeometryCanvas(size, reg)
+		defer geoCanvas.ResetFrame()
 		compositeLayerTree(geoCanvas, a.rootRender)
+		geoCanvas.FlushToSink()
 		if traceEnabled {
 			traceSample.Phases.GeometryMs = durationToMillis(time.Since(compositeStart))
 		}
