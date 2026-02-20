@@ -172,3 +172,10 @@ type Canvas interface {
 	// Size returns the size of the canvas in pixels.
 	Size() Size
 }
+
+// OcclusionCanvas is an optional interface for canvases that support
+// platform view occlusion regions. GeometryCanvas implements this to track
+// z-order occlusion during the geometry compositing pass.
+type OcclusionCanvas interface {
+	OccludePlatformViews(mask *Path)
+}

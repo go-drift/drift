@@ -477,6 +477,79 @@ func TestCompositeLayerTree_RootPanicsWithNilContent(t *testing.T) {
 	compositeLayerTree(inner, root)
 }
 
+func TestCompositeLayerTree_PlatformViewOcclusion(t *testing.T) {
+	// Build a child that embeds a platform view.
+	child := &platformViewBoundary{}
+	child.SetSelf(child)
+	child.SetSize(graphics.Size{Width: 80, Height: 60})
+	child.SetParentData(&layout.BoxParentData{Offset: graphics.Offset{X: 0, Y: 0}})
+
+	// Build an overlay child that emits an occlusion region via display list.
+	overlay := &occlusionBoundary{occlusionBounds: graphics.RectFromLTWH(0, 0, 800, 600)}
+	overlay.SetSelf(overlay)
+	overlay.SetSize(graphics.Size{Width: 800, Height: 600})
+	overlay.SetParentData(&layout.BoxParentData{Offset: graphics.Offset{X: 0, Y: 0}})
+
+	// Parent paints child first, then overlay (overlay occludes child's view).
+	parent := newBoundaryBox(800, 600)
+	parent.children = []layout.RenderObject{child, overlay}
+
+	// Record layers: children before parents.
+	recordLayerContent(child, false, 0)
+	recordLayerContent(overlay, false, 0)
+	recordLayerContent(parent, false, 0)
+
+	// Composite through GeometryCanvas.
+	sink := &mockSink{}
+	gc := NewGeometryCanvas(graphics.Size{Width: 800, Height: 600}, sink)
+	compositeLayerTree(gc, parent)
+	gc.FlushToSink()
+
+	if len(sink.updates) != 1 {
+		t.Fatalf("expected 1 platform view update, got %d", len(sink.updates))
+	}
+
+	u := sink.updates[0]
+	if u.viewID != 123 {
+		t.Errorf("viewID = %d, want 123", u.viewID)
+	}
+	// The platform view should be hidden (occluded by the overlay).
+	if u.clipBounds == nil || !u.clipBounds.IsEmpty() {
+		t.Errorf("platform view should be hidden by overlay, clipBounds = %v", u.clipBounds)
+	}
+}
+
+// occlusionBoundary is a repaint boundary that emits an occlusion region.
+type occlusionBoundary struct {
+	layout.RenderBoxBase
+	occlusionBounds graphics.Rect
+}
+
+func (r *occlusionBoundary) PerformLayout() {}
+
+func (r *occlusionBoundary) Paint(ctx *layout.PaintContext) {
+	mask := graphics.NewPath()
+	mask.AddRect(r.occlusionBounds)
+	ctx.OccludePlatformViews(mask)
+	ctx.Canvas.DrawRect(graphics.RectFromLTWH(0, 0, r.Size().Width, r.Size().Height), graphics.DefaultPaint())
+}
+
+func (r *occlusionBoundary) HitTest(position graphics.Offset, result *layout.HitTestResult) bool {
+	return false
+}
+
+func (r *occlusionBoundary) IsRepaintBoundary() bool {
+	return true
+}
+
+func (r *occlusionBoundary) EnsureLayer() *graphics.Layer {
+	return r.RenderBoxBase.EnsureLayer()
+}
+
+func (r *occlusionBoundary) NeedsPaint() bool {
+	return r.RenderBoxBase.NeedsPaint()
+}
+
 func TestRecordLayerContent_SetsRecordingLayer(t *testing.T) {
 	// Verifies that recording sets RecordingLayer on PaintContext,
 	// enabling DrawChildLayer recording for child boundaries.

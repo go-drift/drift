@@ -3,6 +3,7 @@ package engine
 import (
 	"sync/atomic"
 
+	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/platform"
 )
 
@@ -30,6 +31,12 @@ type ViewSnapshot struct {
 	ClipBottom float64 `json:"clipBottom"`
 	HasClip    bool    `json:"hasClip,omitempty"`
 	Visible    bool    `json:"visible"`
+	// Occlusion masking. Always present.
+	VisibleLeft    float64   `json:"visibleLeft"`
+	VisibleTop     float64   `json:"visibleTop"`
+	VisibleRight   float64   `json:"visibleRight"`
+	VisibleBottom  float64   `json:"visibleBottom"`
+	OcclusionMasks [][][]any `json:"occlusionMasks"`
 }
 
 // viewSnapshotFromCapture converts a captured platform view geometry into a
@@ -37,27 +44,59 @@ type ViewSnapshot struct {
 // clip and zero size (unseen during compositing).
 func viewSnapshotFromCapture(cv platform.CapturedViewGeometry) ViewSnapshot {
 	vs := ViewSnapshot{
-		ViewID: cv.ViewID,
-		X:      cv.Offset.X,
-		Y:      cv.Offset.Y,
-		Width:  cv.Size.Width,
-		Height: cv.Size.Height,
+		ViewID:        cv.ViewID,
+		X:             cv.Offset.X,
+		Y:             cv.Offset.Y,
+		Width:         cv.Size.Width,
+		Height:        cv.Size.Height,
+		VisibleLeft:   cv.VisibleRect.Left,
+		VisibleTop:    cv.VisibleRect.Top,
+		VisibleRight:  cv.VisibleRect.Right,
+		VisibleBottom: cv.VisibleRect.Bottom,
 	}
+
+	vs.OcclusionMasks = occlusionMasksFromPaths(cv.OcclusionPaths)
+	vs.Visible = !cv.VisibleRect.IsEmpty()
+
 	if cv.ClipBounds != nil {
-		isEmpty := cv.ClipBounds.Left == 0 && cv.ClipBounds.Top == 0 &&
-			cv.ClipBounds.Right == 0 && cv.ClipBounds.Bottom == 0
-		if isEmpty && cv.Size.Width == 0 && cv.Size.Height == 0 {
-			vs.Visible = false
-		} else {
-			vs.Visible = true
-			vs.HasClip = true
-			vs.ClipLeft = cv.ClipBounds.Left
-			vs.ClipTop = cv.ClipBounds.Top
-			vs.ClipRight = cv.ClipBounds.Right
-			vs.ClipBottom = cv.ClipBounds.Bottom
-		}
-	} else {
-		vs.Visible = true
+		vs.HasClip = true
+		vs.ClipLeft = cv.ClipBounds.Left
+		vs.ClipTop = cv.ClipBounds.Top
+		vs.ClipRight = cv.ClipBounds.Right
+		vs.ClipBottom = cv.ClipBounds.Bottom
 	}
 	return vs
+}
+
+// occlusionMasksFromPaths converts path-based occlusion masks to the wire format.
+// Each path becomes a list of command arrays: [["M",x,y],["L",x,y],...,["Z"]].
+// Returns an empty (non-nil) slice when input is empty, ensuring JSON serializes
+// as [] rather than null.
+func occlusionMasksFromPaths(paths []*graphics.Path) [][][]any {
+	if len(paths) == 0 {
+		return [][][]any{}
+	}
+	result := make([][][]any, len(paths))
+	for i, p := range paths {
+		var cmds [][]any
+		for _, cmd := range p.Commands {
+			switch cmd.Op {
+			case graphics.PathOpMoveTo:
+				cmds = append(cmds, []any{"M", cmd.Args[0], cmd.Args[1]})
+			case graphics.PathOpLineTo:
+				cmds = append(cmds, []any{"L", cmd.Args[0], cmd.Args[1]})
+			case graphics.PathOpQuadTo:
+				cmds = append(cmds, []any{"Q", cmd.Args[0], cmd.Args[1], cmd.Args[2], cmd.Args[3]})
+			case graphics.PathOpCubicTo:
+				cmds = append(cmds, []any{"C", cmd.Args[0], cmd.Args[1], cmd.Args[2], cmd.Args[3], cmd.Args[4], cmd.Args[5]})
+			case graphics.PathOpClose:
+				cmds = append(cmds, []any{"Z"})
+			}
+		}
+		if cmds == nil {
+			cmds = [][]any{}
+		}
+		result[i] = cmds
+	}
+	return result
 }

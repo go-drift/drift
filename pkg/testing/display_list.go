@@ -220,6 +220,13 @@ func (c *serializingCanvas) DrawLottie(_ unsafe.Pointer, bounds graphics.Rect, t
 	})
 }
 
+func (c *serializingCanvas) OccludePlatformViews(mask *graphics.Path) {
+	c.ops = append(c.ops, DisplayOp{
+		Op:     "occludePlatformViews",
+		Params: sortedMap("bounds", serializeRect(mask.Bounds())),
+	})
+}
+
 func (c *serializingCanvas) EmbedPlatformView(viewID int64, size graphics.Size) {
 	c.ops = append(c.ops, DisplayOp{
 		Op: "embedPlatformView",

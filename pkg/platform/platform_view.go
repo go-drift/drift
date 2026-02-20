@@ -12,10 +12,12 @@ import (
 // CapturedViewGeometry holds the resolved geometry for one platform view,
 // captured during a StepFrame pass for synchronous application on the UI thread.
 type CapturedViewGeometry struct {
-	ViewID     int64
-	Offset     graphics.Offset
-	Size       graphics.Size
-	ClipBounds *graphics.Rect
+	ViewID         int64
+	Offset         graphics.Offset
+	Size           graphics.Size
+	ClipBounds     *graphics.Rect   // collapsed single-rect after occlusion subtraction (Android fallback); nil if unclipped
+	VisibleRect    graphics.Rect    // view bounds intersected with parent clips; {0,0,0,0} if hidden
+	OcclusionPaths []*graphics.Path // path-based occlusion masks; [] if none
 }
 
 // PlatformView represents a native view embedded in Drift UI.
@@ -227,7 +229,8 @@ func (r *PlatformViewRegistry) ViewCount() int {
 // UpdateViewGeometry queues a geometry update for a platform view.
 // Updates are collected during compositing and flushed via FlushGeometryBatch.
 // Gracefully ignores disposed or unknown viewIDs.
-func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) error {
+func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size,
+	clipBounds *graphics.Rect, visibleRect graphics.Rect, occlusionPaths []*graphics.Path) error {
 	// Guard: ignore disposed/unknown views
 	r.mu.RLock()
 	_, exists := r.views[viewID]
@@ -237,10 +240,12 @@ func (r *PlatformViewRegistry) UpdateViewGeometry(viewID int64, offset graphics.
 	}
 
 	entry := CapturedViewGeometry{
-		ViewID:     viewID,
-		Offset:     offset,
-		Size:       size,
-		ClipBounds: clipBounds,
+		ViewID:         viewID,
+		Offset:         offset,
+		Size:           size,
+		ClipBounds:     clipBounds,
+		VisibleRect:    visibleRect,
+		OcclusionPaths: occlusionPaths,
 	}
 
 	r.batchMu.Lock()
@@ -277,7 +282,13 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	r.batchMu.Lock()
 	// Move batch updates directly into captured views
 	r.capturedViews = append(r.capturedViews, r.batchUpdates...)
-	viewsSeen := r.viewsSeenThisFrame
+	// Copy the seen set so we can release batchMu before the r.mu.RLock below.
+	// Without the copy, a concurrent resendGeometry (triggered by native
+	// onViewCreated) could write to viewsSeenThisFrame while we read it.
+	viewsSeen := make(map[int64]struct{}, len(r.viewsSeenThisFrame))
+	for id := range r.viewsSeenThisFrame {
+		viewsSeen[id] = struct{}{}
+	}
 	r.batchUpdates = nil
 	r.batchMu.Unlock()
 
@@ -290,8 +301,10 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 		if _, seen := viewsSeen[viewID]; !seen {
 			emptyClip := graphics.Rect{} // 0,0,0,0 signals hidden
 			hidden = append(hidden, CapturedViewGeometry{
-				ViewID:     viewID,
-				ClipBounds: &emptyClip,
+				ViewID:         viewID,
+				ClipBounds:     &emptyClip,
+				VisibleRect:    graphics.Rect{},
+				OcclusionPaths: []*graphics.Path{},
 			})
 		}
 	}
@@ -328,7 +341,7 @@ func (r *PlatformViewRegistry) resendGeometry(viewID int64) {
 	if !ok {
 		return
 	}
-	r.UpdateViewGeometry(viewID, cached.Offset, cached.Size, cached.ClipBounds)
+	r.UpdateViewGeometry(viewID, cached.Offset, cached.Size, cached.ClipBounds, cached.VisibleRect, cached.OcclusionPaths)
 }
 
 // ClearGeometryCache removes cached geometry for a view (call on dispose).

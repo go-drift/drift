@@ -141,7 +141,10 @@ func (r *renderStack) PerformLayout() {
 	r.SetSize(size)
 }
 
-// Paint paints all children in order.
+// Paint paints all children in order (first = bottom, last = top).
+// Occlusion of platform views is handled by individual widgets: opaque
+// widgets (Container, DecoratedBox) emit occlusion regions during their
+// own Paint() calls, so the Stack doesn't need to inspect children.
 func (r *renderStack) Paint(ctx *layout.PaintContext) {
 	for _, child := range r.children {
 		ctx.PaintChildWithLayer(child, getChildOffset(child))

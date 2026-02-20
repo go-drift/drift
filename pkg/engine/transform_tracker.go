@@ -71,5 +71,13 @@ func (t *transformTracker) embedPlatformView(sink PlatformViewSink, viewID int64
 	}
 	offset := t.transform
 	clipBounds := t.currentClip()
-	sink.UpdateViewGeometry(viewID, offset, size, clipBounds)
+
+	// Compute visibleRect: view bounds intersected with parent clip.
+	viewBounds := graphics.RectFromLTWH(offset.X, offset.Y, size.Width, size.Height)
+	visibleRect := viewBounds
+	if clipBounds != nil {
+		visibleRect = viewBounds.Intersect(*clipBounds)
+	}
+
+	sink.UpdateViewGeometry(viewID, offset, size, clipBounds, visibleRect, []*graphics.Path{})
 }

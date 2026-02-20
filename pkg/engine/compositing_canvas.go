@@ -9,7 +9,8 @@ import (
 
 // PlatformViewSink receives resolved platform view geometry during compositing.
 type PlatformViewSink interface {
-	UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size, clipBounds *graphics.Rect) error
+	UpdateViewGeometry(viewID int64, offset graphics.Offset, size graphics.Size,
+		clipBounds *graphics.Rect, visibleRect graphics.Rect, occlusionPaths []*graphics.Path) error
 }
 
 // CompositingCanvas wraps an inner canvas and tracks transform + clip state

@@ -75,6 +75,17 @@
       "op": "restore"
     },
     {
+      "op": "occludePlatformViews",
+      "params": {
+        "bounds": {
+          "bottom": 100,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
+    },
+    {
       "op": "save"
     },
     {
@@ -107,6 +118,17 @@
       "params": {
         "color": "0xFFFF0000",
         "rect": {
+          "bottom": 100,
+          "left": 0,
+          "right": 100,
+          "top": 0
+        }
+      }
+    },
+    {
+      "op": "occludePlatformViews",
+      "params": {
+        "bounds": {
           "bottom": 100,
           "left": 0,
           "right": 100,

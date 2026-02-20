@@ -42,6 +42,34 @@ struct FrameSnapshot: Decodable {
     let views: [ViewSnapshot]
 }
 
+/// JSON value that can be either a String or a Double (for heterogeneous path command arrays).
+enum JSONAny: Decodable {
+    case string(String)
+    case double(Double)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let s = try? container.decode(String.self) {
+            self = .string(s)
+        } else if let d = try? container.decode(Double.self) {
+            self = .double(d)
+        } else {
+            throw DecodingError.typeMismatch(JSONAny.self, DecodingError.Context(
+                codingPath: decoder.codingPath,
+                debugDescription: "Expected String or Double"))
+        }
+    }
+
+    var stringValue: String? {
+        if case .string(let s) = self { return s }
+        return nil
+    }
+    var doubleValue: Double? {
+        if case .double(let d) = self { return d }
+        return nil
+    }
+}
+
 /// Geometry for a single platform view within a frame snapshot.
 struct ViewSnapshot: Decodable {
     let viewId: Int
@@ -54,6 +82,12 @@ struct ViewSnapshot: Decodable {
     let clipRight: Double?
     let clipBottom: Double?
     let visible: Bool
+    // Occlusion masking. Always present.
+    let visibleLeft: Double
+    let visibleTop: Double
+    let visibleRight: Double
+    let visibleBottom: Double
+    let occlusionMasks: [[[JSONAny]]]
 }
 
 /// Metal renderer that bridges Go engine output to the iOS display.

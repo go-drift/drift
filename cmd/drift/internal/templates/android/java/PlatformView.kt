@@ -237,6 +237,7 @@ object PlatformViewHandler {
             views[viewId] = container
 
             val interceptor = TouchInterceptorView(ctx, viewId)
+            interceptor.supportsRegionMask = container.supportsRegionMask
             if (viewType == "textinput") {
                 val multiline = params["multiline"] as? Boolean ?: false
                 interceptor.enableUnfocusedTextScrollForwarding = !multiline
@@ -315,6 +316,9 @@ object PlatformViewHandler {
 interface PlatformViewContainer {
     val viewId: Int
     val view: View
+    /** Whether this view supports region masking (Path-based clip for partial occlusion).
+     *  TextureView-backed views return true; SurfaceView-backed views return false. */
+    val supportsRegionMask: Boolean get() = false
     fun dispose()
 }
 

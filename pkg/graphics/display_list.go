@@ -209,6 +209,10 @@ func (c *recordingCanvas) EmbedPlatformView(viewID int64, size Size) {
 	c.recorder.append(opEmbedPlatformView{viewID: viewID, size: size})
 }
 
+func (c *recordingCanvas) OccludePlatformViews(mask *Path) {
+	c.recorder.append(opOccludePlatformViews{mask: CopyPath(mask)})
+}
+
 // DrawChildLayer records a child layer reference at current canvas state.
 func (c *recordingCanvas) DrawChildLayer(layer *Layer) {
 	c.recorder.DrawChildLayer(layer)
@@ -228,6 +232,19 @@ type opEmbedPlatformView struct {
 
 func (op opEmbedPlatformView) execute(canvas Canvas) {
 	canvas.EmbedPlatformView(op.viewID, op.size)
+}
+
+// opOccludePlatformViews records a region that occludes platform views painted
+// before it. During the geometry pass, this region is subtracted from platform
+// view visible areas.
+type opOccludePlatformViews struct {
+	mask *Path
+}
+
+func (op opOccludePlatformViews) execute(canvas Canvas) {
+	if c, ok := canvas.(OcclusionCanvas); ok {
+		c.OccludePlatformViews(op.mask)
+	}
 }
 
 // opDrawChildLayer references a child layer to composite at current canvas state.
@@ -471,18 +488,5 @@ func (op opLottie) execute(canvas Canvas) {
 // deepCopyPath creates a fully independent copy of a Path, including all
 // command arguments. Returns nil if path is nil.
 func deepCopyPath(path *Path) *Path {
-	if path == nil {
-		return nil
-	}
-	pathCopy := &Path{
-		Commands: make([]PathCommand, len(path.Commands)),
-		FillRule: path.FillRule,
-	}
-	for i, cmd := range path.Commands {
-		pathCopy.Commands[i] = PathCommand{
-			Op:   cmd.Op,
-			Args: append([]float64(nil), cmd.Args...),
-		}
-	}
-	return pathCopy
+	return CopyPath(path)
 }
