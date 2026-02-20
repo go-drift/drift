@@ -1049,34 +1049,39 @@ func (a *appRunner) StepFrame(size graphics.Size) (*FrameSnapshot, error) {
 	if hasRenderTree {
 		reg := platform.GetPlatformViewRegistry()
 
-		// Begin/Flush geometry batch brackets the compositing pass.
-		// Both calls live in StepFrame so the batch is always paired,
-		// even when runPipeline returns nil on an earlier frame.
-		reg.BeginGeometryBatch()
+		// Skip the geometry pass entirely when no platform views are registered.
+		// This avoids per-frame Path allocations from occlusion ops (emitted by
+		// every opaque Container/DecoratedBox) in the common case.
+		if reg.ViewCount() > 0 {
+			// Begin/Flush geometry batch brackets the compositing pass.
+			// Both calls live in StepFrame so the batch is always paired,
+			// even when runPipeline returns nil on an earlier frame.
+			reg.BeginGeometryBatch()
 
-		// Composite through geometry canvas to extract platform view positions.
-		// GeometryCanvas feeds into the registry's batch system via PlatformViewSink.
-		// Geometry is in logical coordinates; the consumer (Android UI thread)
-		// applies device density scaling.
-		var compositeStart time.Time
-		if traceEnabled {
-			compositeStart = time.Now()
-		}
-		geoCanvas := NewGeometryCanvas(size, reg)
-		defer geoCanvas.ResetFrame()
-		compositeLayerTree(geoCanvas, a.rootRender)
-		geoCanvas.FlushToSink()
-		if traceEnabled {
-			traceSample.Phases.GeometryMs = durationToMillis(time.Since(compositeStart))
-		}
+			// Composite through geometry canvas to extract platform view positions.
+			// GeometryCanvas feeds into the registry's batch system via PlatformViewSink.
+			// Geometry is in logical coordinates; the consumer (Android UI thread)
+			// applies device density scaling.
+			var compositeStart time.Time
+			if traceEnabled {
+				compositeStart = time.Now()
+			}
+			geoCanvas := NewGeometryCanvas(size, reg)
+			defer geoCanvas.ResetFrame()
+			compositeLayerTree(geoCanvas, a.rootRender)
+			geoCanvas.FlushToSink()
+			if traceEnabled {
+				traceSample.Phases.GeometryMs = durationToMillis(time.Since(compositeStart))
+			}
 
-		// FlushGeometryBatch collects both visible views (from compositing
-		// above) and hidden views (unseen, with empty clips).
-		reg.FlushGeometryBatch()
-		captured := reg.TakeCapturedSnapshot()
+			// FlushGeometryBatch collects both visible views (from compositing
+			// above) and hidden views (unseen, with empty clips).
+			reg.FlushGeometryBatch()
+			captured := reg.TakeCapturedSnapshot()
 
-		for _, cv := range captured {
-			snapshot.Views = append(snapshot.Views, viewSnapshotFromCapture(cv))
+			for _, cv := range captured {
+				snapshot.Views = append(snapshot.Views, viewSnapshotFromCapture(cv))
+			}
 		}
 	}
 
