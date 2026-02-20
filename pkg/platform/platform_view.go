@@ -282,7 +282,13 @@ func (r *PlatformViewRegistry) FlushGeometryBatch() {
 	r.batchMu.Lock()
 	// Move batch updates directly into captured views
 	r.capturedViews = append(r.capturedViews, r.batchUpdates...)
-	viewsSeen := r.viewsSeenThisFrame
+	// Copy the seen set so we can release batchMu before the r.mu.RLock below.
+	// Without the copy, a concurrent resendGeometry (triggered by native
+	// onViewCreated) could write to viewsSeenThisFrame while we read it.
+	viewsSeen := make(map[int64]struct{}, len(r.viewsSeenThisFrame))
+	for id := range r.viewsSeenThisFrame {
+		viewsSeen[id] = struct{}{}
+	}
 	r.batchUpdates = nil
 	r.batchMu.Unlock()
 
