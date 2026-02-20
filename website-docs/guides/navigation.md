@@ -1,7 +1,7 @@
 ---
 id: navigation
 title: Navigation
-sidebar_position: 9
+sidebar_position: 1
 ---
 
 # Navigation

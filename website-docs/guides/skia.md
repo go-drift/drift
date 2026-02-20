@@ -1,12 +1,16 @@
 ---
 id: skia
 title: Skia Build
-sidebar_position: 17
+sidebar_position: 2
 ---
 
 # Skia Build
 
-Drift uses `libdrift_skia.a`, which combines Skia with the Drift bridge code. The bridge is pre-compiled at CI/build time, so app developers using prebuilt binaries don't need Skia headers - only the `skia_bridge.h` header included in the drift module. Building from source still requires a full Skia checkout.
+Drift uses `libdrift_skia.a`, which combines Skia with the Drift bridge code. The bridge is pre-compiled at CI/build time, so app developers using prebuilt binaries don't need Skia headers, only the `skia_bridge.h` header included in the drift module. Building from source still requires a full Skia checkout.
+
+:::tip
+Building Skia from source is only needed when [contributing](/docs/guides/contributing) to the Drift engine or creating custom Skia builds. Most app developers can skip this guide entirely.
+:::
 
 The drift CLI searches for libraries in these locations (in order):
 

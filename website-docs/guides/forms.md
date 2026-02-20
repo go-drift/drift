@@ -1,7 +1,7 @@
 ---
 id: forms
 title: Forms & Validation
-sidebar_position: 7
+sidebar_position: 4
 ---
 
 # Forms & Validation

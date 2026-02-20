@@ -1,7 +1,7 @@
 ---
 id: xtool-setup
 title: iOS on Linux with xtool
-sidebar_position: 18
+sidebar_position: 3
 ---
 
 # iOS on Linux with xtool

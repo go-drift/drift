@@ -1,7 +1,7 @@
 ---
 id: overlay
 title: Overlays
-sidebar_position: 10
+sidebar_position: 2
 ---
 
 # Overlays

@@ -1,7 +1,7 @@
 ---
 id: widgets
 title: Widget Architecture
-sidebar_position: 2
+sidebar_position: 1
 ---
 
 # Widget Architecture
@@ -158,9 +158,9 @@ If you want defaults from the theme, prefer `theme.XxxOf(ctx, ...)`.
 Themed widgets use disabled colors from theme data. Explicit widgets without
 `DisabledXxxColor` fields fall back to a 0.5 opacity wrapper when disabled.
 
-## Custom Stateless Widgets
+## Stateless Widgets
 
-Create a stateless widget for UI that depends only on its configuration.
+Stateless widgets produce UI that depends only on their configuration.
 Embed `core.StatelessBase` to get `CreateElement` and `Key` for free:
 
 ```go
@@ -174,9 +174,9 @@ func (g Greeting) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-## Custom Stateful Widgets
+## Stateful Widgets
 
-Create a stateful widget when you need to manage mutable state. There are two
+Stateful widgets manage mutable state that can change over time. There are two
 patterns, depending on complexity:
 
 | Pattern | Best for |
@@ -186,8 +186,8 @@ patterns, depending on complexity:
 
 ### Inline: `Stateful`
 
-Use `Stateful` for small, self-contained pieces of state where you don't need
-lifecycle hooks, `Managed`, or `UseController`:
+`Stateful` is a closure-based alternative for small, self-contained pieces of
+state where you don't need lifecycle hooks, `Managed`, or `UseController`:
 
 ```go
 core.Stateful(
@@ -202,7 +202,8 @@ core.Stateful(
 
 The `init` function runs once; `build` is called on every rebuild with the
 current state, a `BuildContext`, and a `setState` callback that applies
-a transform function to the state.
+a transform function to the state. See [State Management](/docs/guides/state-management)
+for `SetState`, `Managed`, `UseController`, and other state patterns.
 
 ### Struct-based: `StatefulBase`
 

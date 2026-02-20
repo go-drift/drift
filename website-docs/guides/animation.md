@@ -1,7 +1,7 @@
 ---
 id: animation
 title: Animation
-sidebar_position: 10
+sidebar_position: 5
 ---
 
 # Animation
@@ -327,8 +327,13 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
+:::tip
+`UseController` and `UseListenable` are documented in the [State Management](/docs/guides/state-management#hooks) guide.
+:::
+
 ## Next Steps
 
+- [Lottie Animations](/docs/guides/lottie) - Play Lottie animations with Skia
 - [Gestures](/docs/guides/gestures) - Handle touch input
 - [Theming](/docs/guides/theming) - Style your app
 - [API Reference](/docs/api/animation) - Animation API documentation

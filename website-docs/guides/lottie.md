@@ -1,7 +1,7 @@
 ---
 id: lottie
 title: Lottie Animations
-sidebar_position: 11
+sidebar_position: 6
 ---
 
 # Lottie Animations
@@ -166,6 +166,10 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
 ```
 
 Lottie animations contain their own easing curves baked into keyframes, so the controller uses linear interpolation by default. There is no need to set a curve.
+
+:::tip
+`UseController` is documented in the [State Management](/docs/guides/state-management#usecontroller) guide. For animation curves and the controller API, see [Animation](/docs/guides/animation).
+:::
 
 ## Next Steps
 

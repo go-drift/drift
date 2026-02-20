@@ -1,7 +1,7 @@
 ---
 id: platform
 title: Platform Services
-sidebar_position: 11
+sidebar_position: 1
 ---
 
 # Platform Services

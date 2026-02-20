@@ -1,7 +1,7 @@
 ---
 id: layout
 title: Layout System
-sidebar_position: 4
+sidebar_position: 2
 ---
 
 # Layout System
@@ -49,6 +49,53 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
     }
 }
 ```
+
+### Reducing Nesting
+
+When deeply nested layouts become hard to read, build widgets in variables first and compose them at the end:
+
+```go
+func (s *myState) Build(ctx core.BuildContext) core.Widget {
+    colors := theme.ColorsOf(ctx)
+    textTheme := theme.TextThemeOf(ctx)
+
+    header := widgets.Text{Content: "Settings", Style: textTheme.HeadlineLarge}
+
+    darkModeRow := widgets.Row{
+        MainAxisAlignment:  widgets.MainAxisAlignmentSpaceBetween,
+        CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+        Children: []core.Widget{
+            widgets.Text{Content: "Dark Mode", Style: textTheme.BodyLarge},
+            widgets.Switch{Value: s.isDark, OnChanged: s.setDarkMode},
+        },
+    }
+
+    saveButton := widgets.Button{
+        Label:     "Save",
+        OnTap:     s.handleSave,
+        Color:     colors.Primary,
+        TextColor: colors.OnPrimary,
+        Haptic:    true,
+    }
+
+    return widgets.SafeArea{
+        Child: widgets.PaddingAll(20,
+            widgets.Column{
+                MainAxisSize: widgets.MainAxisSizeMin,
+                Children: []core.Widget{
+                    header,
+                    widgets.VSpace(24),
+                    darkModeRow,
+                    widgets.VSpace(16),
+                    saveButton,
+                },
+            },
+        ),
+    }
+}
+```
+
+Both styles produce identical results. Use whichever reads best for the complexity of your layout.
 
 ## Constraints
 

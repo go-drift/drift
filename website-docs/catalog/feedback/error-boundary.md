@@ -85,5 +85,5 @@ func main() {
 
 ## Related
 
-- [Error Handling](/docs/guides/error-handling) for debug vs production behavior and best practices
+- [Error Handling & Debugging](/docs/guides/error-handling-and-debugging) for debug vs production behavior and best practices
 - [Progress Indicators](/docs/catalog/feedback/progress-indicators) for loading states

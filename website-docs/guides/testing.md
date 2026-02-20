@@ -1,7 +1,7 @@
 ---
 id: testing
 title: Testing
-sidebar_position: 16
+sidebar_position: 2
 ---
 
 # Testing

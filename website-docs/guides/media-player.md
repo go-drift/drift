@@ -1,7 +1,7 @@
 ---
 id: media-player
 title: Media Player
-sidebar_position: 12
+sidebar_position: 2
 ---
 
 # Media Player
@@ -329,6 +329,10 @@ app:
 ```
 
 This adds `android:usesCleartextTraffic="true"` to the Android manifest and an `NSAppTransportSecurity` exception to the iOS Info.plist. Use HTTPS whenever possible and only enable this setting when your media source does not support it.
+
+:::tip
+`UseController` is documented in the [State Management](/docs/guides/state-management#usecontroller) guide.
+:::
 
 ## Next Steps
 

@@ -1,57 +1,14 @@
 ---
 id: state-management
 title: State Management
-sidebar_position: 6
+sidebar_position: 3
 ---
 
 # State Management
 
 Drift provides several patterns for managing state in your application, from simple local state to app-wide shared state.
 
-## Reducing Boilerplate with `StatefulBase`
-
-Embed `core.StatefulBase` in your widget struct to get `CreateElement` and `Key`
-for free. This works whether or not the widget carries configuration fields:
-
-```go
-type myPage struct {
-    core.StatefulBase
-}
-
-func (myPage) CreateState() core.State { return &myPageState{} }
-
-type myPageState struct {
-    core.StateBase
-    count int
-}
-
-func (s *myPageState) Build(ctx core.BuildContext) core.Widget {
-    return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", s.count), func() {
-        s.SetState(func() { s.count++ })
-    })
-}
-```
-
-Similarly, embed `core.StatelessBase` for stateless widgets.
-
-### Inline State with `Stateful`
-
-For quick, self-contained fragments that don't need lifecycle hooks or `StateBase`, use
-`Stateful` instead:
-
-```go
-core.Stateful(
-    func() int { return 0 },
-    func(count int, ctx core.BuildContext, setState func(func(int) int)) core.Widget {
-        return theme.ButtonOf(ctx, fmt.Sprintf("Count: %d", count), func() {
-            setState(func(c int) int { return c + 1 })
-        })
-    },
-)
-```
-
-`Stateful` is closure-based: no struct types, no lifecycle methods. Reach for
-`StatefulBase` embedding when you need `Managed`, `UseController`, or `Dispose`.
+For how to define stateful and stateless widget types, see [Widget Architecture](/docs/guides/widgets#stateful-widgets).
 
 ## The SetState Pattern
 

@@ -65,8 +65,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Copy hand-written docs from website-docs/ to website/docs/
+	// Clean hand-written doc subdirectories before copying so that
+	// renamed or deleted source files don't leave stale copies behind.
+	// The api/ subdirectory is regenerated below, so we skip it here.
 	websiteDocsDir := filepath.Join(root, "website-docs")
+	if err := cleanCopiedDirs(docsDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Error cleaning old docs: %v\n", err)
+		os.Exit(1)
+	}
+
 	if err := copyDir(websiteDocsDir, docsDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error copying website-docs: %v\n", err)
 		os.Exit(1)
@@ -130,6 +137,29 @@ func ensureGomarkdoc() error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// cleanCopiedDirs removes all entries in dst except api/ (which is generated
+// separately by docgen), so that deleted or renamed source files in
+// website-docs/ don't leave stale copies in website/docs/. The subsequent
+// copyDir call recreates everything from the current source.
+func cleanCopiedDirs(dst string) error {
+	entries, err := os.ReadDir(dst)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		if e.Name() == "api" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(dst, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func copyDir(src, dst string) error {
