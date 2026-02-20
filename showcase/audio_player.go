@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/go-drift/drift/pkg/core"
@@ -184,9 +185,9 @@ func formatDuration(d time.Duration) string {
 	totalSeconds := int(d.Seconds())
 	minutes := totalSeconds / 60
 	seconds := totalSeconds % 60
-	secStr := itoa(seconds)
+	secStr := strconv.Itoa(seconds)
 	if seconds < 10 {
 		secStr = "0" + secStr
 	}
-	return itoa(minutes) + ":" + secStr
+	return strconv.Itoa(minutes) + ":" + secStr
 }

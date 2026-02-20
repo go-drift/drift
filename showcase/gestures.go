@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
@@ -169,7 +171,7 @@ func (s *gesturesDemoState) buildHorizontalSlider(colors theme.ColorScheme) core
 				},
 			},
 			widgets.VSpace(8),
-			widgets.Text{Content: "Value: " + itoa(int(((s.sliderX-thumbSize/2)/(trackWidth-thumbSize))*100)) + "%", Style: labelStyle(colors)},
+			widgets.Text{Content: "Value: " + strconv.Itoa(int(((s.sliderX-thumbSize/2)/(trackWidth-thumbSize))*100)) + "%", Style: labelStyle(colors)},
 		},
 	}
 }

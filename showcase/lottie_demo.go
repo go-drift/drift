@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"sync"
 
 	"github.com/go-drift/drift/pkg/animation"
@@ -179,7 +180,7 @@ func (s *lottieDemoState) buildControlled(ctx core.BuildContext, colors theme.Co
 		return widgets.Lottie{Source: s.anim, Width: 200, Height: 200}
 	}
 
-	progressStr := "Progress: " + itoa(int(s.controlCtrl.Value*100)) + "%"
+	progressStr := "Progress: " + strconv.Itoa(int(s.controlCtrl.Value*100)) + "%"
 
 	playLabel := "Play"
 	if s.controlPlaying {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -87,7 +88,7 @@ func (s *cameraState) handleResult(result platform.CameraResult) {
 	}
 
 	s.image.Set(img)
-	s.status.Set("Image loaded: " + itoa(media.Width) + "x" + itoa(media.Height))
+	s.status.Set("Image loaded: " + strconv.Itoa(media.Width) + "x" + strconv.Itoa(media.Height))
 }
 
 func loadImageFromPath(path string) (image.Image, error) {

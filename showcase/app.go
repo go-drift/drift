@@ -10,7 +10,6 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/engine"
 	"github.com/go-drift/drift/pkg/graphics"
-	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/navigation"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
@@ -94,15 +93,10 @@ func (s *showcaseState) buildRoutes() []navigation.ScreenRoute {
 		{Path: "/motion-hub", Screen: navigation.ScreenOnly(buildMotionHubPage)},
 		{Path: "/media-hub", Screen: navigation.ScreenOnly(buildMediaHubPage)},
 		{Path: "/system-hub", Screen: navigation.ScreenOnly(buildSystemHubPage)},
-
-		// Legacy routes (redirect to new hubs)
-		{Path: "/foundations", Screen: navigation.ScreenOnly(buildLayoutHubPage)},
-		{Path: "/components", Screen: navigation.ScreenOnly(buildWidgetsHubPage)},
-		{Path: "/interactions", Screen: navigation.ScreenOnly(buildMotionHubPage)},
-		{Path: "/platform", Screen: navigation.ScreenOnly(buildSystemHubPage)},
 	}
 
-	// Add all demos from registry
+	// Add all demos from registry.
+	// Capture demo.Builder in a local variable so each closure gets its own copy.
 	for _, demo := range demos {
 		if demo.Builder != nil {
 			builder := demo.Builder
@@ -121,16 +115,13 @@ func buildNotFoundPage(ctx core.BuildContext, settings navigation.RouteSettings)
 	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
 	return pageScaffold(ctx, "Not Found", widgets.Container{
 		Color: colors.Background,
-		Child: widgets.Center{
-			Child: widgets.Column{
-				MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
-				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-				MainAxisSize:       widgets.MainAxisSizeMin,
-				Children: []core.Widget{
-					widgets.Text{Content: "404", Style: textTheme.DisplayLarge},
-					widgets.VSpace(16),
-					widgets.Text{Content: "Page not found: " + settings.Name, Style: textTheme.BodyLarge},
-				},
+		Child: widgets.Column{
+			MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
+			CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+			Children: []core.Widget{
+				widgets.Text{Content: "404", Style: textTheme.DisplayLarge},
+				widgets.VSpace(16),
+				widgets.Text{Content: "Page not found: " + settings.Name, Style: textTheme.BodyLarge},
 			},
 		},
 	})
@@ -189,9 +180,7 @@ func (s *showcaseState) applySystemUI() {
 	}
 	backgroundColor := appThemeData.Material.ColorScheme.Surface
 	_ = platform.SetSystemUI(platform.SystemUIStyle{
-		StatusBarHidden: false,
 		StatusBarStyle:  statusStyle,
-		TitleBarHidden:  false,
 		BackgroundColor: &backgroundColor,
 		Transparent:     true,
 	})
@@ -210,41 +199,25 @@ func (s *showcaseState) deepLinkRoute(link platform.DeepLink) (navigation.DeepLi
 		return navigation.DeepLinkRoute{}, false
 	}
 
-	// Home route
-	if candidate == "home" {
-		log.Printf("deep link received: %s (source=%s)", link.URL, link.Source)
-		return navigation.DeepLinkRoute{Name: "/"}, true
-	}
-
-	// Category hub routes (new 6-category layout)
-	categoryRoutes := map[string]string{
+	// Static routes
+	routes := map[string]string{
+		"home":        "/",
+		"theming":     "/theming",
 		"theming-hub": "/theming-hub",
 		"layout-hub":  "/layout-hub",
 		"widgets-hub": "/widgets-hub",
 		"motion-hub":  "/motion-hub",
 		"media-hub":   "/media-hub",
 		"system-hub":  "/system-hub",
-		// Legacy routes (redirect to new)
-		"foundations":  "/layout-hub",
-		"components":   "/widgets-hub",
-		"interactions": "/motion-hub",
-		"platform":     "/system-hub",
 	}
-	if route, ok := categoryRoutes[candidate]; ok {
+	if name, ok := routes[candidate]; ok {
 		log.Printf("deep link received: %s (source=%s)", link.URL, link.Source)
-		return navigation.DeepLinkRoute{Name: route}, true
+		return navigation.DeepLinkRoute{Name: name}, true
 	}
 
-	// Theming route (special case)
-	if candidate == "theming" {
-		log.Printf("deep link received: %s (source=%s)", link.URL, link.Source)
-		return navigation.DeepLinkRoute{Name: "/theming"}, true
-	}
-
-	// Check demos from registry
+	// Demo routes from registry
 	for _, demo := range demos {
-		routeName := strings.TrimPrefix(demo.Route, "/")
-		if candidate == routeName {
+		if candidate == strings.TrimPrefix(demo.Route, "/") {
 			log.Printf("deep link received: %s (source=%s)", link.URL, link.Source)
 			return navigation.DeepLinkRoute{Name: demo.Route}, true
 		}
@@ -260,53 +233,4 @@ func (s *showcaseState) toggleTheme() {
 	})
 	s.updateBackgroundColor()
 	s.applySystemUI()
-}
-
-// pageScaffold creates a consistent page layout with title and back button.
-func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core.Widget {
-	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
-
-	// Header needs top safe area padding so it sits below the status bar
-	headerPadding := widgets.SafeAreaPadding(ctx).OnlyTop().Add(16)
-
-	return widgets.Expanded{
-		Child: widgets.Container{
-			Color: colors.Background,
-			Child: widgets.Column{
-				Children: []core.Widget{
-					// Header
-					widgets.Container{
-						Color: colors.Surface,
-						Child: widgets.Padding{
-							Padding: headerPadding,
-							Child: widgets.Row{
-								CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-								Children: []core.Widget{
-									widgets.Button{
-										Label: "Back",
-										OnTap: func() {
-											nav := navigation.NavigatorOf(ctx)
-											if nav != nil {
-												nav.Pop(nil)
-											}
-										},
-										Color:        colors.SurfaceContainerHigh,
-										TextColor:    colors.OnSurface,
-										Padding:      layout.EdgeInsetsSymmetric(16, 10),
-										BorderRadius: 8,
-										FontSize:     14,
-										Haptic:       true,
-									},
-									widgets.HSpace(16),
-									widgets.Text{Content: title, Style: textTheme.HeadlineMedium},
-								},
-							},
-						},
-					},
-					// Content
-					widgets.Expanded{Child: content},
-				},
-			},
-		},
-	}
 }

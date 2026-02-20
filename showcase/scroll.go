@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
@@ -84,13 +86,13 @@ func listItem(index int, bgColor graphics.Color, colors theme.ColorScheme) core.
 					Width:        32,
 					Height:       32,
 					Alignment:    layout.AlignmentCenter,
-					Child: widgets.Text{Content: itoa(index), Style: graphics.TextStyle{
+					Child: widgets.Text{Content: strconv.Itoa(index), Style: graphics.TextStyle{
 						Color:    colors.OnPrimaryContainer,
 						FontSize: 14,
 					}},
 				},
 				widgets.HSpace(12),
-				widgets.Text{Content: "Item " + itoa(index), Style: graphics.TextStyle{
+				widgets.Text{Content: "Item " + strconv.Itoa(index), Style: graphics.TextStyle{
 					Color:    colors.OnSurface,
 					FontSize: 15,
 				}},

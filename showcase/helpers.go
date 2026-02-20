@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
@@ -9,6 +11,92 @@ import (
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 )
+
+// pageScaffold creates a consistent page layout with title and back button.
+func pageScaffold(ctx core.BuildContext, title string, content core.Widget) core.Widget {
+	colors, textTheme := theme.ColorsOf(ctx), theme.TextThemeOf(ctx)
+
+	backButton := widgets.Button{
+		Label: "Back",
+		OnTap: func() {
+			if nav := navigation.NavigatorOf(ctx); nav != nil {
+				nav.Pop(nil)
+			}
+		},
+		Color:        colors.SurfaceContainerHigh,
+		TextColor:    colors.OnSurface,
+		Padding:      layout.EdgeInsetsSymmetric(16, 10),
+		BorderRadius: 8,
+		FontSize:     14,
+		Haptic:       true,
+	}
+
+	// Header needs top safe area padding so it sits below the status bar
+	headerPadding := widgets.SafeAreaPadding(ctx).OnlyTop().Add(16)
+	header := widgets.Container{
+		Color: colors.Surface,
+		Child: widgets.Padding{
+			Padding: headerPadding,
+			Child: widgets.Row{
+				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
+				Children: []core.Widget{
+					backButton,
+					widgets.HSpace(16),
+					widgets.Text{Content: title, Style: textTheme.HeadlineMedium},
+				},
+			},
+		},
+	}
+
+	return widgets.Expanded{
+		Child: widgets.Container{
+			Color: colors.Background,
+			Child: widgets.Column{
+				Children: []core.Widget{
+					header,
+					widgets.Expanded{Child: content},
+				},
+			},
+		},
+	}
+}
+
+// demoPage creates a standard demo page with scroll view and column layout.
+// This is the common pattern used by most showcase pages.
+func demoPage(ctx core.BuildContext, title string, items ...core.Widget) core.Widget {
+	content := widgets.ScrollView{
+		ScrollDirection: widgets.AxisVertical,
+		Physics:         widgets.BouncingScrollPhysics{},
+		Padding:         layout.EdgeInsetsAll(20),
+		Child: widgets.Column{
+			MainAxisSize: widgets.MainAxisSizeMin,
+			Children:     items,
+		},
+	}
+	return pageScaffold(ctx, title, content)
+}
+
+// categoryHubPage creates a standard hub page for a demo category.
+func categoryHubPage(ctx core.BuildContext, category string, title, description string) core.Widget {
+	colors := theme.ColorsOf(ctx)
+
+	// Build page content: description followed by demo cards
+	items := []core.Widget{
+		widgets.Text{
+			Content: description,
+			Style: graphics.TextStyle{
+				Color:    colors.OnSurfaceVariant,
+				FontSize: 14,
+			},
+		},
+		widgets.VSpace(24),
+	}
+	for _, demo := range demosForCategory(category) {
+		items = append(items, demoCard(ctx, demo, colors), widgets.VSpace(12))
+	}
+
+	return demoPage(ctx, title, items...)
+}
 
 // sectionTitle creates a styled section header for demo pages.
 func sectionTitle(text string, colors theme.ColorScheme) core.Widget {
@@ -30,30 +118,6 @@ func labelStyle(colors theme.ColorScheme) graphics.TextStyle {
 	}
 }
 
-// itoa converts an integer to a string without importing strconv.
-func itoa(value int) string {
-	if value == 0 {
-		return "0"
-	}
-	neg := false
-	if value < 0 {
-		neg = true
-		value = -value
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for value > 0 {
-		i--
-		buf[i] = byte('0' + value%10)
-		value /= 10
-	}
-	if neg {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
-}
-
 // formatSize formats a byte count as a human-readable string.
 func formatSize(bytes int64) string {
 	const (
@@ -63,13 +127,13 @@ func formatSize(bytes int64) string {
 	)
 	switch {
 	case bytes >= GB:
-		return itoa(int(bytes/GB)) + " GB"
+		return strconv.Itoa(int(bytes/GB)) + " GB"
 	case bytes >= MB:
-		return itoa(int(bytes/MB)) + " MB"
+		return strconv.Itoa(int(bytes/MB)) + " MB"
 	case bytes >= KB:
-		return itoa(int(bytes/KB)) + " KB"
+		return strconv.Itoa(int(bytes/KB)) + " KB"
 	default:
-		return itoa(int(bytes)) + " B"
+		return strconv.Itoa(int(bytes)) + " B"
 	}
 }
 
@@ -92,24 +156,7 @@ func smallButton(ctx core.BuildContext, label string, onTap func(), colors theme
 	}
 }
 
-// demoPage creates a standard demo page with scroll view and column layout.
-// This is the common pattern used by most showcase pages.
-func demoPage(ctx core.BuildContext, title string, items ...core.Widget) core.Widget {
-	content := widgets.ScrollView{
-		ScrollDirection: widgets.AxisVertical,
-		Physics:         widgets.BouncingScrollPhysics{},
-		Padding:         layout.EdgeInsetsAll(20),
-		Child: widgets.Column{
-			MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-			CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-			MainAxisSize:       widgets.MainAxisSizeMin,
-			Children:           items,
-		},
-	}
-	return pageScaffold(ctx, title, content)
-}
-
-// gradientBorderCard creates a card with pink-to-cyan gradient border (Style A).
+// gradientBorderCard creates a card with pink-to-cyan gradient border.
 // Used for the 6-card category grid on the home page.
 func gradientBorderCard(ctx core.BuildContext, title, description, route string, colors theme.ColorScheme, isDark bool) core.Widget {
 	// Gradient border from pink to cyan at 135 degrees
@@ -131,11 +178,32 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 		cyanAlpha = 0.1
 	}
 
+	content := widgets.Column{
+		Children: []core.Widget{
+			widgets.Text{
+				Content: title,
+				Style: graphics.TextStyle{
+					Color:      colors.OnSurface,
+					FontSize:   15,
+					FontWeight: graphics.FontWeightSemibold,
+				},
+			},
+			widgets.VSpace(6),
+			widgets.Text{
+				Content:  description,
+				MaxLines: 2,
+				Style: graphics.TextStyle{
+					Color:    colors.OnSurfaceVariant,
+					FontSize: 11,
+				},
+			},
+		},
+	}
+
 	return widgets.Tappable(
 		"",
 		func() {
-			nav := navigation.NavigatorOf(ctx)
-			if nav != nil {
+			if nav := navigation.NavigatorOf(ctx); nav != nil {
 				nav.PushNamed(route, nil)
 			}
 		},
@@ -148,7 +216,6 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 			Alignment:      layout.AlignmentTopLeft,
 			Shadow: &graphics.BoxShadow{
 				Color:      PinkSeed.WithAlpha(pinkAlpha),
-				Offset:     graphics.Offset{X: 0, Y: 0},
 				BlurStyle:  graphics.BlurStyleOuter,
 				BlurRadius: 18,
 			},
@@ -157,35 +224,11 @@ func gradientBorderCard(ctx core.BuildContext, title, description, route string,
 				Overflow: widgets.OverflowVisible,
 				Shadow: &graphics.BoxShadow{
 					Color:      CyanSeed.WithAlpha(cyanAlpha),
-					Offset:     graphics.Offset{X: 0, Y: 0},
 					BlurStyle:  graphics.BlurStyleOuter,
 					BlurRadius: 14,
 				},
 				Padding: layout.EdgeInsetsAll(18),
-				Child: widgets.Column{
-					MainAxisAlignment:  widgets.MainAxisAlignmentStart,
-					CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-					MainAxisSize:       widgets.MainAxisSizeMax,
-					Children: []core.Widget{
-						widgets.Text{
-							Content: title,
-							Style: graphics.TextStyle{
-								Color:      colors.OnSurface,
-								FontSize:   15,
-								FontWeight: graphics.FontWeightSemibold,
-							},
-						},
-						widgets.VSpace(6),
-						widgets.Text{
-							Content:  description,
-							MaxLines: 2,
-							Style: graphics.TextStyle{
-								Color:    colors.OnSurfaceVariant,
-								FontSize: 11,
-							},
-						},
-					},
-				},
+				Child:   content,
 			},
 		},
 	)
@@ -202,6 +245,11 @@ func themeToggleButton(ctx core.BuildContext, isDark bool, onToggle func()) core
 		icon = "\u263E" // Moon
 	}
 
+	textStyle := graphics.TextStyle{
+		Color:    colors.OnSurfaceVariant,
+		FontSize: 12,
+	}
+
 	return widgets.GestureDetector{
 		OnTap: onToggle,
 		Child: widgets.Container{
@@ -214,21 +262,9 @@ func themeToggleButton(ctx core.BuildContext, isDark bool, onToggle func()) core
 				MainAxisSize:       widgets.MainAxisSizeMin,
 				CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
 				Children: []core.Widget{
-					widgets.Text{
-						Content: icon,
-						Style: graphics.TextStyle{
-							Color:    colors.OnSurfaceVariant,
-							FontSize: 12,
-						},
-					},
+					widgets.Text{Content: icon, Style: textStyle},
 					widgets.HSpace(6),
-					widgets.Text{
-						Content: label,
-						Style: graphics.TextStyle{
-							Color:    colors.OnSurfaceVariant,
-							FontSize: 12,
-						},
-					},
+					widgets.Text{Content: label, Style: textStyle},
 				},
 			},
 		},
@@ -263,8 +299,7 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 	return widgets.Tappable(
 		"",
 		func() {
-			nav := navigation.NavigatorOf(ctx)
-			if nav != nil {
+			if nav := navigation.NavigatorOf(ctx); nav != nil {
 				nav.PushNamed(demo.Route, nil)
 			}
 		},
@@ -293,17 +328,14 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 					widgets.Padding{
 						Padding: layout.EdgeInsetsOnly(16, 14, 16, 16),
 						Child: widgets.Row{
-							MainAxisAlignment:  widgets.MainAxisAlignmentStart,
 							CrossAxisAlignment: widgets.CrossAxisAlignmentCenter,
-							MainAxisSize:       widgets.MainAxisSizeMax,
 							Children: []core.Widget{
 								iconWidget,
 								widgets.HSpace(14),
 								widgets.Expanded{
 									Child: widgets.Column{
-										MainAxisAlignment:  widgets.MainAxisAlignmentCenter,
-										CrossAxisAlignment: widgets.CrossAxisAlignmentStart,
-										MainAxisSize:       widgets.MainAxisSizeMin,
+										MainAxisAlignment: widgets.MainAxisAlignmentCenter,
+										MainAxisSize:      widgets.MainAxisSizeMin,
 										Children: []core.Widget{
 											widgets.Text{
 												Content: demo.Title,
@@ -342,22 +374,21 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 
 // permissionBadge renders a colored badge showing permission status.
 func permissionBadge(status platform.PermissionStatus, colors theme.ColorScheme) core.Widget {
-	var bgColor, textColor graphics.Color
 	label := string(status)
 	if label == "" {
 		label = "unknown"
 	}
 
+	bgColor := graphics.Color(0xFFFFFFFF)
+	textColor := graphics.Color(0xFFFFFFFF)
+
 	switch status {
 	case platform.PermissionGranted:
 		bgColor = 0xFF4CAF50 // green
-		textColor = 0xFFFFFFFF
 	case platform.PermissionDenied, platform.PermissionPermanentlyDenied:
 		bgColor = 0xFFF44336 // red
-		textColor = 0xFFFFFFFF
 	case platform.PermissionLimited, platform.PermissionProvisional:
 		bgColor = 0xFFFF9800 // orange
-		textColor = 0xFFFFFFFF
 	default:
 		bgColor = colors.SurfaceContainerHigh
 		textColor = colors.OnSurfaceVariant
@@ -387,26 +418,4 @@ func statusCard(text string, colors theme.ColorScheme) core.Widget {
 			FontSize: 14,
 		}},
 	}
-}
-
-// categoryHubPage creates a standard hub page for a demo category.
-func categoryHubPage(ctx core.BuildContext, category string, title, description string) core.Widget {
-	colors := theme.ColorsOf(ctx)
-
-	// Build page content: description followed by demo cards
-	items := []core.Widget{
-		widgets.Text{
-			Content: description,
-			Style: graphics.TextStyle{
-				Color:    colors.OnSurfaceVariant,
-				FontSize: 14,
-			},
-		},
-		widgets.VSpace(24),
-	}
-	for _, demo := range demosForCategory(category) {
-		items = append(items, demoCard(ctx, demo, colors), widgets.VSpace(12))
-	}
-
-	return demoPage(ctx, title, items...)
 }
