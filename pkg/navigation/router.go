@@ -83,7 +83,7 @@ type ScreenRoute struct {
 	// matched routes within this subtree would render in a dedicated
 	// nested Navigator identified by this key, preserving navigation
 	// history independently (e.g., tab branches). Not implemented in v1;
-	// use TabScaffold for stateful tab navigation.
+	// use TabNavigator for stateful tab navigation.
 }
 
 // ScreenOnly adapts a plain widget builder to the [ScreenRoute.Screen]
@@ -123,7 +123,7 @@ func ScreenOnly(build func(core.BuildContext) core.Widget) func(core.BuildContex
 // manage navigator registration manually.
 //
 // IMPORTANT: Router is designed to be used as a singleton at the root of your
-// app. Do not nest Routers or use Router inside [TabScaffold] tabs. For tabs
+// app. Do not nest Routers or use Router inside [TabNavigator] tabs. For tabs
 // with their own navigation stacks, use [Navigator] with [Tab.OnGenerateRoute]
 // instead.
 //

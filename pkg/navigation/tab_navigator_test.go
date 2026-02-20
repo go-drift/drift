@@ -6,15 +6,15 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-func TestTabScaffoldState_RegisterTabNavigator(t *testing.T) {
+func TestTabNavigatorState_RegisterNavigator(t *testing.T) {
 	// Save and restore global state
 	oldScope := globalScope
 	globalScope = &NavigationScope{}
 	defer func() { globalScope = oldScope }()
 
-	state := &tabScaffoldState{
-		tabNavigators: make([]NavigatorState, 3),
-		currentIndex:  0,
+	state := &tabNavigatorState{
+		navigators:   make([]NavigatorState, 3),
+		currentIndex: 0,
 	}
 
 	nav0 := &mockNavigatorState{}
@@ -22,8 +22,8 @@ func TestTabScaffoldState_RegisterTabNavigator(t *testing.T) {
 	nav2 := &mockNavigatorState{}
 
 	// Register first tab - should become active since currentIndex is 0
-	state.registerTabNavigator(0, nav0)
-	if state.tabNavigators[0] != nav0 {
+	state.registerNavigator(0, nav0)
+	if state.navigators[0] != nav0 {
 		t.Error("Tab 0 navigator not stored")
 	}
 	if globalScope.ActiveNavigator() != nav0 {
@@ -31,32 +31,32 @@ func TestTabScaffoldState_RegisterTabNavigator(t *testing.T) {
 	}
 
 	// Register other tabs - should not change active
-	state.registerTabNavigator(1, nav1)
-	state.registerTabNavigator(2, nav2)
+	state.registerNavigator(1, nav1)
+	state.registerNavigator(2, nav2)
 	if globalScope.ActiveNavigator() != nav0 {
 		t.Error("Active navigator should still be nav0")
 	}
 }
 
-func TestTabScaffoldState_RegisterTabNavigator_InvalidIndex(t *testing.T) {
-	state := &tabScaffoldState{
-		tabNavigators: make([]NavigatorState, 2),
-		currentIndex:  0,
+func TestTabNavigatorState_RegisterNavigator_InvalidIndex(t *testing.T) {
+	state := &tabNavigatorState{
+		navigators:   make([]NavigatorState, 2),
+		currentIndex: 0,
 	}
 
 	nav := &mockNavigatorState{}
 
 	// Out of bounds indices should be silently ignored
-	state.registerTabNavigator(-1, nav)
-	state.registerTabNavigator(5, nav)
+	state.registerNavigator(-1, nav)
+	state.registerNavigator(5, nav)
 
 	// No panic, no modifications
-	if state.tabNavigators[0] != nil || state.tabNavigators[1] != nil {
+	if state.navigators[0] != nil || state.navigators[1] != nil {
 		t.Error("Invalid indices should not modify navigators")
 	}
 }
 
-func TestTabScaffoldState_OnTabChanged(t *testing.T) {
+func TestTabNavigatorState_OnTabChanged(t *testing.T) {
 	// Save and restore global state
 	oldScope := globalScope
 	globalScope = &NavigationScope{}
@@ -66,9 +66,9 @@ func TestTabScaffoldState_OnTabChanged(t *testing.T) {
 	nav1 := &mockNavigatorState{}
 	nav2 := &mockNavigatorState{}
 
-	state := &tabScaffoldState{
-		tabNavigators: []NavigatorState{nav0, nav1, nav2},
-		currentIndex:  0,
+	state := &tabNavigatorState{
+		navigators:   []NavigatorState{nav0, nav1, nav2},
+		currentIndex: 0,
 	}
 
 	// Switch to tab 1
@@ -96,7 +96,7 @@ func TestTabScaffoldState_OnTabChanged(t *testing.T) {
 	}
 }
 
-func TestTabScaffoldState_OnTabChanged_NilNavigator(t *testing.T) {
+func TestTabNavigatorState_OnTabChanged_NilNavigator(t *testing.T) {
 	// Save and restore global state
 	oldScope := globalScope
 	globalScope = &NavigationScope{}
@@ -104,9 +104,9 @@ func TestTabScaffoldState_OnTabChanged_NilNavigator(t *testing.T) {
 
 	nav0 := &mockNavigatorState{}
 
-	state := &tabScaffoldState{
-		tabNavigators: []NavigatorState{nav0, nil, nil}, // Tab 1 and 2 not yet registered
-		currentIndex:  0,
+	state := &tabNavigatorState{
+		navigators:   []NavigatorState{nav0, nil, nil}, // Tab 1 and 2 not yet registered
+		currentIndex: 0,
 	}
 
 	// Initially set nav0 as active
@@ -123,7 +123,7 @@ func TestTabScaffoldState_OnTabChanged_NilNavigator(t *testing.T) {
 	}
 }
 
-func TestTabScaffoldState_OnTabChanged_OutOfBounds(t *testing.T) {
+func TestTabNavigatorState_OnTabChanged_OutOfBounds(t *testing.T) {
 	// Save and restore global state
 	oldScope := globalScope
 	globalScope = &NavigationScope{}
@@ -131,9 +131,9 @@ func TestTabScaffoldState_OnTabChanged_OutOfBounds(t *testing.T) {
 
 	nav0 := &mockNavigatorState{}
 
-	state := &tabScaffoldState{
-		tabNavigators: []NavigatorState{nav0},
-		currentIndex:  0,
+	state := &tabNavigatorState{
+		navigators:   []NavigatorState{nav0},
+		currentIndex: 0,
 	}
 
 	globalScope.SetActiveNavigator(nav0)
@@ -149,11 +149,11 @@ func TestTabScaffoldState_OnTabChanged_OutOfBounds(t *testing.T) {
 	}
 }
 
-func TestTabScaffoldState_ValidatedIndex(t *testing.T) {
+func TestTabNavigatorState_ValidatedIndex(t *testing.T) {
 	controller := NewTabController(5) // Start at invalid index
 
-	state := &tabScaffoldState{
-		scaffold: TabScaffold{
+	state := &tabNavigatorState{
+		nav: TabNavigator{
 			Tabs: []Tab{
 				{Item: widgets.TabItem{Label: "Tab 0"}},
 				{Item: widgets.TabItem{Label: "Tab 1"}},
@@ -172,11 +172,11 @@ func TestTabScaffoldState_ValidatedIndex(t *testing.T) {
 	}
 }
 
-func TestTabScaffoldState_ValidatedIndex_Negative(t *testing.T) {
+func TestTabNavigatorState_ValidatedIndex_Negative(t *testing.T) {
 	controller := NewTabController(-1)
 
-	state := &tabScaffoldState{
-		scaffold: TabScaffold{
+	state := &tabNavigatorState{
+		nav: TabNavigator{
 			Tabs: []Tab{
 				{Item: widgets.TabItem{Label: "Tab 0"}},
 			},
@@ -190,11 +190,11 @@ func TestTabScaffoldState_ValidatedIndex_Negative(t *testing.T) {
 	}
 }
 
-func TestTabScaffoldState_ValidatedIndex_Valid(t *testing.T) {
+func TestTabNavigatorState_ValidatedIndex_Valid(t *testing.T) {
 	controller := NewTabController(1)
 
-	state := &tabScaffoldState{
-		scaffold: TabScaffold{
+	state := &tabNavigatorState{
+		nav: TabNavigator{
 			Tabs: []Tab{
 				{Item: widgets.TabItem{Label: "Tab 0"}},
 				{Item: widgets.TabItem{Label: "Tab 1"}},
@@ -214,24 +214,24 @@ func TestTabScaffoldState_ValidatedIndex_Valid(t *testing.T) {
 	}
 }
 
-func TestTabScaffoldState_DidUpdateWidget_ResizesNavigators(t *testing.T) {
+func TestTabNavigatorState_DidUpdateWidget_ResizesNavigators(t *testing.T) {
 	nav0 := &mockNavigatorState{}
 	nav1 := &mockNavigatorState{}
 
 	// Initial state with 2 tabs
-	state := &tabScaffoldState{
-		scaffold: TabScaffold{
+	state := &tabNavigatorState{
+		nav: TabNavigator{
 			Tabs: []Tab{
 				{Item: widgets.TabItem{Label: "Tab 0"}},
 				{Item: widgets.TabItem{Label: "Tab 1"}},
 			},
 		},
-		tabNavigators: []NavigatorState{nav0, nav1},
-		controller:    NewTabController(0),
+		navigators: []NavigatorState{nav0, nav1},
+		controller: NewTabController(0),
 	}
 
 	// Simulate widget update with more tabs
-	newScaffold := TabScaffold{
+	updated := TabNavigator{
 		Tabs: []Tab{
 			{Item: widgets.TabItem{Label: "Tab 0"}},
 			{Item: widgets.TabItem{Label: "Tab 1"}},
@@ -241,61 +241,61 @@ func TestTabScaffoldState_DidUpdateWidget_ResizesNavigators(t *testing.T) {
 		Controller: state.controller,
 	}
 
-	// Call DidUpdateWidget with new scaffold
-	oldScaffold := state.scaffold
-	state.scaffold = newScaffold
+	// Call DidUpdateWidget logic
+	old := state.nav
+	state.nav = updated
 
 	// Manually resize (mimicking DidUpdateWidget logic)
-	if len(state.scaffold.Tabs) != len(oldScaffold.Tabs) {
-		newNavigators := make([]NavigatorState, len(state.scaffold.Tabs))
-		for i := 0; i < len(newNavigators) && i < len(state.tabNavigators); i++ {
-			newNavigators[i] = state.tabNavigators[i]
+	if len(state.nav.Tabs) != len(old.Tabs) {
+		newNavigators := make([]NavigatorState, len(state.nav.Tabs))
+		for i := 0; i < len(newNavigators) && i < len(state.navigators); i++ {
+			newNavigators[i] = state.navigators[i]
 		}
-		state.tabNavigators = newNavigators
+		state.navigators = newNavigators
 	}
 
 	// Verify resize happened
-	if len(state.tabNavigators) != 4 {
-		t.Errorf("tabNavigators should have 4 slots, got %d", len(state.tabNavigators))
+	if len(state.navigators) != 4 {
+		t.Errorf("navigators should have 4 slots, got %d", len(state.navigators))
 	}
 
 	// Verify existing navigators preserved
-	if state.tabNavigators[0] != nav0 {
+	if state.navigators[0] != nav0 {
 		t.Error("Tab 0 navigator should be preserved")
 	}
-	if state.tabNavigators[1] != nav1 {
+	if state.navigators[1] != nav1 {
 		t.Error("Tab 1 navigator should be preserved")
 	}
 
 	// New slots should be nil
-	if state.tabNavigators[2] != nil {
+	if state.navigators[2] != nil {
 		t.Error("Tab 2 navigator should be nil")
 	}
-	if state.tabNavigators[3] != nil {
+	if state.navigators[3] != nil {
 		t.Error("Tab 3 navigator should be nil")
 	}
 }
 
-func TestTabScaffoldState_DidUpdateWidget_ShrinksTabs(t *testing.T) {
+func TestTabNavigatorState_DidUpdateWidget_ShrinksTabs(t *testing.T) {
 	nav0 := &mockNavigatorState{}
 	nav1 := &mockNavigatorState{}
 	nav2 := &mockNavigatorState{}
 
 	// Initial state with 3 tabs
-	state := &tabScaffoldState{
-		scaffold: TabScaffold{
+	state := &tabNavigatorState{
+		nav: TabNavigator{
 			Tabs: []Tab{
 				{Item: widgets.TabItem{Label: "Tab 0"}},
 				{Item: widgets.TabItem{Label: "Tab 1"}},
 				{Item: widgets.TabItem{Label: "Tab 2"}},
 			},
 		},
-		tabNavigators: []NavigatorState{nav0, nav1, nav2},
-		controller:    NewTabController(0),
+		navigators: []NavigatorState{nav0, nav1, nav2},
+		controller: NewTabController(0),
 	}
 
 	// Simulate widget update with fewer tabs
-	newScaffold := TabScaffold{
+	updated := TabNavigator{
 		Tabs: []Tab{
 			{Item: widgets.TabItem{Label: "Tab 0"}},
 		},
@@ -303,24 +303,24 @@ func TestTabScaffoldState_DidUpdateWidget_ShrinksTabs(t *testing.T) {
 	}
 
 	// Call DidUpdateWidget logic
-	oldScaffold := state.scaffold
-	state.scaffold = newScaffold
+	old := state.nav
+	state.nav = updated
 
-	if len(state.scaffold.Tabs) != len(oldScaffold.Tabs) {
-		newNavigators := make([]NavigatorState, len(state.scaffold.Tabs))
-		for i := 0; i < len(newNavigators) && i < len(state.tabNavigators); i++ {
-			newNavigators[i] = state.tabNavigators[i]
+	if len(state.nav.Tabs) != len(old.Tabs) {
+		newNavigators := make([]NavigatorState, len(state.nav.Tabs))
+		for i := 0; i < len(newNavigators) && i < len(state.navigators); i++ {
+			newNavigators[i] = state.navigators[i]
 		}
-		state.tabNavigators = newNavigators
+		state.navigators = newNavigators
 	}
 
 	// Verify resize happened
-	if len(state.tabNavigators) != 1 {
-		t.Errorf("tabNavigators should have 1 slot, got %d", len(state.tabNavigators))
+	if len(state.navigators) != 1 {
+		t.Errorf("navigators should have 1 slot, got %d", len(state.navigators))
 	}
 
 	// Verify first navigator preserved
-	if state.tabNavigators[0] != nav0 {
+	if state.navigators[0] != nav0 {
 		t.Error("Tab 0 navigator should be preserved")
 	}
 }

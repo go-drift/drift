@@ -61,8 +61,8 @@
 //
 // # Tab Navigation
 //
-// Use [TabScaffold] for bottom tab navigation with separate navigation stacks
-// per tab. TabScaffold automatically manages which tab's navigator is active
+// Use [TabNavigator] for bottom tab navigation with separate navigation stacks
+// per tab. TabNavigator automatically manages which tab's navigator is active
 // for back button handling.
 package navigation
 

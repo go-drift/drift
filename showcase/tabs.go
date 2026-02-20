@@ -44,7 +44,7 @@ func buildTabsPage(ctx core.BuildContext) core.Widget {
 		buildTabSpec("Settings", loadSVGAsset("settings.svg"), iconColor),
 	}
 
-	return pageScaffold(ctx, "Tabs", navigation.TabScaffold{Tabs: tabs})
+	return pageScaffold(ctx, "Tabs", navigation.TabNavigator{Tabs: tabs})
 }
 
 func buildTabSpec(label string, icon *svg.Icon, color graphics.Color) navigation.Tab {

@@ -9,7 +9,7 @@ import (
 	"github.com/go-drift/drift/pkg/widgets"
 )
 
-// Tab configures a single tab in a [TabScaffold].
+// Tab configures a single tab in a [TabNavigator].
 //
 // For simple tabs with a single screen, use [NewTab]. For tabs with their own
 // navigation stack, configure OnGenerateRoute.
@@ -52,17 +52,17 @@ func NewTab(item widgets.TabItem, builder func(ctx core.BuildContext) core.Widge
 	}
 }
 
-// TabScaffold provides bottom tab navigation with separate navigation stacks
+// TabNavigator provides bottom tab navigation with separate navigation stacks
 // per tab.
 //
 // Each tab has its own [Navigator], allowing independent navigation within tabs.
 // When the user switches tabs, the tab's navigation state is preserved.
-// TabScaffold automatically manages which tab's navigator is "active" for
+// TabNavigator automatically manages which tab's navigator is "active" for
 // back button handling via [NavigationScope].
 //
 // Basic usage:
 //
-//	navigation.TabScaffold{
+//	navigation.TabNavigator{
 //	    Tabs: []navigation.Tab{
 //	        navigation.NewTab(
 //	            widgets.TabItem{Label: "Home"},
@@ -93,7 +93,7 @@ func NewTab(item widgets.TabItem, builder func(ctx core.BuildContext) core.Widge
 //
 // Accessibility: Inactive tabs are automatically excluded from the accessibility
 // tree using [widgets.ExcludeSemantics].
-type TabScaffold struct {
+type TabNavigator struct {
 	core.StatefulBase
 
 	// Tabs defines the tab configuration. At least one tab is required.
@@ -104,40 +104,40 @@ type TabScaffold struct {
 	Controller *TabController
 }
 
-func (t TabScaffold) CreateState() core.State {
-	return &tabScaffoldState{}
+func (t TabNavigator) CreateState() core.State {
+	return &tabNavigatorState{}
 }
 
-type tabScaffoldState struct {
+type tabNavigatorState struct {
 	element               *core.StatefulElement
-	scaffold              TabScaffold
+	nav                   TabNavigator
 	controller            *TabController
 	unsubscribeController func()
-	tabNavigators         []NavigatorState // Store each tab's navigator
-	currentIndex          int              // Track current tab for active navigator
+	navigators            []NavigatorState // per-tab child navigators
+	currentIndex          int
 }
 
-func (s *tabScaffoldState) SetElement(element *core.StatefulElement) {
+func (s *tabNavigatorState) SetElement(element *core.StatefulElement) {
 	s.element = element
 }
 
-func (s *tabScaffoldState) InitState() {
-	s.scaffold = s.element.Widget().(TabScaffold)
-	s.tabNavigators = make([]NavigatorState, len(s.scaffold.Tabs))
+func (s *tabNavigatorState) InitState() {
+	s.nav = s.element.Widget().(TabNavigator)
+	s.navigators = make([]NavigatorState, len(s.nav.Tabs))
 	s.configureController()
 }
 
-func (s *tabScaffoldState) Build(ctx core.BuildContext) core.Widget {
-	if len(s.scaffold.Tabs) == 0 {
+func (s *tabNavigatorState) Build(ctx core.BuildContext) core.Widget {
+	if len(s.nav.Tabs) == 0 {
 		return widgets.SizedBox{}
 	}
 
 	index := s.validatedIndex()
 	s.currentIndex = index
-	tabItems := make([]widgets.TabItem, len(s.scaffold.Tabs))
-	bodies := make([]core.Widget, len(s.scaffold.Tabs))
+	tabItems := make([]widgets.TabItem, len(s.nav.Tabs))
+	bodies := make([]core.Widget, len(s.nav.Tabs))
 
-	for i, tab := range s.scaffold.Tabs {
+	for i, tab := range s.nav.Tabs {
 		tabItems[i] = tab.Item
 		isActive := i == index
 
@@ -147,9 +147,9 @@ func (s *tabScaffoldState) Build(ctx core.BuildContext) core.Widget {
 			Child: widgets.Offstage{
 				Offstage: !isActive,
 				Child: tabNavigatorScope{
-					scaffoldState: s,
-					tabIndex:      i,
-					child:         s.buildTabNavigator(tab),
+					state: s,
+					index: i,
+					child: s.buildNavigator(tab),
 				},
 			},
 		}
@@ -167,7 +167,7 @@ func (s *tabScaffoldState) Build(ctx core.BuildContext) core.Widget {
 			},
 			widgets.SafeArea{
 				Bottom: true,
-				Child:  theme.TabBarOf(ctx, tabItems, index, func(tabIndex int) { s.controller.SetIndex(tabIndex) }),
+				Child:  theme.TabBarOf(ctx, tabItems, index, func(i int) { s.controller.SetIndex(i) }),
 			},
 		},
 		MainAxisAlignment:  widgets.MainAxisAlignmentStart,
@@ -177,17 +177,17 @@ func (s *tabScaffoldState) Build(ctx core.BuildContext) core.Widget {
 }
 
 // validatedIndex returns the current tab index, clamping to valid range.
-func (s *tabScaffoldState) validatedIndex() int {
+func (s *tabNavigatorState) validatedIndex() int {
 	index := s.controller.Index()
-	if index < 0 || index >= len(s.scaffold.Tabs) {
+	if index < 0 || index >= len(s.nav.Tabs) {
 		s.controller.SetIndex(0)
 		return 0
 	}
 	return index
 }
 
-// buildTabNavigator creates a Navigator for the given tab configuration.
-func (s *tabScaffoldState) buildTabNavigator(tab Tab) Navigator {
+// buildNavigator creates a Navigator for the given tab configuration.
+func (s *tabNavigatorState) buildNavigator(tab Tab) Navigator {
 	initialRoute := tab.InitialRoute
 	if initialRoute == "" {
 		initialRoute = "/"
@@ -213,40 +213,40 @@ func (s *tabScaffoldState) buildTabNavigator(tab Tab) Navigator {
 	}
 }
 
-func (s *tabScaffoldState) SetState(fn func()) {
+func (s *tabNavigatorState) SetState(fn func()) {
 	fn()
 	if s.element != nil {
 		s.element.MarkNeedsBuild()
 	}
 }
 
-func (s *tabScaffoldState) Dispose() {
+func (s *tabNavigatorState) Dispose() {
 	s.detachController()
 }
 
-func (s *tabScaffoldState) DidChangeDependencies() {}
+func (s *tabNavigatorState) DidChangeDependencies() {}
 
-func (s *tabScaffoldState) DidUpdateWidget(oldWidget core.StatefulWidget) {
-	oldScaffold := s.scaffold
-	s.scaffold = s.element.Widget().(TabScaffold)
+func (s *tabNavigatorState) DidUpdateWidget(oldWidget core.StatefulWidget) {
+	old := s.nav
+	s.nav = s.element.Widget().(TabNavigator)
 
-	// Resize tabNavigators if tab count changed
-	if len(s.scaffold.Tabs) != len(oldScaffold.Tabs) {
-		newNavigators := make([]NavigatorState, len(s.scaffold.Tabs))
+	// Resize navigators if tab count changed
+	if len(s.nav.Tabs) != len(old.Tabs) {
+		newNavigators := make([]NavigatorState, len(s.nav.Tabs))
 		// Preserve existing navigators where possible
-		for i := 0; i < len(newNavigators) && i < len(s.tabNavigators); i++ {
-			newNavigators[i] = s.tabNavigators[i]
+		for i := 0; i < len(newNavigators) && i < len(s.navigators); i++ {
+			newNavigators[i] = s.navigators[i]
 		}
-		s.tabNavigators = newNavigators
+		s.navigators = newNavigators
 	}
 
 	s.configureController()
 }
 
-func (s *tabScaffoldState) configureController() {
+func (s *tabNavigatorState) configureController() {
 	s.detachController()
 
-	controller := s.scaffold.Controller
+	controller := s.nav.Controller
 	if controller == nil {
 		controller = NewTabController(0)
 	}
@@ -258,7 +258,7 @@ func (s *tabScaffoldState) configureController() {
 	})
 }
 
-func (s *tabScaffoldState) detachController() {
+func (s *tabNavigatorState) detachController() {
 	if s.unsubscribeController != nil {
 		s.unsubscribeController()
 		s.unsubscribeController = nil
@@ -266,12 +266,12 @@ func (s *tabScaffoldState) detachController() {
 	s.controller = nil
 }
 
-// registerTabNavigator stores a tab's navigator and sets it as active if needed.
-func (s *tabScaffoldState) registerTabNavigator(index int, nav NavigatorState) {
-	if index < 0 || index >= len(s.tabNavigators) {
+// registerNavigator stores a tab's navigator and sets it as active if needed.
+func (s *tabNavigatorState) registerNavigator(index int, nav NavigatorState) {
+	if index < 0 || index >= len(s.navigators) {
 		return
 	}
-	s.tabNavigators[index] = nav
+	s.navigators[index] = nav
 
 	// If this is the active tab, set it as the active navigator
 	if index == s.currentIndex {
@@ -280,47 +280,47 @@ func (s *tabScaffoldState) registerTabNavigator(index int, nav NavigatorState) {
 }
 
 // onTabChanged updates the active navigator when tabs change.
-func (s *tabScaffoldState) onTabChanged(index int) {
+func (s *tabNavigatorState) onTabChanged(index int) {
 	s.currentIndex = index
 	// Set the active tab's navigator as the focused one
-	if index >= 0 && index < len(s.tabNavigators) && s.tabNavigators[index] != nil {
-		globalScope.SetActiveNavigator(s.tabNavigators[index])
+	if index >= 0 && index < len(s.navigators) && s.navigators[index] != nil {
+		globalScope.SetActiveNavigator(s.navigators[index])
 	}
 }
 
-// tabNavigatorScope provides a way for child navigators to register with TabScaffold.
+// tabNavigatorScope provides a way for child navigators to register with TabNavigator.
 type tabNavigatorScope struct {
 	core.InheritedBase
-	scaffoldState *tabScaffoldState
-	tabIndex      int
-	child         core.Widget
+	state *tabNavigatorState
+	index int
+	child core.Widget
 }
 
-func (t tabNavigatorScope) Key() any                 { return t.tabIndex }
+func (t tabNavigatorScope) Key() any                 { return t.index }
 func (t tabNavigatorScope) ChildWidget() core.Widget { return t.child }
 
 func (t tabNavigatorScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(tabNavigatorScope); ok {
-		return t.tabIndex != old.tabIndex || t.scaffoldState != old.scaffoldState
+		return t.index != old.index || t.state != old.state
 	}
 	return true
 }
 
 var tabNavigatorScopeType = reflect.TypeFor[tabNavigatorScope]()
 
-// RegisterTabNavigator registers a navigator with its enclosing [TabScaffold].
+// RegisterTabNavigator registers a navigator with its enclosing [TabNavigator].
 //
 // This is called automatically by [Navigator] during Build when inside a
-// TabScaffold. You typically don't need to call this directly.
+// TabNavigator. You typically don't need to call this directly.
 //
-// Registration enables TabScaffold to track which navigator is active and
+// Registration enables TabNavigator to track which navigator is active and
 // should receive back button events.
 func RegisterTabNavigator(ctx core.BuildContext, nav NavigatorState) {
 	tryRegisterTabNavigator(ctx, nav)
 }
 
 // tryRegisterTabNavigator attempts to register a navigator with its enclosing
-// TabScaffold. Returns true if inside a TabScaffold and registration occurred,
+// TabNavigator. Returns true if inside a TabNavigator and registration occurred,
 // false otherwise.
 func tryRegisterTabNavigator(ctx core.BuildContext, nav NavigatorState) bool {
 	inherited := ctx.DependOnInherited(tabNavigatorScopeType, nil)
@@ -328,7 +328,7 @@ func tryRegisterTabNavigator(ctx core.BuildContext, nav NavigatorState) bool {
 		return false
 	}
 	if scope, ok := inherited.(tabNavigatorScope); ok {
-		scope.scaffoldState.registerTabNavigator(scope.tabIndex, nav)
+		scope.state.registerNavigator(scope.index, nav)
 		return true
 	}
 	return false

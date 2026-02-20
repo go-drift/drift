@@ -35,7 +35,7 @@ func App() core.Widget {
 
 ### Navigator Ownership
 
-When using multiple navigators (e.g., with TabScaffold), set `IsRoot: true` on your main navigator. This registers it as the root navigator for back button handling and deep links. Tab navigators automatically register with TabScaffold and become active when their tab is selected.
+When using multiple navigators (e.g., with TabNavigator), set `IsRoot: true` on your main navigator. This registers it as the root navigator for back button handling and deep links. Tab navigators automatically register with TabNavigator and become active when their tab is selected.
 
 ## Route Builders
 
@@ -532,13 +532,13 @@ The controller automatically:
 - Handles the initial deep link if the app was launched via URL
 - Navigates to matching routes using `RootNavigator()`
 
-**Important:** Deep links require a root navigator. If your app uses TabScaffold at the top level, wrap it in a Router:
+**Important:** Deep links require a root navigator. If your app uses TabNavigator at the top level, wrap it in a Router:
 
 ```go
 navigation.Router{
     InitialPath: "/",
     Routes: []navigation.ScreenRoute{
-        {Path: "/", Screen: buildTabScaffold},
+        {Path: "/", Screen: buildTabNavigator},
         // Deep link routes
         {Path: "/product/:id", Screen: buildProduct},
         {Path: "/profile/:username", Screen: buildProfile},
@@ -548,11 +548,11 @@ navigation.Router{
 
 ## Tab Navigation
 
-Use `TabScaffold` for bottom tab navigation with separate navigation stacks per tab:
+Use `TabNavigator` for bottom tab navigation with separate navigation stacks per tab:
 
 ```go
 func App() core.Widget {
-    return navigation.TabScaffold{
+    return navigation.TabNavigator{
         Tabs: []navigation.Tab{
             navigation.NewTab(
                 widgets.TabItem{Label: "Home", Icon: widgets.Icon{Glyph: "home"}},
@@ -585,7 +585,7 @@ func buildProfileScreen(ctx core.BuildContext) core.Widget {
 
 ### Active Navigator Tracking
 
-TabScaffold automatically manages which tab's navigator is "active" for back button handling:
+TabNavigator automatically manages which tab's navigator is "active" for back button handling:
 
 - Each tab has its own navigation stack
 - When switching tabs, the new tab's navigator becomes active
@@ -607,7 +607,7 @@ func (s *appState) InitState() {
 }
 
 func (s *appState) Build(ctx core.BuildContext) core.Widget {
-    return navigation.TabScaffold{
+    return navigation.TabNavigator{
         Controller: s.tabController,
         Tabs: []navigation.Tab{
             // ... tabs
@@ -714,7 +714,7 @@ func buildOnboarding(ctx core.BuildContext) core.Widget {
 
 ### Back Button with Nested Navigators
 
-For nested navigators outside TabScaffold, back button handling uses the root navigator by default. The nested navigator handles its own internal navigation via `NavigatorOf(ctx)`:
+For nested navigators outside TabNavigator, back button handling uses the root navigator by default. The nested navigator handles its own internal navigation via `NavigatorOf(ctx)`:
 
 ```go
 func buildOnboardingStep(ctx core.BuildContext) core.Widget {

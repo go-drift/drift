@@ -19,11 +19,11 @@ type DeepLinkRoute struct {
 //
 // Deep links are dispatched via [RootNavigator], which requires a [Router] or
 // [Navigator] with IsRoot=true to be present in the widget tree. If your app
-// uses [TabScaffold] at the top level, wrap it in a Router or Navigator:
+// uses [TabNavigator] at the top level, wrap it in a Router or Navigator:
 //
 //	navigation.Router{
 //	    Routes: []navigation.ScreenRoute{
-//	        {Path: "/", Screen: buildTabScaffold},
+//	        {Path: "/", Screen: buildTabNavigator},
 //	    },
 //	}
 //

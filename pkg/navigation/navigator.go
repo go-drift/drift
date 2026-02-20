@@ -13,15 +13,15 @@ import (
 // NavigationScope tracks navigator hierarchy and determines which navigator
 // receives back button events and deep links.
 //
-// In apps with multiple navigators (e.g., [TabScaffold] with per-tab stacks),
+// In apps with multiple navigators (e.g., [TabNavigator] with per-tab stacks),
 // NavigationScope ensures the correct navigator handles user input:
 //
 //   - The root navigator (IsRoot=true) handles deep links
-//   - The active navigator (set by TabScaffold on tab change) handles back button
+//   - The active navigator (set by TabNavigator on tab change) handles back button
 //   - When the active navigator can't pop, falls back to root
 //
 // You typically don't interact with NavigationScope directly. It's managed
-// automatically by [Navigator] and [TabScaffold].
+// automatically by [Navigator] and [TabNavigator].
 type NavigationScope struct {
 	mu              sync.Mutex
 	root            NavigatorState
@@ -41,7 +41,7 @@ func (s *NavigationScope) SetRoot(nav NavigatorState) {
 }
 
 // SetActiveNavigator sets which navigator receives back button events.
-// TabScaffold calls this on tab change.
+// TabNavigator calls this on tab change.
 func (s *NavigationScope) SetActiveNavigator(nav NavigatorState) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -317,7 +317,7 @@ func (s *navigatorState) InitState() {
 }
 
 func (s *navigatorState) Build(ctx core.BuildContext) core.Widget {
-	// Register with TabScaffold if we're inside one (for active navigator tracking)
+	// Register with TabNavigator if we're inside one (for active navigator tracking)
 	tryRegisterTabNavigator(ctx, s)
 
 	// Check if top route is transparent (needs previous routes visible)
