@@ -875,7 +875,7 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
     VkInstanceCreateInfo instanceCI = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &appInfo,
-        .enabledExtensionCount = 2,
+        .enabledExtensionCount = sizeof(instanceExtensions) / sizeof(instanceExtensions[0]),
         .ppEnabledExtensionNames = instanceExtensions,
     };
 
@@ -956,7 +956,7 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queueCI,
-        .enabledExtensionCount = 8,
+        .enabledExtensionCount = sizeof(deviceExtensions) / sizeof(deviceExtensions[0]),
         .ppEnabledExtensionNames = deviceExtensions,
     };
 
