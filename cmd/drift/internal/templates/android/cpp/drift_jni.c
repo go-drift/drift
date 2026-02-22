@@ -215,10 +215,19 @@ static VkQueue g_vk_queue = VK_NULL_HANDLE;
 static uint32_t g_vk_queue_family_index = 0;
 static PFN_vkGetInstanceProcAddr g_vk_get_instance_proc_addr = NULL;
 
-/* ─── HardwareBuffer Vulkan state ─── */
-static AHardwareBuffer *g_hwb = NULL;
-static VkImage g_vk_image = VK_NULL_HANDLE;
-static VkDeviceMemory g_vk_image_memory = VK_NULL_HANDLE;
+/* ─── Double-buffered HardwareBuffer Vulkan state ─── */
+#define HWB_COUNT 2
+
+typedef struct {
+    AHardwareBuffer *hwb;
+    VkImage          image;
+    VkDeviceMemory   memory;
+    VkFence          fence;
+    int              fence_submitted;  /* whether fence is pending */
+} HwbSlot;
+
+static HwbSlot g_hwb_slots[HWB_COUNT];
+static int     g_hwb_current = 0;       /* index of slot to render into next */
 static VkFormat g_vk_format = VK_FORMAT_R8G8B8A8_UNORM;
 static int g_hwb_width = 0;
 static int g_hwb_height = 0;
@@ -977,18 +986,11 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
 }
 
 /**
- * JNI: NativeBridge.createHwbResources(width, height)
- * Allocates an AHardwareBuffer and imports it as a VkImage via
- * VK_ANDROID_external_memory_android_hardware_buffer.
+ * Helper: allocate a single HWB slot (AHardwareBuffer + VkImage + VkDeviceMemory + VkFence).
+ * Returns 0 on success, -1 on failure. On failure the slot is left zeroed.
  */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, jint width, jint height) {
-    (void)env; (void)clazz;
-
-    if (!g_vk_device) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Vulkan device not initialized");
-        return -1;
-    }
+static int create_hwb_slot(HwbSlot *slot, int width, int height) {
+    memset(slot, 0, sizeof(*slot));
 
     /* Allocate AHardwareBuffer */
     AHardwareBuffer_Desc desc = {
@@ -1003,7 +1005,7 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
         .rfu0 = 0,
         .rfu1 = 0,
     };
-    if (AHardwareBuffer_allocate(&desc, &g_hwb) != 0) {
+    if (AHardwareBuffer_allocate(&desc, &slot->hwb) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "AHardwareBuffer_allocate failed");
         return -1;
     }
@@ -1014,7 +1016,7 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
             g_vk_instance, "vkGetAndroidHardwareBufferPropertiesANDROID");
     if (!vkGetAHBProps) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetAndroidHardwareBufferPropertiesANDROID not found");
-        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
@@ -1025,10 +1027,10 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
         .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID,
         .pNext = &formatProps,
     };
-    VkResult res = vkGetAHBProps(g_vk_device, g_hwb, &ahbProps);
+    VkResult res = vkGetAHBProps(g_vk_device, slot->hwb, &ahbProps);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetAndroidHardwareBufferPropertiesANDROID failed: %d", res);
-        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
@@ -1059,26 +1061,25 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
 
     PFN_vkCreateImage vkCreateImageFn =
         (PFN_vkCreateImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateImage");
-    res = vkCreateImageFn(g_vk_device, &imageCI, NULL, &g_vk_image);
+    res = vkCreateImageFn(g_vk_device, &imageCI, NULL, &slot->image);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkCreateImage failed: %d", res);
-        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
     /* Allocate and bind memory from the AHardwareBuffer */
     VkImportAndroidHardwareBufferInfoANDROID importInfo = {
         .sType = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID,
-        .buffer = g_hwb,
+        .buffer = slot->hwb,
     };
 
     VkMemoryDedicatedAllocateInfo dedicatedInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
         .pNext = &importInfo,
-        .image = g_vk_image,
+        .image = slot->image,
     };
 
-    /* Find a memory type that matches the AHB requirements */
     PFN_vkGetPhysicalDeviceMemoryProperties vkGetMemProps =
         (PFN_vkGetPhysicalDeviceMemoryProperties)g_vk_get_instance_proc_addr(
             g_vk_instance, "vkGetPhysicalDeviceMemoryProperties");
@@ -1096,8 +1097,8 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "No compatible memory type for AHB");
         PFN_vkDestroyImage vkDestroyImageFn =
             (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, g_vk_image, NULL); g_vk_image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
@@ -1110,42 +1111,118 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
 
     PFN_vkAllocateMemory vkAllocMemFn =
         (PFN_vkAllocateMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkAllocateMemory");
-    res = vkAllocMemFn(g_vk_device, &allocInfo, NULL, &g_vk_image_memory);
+    res = vkAllocMemFn(g_vk_device, &allocInfo, NULL, &slot->memory);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkAllocateMemory failed: %d", res);
         PFN_vkDestroyImage vkDestroyImageFn =
             (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, g_vk_image, NULL); g_vk_image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
     PFN_vkBindImageMemory vkBindImageMemFn =
         (PFN_vkBindImageMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkBindImageMemory");
-    res = vkBindImageMemFn(g_vk_device, g_vk_image, g_vk_image_memory, 0);
+    res = vkBindImageMemFn(g_vk_device, slot->image, slot->memory, 0);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkBindImageMemory failed: %d", res);
         PFN_vkFreeMemory vkFreeMemFn =
             (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
-        vkFreeMemFn(g_vk_device, g_vk_image_memory, NULL); g_vk_image_memory = VK_NULL_HANDLE;
+        vkFreeMemFn(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
         PFN_vkDestroyImage vkDestroyImageFn =
             (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, g_vk_image, NULL); g_vk_image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(g_hwb); g_hwb = NULL;
+        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
+    /* Create VkFence (signaled initially so first wait is a no-op) */
+    PFN_vkCreateFence vkCreateFenceFn =
+        (PFN_vkCreateFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateFence");
+    VkFenceCreateInfo fenceCI = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+    res = vkCreateFenceFn(g_vk_device, &fenceCI, NULL, &slot->fence);
+    if (res != VK_SUCCESS) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkCreateFence failed: %d", res);
+        PFN_vkFreeMemory vkFreeMemFn =
+            (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
+        vkFreeMemFn(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
+        PFN_vkDestroyImage vkDestroyImageFn =
+            (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
+        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
+        return -1;
+    }
+    slot->fence_submitted = 0;
+
+    return 0;
+}
+
+/**
+ * Helper: destroy a single HWB slot.
+ */
+static void destroy_hwb_slot(HwbSlot *slot) {
+    if (!slot) return;
+    if (g_vk_device) {
+        if (slot->fence != VK_NULL_HANDLE) {
+            PFN_vkDestroyFence vkDestroyFenceFn =
+                (PFN_vkDestroyFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyFence");
+            vkDestroyFenceFn(g_vk_device, slot->fence, NULL);
+        }
+        if (slot->image != VK_NULL_HANDLE) {
+            PFN_vkDestroyImage vkDestroyImageFn =
+                (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
+            vkDestroyImageFn(g_vk_device, slot->image, NULL);
+        }
+        if (slot->memory != VK_NULL_HANDLE) {
+            PFN_vkFreeMemory vkFreeMemFn =
+                (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
+            vkFreeMemFn(g_vk_device, slot->memory, NULL);
+        }
+    }
+    if (slot->hwb) { AHardwareBuffer_release(slot->hwb); }
+    memset(slot, 0, sizeof(*slot));
+}
+
+/**
+ * JNI: NativeBridge.createHwbResources(width, height)
+ * Allocates two AHardwareBuffers and imports each as a VkImage via
+ * VK_ANDROID_external_memory_android_hardware_buffer. Creates a VkFence
+ * per slot for double-buffered rendering.
+ */
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, jint width, jint height) {
+    (void)env; (void)clazz;
+
+    if (!g_vk_device) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Vulkan device not initialized");
+        return -1;
+    }
+
+    for (int i = 0; i < HWB_COUNT; i++) {
+        if (create_hwb_slot(&g_hwb_slots[i], width, height) != 0) {
+            /* Clean up any slots already created */
+            for (int j = 0; j < i; j++) {
+                destroy_hwb_slot(&g_hwb_slots[j]);
+            }
+            return -1;
+        }
+    }
+
+    g_hwb_current = 0;
     g_hwb_width = width;
     g_hwb_height = height;
 
-    __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "HWB Vulkan resources created: %dx%d format=%u",
+    __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "HWB Vulkan resources created (double-buffered): %dx%d format=%u",
         width, height, g_vk_format);
     return 0;
 }
 
 /**
  * JNI: NativeBridge.destroyHwbResources()
- * Destroys the VkImage, VkDeviceMemory, and releases the AHardwareBuffer.
+ * Waits for the GPU to idle, then destroys both buffer slots.
  */
 JNIEXPORT void JNICALL
 Java_{{.JNIPackage}}_NativeBridge_destroyHwbResources(JNIEnv *env, jclass clazz) {
@@ -1155,35 +1232,28 @@ Java_{{.JNIPackage}}_NativeBridge_destroyHwbResources(JNIEnv *env, jclass clazz)
         PFN_vkDeviceWaitIdle vkWaitFn =
             (PFN_vkDeviceWaitIdle)g_vk_get_instance_proc_addr(g_vk_instance, "vkDeviceWaitIdle");
         if (vkWaitFn) vkWaitFn(g_vk_device);
-
-        if (g_vk_image != VK_NULL_HANDLE) {
-            PFN_vkDestroyImage vkDestroyImageFn =
-                (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-            vkDestroyImageFn(g_vk_device, g_vk_image, NULL);
-            g_vk_image = VK_NULL_HANDLE;
-        }
-        if (g_vk_image_memory != VK_NULL_HANDLE) {
-            PFN_vkFreeMemory vkFreeMemFn =
-                (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
-            vkFreeMemFn(g_vk_device, g_vk_image_memory, NULL);
-            g_vk_image_memory = VK_NULL_HANDLE;
-        }
     }
-    if (g_hwb) { AHardwareBuffer_release(g_hwb); g_hwb = NULL; }
+
+    for (int i = 0; i < HWB_COUNT; i++) {
+        destroy_hwb_slot(&g_hwb_slots[i]);
+    }
+    g_hwb_current = 0;
     g_hwb_width = 0;
     g_hwb_height = 0;
 }
 
 /**
- * JNI: NativeBridge.getHardwareBuffer()
- * Returns the current AHardwareBuffer as a Java HardwareBuffer object.
- * Used by SkiaHostView to wrap as a Bitmap for HWUI onDraw().
+ * JNI: NativeBridge.getHardwareBuffer(index)
+ * Returns the AHardwareBuffer for the given slot as a Java HardwareBuffer object.
+ * Used by SkiaHostView to wrap each slot as a Bitmap for HWUI onDraw().
  */
 JNIEXPORT jobject JNICALL
-Java_{{.JNIPackage}}_NativeBridge_getHardwareBuffer(JNIEnv *env, jclass clazz) {
+Java_{{.JNIPackage}}_NativeBridge_getHardwareBuffer(JNIEnv *env, jclass clazz, jint index) {
     (void)clazz;
-    if (!g_hwb) return NULL;
-    return AHardwareBuffer_toHardwareBuffer(env, g_hwb);
+    if (index < 0 || index >= HWB_COUNT) return NULL;
+    AHardwareBuffer *hwb = g_hwb_slots[index].hwb;
+    if (!hwb) return NULL;
+    return AHardwareBuffer_toHardwareBuffer(env, hwb);
 }
 
 
@@ -1222,7 +1292,9 @@ Java_{{.JNIPackage}}_NativeBridge_stepAndSnapshot(JNIEnv *env, jclass clazz, jin
 
 /**
  * JNI: NativeBridge.renderFrameSync(width, height)
- * Calls Go DriftSkiaRenderVulkanSync with the current VkImage and VkFormat.
+ * Double-buffered: picks the next slot, waits on its fence (from two frames ago),
+ * renders into that slot's VkImage, then submits a fence for this frame.
+ * Returns the slot index rendered into (0 or 1), or -1 on error.
  */
 JNIEXPORT jint JNICALL
 Java_{{.JNIPackage}}_NativeBridge_renderFrameSync(JNIEnv *env, jclass clazz, jint width, jint height) {
@@ -1232,7 +1304,47 @@ Java_{{.JNIPackage}}_NativeBridge_renderFrameSync(JNIEnv *env, jclass clazz, jin
         return -1;
     }
 
-    return (jint)drift_skia_render_vulkan_sync(width, height, (uintptr_t)g_vk_image, (uint32_t)g_vk_format);
+    int slot_idx = g_hwb_current;
+    HwbSlot *slot = &g_hwb_slots[slot_idx];
+
+    /* Wait on this slot's fence (ensures GPU finished the frame that last used it) */
+    if (slot->fence_submitted) {
+        PFN_vkWaitForFences vkWaitFn =
+            (PFN_vkWaitForFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkWaitForFences");
+        PFN_vkResetFences vkResetFn =
+            (PFN_vkResetFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkResetFences");
+        if (vkWaitFn && vkResetFn) {
+            vkWaitFn(g_vk_device, 1, &slot->fence, VK_TRUE, UINT64_MAX);
+            vkResetFn(g_vk_device, 1, &slot->fence);
+        }
+        slot->fence_submitted = 0;
+    }
+
+    /* Render into this slot's VkImage */
+    int result = drift_skia_render_vulkan_sync(width, height, (uintptr_t)slot->image, (uint32_t)g_vk_format);
+    if (result != 0) {
+        return -1;
+    }
+
+    /* Submit an empty batch with just the fence to track GPU completion */
+    PFN_vkQueueSubmit vkQueueSubmitFn =
+        (PFN_vkQueueSubmit)g_vk_get_instance_proc_addr(g_vk_instance, "vkQueueSubmit");
+    if (vkQueueSubmitFn) {
+        VkSubmitInfo submitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        };
+        VkResult res = vkQueueSubmitFn(g_vk_queue, 1, &submitInfo, slot->fence);
+        if (res == VK_SUCCESS) {
+            slot->fence_submitted = 1;
+        } else {
+            __android_log_print(ANDROID_LOG_WARN, "DriftJNI", "vkQueueSubmit fence failed: %d", res);
+        }
+    }
+
+    /* Advance to next slot */
+    g_hwb_current = (g_hwb_current + 1) % HWB_COUNT;
+
+    return (jint)slot_idx;
 }
 
 /**

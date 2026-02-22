@@ -210,13 +210,13 @@ object NativeBridge {
     /** Destroys the Vulkan image, memory, and releases the AHardwareBuffer. */
     external fun destroyHwbResources()
 
-    /** Returns the current HardwareBuffer as a Java HardwareBuffer object. */
-    external fun getHardwareBuffer(): android.hardware.HardwareBuffer?
+    /** Returns the HardwareBuffer for the given slot index (0 or 1). */
+    external fun getHardwareBuffer(index: Int): android.hardware.HardwareBuffer?
 
     /** Runs the engine pipeline and returns geometry snapshot as JSON bytes. */
     external fun stepAndSnapshot(width: Int, height: Int): ByteArray?
 
-    /** Renders into the currently bound FBO using the split pipeline. */
+    /** Renders into the next double-buffer slot. Returns the slot index (0 or 1), or -1 on error. */
     external fun renderFrameSync(width: Int, height: Int): Int
 
     /** Releases all cached GPU resources.

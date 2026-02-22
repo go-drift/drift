@@ -33,8 +33,9 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
     private var initThread: HandlerThread? = HandlerThread("drift-init").also { it.start() }
     private var initHandler: Handler? = initThread?.let { Handler(it.looper) }
 
-    // HardwareBuffer bitmap for onDraw
-    private var hwBitmap: Bitmap? = null
+    // Double-buffered HardwareBuffer bitmaps for onDraw
+    private var hwBitmaps: Array<Bitmap?> = arrayOfNulls(2)
+    private var currentBitmapIndex = 0
 
     @Volatile override var surfaceWidth = 0
         private set
@@ -115,9 +116,11 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
             NativeBridge.purgeResources()
         }
 
-        val result = NativeBridge.renderFrameSync(w, h)
-        if (result != 0) {
-            Log.e(TAG, "renderFrameSync failed: $result")
+        val slotIndex = NativeBridge.renderFrameSync(w, h)
+        if (slotIndex < 0) {
+            Log.e(TAG, "renderFrameSync failed: $slotIndex")
+        } else {
+            currentBitmapIndex = slotIndex
         }
 
         // Mark this View dirty so onDraw runs during TRAVERSAL
@@ -125,7 +128,7 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
     }
 
     override fun onDraw(canvas: Canvas) {
-        hwBitmap?.let { bitmap ->
+        hwBitmaps[currentBitmapIndex]?.let { bitmap ->
             canvas.drawBitmap(bitmap, 0f, 0f, null)
         }
     }
@@ -156,16 +159,19 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
             return
         }
 
-        val hwb = NativeBridge.getHardwareBuffer()
-        if (hwb == null) {
-            Log.e(TAG, "getHardwareBuffer returned null")
-            return
+        for (i in hwBitmaps.indices) {
+            hwBitmaps[i]?.recycle()
+            val hwb = NativeBridge.getHardwareBuffer(i)
+            if (hwb == null) {
+                Log.e(TAG, "getHardwareBuffer($i) returned null")
+                hwBitmaps[i] = null
+                continue
+            }
+            hwBitmaps[i] = Bitmap.wrapHardwareBuffer(hwb, ColorSpace.get(ColorSpace.Named.SRGB))
+            hwb.close()
         }
-
-        hwBitmap?.recycle()
-        hwBitmap = Bitmap.wrapHardwareBuffer(hwb, ColorSpace.get(ColorSpace.Named.SRGB))
-        hwb.close()
-        Log.i(TAG, "HWB bitmap created: ${w}x${h}")
+        currentBitmapIndex = 0
+        Log.i(TAG, "HWB bitmaps created (double-buffered): ${w}x${h}")
     }
 
     private fun initEngine(): Boolean {
