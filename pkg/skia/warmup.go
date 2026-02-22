@@ -21,6 +21,8 @@ func (c *Context) WarmupShaders(backend string) error {
 		return c.warmupShadersGL()
 	case "metal":
 		return c.warmupShadersMetal()
+	case "vulkan":
+		return c.warmupShadersVulkan()
 	default:
 		return errors.New("skia: unknown backend: " + backend)
 	}
@@ -70,6 +72,26 @@ func (c *Context) warmupShadersMetal() error {
 	warmupPrimitives(canvas)
 
 	// Flush surface work to the context, then submit to GPU synchronously.
+	surface.Flush()
+	c.FlushAndSubmit(true)
+
+	return nil
+}
+
+func (c *Context) warmupShadersVulkan() error {
+	surface, err := c.MakeOffscreenSurfaceVulkan(16, 16)
+	if err != nil {
+		return err
+	}
+	defer surface.Destroy()
+
+	canvas := surface.Canvas()
+	if canvas == nil {
+		return errors.New("skia: failed to get canvas from offscreen surface")
+	}
+
+	warmupPrimitives(canvas)
+
 	surface.Flush()
 	c.FlushAndSubmit(true)
 

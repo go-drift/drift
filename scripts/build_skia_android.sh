@@ -69,7 +69,7 @@ build() {
     extra_cflags='extra_cflags=["-mno-outline-atomics"]'
   fi
 
-  bin/gn gen "$out_dir" --args="target_os=\"android\" target_cpu=\"$target_cpu\" ndk=\"$ANDROID_NDK_HOME\" ndk_api=21 is_official_build=true skia_use_gl=true skia_use_system_harfbuzz=false skia_use_harfbuzz=true skia_use_system_expat=false skia_use_system_libpng=false skia_use_system_zlib=false skia_use_system_freetype2=false skia_use_system_libjpeg_turbo=false skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true skia_use_system_libwebp=false skia_use_libwebp_decode=true skia_use_libwebp_encode=true skia_enable_svg=true skia_use_expat=true skia_use_icu=false skia_use_libgrapheme=true skia_enable_skparagraph=true skia_enable_skshaper=true skia_enable_skottie=true $extra_cflags"
+  bin/gn gen "$out_dir" --args="target_os=\"android\" target_cpu=\"$target_cpu\" ndk=\"$ANDROID_NDK_HOME\" ndk_api=21 is_official_build=true skia_use_vulkan=true skia_use_backup_vma=true skia_use_gl=false skia_use_system_harfbuzz=false skia_use_harfbuzz=true skia_use_system_expat=false skia_use_system_libpng=false skia_use_system_zlib=false skia_use_system_freetype2=false skia_use_system_libjpeg_turbo=false skia_use_libjpeg_turbo_decode=true skia_use_libjpeg_turbo_encode=true skia_use_system_libwebp=false skia_use_libwebp_decode=true skia_use_libwebp_encode=true skia_enable_svg=true skia_use_expat=true skia_use_icu=false skia_use_libgrapheme=true skia_enable_skparagraph=true skia_enable_skshaper=true skia_enable_skottie=true $extra_cflags"
   ninja -C "$out_dir" skia svg skresources skparagraph skshaper skunicode skottie
 }
 
@@ -129,9 +129,9 @@ compile_bridge() {
 
   # Compile bridge
   "$clang" --target="$target_triple" \
-    -std=c++17 -fPIC -DSKIA_GL $arch_flags \
+    -std=c++17 -fPIC -DSKIA_VULKAN $arch_flags \
     -I. -I./include \
-    -c "$ROOT_DIR/pkg/skia/bridge/skia_gl.cc" \
+    -c "$ROOT_DIR/pkg/skia/bridge/skia_vk.cc" \
     -o "$out_dir/skia_bridge.o"
 
   # Combine: extract all Skia libs, add bridge, repack

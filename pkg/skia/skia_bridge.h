@@ -308,10 +308,26 @@ void drift_skia_skottie_render(DriftSkiaSkottie anim, DriftSkiaCanvas canvas, fl
 
 DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height);
 DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx, int width, int height);
+DriftSkiaSurface drift_skia_surface_create_offscreen_vulkan(DriftSkiaContext ctx, int width, int height);
 void drift_skia_context_flush_and_submit(DriftSkiaContext ctx, int sync_cpu);
 int drift_skia_gl_get_framebuffer_binding(void);
 void drift_skia_gl_bind_framebuffer(int fbo);
 void drift_skia_context_purge_resources(DriftSkiaContext ctx);
+
+DriftSkiaContext drift_skia_context_create_vulkan(
+    uintptr_t instance,
+    uintptr_t phys_device,
+    uintptr_t device,
+    uintptr_t queue,
+    uint32_t queue_family_index,
+    uintptr_t get_instance_proc_addr
+);
+DriftSkiaSurface drift_skia_surface_create_vulkan(
+    DriftSkiaContext ctx,
+    int width, int height,
+    uintptr_t vk_image,
+    uint32_t vk_format
+);
 
 #ifdef __cplusplus
 }

@@ -163,9 +163,9 @@ func compileGoForAndroid(cfg androidCompileConfig) error {
 		triple   string
 		skiaArch string
 	}{
-		{"arm64-v8a", "arm64", "", "aarch64-linux-android21-clang", "aarch64-linux-android", "arm64"},
-		{"armeabi-v7a", "arm", "7", "armv7a-linux-androideabi21-clang", "arm-linux-androideabi", "arm"},
-		{"x86_64", "amd64", "", "x86_64-linux-android21-clang", "x86_64-linux-android", "amd64"},
+		{"arm64-v8a", "arm64", "", "aarch64-linux-android31-clang", "aarch64-linux-android", "arm64"},
+		{"armeabi-v7a", "arm", "7", "armv7a-linux-androideabi31-clang", "arm-linux-androideabi", "arm"},
+		{"x86_64", "amd64", "", "x86_64-linux-android31-clang", "x86_64-linux-android", "amd64"},
 	}
 
 	if cfg.targetABI != "" {
