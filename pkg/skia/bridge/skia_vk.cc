@@ -321,9 +321,9 @@ void drift_skia_surface_flush(DriftSkiaContext ctx, DriftSkiaSurface surface) {
         return;
     }
     auto sk_surface = reinterpret_cast<SkSurface*>(surface);
-    // Use GrSyncCpu::kYes because we share a single AHardwareBuffer with HWUI.
-    // The GPU must finish writing before HWUI reads the buffer in onDraw().
-    reinterpret_cast<GrDirectContext*>(ctx)->flushAndSubmit(sk_surface, GrSyncCpu::kYes);
+    // Double-buffered: VkFence tracking in the JNI layer handles GPU completion.
+    // No CPU wait needed here; the fence only blocks when reusing a slot.
+    reinterpret_cast<GrDirectContext*>(ctx)->flushAndSubmit(sk_surface, GrSyncCpu::kNo);
 }
 
 DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx, int width, int height) {
