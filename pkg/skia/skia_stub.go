@@ -48,26 +48,45 @@ type ParagraphLineMetrics struct {
 	Heights  []float64
 }
 
-// NewGLContext creates a Skia GPU context using the current OpenGL context.
-func NewGLContext() (*Context, error) {
+// NewMetalContext creates a Skia GPU context using the provided Metal device/queue.
+func NewMetalContext(device, queue unsafe.Pointer) (*Context, error) {
 	return nil, errStubNotSupported
 }
 
-// NewMetalContext creates a Skia GPU context using the provided Metal device/queue.
-func NewMetalContext(device, queue unsafe.Pointer) (*Context, error) {
+// NewVulkanContext creates a Skia GPU context using the provided Vulkan handles.
+func NewVulkanContext(instance, physDevice, device, queue uintptr, queueFamilyIndex uint32, getInstanceProcAddr uintptr) (*Context, error) {
 	return nil, errStubNotSupported
 }
 
 // Destroy releases the Skia context.
 func (c *Context) Destroy() {}
 
-// MakeGLSurface creates a Skia surface targeting the current GL framebuffer.
-func (c *Context) MakeGLSurface(width, height int) (*Surface, error) {
-	return nil, errStubNotSupported
-}
+// FlushAndSubmit flushes pending GPU work and optionally waits for completion.
+func (c *Context) FlushAndSubmit(syncCPU bool) {}
+
+// PurgeGpuResources releases all cached GPU resources.
+func (c *Context) PurgeGpuResources() {}
+
+// WarmupShaders pre-compiles common GPU shaders.
+func (c *Context) WarmupShaders(backend string) error { return errStubNotSupported }
 
 // MakeMetalSurface creates a Skia surface targeting the provided Metal texture.
 func (c *Context) MakeMetalSurface(texture unsafe.Pointer, width, height int) (*Surface, error) {
+	return nil, errStubNotSupported
+}
+
+// MakeVulkanSurface creates a Skia surface wrapping the provided VkImage.
+func (c *Context) MakeVulkanSurface(width, height int, vkImage uintptr, vkFormat uint32) (*Surface, error) {
+	return nil, errStubNotSupported
+}
+
+// MakeOffscreenSurfaceMetal creates a GPU-backed offscreen surface for Metal.
+func (c *Context) MakeOffscreenSurfaceMetal(width, height int) (*Surface, error) {
+	return nil, errStubNotSupported
+}
+
+// MakeOffscreenSurfaceVulkan creates a GPU-backed offscreen surface for Vulkan.
+func (c *Context) MakeOffscreenSurfaceVulkan(width, height int) (*Surface, error) {
 	return nil, errStubNotSupported
 }
 

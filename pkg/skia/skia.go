@@ -83,15 +83,6 @@ type ParagraphLineMetrics struct {
 	Heights  []float64
 }
 
-// NewGLContext creates a Skia GPU context using the current OpenGL context.
-func NewGLContext() (*Context, error) {
-	ctx := C.drift_skia_context_create_gl()
-	if ctx == nil {
-		return nil, errors.New("skia: failed to create GL context")
-	}
-	return &Context{ptr: ctx}, nil
-}
-
 // NewMetalContext creates a Skia GPU context using the provided Metal device/queue.
 func NewMetalContext(device, queue unsafe.Pointer) (*Context, error) {
 	ctx := C.drift_skia_context_create_metal(device, queue)
@@ -139,50 +130,13 @@ func (c *Context) FlushAndSubmit(syncCPU bool) {
 	C.drift_skia_context_flush_and_submit(c.ptr, sync)
 }
 
-// GLGetFramebufferBinding returns the currently bound GL framebuffer.
-// Returns 0 on non-GL backends.
-func GLGetFramebufferBinding() int {
-	return int(C.drift_skia_gl_get_framebuffer_binding())
-}
-
-// GLBindFramebuffer binds the specified GL framebuffer.
-// No-op on non-GL backends.
-func GLBindFramebuffer(fbo int) {
-	C.drift_skia_gl_bind_framebuffer(C.int(fbo))
-}
-
-// PurgeGpuResources resets GL state tracking and releases all cached GPU
-// resources (glyph atlases, texture caches, etc.). Call this after events
+// PurgeGpuResources releases all cached GPU resources (glyph atlases, texture caches, etc.). Call this after events
 // that may invalidate GPU memory, such as sleep/wake or surface recreation.
 func (c *Context) PurgeGpuResources() {
 	if c == nil || c.ptr == nil {
 		return
 	}
 	C.drift_skia_context_purge_resources(c.ptr)
-}
-
-// MakeGLSurface creates a Skia surface targeting the current GL framebuffer.
-func (c *Context) MakeGLSurface(width, height int) (*Surface, error) {
-	if c == nil || c.ptr == nil {
-		return nil, errors.New("skia: nil context")
-	}
-	surface := C.drift_skia_surface_create_gl(c.ptr, C.int(width), C.int(height))
-	if surface == nil {
-		return nil, errors.New("skia: failed to create GL surface")
-	}
-	return &Surface{ptr: surface, ctx: c}, nil
-}
-
-// MakeOffscreenSurfaceGL creates a GPU-backed offscreen surface for GL.
-func (c *Context) MakeOffscreenSurfaceGL(width, height int) (*Surface, error) {
-	if c == nil || c.ptr == nil {
-		return nil, errors.New("skia: nil context")
-	}
-	surface := C.drift_skia_surface_create_offscreen_gl(c.ptr, C.int(width), C.int(height))
-	if surface == nil {
-		return nil, errors.New("skia: failed to create offscreen GL surface")
-	}
-	return &Surface{ptr: surface, ctx: c}, nil
 }
 
 // MakeOffscreenSurfaceMetal creates a GPU-backed offscreen surface for Metal.

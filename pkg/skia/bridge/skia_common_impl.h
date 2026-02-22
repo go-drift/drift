@@ -1,5 +1,5 @@
 // Drift Skia shared implementation
-// Included by backend-specific bridge files (skia_gl.cc, skia_metal.mm, skia_vk.cc).
+// Included by backend-specific bridge files (skia_metal.mm, skia_vk.cc).
 // Contains all canvas, paint, gradient, text, paragraph, path, SVG, Skottie,
 // and image implementations that are identical across GPU backends.
 //
@@ -453,7 +453,7 @@ sk_sp<SkImageFilter> parse_image_filter(const float* data, int len, int& consume
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // This macro defines all the extern "C" functions that are identical across
-// GL, Metal, and Vulkan backends. The backend file calls this macro after
+// Metal and Vulkan backends. The backend file calls this macro after
 // closing the anonymous namespace and defining the kDefaultFontFamilies symbol.
 
 #define DRIFT_SKIA_DEFINE_COMMON_FUNCTIONS \

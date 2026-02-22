@@ -10,76 +10,22 @@ import (
 // WarmupShaders pre-compiles common GPU shaders by drawing primitives to an
 // offscreen surface. This eliminates shader compilation jank during the first
 // visible frames. Should be called during context initialization while the
-// GL/Metal context is current.
+// GPU context is current.
 func (c *Context) WarmupShaders(backend string) error {
 	if c == nil || c.ptr == nil {
 		return errors.New("skia: nil context")
 	}
 
+	var surface *Surface
+	var err error
 	switch backend {
-	case "gl":
-		return c.warmupShadersGL()
 	case "metal":
-		return c.warmupShadersMetal()
+		surface, err = c.MakeOffscreenSurfaceMetal(16, 16)
 	case "vulkan":
-		return c.warmupShadersVulkan()
+		surface, err = c.MakeOffscreenSurfaceVulkan(16, 16)
 	default:
 		return errors.New("skia: unknown backend: " + backend)
 	}
-}
-
-func (c *Context) warmupShadersGL() error {
-	// Save current framebuffer binding to restore after warmup.
-	// This avoids clobbering state if embedder had a non-default FBO bound.
-	// Use defer to ensure restore happens on all exit paths.
-	savedFBO := GLGetFramebufferBinding()
-	defer GLBindFramebuffer(savedFBO)
-
-	surface, err := c.MakeOffscreenSurfaceGL(16, 16)
-	if err != nil {
-		return err
-	}
-	defer surface.Destroy()
-
-	canvas := surface.Canvas()
-	if canvas == nil {
-		return errors.New("skia: failed to get canvas from offscreen surface")
-	}
-
-	warmupPrimitives(canvas)
-
-	// Flush surface work to the context, then submit to GPU synchronously.
-	// surface.Flush() ensures draw ops are pushed to the context before
-	// FlushAndSubmit forces shader compilation.
-	surface.Flush()
-	c.FlushAndSubmit(true)
-
-	return nil
-}
-
-func (c *Context) warmupShadersMetal() error {
-	surface, err := c.MakeOffscreenSurfaceMetal(16, 16)
-	if err != nil {
-		return err
-	}
-	defer surface.Destroy()
-
-	canvas := surface.Canvas()
-	if canvas == nil {
-		return errors.New("skia: failed to get canvas from offscreen surface")
-	}
-
-	warmupPrimitives(canvas)
-
-	// Flush surface work to the context, then submit to GPU synchronously.
-	surface.Flush()
-	c.FlushAndSubmit(true)
-
-	return nil
-}
-
-func (c *Context) warmupShadersVulkan() error {
-	surface, err := c.MakeOffscreenSurfaceVulkan(16, 16)
 	if err != nil {
 		return err
 	}
