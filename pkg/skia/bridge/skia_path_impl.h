@@ -1,5 +1,5 @@
-// Shared path implementation for OpenGL and Metal backends.
-// This header should only be included from skia_gl.cc and skia_metal.mm.
+// Shared path implementation for Metal and Vulkan backends.
+// This header should only be included from skia_metal.mm and skia_vk.cc.
 
 #ifndef DRIFT_SKIA_PATH_IMPL_H
 #define DRIFT_SKIA_PATH_IMPL_H

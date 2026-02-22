@@ -134,10 +134,6 @@ DRIFT_SKIA_DEFINE_COMMON_FUNCTIONS
 
 extern "C" {
 
-DriftSkiaContext drift_skia_context_create_gl(void) {
-    return nullptr;
-}
-
 DriftSkiaContext drift_skia_context_create_metal(void* device, void* queue) {
     if (!device || !queue) {
         return nullptr;
@@ -158,13 +154,6 @@ void drift_skia_context_destroy(DriftSkiaContext ctx) {
         return;
     }
     reinterpret_cast<GrDirectContext*>(ctx)->unref();
-}
-
-DriftSkiaSurface drift_skia_surface_create_gl(DriftSkiaContext ctx, int width, int height) {
-    (void)ctx;
-    (void)width;
-    (void)height;
-    return nullptr;
 }
 
 DriftSkiaSurface drift_skia_surface_create_metal(DriftSkiaContext ctx, void* texture, int width, int height) {
@@ -208,10 +197,24 @@ void drift_skia_surface_flush(DriftSkiaContext ctx, DriftSkiaSurface surface) {
     reinterpret_cast<GrDirectContext*>(ctx)->flushAndSubmit(sk_surface, GrSyncCpu::kNo);
 }
 
-DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height) {
-    (void)ctx;
-    (void)width;
-    (void)height;
+DriftSkiaContext drift_skia_context_create_vulkan(
+    uintptr_t instance, uintptr_t phys_device, uintptr_t device,
+    uintptr_t queue, uint32_t queue_family_index, uintptr_t get_instance_proc_addr
+) {
+    (void)instance; (void)phys_device; (void)device;
+    (void)queue; (void)queue_family_index; (void)get_instance_proc_addr;
+    return nullptr;
+}
+
+DriftSkiaSurface drift_skia_surface_create_vulkan(
+    DriftSkiaContext ctx, int width, int height, uintptr_t vk_image, uint32_t vk_format
+) {
+    (void)ctx; (void)width; (void)height; (void)vk_image; (void)vk_format;
+    return nullptr;
+}
+
+DriftSkiaSurface drift_skia_surface_create_offscreen_vulkan(DriftSkiaContext ctx, int width, int height) {
+    (void)ctx; (void)width; (void)height;
     return nullptr;
 }
 
@@ -227,16 +230,6 @@ DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx,
         return nullptr;
     }
     return surface.release();
-}
-
-int drift_skia_gl_get_framebuffer_binding(void) {
-    // No-op on Metal - framebuffer binding is a GL concept
-    return 0;
-}
-
-void drift_skia_gl_bind_framebuffer(int fbo) {
-    // No-op on Metal - framebuffer binding is a GL concept
-    (void)fbo;
 }
 
 void drift_skia_context_purge_resources(DriftSkiaContext ctx) {

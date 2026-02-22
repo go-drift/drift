@@ -28,37 +28,6 @@ var (
 	errNilBuffer   = errors.New("skia: nil texture buffer")
 )
 
-// InitSkiaGL initializes the Skia GL context using the current OpenGL context.
-func InitSkiaGL() error {
-	skiaState.mu.Lock()
-
-	if skiaState.ctx != nil {
-		if skiaState.backend != "gl" {
-			skiaState.mu.Unlock()
-			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
-		}
-		skiaState.ctx.Destroy()
-		skiaState.ctx = nil
-	}
-
-	ctx, err := skia.NewGLContext()
-	if err != nil {
-		skiaState.mu.Unlock()
-		return skiaState.setError(err)
-	}
-	skiaState.ctx = ctx
-	skiaState.backend = "gl"
-	skiaState.mu.Unlock()
-
-	// Warmup shaders outside the lock (runs on init thread, logs on failure).
-	// This avoids blocking other callers if warmup is slow.
-	if err := ctx.WarmupShaders("gl"); err != nil {
-		log.Printf("skia: shader warmup failed: %v", err)
-	}
-
-	return nil
-}
-
 // InitSkiaMetal initializes the Skia Metal context using the provided device/queue.
 func InitSkiaMetal(device, queue unsafe.Pointer) error {
 	skiaState.mu.Lock()
@@ -162,44 +131,6 @@ func StepAndSnapshot(width, height int) ([]byte, error) {
 	return json.Marshal(snapshot)
 }
 
-// RenderSkiaGLSync renders a frame into the currently bound framebuffer using
-// the split pipeline (RenderFrame only, composite phase). Geometry is applied
-// synchronously by the Android UI thread between StepAndSnapshot and this call.
-//
-// Y-flip is only applied when the current FBO is 0 (default framebuffer).
-// HardwareBuffer FBOs have top-left origin matching the Skia coordinate system.
-func RenderSkiaGLSync(width, height int) error {
-	if width <= 0 || height <= 0 {
-		return skiaState.setError(errInvalidSize)
-	}
-	ctx, err := currentSkiaContext("gl")
-	if err != nil {
-		return skiaState.setError(err)
-	}
-	surface, err := ctx.MakeGLSurface(width, height)
-	if err != nil {
-		return skiaState.setError(err)
-	}
-	defer surface.Destroy()
-
-	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
-
-	// Only flip for default framebuffer (FBO 0). HardwareBuffer FBOs
-	// have top-left origin and don't need flipping.
-	fbo := skia.GLGetFramebufferBinding()
-	if fbo == 0 {
-		canvas.Translate(0, float64(height))
-		canvas.Scale(1, -1)
-	}
-
-	if err := app.RenderFrame(canvas); err != nil {
-		return skiaState.setError(err)
-	}
-	surface.Flush()
-	skiaState.clearError()
-	return nil
-}
-
 // RenderSkiaMetalSync renders a frame into the provided Metal texture using the
 // split pipeline (composite only). Geometry is applied synchronously by the iOS
 // main thread between StepAndSnapshot and this call.
@@ -239,11 +170,6 @@ func PurgeSkiaResources() {
 	if skiaState.ctx != nil {
 		skiaState.ctx.PurgeGpuResources()
 	}
-}
-
-// PurgeSkiaGLResources is kept for backward compatibility with iOS bridge templates.
-func PurgeSkiaGLResources() {
-	PurgeSkiaResources()
 }
 
 func currentSkiaContext(backend string) (*skia.Context, error) {

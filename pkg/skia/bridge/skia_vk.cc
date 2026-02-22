@@ -153,10 +153,6 @@ DRIFT_SKIA_DEFINE_COMMON_FUNCTIONS
 
 extern "C" {
 
-DriftSkiaContext drift_skia_context_create_gl(void) {
-    return nullptr;
-}
-
 DriftSkiaContext drift_skia_context_create_metal(void* device, void* queue) {
     (void)device;
     (void)queue;
@@ -260,13 +256,6 @@ void drift_skia_context_destroy(DriftSkiaContext ctx) {
     reinterpret_cast<GrDirectContext*>(ctx)->unref();
 }
 
-DriftSkiaSurface drift_skia_surface_create_gl(DriftSkiaContext ctx, int width, int height) {
-    (void)ctx;
-    (void)width;
-    (void)height;
-    return nullptr;
-}
-
 DriftSkiaSurface drift_skia_surface_create_metal(DriftSkiaContext ctx, void* texture, int width, int height) {
     (void)ctx;
     (void)texture;
@@ -335,13 +324,6 @@ void drift_skia_surface_flush(DriftSkiaContext ctx, DriftSkiaSurface surface) {
     reinterpret_cast<GrDirectContext*>(ctx)->flushAndSubmit(sk_surface, GrSyncCpu::kYes);
 }
 
-DriftSkiaSurface drift_skia_surface_create_offscreen_gl(DriftSkiaContext ctx, int width, int height) {
-    (void)ctx;
-    (void)width;
-    (void)height;
-    return nullptr;
-}
-
 DriftSkiaSurface drift_skia_surface_create_offscreen_metal(DriftSkiaContext ctx, int width, int height) {
     (void)ctx;
     (void)width;
@@ -361,14 +343,6 @@ DriftSkiaSurface drift_skia_surface_create_offscreen_vulkan(DriftSkiaContext ctx
         return nullptr;
     }
     return surface.release();
-}
-
-int drift_skia_gl_get_framebuffer_binding(void) {
-    return 0;
-}
-
-void drift_skia_gl_bind_framebuffer(int fbo) {
-    (void)fbo;
 }
 
 void drift_skia_context_purge_resources(DriftSkiaContext ctx) {
