@@ -3,4 +3,4 @@ project(drift_jni C)
 
 add_library(drift_jni SHARED drift_jni.c)
 
-target_link_libraries(drift_jni log dl android EGL GLESv3)
+target_link_libraries(drift_jni log dl android vulkan)

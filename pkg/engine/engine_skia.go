@@ -90,6 +90,61 @@ func InitSkiaMetal(device, queue unsafe.Pointer) error {
 	return nil
 }
 
+// InitSkiaVulkan initializes the Skia Vulkan context using the provided Vulkan handles.
+func InitSkiaVulkan(instance, physDevice, device, queue uintptr, queueFamilyIndex uint32, getInstanceProcAddr uintptr) error {
+	skiaState.mu.Lock()
+
+	if skiaState.ctx != nil {
+		if skiaState.backend != "vulkan" {
+			skiaState.mu.Unlock()
+			return skiaState.setError(errors.New("skia: context already initialized for " + skiaState.backend))
+		}
+		skiaState.ctx.Destroy()
+		skiaState.ctx = nil
+	}
+
+	ctx, err := skia.NewVulkanContext(instance, physDevice, device, queue, queueFamilyIndex, getInstanceProcAddr)
+	if err != nil {
+		skiaState.mu.Unlock()
+		return skiaState.setError(err)
+	}
+	skiaState.ctx = ctx
+	skiaState.backend = "vulkan"
+	skiaState.mu.Unlock()
+
+	if err := ctx.WarmupShaders("vulkan"); err != nil {
+		log.Printf("skia: shader warmup failed: %v", err)
+	}
+
+	return nil
+}
+
+// RenderSkiaVulkanSync renders a frame into the provided VkImage using the
+// split pipeline (composite only). Geometry is applied synchronously by the
+// Android UI thread between StepAndSnapshot and this call.
+func RenderSkiaVulkanSync(width, height int, vkImage uintptr, vkFormat uint32) error {
+	if width <= 0 || height <= 0 {
+		return skiaState.setError(errInvalidSize)
+	}
+	ctx, err := currentSkiaContext("vulkan")
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	surface, err := ctx.MakeVulkanSurface(width, height, vkImage, vkFormat)
+	if err != nil {
+		return skiaState.setError(err)
+	}
+	defer surface.Destroy()
+
+	canvas := graphics.NewSkiaCanvas(surface.Canvas(), graphics.Size{Width: float64(width), Height: float64(height)})
+	if err := app.RenderFrame(canvas); err != nil {
+		return skiaState.setError(err)
+	}
+	surface.Flush()
+	skiaState.clearError()
+	return nil
+}
+
 // StepAndSnapshot runs the engine pipeline and returns the platform view
 // geometry snapshot as JSON bytes. Called from the Android UI thread via JNI.
 func StepAndSnapshot(width, height int) ([]byte, error) {
@@ -174,16 +229,21 @@ func RenderSkiaMetalSync(width, height int, texture unsafe.Pointer) error {
 	return nil
 }
 
-// PurgeSkiaGLResources resets GL state tracking and releases all cached GPU
-// resources. Call this after events that may invalidate GPU memory (e.g.
-// sleep/wake, surface recreation) to force Skia to rebuild its glyph atlas
-// and other GPU caches on the next frame.
-func PurgeSkiaGLResources() {
+// PurgeSkiaResources releases all cached GPU resources regardless of backend.
+// Call this after events that may invalidate GPU memory (e.g. sleep/wake,
+// surface recreation) to force Skia to rebuild its glyph atlas and other GPU
+// caches on the next frame.
+func PurgeSkiaResources() {
 	skiaState.mu.Lock()
 	defer skiaState.mu.Unlock()
-	if skiaState.ctx != nil && skiaState.backend == "gl" {
+	if skiaState.ctx != nil {
 		skiaState.ctx.PurgeGpuResources()
 	}
+}
+
+// PurgeSkiaGLResources is kept for backward compatibility with iOS bridge templates.
+func PurgeSkiaGLResources() {
+	PurgeSkiaResources()
 }
 
 func currentSkiaContext(backend string) (*skia.Context, error) {
