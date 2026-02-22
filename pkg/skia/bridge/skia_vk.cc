@@ -217,8 +217,8 @@ DriftSkiaContext drift_skia_context_create_vulkan(
 
     skgpu::VulkanExtensions extensions;
     extensions.init(getProc, vkInstance, vkPhysDevice,
-                    2, instanceExts,
-                    8, deviceExts);
+                    std::size(instanceExts), instanceExts,
+                    std::size(deviceExts), deviceExts);
 
     // Query physical device features so Skia knows what's available.
     VkPhysicalDeviceFeatures2 deviceFeatures2 = {};
@@ -321,6 +321,8 @@ void drift_skia_surface_flush(DriftSkiaContext ctx, DriftSkiaSurface surface) {
         return;
     }
     auto sk_surface = reinterpret_cast<SkSurface*>(surface);
+    // Use GrSyncCpu::kYes because we share a single AHardwareBuffer with HWUI.
+    // The GPU must finish writing before HWUI reads the buffer in onDraw().
     reinterpret_cast<GrDirectContext*>(ctx)->flushAndSubmit(sk_surface, GrSyncCpu::kYes);
 }
 
