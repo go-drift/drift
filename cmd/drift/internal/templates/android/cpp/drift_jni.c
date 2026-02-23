@@ -41,6 +41,7 @@
 #include <android/hardware_buffer_jni.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_android.h>
+#include "drift_vulkan_extensions.h"
 
 /**
  * Function pointer type for DriftPointerEvent.
@@ -201,6 +202,7 @@ static VkDevice g_vk_device = VK_NULL_HANDLE;
 static VkQueue g_vk_queue = VK_NULL_HANDLE;
 static uint32_t g_vk_queue_family_index = 0;
 static PFN_vkGetInstanceProcAddr g_vk_get_instance_proc_addr = NULL;
+static PFN_vkGetDeviceProcAddr g_vk_get_device_proc_addr = NULL;
 
 /* ─── Double-buffered HardwareBuffer Vulkan state ─── */
 #define HWB_COUNT 2
@@ -877,16 +879,11 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
         .apiVersion = VK_API_VERSION_1_1,
     };
 
-    const char *instanceExtensions[] = {
-        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-    };
-
     VkInstanceCreateInfo instanceCI = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &appInfo,
-        .enabledExtensionCount = sizeof(instanceExtensions) / sizeof(instanceExtensions[0]),
-        .ppEnabledExtensionNames = instanceExtensions,
+        .enabledExtensionCount = DRIFT_VK_INSTANCE_EXTENSION_COUNT,
+        .ppEnabledExtensionNames = DRIFT_VK_INSTANCE_EXTENSIONS,
     };
 
     PFN_vkCreateInstance vkCreateInstanceFn =
@@ -951,23 +948,12 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
         .pQueuePriorities = &queuePriority,
     };
 
-    const char *deviceExtensions[] = {
-        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-        VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME,
-        VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME,
-        VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
-        VK_KHR_MAINTENANCE1_EXTENSION_NAME,
-        VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
-        VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
-    };
-
     VkDeviceCreateInfo deviceCI = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .queueCreateInfoCount = 1,
         .pQueueCreateInfos = &queueCI,
-        .enabledExtensionCount = sizeof(deviceExtensions) / sizeof(deviceExtensions[0]),
-        .ppEnabledExtensionNames = deviceExtensions,
+        .enabledExtensionCount = DRIFT_VK_DEVICE_EXTENSION_COUNT,
+        .ppEnabledExtensionNames = DRIFT_VK_DEVICE_EXTENSIONS,
     };
 
     PFN_vkCreateDevice vkCreateDeviceFn =
@@ -978,24 +964,32 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
         return -1;
     }
 
+    /* Resolve vkGetDeviceProcAddr for device-level function lookups */
+    g_vk_get_device_proc_addr = (PFN_vkGetDeviceProcAddr)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetDeviceProcAddr");
+    if (!g_vk_get_device_proc_addr) {
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetDeviceProcAddr not found");
+        return -1;
+    }
+
     PFN_vkGetDeviceQueue vkGetDeviceQueueFn =
-        (PFN_vkGetDeviceQueue)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetDeviceQueue");
+        (PFN_vkGetDeviceQueue)g_vk_get_device_proc_addr(g_vk_device, "vkGetDeviceQueue");
     vkGetDeviceQueueFn(g_vk_device, g_vk_queue_family_index, 0, &g_vk_queue);
 
-    /* Cache Vulkan function pointers for per-frame and resource operations */
-    g_vk_wait_for_fences = (PFN_vkWaitForFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkWaitForFences");
-    g_vk_reset_fences = (PFN_vkResetFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkResetFences");
-    g_vk_queue_submit = (PFN_vkQueueSubmit)g_vk_get_instance_proc_addr(g_vk_instance, "vkQueueSubmit");
-    g_vk_device_wait_idle = (PFN_vkDeviceWaitIdle)g_vk_get_instance_proc_addr(g_vk_instance, "vkDeviceWaitIdle");
-    g_vk_create_image = (PFN_vkCreateImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateImage");
-    g_vk_destroy_image = (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-    g_vk_allocate_memory = (PFN_vkAllocateMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkAllocateMemory");
-    g_vk_free_memory = (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
-    g_vk_bind_image_memory = (PFN_vkBindImageMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkBindImageMemory");
-    g_vk_create_fence = (PFN_vkCreateFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateFence");
-    g_vk_destroy_fence = (PFN_vkDestroyFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyFence");
+    /* Cache device-level Vulkan function pointers for per-frame and resource operations */
+    g_vk_wait_for_fences = (PFN_vkWaitForFences)g_vk_get_device_proc_addr(g_vk_device, "vkWaitForFences");
+    g_vk_reset_fences = (PFN_vkResetFences)g_vk_get_device_proc_addr(g_vk_device, "vkResetFences");
+    g_vk_queue_submit = (PFN_vkQueueSubmit)g_vk_get_device_proc_addr(g_vk_device, "vkQueueSubmit");
+    g_vk_device_wait_idle = (PFN_vkDeviceWaitIdle)g_vk_get_device_proc_addr(g_vk_device, "vkDeviceWaitIdle");
+    g_vk_create_image = (PFN_vkCreateImage)g_vk_get_device_proc_addr(g_vk_device, "vkCreateImage");
+    g_vk_destroy_image = (PFN_vkDestroyImage)g_vk_get_device_proc_addr(g_vk_device, "vkDestroyImage");
+    g_vk_allocate_memory = (PFN_vkAllocateMemory)g_vk_get_device_proc_addr(g_vk_device, "vkAllocateMemory");
+    g_vk_free_memory = (PFN_vkFreeMemory)g_vk_get_device_proc_addr(g_vk_device, "vkFreeMemory");
+    g_vk_bind_image_memory = (PFN_vkBindImageMemory)g_vk_get_device_proc_addr(g_vk_device, "vkBindImageMemory");
+    g_vk_create_fence = (PFN_vkCreateFence)g_vk_get_device_proc_addr(g_vk_device, "vkCreateFence");
+    g_vk_destroy_fence = (PFN_vkDestroyFence)g_vk_get_device_proc_addr(g_vk_device, "vkDestroyFence");
+    /* Instance-level: physical device queries are resolved via instance proc addr */
     g_vk_get_phys_dev_mem_props = (PFN_vkGetPhysicalDeviceMemoryProperties)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetPhysicalDeviceMemoryProperties");
-    g_vk_get_ahb_props = (PFN_vkGetAndroidHardwareBufferPropertiesANDROID)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetAndroidHardwareBufferPropertiesANDROID");
+    g_vk_get_ahb_props = (PFN_vkGetAndroidHardwareBufferPropertiesANDROID)g_vk_get_device_proc_addr(g_vk_device, "vkGetAndroidHardwareBufferPropertiesANDROID");
 
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Vulkan initialized: queue family %u", g_vk_queue_family_index);
     return 0;
@@ -1283,10 +1277,22 @@ Java_{{.JNIPackage}}_NativeBridge_renderFrameSync(JNIEnv *env, jclass clazz, jin
     int slot_idx = g_hwb_current;
     HwbSlot *slot = &g_hwb_slots[slot_idx];
 
-    /* Wait on this slot's fence (ensures GPU finished the frame that last used it) */
+    /* Wait on this slot's fence (ensures GPU finished the frame that last used it).
+     * Use a finite timeout to avoid hanging forever if the GPU stalls (e.g. during
+     * app backgrounding on some devices). 1 second is generous for a single frame. */
     if (slot->fence_submitted) {
         if (g_vk_wait_for_fences && g_vk_reset_fences) {
-            g_vk_wait_for_fences(g_vk_device, 1, &slot->fence, VK_TRUE, UINT64_MAX);
+            static const uint64_t FENCE_TIMEOUT_NS = 1000000000ULL; /* 1 second */
+            VkResult fence_res = g_vk_wait_for_fences(g_vk_device, 1, &slot->fence, VK_TRUE, FENCE_TIMEOUT_NS);
+            if (fence_res == VK_TIMEOUT) {
+                __android_log_print(ANDROID_LOG_WARN, "DriftJNI", "Fence wait timed out on slot %d, resetting device", slot_idx);
+                if (g_vk_device_wait_idle) {
+                    g_vk_device_wait_idle(g_vk_device);
+                }
+            } else if (fence_res != VK_SUCCESS) {
+                __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkWaitForFences failed: %d", fence_res);
+                return -1;
+            }
             g_vk_reset_fences(g_vk_device, 1, &slot->fence);
         }
         slot->fence_submitted = 0;

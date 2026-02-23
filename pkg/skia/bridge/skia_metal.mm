@@ -74,53 +74,7 @@ sk_sp<SkFontMgr> get_font_manager() {
     return manager;
 }
 
-sk_sp<SkTypeface> resolve_typeface(const char* family, int weight, int style) {
-    struct Cache {
-        std::string family;
-        int weight = -1;
-        int style = -1;
-        sk_sp<SkTypeface> typeface;
-    };
-    static Cache cache;
-
-    weight = std::clamp(weight, 100, 900);
-    std::string family_name = (family && family[0] != '\0') ? family : "";
-    if (cache.typeface && cache.weight == weight && cache.style == style && cache.family == family_name) {
-        return cache.typeface;
-    }
-
-    SkFontStyle::Slant slant = (style == 1) ? SkFontStyle::kItalic_Slant : SkFontStyle::kUpright_Slant;
-    SkFontStyle font_style(weight, SkFontStyle::kNormal_Width, slant);
-    auto manager = get_font_manager();
-    sk_sp<SkTypeface> typeface = lookup_custom_typeface(family);
-    if (!typeface && manager && !family_name.empty()) {
-        typeface = manager->matchFamilyStyle(family_name.c_str(), font_style);
-    }
-    if (!typeface && manager) {
-        typeface = manager->matchFamilyStyle(nullptr, font_style);
-    }
-    if (!typeface && manager) {
-        typeface = manager->matchFamilyStyle("SF Pro Text", font_style);
-    }
-    if (!typeface && manager) {
-        int family_count = manager->countFamilies();
-        if (family_count > 0) {
-            SkString fallback_name;
-            manager->getFamilyName(0, &fallback_name);
-            typeface = manager->matchFamilyStyle(fallback_name.c_str(), font_style);
-        }
-    }
-    if (!typeface && manager) {
-        SkFontStyle fallback_style(400, SkFontStyle::kNormal_Width, slant);
-        typeface = manager->matchFamilyStyle("SF Pro Text", fallback_style);
-    }
-    cache.family = family_name;
-    cache.weight = weight;
-    cache.style = style;
-    cache.typeface = typeface;
-    return typeface;
-}
-
+#define DRIFT_PLATFORM_FALLBACK_FONT "SF Pro Text"
 #include "skia_common_impl.h"
 
 }  // namespace

@@ -59,11 +59,11 @@
 #include "skia_svg_impl.h"
 
 #include <vulkan/vulkan.h>
+#include "drift_vulkan_extensions.h"
 
 namespace {
 
 sk_sp<SkFontMgr> get_font_manager();
-sk_sp<SkTypeface> lookup_custom_typeface(const char* family);
 
 sk_sp<SkFontMgr> get_font_manager() {
     static std::once_flag once;
@@ -87,56 +87,7 @@ sk_sp<SkFontMgr> get_font_manager() {
     return manager;
 }
 
-sk_sp<SkTypeface> resolve_typeface(const char* family, int weight, int style) {
-    struct Cache {
-        std::string family;
-        int weight = -1;
-        int style = -1;
-        sk_sp<SkTypeface> typeface;
-    };
-    static Cache cache;
-
-    weight = std::clamp(weight, 100, 900);
-    std::string family_name = (family && family[0] != '\0') ? family : "";
-    if (cache.typeface && cache.weight == weight && cache.style == style && cache.family == family_name) {
-        return cache.typeface;
-    }
-
-    SkFontStyle::Slant slant = (style == 1) ? SkFontStyle::kItalic_Slant : SkFontStyle::kUpright_Slant;
-    SkFontStyle font_style(weight, SkFontStyle::kNormal_Width, slant);
-    auto manager = get_font_manager();
-    sk_sp<SkTypeface> typeface = lookup_custom_typeface(family);
-    if (!typeface && manager && !family_name.empty()) {
-        typeface = manager->matchFamilyStyle(family_name.c_str(), font_style);
-    }
-    if (!typeface && manager) {
-        typeface = manager->matchFamilyStyle(nullptr, font_style);
-    }
-    if (!typeface && manager) {
-        typeface = manager->matchFamilyStyle("sans-serif", font_style);
-    }
-    if (!typeface && manager) {
-        int family_count = manager->countFamilies();
-        if (family_count > 0) {
-            SkString fallback_name;
-            manager->getFamilyName(0, &fallback_name);
-            typeface = manager->matchFamilyStyle(fallback_name.c_str(), font_style);
-        }
-    }
-    if (!typeface && manager) {
-        SkFontStyle fallback_style(400, SkFontStyle::kNormal_Width, slant);
-        typeface = manager->matchFamilyStyle("sans-serif", fallback_style);
-    }
-    if (!typeface) {
-        __android_log_print(ANDROID_LOG_WARN, "DriftSkia", "No typeface match for family=%s weight=%d style=%d", family_name.c_str(), weight, style);
-    }
-    cache.family = family_name;
-    cache.weight = weight;
-    cache.style = style;
-    cache.typeface = typeface;
-    return typeface;
-}
-
+#define DRIFT_PLATFORM_FALLBACK_FONT "sans-serif"
 #include "skia_common_impl.h"
 
 }  // namespace
@@ -199,26 +150,10 @@ DriftSkiaContext drift_skia_context_create_vulkan(
         return fn;
     };
 
-    // Must match the extensions enabled in drift_jni.c init_vulkan().
-    const char* instanceExts[] = {
-        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-    };
-    const char* deviceExts[] = {
-        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-        VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME,
-        VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME,
-        VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
-        VK_KHR_MAINTENANCE1_EXTENSION_NAME,
-        VK_KHR_BIND_MEMORY_2_EXTENSION_NAME,
-        VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
-    };
-
     skgpu::VulkanExtensions extensions;
     extensions.init(getProc, vkInstance, vkPhysDevice,
-                    std::size(instanceExts), instanceExts,
-                    std::size(deviceExts), deviceExts);
+                    DRIFT_VK_INSTANCE_EXTENSION_COUNT, DRIFT_VK_INSTANCE_EXTENSIONS,
+                    DRIFT_VK_DEVICE_EXTENSION_COUNT, DRIFT_VK_DEVICE_EXTENSIONS);
 
     // Query physical device features so Skia knows what's available.
     VkPhysicalDeviceFeatures2 deviceFeatures2 = {};
