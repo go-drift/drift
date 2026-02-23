@@ -232,6 +232,21 @@ static VkFormat g_vk_format = VK_FORMAT_R8G8B8A8_UNORM;
 static int g_hwb_width = 0;
 static int g_hwb_height = 0;
 
+/* Cached Vulkan function pointers (resolved once in initVulkan) */
+static PFN_vkWaitForFences      g_vk_wait_for_fences = NULL;
+static PFN_vkResetFences        g_vk_reset_fences = NULL;
+static PFN_vkQueueSubmit        g_vk_queue_submit = NULL;
+static PFN_vkDeviceWaitIdle     g_vk_device_wait_idle = NULL;
+static PFN_vkCreateImage        g_vk_create_image = NULL;
+static PFN_vkDestroyImage       g_vk_destroy_image = NULL;
+static PFN_vkAllocateMemory     g_vk_allocate_memory = NULL;
+static PFN_vkFreeMemory         g_vk_free_memory = NULL;
+static PFN_vkBindImageMemory    g_vk_bind_image_memory = NULL;
+static PFN_vkCreateFence        g_vk_create_fence = NULL;
+static PFN_vkDestroyFence       g_vk_destroy_fence = NULL;
+static PFN_vkGetPhysicalDeviceMemoryProperties g_vk_get_phys_dev_mem_props = NULL;
+static PFN_vkGetAndroidHardwareBufferPropertiesANDROID g_vk_get_ahb_props = NULL;
+
 /* Global JVM reference for callbacks from Go to Kotlin */
 static JavaVM *g_jvm = NULL;
 static jclass g_platform_channel_class = NULL;
@@ -981,6 +996,21 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
         (PFN_vkGetDeviceQueue)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetDeviceQueue");
     vkGetDeviceQueueFn(g_vk_device, g_vk_queue_family_index, 0, &g_vk_queue);
 
+    /* Cache Vulkan function pointers for per-frame and resource operations */
+    g_vk_wait_for_fences = (PFN_vkWaitForFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkWaitForFences");
+    g_vk_reset_fences = (PFN_vkResetFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkResetFences");
+    g_vk_queue_submit = (PFN_vkQueueSubmit)g_vk_get_instance_proc_addr(g_vk_instance, "vkQueueSubmit");
+    g_vk_device_wait_idle = (PFN_vkDeviceWaitIdle)g_vk_get_instance_proc_addr(g_vk_instance, "vkDeviceWaitIdle");
+    g_vk_create_image = (PFN_vkCreateImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateImage");
+    g_vk_destroy_image = (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
+    g_vk_allocate_memory = (PFN_vkAllocateMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkAllocateMemory");
+    g_vk_free_memory = (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
+    g_vk_bind_image_memory = (PFN_vkBindImageMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkBindImageMemory");
+    g_vk_create_fence = (PFN_vkCreateFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateFence");
+    g_vk_destroy_fence = (PFN_vkDestroyFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyFence");
+    g_vk_get_phys_dev_mem_props = (PFN_vkGetPhysicalDeviceMemoryProperties)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetPhysicalDeviceMemoryProperties");
+    g_vk_get_ahb_props = (PFN_vkGetAndroidHardwareBufferPropertiesANDROID)g_vk_get_instance_proc_addr(g_vk_instance, "vkGetAndroidHardwareBufferPropertiesANDROID");
+
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Vulkan initialized: queue family %u", g_vk_queue_family_index);
     return 0;
 }
@@ -1011,10 +1041,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     }
 
     /* Get VkFormat and memory requirements from the AHardwareBuffer */
-    PFN_vkGetAndroidHardwareBufferPropertiesANDROID vkGetAHBProps =
-        (PFN_vkGetAndroidHardwareBufferPropertiesANDROID)g_vk_get_instance_proc_addr(
-            g_vk_instance, "vkGetAndroidHardwareBufferPropertiesANDROID");
-    if (!vkGetAHBProps) {
+    if (!g_vk_get_ahb_props) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetAndroidHardwareBufferPropertiesANDROID not found");
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
@@ -1027,7 +1054,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
         .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID,
         .pNext = &formatProps,
     };
-    VkResult res = vkGetAHBProps(g_vk_device, slot->hwb, &ahbProps);
+    VkResult res = g_vk_get_ahb_props(g_vk_device, slot->hwb, &ahbProps);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetAndroidHardwareBufferPropertiesANDROID failed: %d", res);
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
@@ -1059,9 +1086,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
 
-    PFN_vkCreateImage vkCreateImageFn =
-        (PFN_vkCreateImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateImage");
-    res = vkCreateImageFn(g_vk_device, &imageCI, NULL, &slot->image);
+    res = g_vk_create_image(g_vk_device, &imageCI, NULL, &slot->image);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkCreateImage failed: %d", res);
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
@@ -1080,11 +1105,8 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
         .image = slot->image,
     };
 
-    PFN_vkGetPhysicalDeviceMemoryProperties vkGetMemProps =
-        (PFN_vkGetPhysicalDeviceMemoryProperties)g_vk_get_instance_proc_addr(
-            g_vk_instance, "vkGetPhysicalDeviceMemoryProperties");
     VkPhysicalDeviceMemoryProperties memProps;
-    vkGetMemProps(g_vk_phys_device, &memProps);
+    g_vk_get_phys_dev_mem_props(g_vk_phys_device, &memProps);
 
     uint32_t memoryTypeIndex = UINT32_MAX;
     for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
@@ -1095,9 +1117,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     }
     if (memoryTypeIndex == UINT32_MAX) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "No compatible memory type for AHB");
-        PFN_vkDestroyImage vkDestroyImageFn =
-            (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
@@ -1109,49 +1129,33 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
         .memoryTypeIndex = memoryTypeIndex,
     };
 
-    PFN_vkAllocateMemory vkAllocMemFn =
-        (PFN_vkAllocateMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkAllocateMemory");
-    res = vkAllocMemFn(g_vk_device, &allocInfo, NULL, &slot->memory);
+    res = g_vk_allocate_memory(g_vk_device, &allocInfo, NULL, &slot->memory);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkAllocateMemory failed: %d", res);
-        PFN_vkDestroyImage vkDestroyImageFn =
-            (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
-    PFN_vkBindImageMemory vkBindImageMemFn =
-        (PFN_vkBindImageMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkBindImageMemory");
-    res = vkBindImageMemFn(g_vk_device, slot->image, slot->memory, 0);
+    res = g_vk_bind_image_memory(g_vk_device, slot->image, slot->memory, 0);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkBindImageMemory failed: %d", res);
-        PFN_vkFreeMemory vkFreeMemFn =
-            (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
-        vkFreeMemFn(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
-        PFN_vkDestroyImage vkDestroyImageFn =
-            (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        g_vk_free_memory(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
+        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
 
     /* Create VkFence (signaled initially so first wait is a no-op) */
-    PFN_vkCreateFence vkCreateFenceFn =
-        (PFN_vkCreateFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkCreateFence");
     VkFenceCreateInfo fenceCI = {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
     };
-    res = vkCreateFenceFn(g_vk_device, &fenceCI, NULL, &slot->fence);
+    res = g_vk_create_fence(g_vk_device, &fenceCI, NULL, &slot->fence);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkCreateFence failed: %d", res);
-        PFN_vkFreeMemory vkFreeMemFn =
-            (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
-        vkFreeMemFn(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
-        PFN_vkDestroyImage vkDestroyImageFn =
-            (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-        vkDestroyImageFn(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
+        g_vk_free_memory(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
+        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
         AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
         return -1;
     }
@@ -1166,20 +1170,14 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
 static void destroy_hwb_slot(HwbSlot *slot) {
     if (!slot) return;
     if (g_vk_device) {
-        if (slot->fence != VK_NULL_HANDLE) {
-            PFN_vkDestroyFence vkDestroyFenceFn =
-                (PFN_vkDestroyFence)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyFence");
-            vkDestroyFenceFn(g_vk_device, slot->fence, NULL);
+        if (slot->fence != VK_NULL_HANDLE && g_vk_destroy_fence) {
+            g_vk_destroy_fence(g_vk_device, slot->fence, NULL);
         }
-        if (slot->image != VK_NULL_HANDLE) {
-            PFN_vkDestroyImage vkDestroyImageFn =
-                (PFN_vkDestroyImage)g_vk_get_instance_proc_addr(g_vk_instance, "vkDestroyImage");
-            vkDestroyImageFn(g_vk_device, slot->image, NULL);
+        if (slot->image != VK_NULL_HANDLE && g_vk_destroy_image) {
+            g_vk_destroy_image(g_vk_device, slot->image, NULL);
         }
-        if (slot->memory != VK_NULL_HANDLE) {
-            PFN_vkFreeMemory vkFreeMemFn =
-                (PFN_vkFreeMemory)g_vk_get_instance_proc_addr(g_vk_instance, "vkFreeMemory");
-            vkFreeMemFn(g_vk_device, slot->memory, NULL);
+        if (slot->memory != VK_NULL_HANDLE && g_vk_free_memory) {
+            g_vk_free_memory(g_vk_device, slot->memory, NULL);
         }
     }
     if (slot->hwb) { AHardwareBuffer_release(slot->hwb); }
@@ -1228,10 +1226,8 @@ JNIEXPORT void JNICALL
 Java_{{.JNIPackage}}_NativeBridge_destroyHwbResources(JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;
 
-    if (g_vk_device) {
-        PFN_vkDeviceWaitIdle vkWaitFn =
-            (PFN_vkDeviceWaitIdle)g_vk_get_instance_proc_addr(g_vk_instance, "vkDeviceWaitIdle");
-        if (vkWaitFn) vkWaitFn(g_vk_device);
+    if (g_vk_device && g_vk_device_wait_idle) {
+        g_vk_device_wait_idle(g_vk_device);
     }
 
     for (int i = 0; i < HWB_COUNT; i++) {
@@ -1309,13 +1305,9 @@ Java_{{.JNIPackage}}_NativeBridge_renderFrameSync(JNIEnv *env, jclass clazz, jin
 
     /* Wait on this slot's fence (ensures GPU finished the frame that last used it) */
     if (slot->fence_submitted) {
-        PFN_vkWaitForFences vkWaitFn =
-            (PFN_vkWaitForFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkWaitForFences");
-        PFN_vkResetFences vkResetFn =
-            (PFN_vkResetFences)g_vk_get_instance_proc_addr(g_vk_instance, "vkResetFences");
-        if (vkWaitFn && vkResetFn) {
-            vkWaitFn(g_vk_device, 1, &slot->fence, VK_TRUE, UINT64_MAX);
-            vkResetFn(g_vk_device, 1, &slot->fence);
+        if (g_vk_wait_for_fences && g_vk_reset_fences) {
+            g_vk_wait_for_fences(g_vk_device, 1, &slot->fence, VK_TRUE, UINT64_MAX);
+            g_vk_reset_fences(g_vk_device, 1, &slot->fence);
         }
         slot->fence_submitted = 0;
     }
@@ -1327,13 +1319,11 @@ Java_{{.JNIPackage}}_NativeBridge_renderFrameSync(JNIEnv *env, jclass clazz, jin
     }
 
     /* Submit an empty batch with just the fence to track GPU completion */
-    PFN_vkQueueSubmit vkQueueSubmitFn =
-        (PFN_vkQueueSubmit)g_vk_get_instance_proc_addr(g_vk_instance, "vkQueueSubmit");
-    if (vkQueueSubmitFn) {
+    if (g_vk_queue_submit) {
         VkSubmitInfo submitInfo = {
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         };
-        VkResult res = vkQueueSubmitFn(g_vk_queue, 1, &submitInfo, slot->fence);
+        VkResult res = g_vk_queue_submit(g_vk_queue, 1, &submitInfo, slot->fence);
         if (res == VK_SUCCESS) {
             slot->fence_submitted = 1;
         } else {
