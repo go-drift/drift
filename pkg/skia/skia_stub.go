@@ -142,6 +142,16 @@ func CanvasSaveLayer(
 ) {
 }
 
+// CanvasSaveLayerFiltered saves a layer with optional color and image filters.
+func CanvasSaveLayerFiltered(
+	canvas unsafe.Pointer,
+	left, top, right, bottom float32,
+	blendMode int32, alpha float32,
+	colorFilterData []float32,
+	imageFilterData []float32,
+) {
+}
+
 // CanvasClear clears the canvas with a solid color.
 func CanvasClear(canvas unsafe.Pointer, argb uint32) {}
 

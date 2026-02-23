@@ -94,19 +94,6 @@ typedef int (*DriftPlatformIsStreamActiveFn)(const char *channel);
 typedef void (*DriftPlatformSetNativeHandlerFn)(void *handler);
 
 /**
- * Native method handler signature that Go expects.
- */
-typedef int (*DriftNativeMethodHandler)(
-    const char *channel,
-    const char *method,
-    const void *argsData,
-    int argsLen,
-    void **resultData,
-    int *resultLen,
-    char **errorMsg
-);
-
-/**
  * Function pointer type for DriftSkiaInitVulkan.
  * Matches the signature exported by Go:
  *   func DriftSkiaInitVulkan(...) C.int
@@ -520,6 +507,8 @@ Java_{{.JNIPackage}}_NativeBridge_pointerEvent(
     jdouble x,
     jdouble y
 ) {
+    (void)env; (void)clazz;
+
     /* Ensure the Go pointer function is available */
     if (resolve_symbol("DriftPointerEvent", (void **)&drift_pointer_event) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftPointerEvent");
@@ -546,6 +535,8 @@ Java_{{.JNIPackage}}_NativeBridge_setDeviceScale(
     jclass clazz,
     jdouble scale
 ) {
+    (void)env; (void)clazz;
+
     /* Ensure the Go scale function is available */
     if (resolve_symbol("DriftSetDeviceScale", (void **)&drift_set_scale) != 0) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "Failed to resolve DriftSetDeviceScale");
@@ -846,12 +837,7 @@ Java_{{.JNIPackage}}_NativeBridge_platformInit(
 
     /* Register the schedule-frame handler with Go for on-demand rendering */
     if (g_native_schedule_frame) {
-        if (!drift_set_schedule_frame_handler && drift_handle) {
-            drift_set_schedule_frame_handler = (DriftSetScheduleFrameHandlerFn)dlsym(
-                drift_handle, "DriftSetScheduleFrameHandler"
-            );
-        }
-        if (drift_set_schedule_frame_handler) {
+        if (resolve_symbol("DriftSetScheduleFrameHandler", (void **)&drift_set_schedule_frame_handler) == 0) {
             drift_set_schedule_frame_handler(schedule_frame_handler);
             __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "Schedule-frame handler registered");
         }
@@ -1021,6 +1007,7 @@ Java_{{.JNIPackage}}_NativeBridge_initVulkan(JNIEnv *env, jclass clazz) {
  */
 static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     memset(slot, 0, sizeof(*slot));
+    VkResult res;
 
     /* Allocate AHardwareBuffer */
     AHardwareBuffer_Desc desc = {
@@ -1043,8 +1030,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     /* Get VkFormat and memory requirements from the AHardwareBuffer */
     if (!g_vk_get_ahb_props) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetAndroidHardwareBufferPropertiesANDROID not found");
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_hwb;
     }
 
     VkAndroidHardwareBufferFormatPropertiesANDROID formatProps = {
@@ -1054,11 +1040,10 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
         .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID,
         .pNext = &formatProps,
     };
-    VkResult res = g_vk_get_ahb_props(g_vk_device, slot->hwb, &ahbProps);
+    res = g_vk_get_ahb_props(g_vk_device, slot->hwb, &ahbProps);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkGetAndroidHardwareBufferPropertiesANDROID failed: %d", res);
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_hwb;
     }
 
     g_vk_format = formatProps.format;
@@ -1089,8 +1074,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     res = g_vk_create_image(g_vk_device, &imageCI, NULL, &slot->image);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkCreateImage failed: %d", res);
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_hwb;
     }
 
     /* Allocate and bind memory from the AHardwareBuffer */
@@ -1117,9 +1101,7 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     }
     if (memoryTypeIndex == UINT32_MAX) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "No compatible memory type for AHB");
-        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_image;
     }
 
     VkMemoryAllocateInfo allocInfo = {
@@ -1132,18 +1114,13 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     res = g_vk_allocate_memory(g_vk_device, &allocInfo, NULL, &slot->memory);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkAllocateMemory failed: %d", res);
-        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_image;
     }
 
     res = g_vk_bind_image_memory(g_vk_device, slot->image, slot->memory, 0);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkBindImageMemory failed: %d", res);
-        g_vk_free_memory(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
-        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_memory;
     }
 
     /* Create VkFence (signaled initially so first wait is a no-op) */
@@ -1154,14 +1131,22 @@ static int create_hwb_slot(HwbSlot *slot, int width, int height) {
     res = g_vk_create_fence(g_vk_device, &fenceCI, NULL, &slot->fence);
     if (res != VK_SUCCESS) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "vkCreateFence failed: %d", res);
-        g_vk_free_memory(g_vk_device, slot->memory, NULL); slot->memory = VK_NULL_HANDLE;
-        g_vk_destroy_image(g_vk_device, slot->image, NULL); slot->image = VK_NULL_HANDLE;
-        AHardwareBuffer_release(slot->hwb); slot->hwb = NULL;
-        return -1;
+        goto fail_memory;
     }
     slot->fence_submitted = 0;
 
     return 0;
+
+fail_memory:
+    g_vk_free_memory(g_vk_device, slot->memory, NULL);
+    slot->memory = VK_NULL_HANDLE;
+fail_image:
+    g_vk_destroy_image(g_vk_device, slot->image, NULL);
+    slot->image = VK_NULL_HANDLE;
+fail_hwb:
+    AHardwareBuffer_release(slot->hwb);
+    slot->hwb = NULL;
+    return -1;
 }
 
 /**
@@ -1268,13 +1253,8 @@ Java_{{.JNIPackage}}_NativeBridge_stepAndSnapshot(JNIEnv *env, jclass clazz, jin
     char *outData = NULL;
     int outLen = 0;
     int result = drift_step_and_snapshot(width, height, &outData, &outLen);
-    if (result != 0) {
-        if (outData) free(outData);
-        return NULL;
-    }
-
-    if (!outData || outLen <= 0) {
-        if (outData) free(outData);
+    if (result != 0 || !outData || outLen <= 0) {
+        free(outData);
         return NULL;
     }
 
