@@ -218,8 +218,6 @@ typedef struct {
 static HwbSlot g_hwb_slots[HWB_COUNT];
 static int     g_hwb_current = 0;       /* index of slot to render into next */
 static VkFormat g_vk_format = VK_FORMAT_R8G8B8A8_UNORM;
-static int g_hwb_width = 0;
-static int g_hwb_height = 0;
 
 /* Cached Vulkan function pointers (resolved once in initVulkan) */
 static PFN_vkWaitForFences      g_vk_wait_for_fences = NULL;
@@ -1189,8 +1187,6 @@ Java_{{.JNIPackage}}_NativeBridge_createHwbResources(JNIEnv *env, jclass clazz, 
     }
 
     g_hwb_current = 0;
-    g_hwb_width = width;
-    g_hwb_height = height;
 
     __android_log_print(ANDROID_LOG_INFO, "DriftJNI", "HWB Vulkan resources created (double-buffered): %dx%d format=%u",
         width, height, g_vk_format);
@@ -1213,8 +1209,6 @@ Java_{{.JNIPackage}}_NativeBridge_destroyHwbResources(JNIEnv *env, jclass clazz)
         destroy_hwb_slot(&g_hwb_slots[i]);
     }
     g_hwb_current = 0;
-    g_hwb_width = 0;
-    g_hwb_height = 0;
 }
 
 /**
