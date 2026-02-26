@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/go-drift/drift/cmd/drift/internal/cache"
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
@@ -87,6 +88,8 @@ func runCompile(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	config.CheckVersionMismatch(root, cache.NormalizeVersion(Version))
 
 	ejected := workspace.IsEjected(root, platform)
 

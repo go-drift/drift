@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // --- defaultAppName ---
 
@@ -211,5 +215,76 @@ func TestValidateAppID_InvalidChars(t *testing.T) {
 		if err := validateAppID(id); err == nil {
 			t.Errorf("validateAppID(%q) should return error for invalid characters", id)
 		}
+	}
+}
+
+// --- parseMajorMinor ---
+
+func TestParseMajorMinor(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"v0.22.0", "0.22"},
+		{"v1.2.3", "1.2"},
+		{"v0.22.0-rc1", "0.22"},
+		{"v1.2.3-beta.1", "1.2"},
+		{"0.22.0", "0.22"},
+		{"", ""},
+		{"v1", ""},
+		{"vx.y.z", ""},
+		{"abc", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := parseMajorMinor(tt.input)
+			if got != tt.want {
+				t.Errorf("parseMajorMinor(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// --- driftDepVersion ---
+
+func TestDriftDepVersion(t *testing.T) {
+	dir := t.TempDir()
+	gomod := `module example.com/myapp
+
+go 1.23
+
+require github.com/go-drift/drift v0.22.0
+`
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := driftDepVersion(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "v0.22.0" {
+		t.Errorf("driftDepVersion() = %q, want %q", got, "v0.22.0")
+	}
+}
+
+func TestDriftDepVersion_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	gomod := `module example.com/myapp
+
+go 1.23
+
+require golang.org/x/text v0.3.0
+`
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := driftDepVersion(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("driftDepVersion() = %q, want empty", got)
 	}
 }

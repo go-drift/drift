@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-drift/drift/cmd/drift/internal/cache"
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
@@ -77,6 +78,8 @@ func runRun(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	config.CheckVersionMismatch(root, cache.NormalizeVersion(Version))
 
 	ws, err := workspace.Prepare(root, cfg, platform)
 	if err != nil {

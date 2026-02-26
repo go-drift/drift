@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"gopkg.in/yaml.v3"
 )
+
+const driftModulePath = "github.com/go-drift/drift"
 
 // Config represents the optional drift.yaml configuration.
 type Config struct {
@@ -232,6 +235,68 @@ func validateOrientation(orientation string) error {
 	default:
 		return fmt.Errorf("app.orientation must be \"portrait\", \"landscape\", or \"all\" (got %q)", orientation)
 	}
+}
+
+// CheckVersionMismatch compares the CLI version against the drift module
+// version in go.mod and prints a warning to stderr if the major.minor differs.
+func CheckVersionMismatch(projectRoot, cliVersion string) {
+	if cliVersion == "" {
+		return
+	}
+	depVersion, err := driftDepVersion(projectRoot)
+	if err != nil || depVersion == "" {
+		return
+	}
+	cliMM := parseMajorMinor(cliVersion)
+	depMM := parseMajorMinor(depVersion)
+	if cliMM == "" || depMM == "" || cliMM == depMM {
+		return
+	}
+	fmt.Fprintf(os.Stderr,
+		"Warning: drift CLI version (%s) does not match project dependency (%s).\n"+
+			"  This can cause build failures due to Skia library version mismatches.\n"+
+			"  Update the CLI:  go install %s/cmd/drift@%s\n",
+		cliVersion, depVersion, driftModulePath, depVersion)
+}
+
+func driftDepVersion(projectRoot string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(projectRoot, "go.mod"))
+	if err != nil {
+		return "", err
+	}
+	f, err := modfile.Parse("go.mod", data, nil)
+	if err != nil {
+		return "", err
+	}
+	for _, req := range f.Require {
+		if req.Mod.Path == driftModulePath {
+			return req.Mod.Version, nil
+		}
+	}
+	return "", nil
+}
+
+// parseMajorMinor extracts "X.Y" from a semver string like "vX.Y.Z" or
+// "vX.Y.Z-rc1". Callers are expected to pass release versions only;
+// pseudo-versions are filtered by cache.NormalizeVersion before reaching here.
+func parseMajorMinor(version string) string {
+	v := strings.TrimPrefix(version, "v")
+	// Strip prerelease suffix (e.g. "-rc1")
+	if idx := strings.Index(v, "-"); idx != -1 {
+		v = v[:idx]
+	}
+	parts := strings.Split(v, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	major, minor := parts[0], parts[1]
+	if _, err := strconv.Atoi(major); err != nil {
+		return ""
+	}
+	if _, err := strconv.Atoi(minor); err != nil {
+		return ""
+	}
+	return major + "." + minor
 }
 
 func validateAppID(appID string) error {
