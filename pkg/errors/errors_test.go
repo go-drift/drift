@@ -244,6 +244,30 @@ func TestBoundaryErrorString(t *testing.T) {
 	}
 }
 
+func TestBoundaryErrorString_LayoutIssue(t *testing.T) {
+	err := &BoundaryError{
+		Phase:         "layout",
+		RenderObject:  "*widgets.renderFlex",
+		IsLayoutIssue: true,
+		Recovered:     LayoutIssue{Message: "Expanded used in Row with unbounded width"},
+		Timestamp:     time.Now(),
+	}
+	got := err.Error()
+	want := "Expanded used in Row with unbounded width"
+	if got != want {
+		t.Errorf("BoundaryError.Error() with IsLayoutIssue = %q, want %q", got, want)
+	}
+}
+
+func TestLayoutIssueError(t *testing.T) {
+	li := LayoutIssue{Message: "test layout issue"}
+	got := li.Error()
+	want := "test layout issue"
+	if got != want {
+		t.Errorf("LayoutIssue.Error() = %q, want %q", got, want)
+	}
+}
+
 func TestReportBoundaryError(t *testing.T) {
 	var capturedErr *BoundaryError
 	handler := &testHandler{

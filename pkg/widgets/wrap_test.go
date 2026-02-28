@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/layout"
 )
 
@@ -803,12 +804,12 @@ func TestWrap_UnboundedMainAxisPanics(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for Wrap with unbounded main axis")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "Wrap (horizontal) used with unbounded width") {
-			t.Errorf("panic message should mention horizontal Wrap and unbounded width, got: %s", msg)
+		if !strings.Contains(li.Message, "Wrap (horizontal) used with unbounded width") {
+			t.Errorf("panic message should mention horizontal Wrap and unbounded width, got: %s", li.Message)
 		}
 	}()
 
@@ -838,12 +839,12 @@ func TestWrap_UnboundedMainAxisVerticalPanics(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for vertical Wrap with unbounded main axis")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "Wrap (vertical) used with unbounded height") {
-			t.Errorf("panic message should mention vertical Wrap and unbounded height, got: %s", msg)
+		if !strings.Contains(li.Message, "Wrap (vertical) used with unbounded height") {
+			t.Errorf("panic message should mention vertical Wrap and unbounded height, got: %s", li.Message)
 		}
 	}()
 

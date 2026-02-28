@@ -37,9 +37,16 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 	dimTextColor := graphics.RGBA(180, 180, 180, 1.0)
 	stackBgColor := graphics.RGBA(40, 40, 40, 1.0)
 
+	isLayoutIssue := d.Error != nil && d.Error.IsLayoutIssue
+	if isLayoutIssue {
+		headerColor = graphics.RGBA(230, 160, 30, 1.0) // Orange header
+	}
+
 	// Build header text based on error phase
 	headerText := "Error"
-	if d.Error != nil {
+	if isLayoutIssue {
+		headerText = "Layout Issue"
+	} else if d.Error != nil {
 		switch d.Error.Phase {
 		case "build":
 			headerText = "Build Error"
@@ -76,9 +83,9 @@ func (d DebugErrorScreen) Build(ctx core.BuildContext) core.Widget {
 		}
 	}
 
-	// Stack trace
+	// Stack trace (omit for layout issues)
 	stackTrace := ""
-	if d.Error != nil && d.Error.StackTrace != "" {
+	if d.Error != nil && d.Error.StackTrace != "" && !isLayoutIssue {
 		stackTrace = d.Error.StackTrace
 	}
 

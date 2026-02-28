@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
 )
@@ -319,7 +320,7 @@ func (r *renderWrap) PerformLayout() {
 			mainAxisName = "height"
 			containerType = "vertical"
 		}
-		panic(fmt.Sprintf(
+		panic(errors.LayoutIssue{Message: fmt.Sprintf(
 			"Wrap (%s) used with unbounded %s.\n\n"+
 				"Wrap needs a finite main axis to determine when to wrap to a new run. This happens when:\n"+
 				"- The Wrap is inside a ScrollView scrolling in the same direction\n"+
@@ -332,7 +333,7 @@ func (r *renderWrap) PerformLayout() {
 			mainAxisName,
 			mainAxisName,
 			mainAxisName,
-		))
+		)})
 	}
 
 	if len(r.children) == 0 {

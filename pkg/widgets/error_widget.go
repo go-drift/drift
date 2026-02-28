@@ -42,15 +42,25 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 		verbose = *e.Verbose
 	}
 
+	isLayoutIssue := e.Error != nil && e.Error.IsLayoutIssue
+	showDetails := verbose || isLayoutIssue
+
 	var errorText string
 	if e.Error != nil {
-		if verbose {
+		if showDetails {
 			errorText = e.Error.Error()
 		} else {
 			errorText = "An error occurred"
 		}
 	} else {
 		errorText = "Unknown error"
+	}
+
+	titleText := "Something went wrong"
+	containerColor := graphics.RGBA(180, 0, 0, 1.0) // Dark red
+	if isLayoutIssue {
+		titleText = "Layout Issue"
+		containerColor = graphics.RGBA(210, 140, 20, 1.0) // Orange
 	}
 
 	children := []core.Widget{
@@ -66,7 +76,7 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 		SizedBox{Height: 8},
 		// Error message
 		Text{
-			Content: "Something went wrong",
+			Content: titleText,
 			Style: graphics.TextStyle{
 				Color:      graphics.ColorWhite,
 				FontSize:   16,
@@ -75,7 +85,7 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 		},
 	}
 
-	if verbose {
+	if showDetails {
 		children = append(children,
 			SizedBox{Height: 8},
 			Text{
@@ -96,7 +106,7 @@ func (e ErrorWidget) Build(ctx core.BuildContext) core.Widget {
 	)
 
 	return Container{
-		Color:   graphics.RGBA(180, 0, 0, 1.0), // Dark red
+		Color:   containerColor,
 		Padding: layout.EdgeInsetsAll(16),
 		Child: Column{
 			MainAxisAlignment:  MainAxisAlignmentCenter,

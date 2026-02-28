@@ -361,6 +361,9 @@ func (r *renderErrorBoundary) deferErrorCapture(phase string, value any, stack s
 		StackTrace:   stack,
 		Timestamp:    time.Now(),
 	}
+	if _, ok := value.(errors.LayoutIssue); ok {
+		err.IsLayoutIssue = true
+	}
 
 	// Report to global handler immediately
 	errors.ReportBoundaryError(err)

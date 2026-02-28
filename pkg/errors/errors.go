@@ -105,6 +105,15 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("failed to parse %s from channel %s: got %T", e.DataType, e.Channel, e.Got)
 }
 
+// LayoutIssue is a panic value used for constraint violations and other
+// developer-facing layout mistakes. Recovery code detects this type and
+// presents a calmer "layout issue" screen instead of a crash error.
+type LayoutIssue struct {
+	Message string
+}
+
+func (e LayoutIssue) Error() string { return e.Message }
+
 // BoundaryError represents a failure caught by an ErrorBoundary or the global
 // panic recovery in the engine. This is a unified error type that covers all phases.
 //
@@ -122,6 +131,8 @@ type BoundaryError struct {
 	Widget string
 	// RenderObject is the type name of the render object that failed (for layout/paint/hittest errors).
 	RenderObject string
+	// IsLayoutIssue indicates this is a developer layout mistake, not a crash.
+	IsLayoutIssue bool
 	// Recovered is the panic value (nil for regular errors).
 	Recovered any
 	// Err is the underlying error (nil for panics).
@@ -133,6 +144,11 @@ type BoundaryError struct {
 }
 
 func (e *BoundaryError) Error() string {
+	if e.IsLayoutIssue {
+		if li, ok := e.Recovered.(LayoutIssue); ok {
+			return li.Message
+		}
+	}
 	typeName := e.Widget
 	if typeName == "" {
 		typeName = e.RenderObject

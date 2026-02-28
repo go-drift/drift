@@ -7,6 +7,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
 )
@@ -45,12 +46,12 @@ func TestFlex_UnboundedConstraints(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for Expanded in unbounded Row")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "Expanded/Flexible used in Row with unbounded width") {
-			t.Errorf("panic message should mention Row and unbounded width, got: %s", msg)
+		if !strings.Contains(li.Message, "Expanded/Flexible used in Row with unbounded width") {
+			t.Errorf("panic message should mention Row and unbounded width, got: %s", li.Message)
 		}
 	}()
 
@@ -84,12 +85,12 @@ func TestFlex_UnboundedVertical(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for Expanded in unbounded Column")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "Expanded/Flexible used in Column with unbounded height") {
-			t.Errorf("panic message should mention Column and unbounded height, got: %s", msg)
+		if !strings.Contains(li.Message, "Expanded/Flexible used in Column with unbounded height") {
+			t.Errorf("panic message should mention Column and unbounded height, got: %s", li.Message)
 		}
 	}()
 
@@ -123,12 +124,12 @@ func TestFlex_CrossAxisStretch_UnboundedHeight(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for CrossAxisStretch in Row with unbounded height")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "CrossAxisAlignmentStretch used in Row with unbounded height") {
-			t.Errorf("panic message should mention Row and unbounded height, got: %s", msg)
+		if !strings.Contains(li.Message, "CrossAxisAlignmentStretch used in Row with unbounded height") {
+			t.Errorf("panic message should mention Row and unbounded height, got: %s", li.Message)
 		}
 	}()
 
@@ -162,12 +163,12 @@ func TestFlex_CrossAxisStretch_UnboundedWidth(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for CrossAxisStretch in Column with unbounded width")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "CrossAxisAlignmentStretch used in Column with unbounded width") {
-			t.Errorf("panic message should mention Column and unbounded width, got: %s", msg)
+		if !strings.Contains(li.Message, "CrossAxisAlignmentStretch used in Column with unbounded width") {
+			t.Errorf("panic message should mention Column and unbounded width, got: %s", li.Message)
 		}
 	}()
 
@@ -878,12 +879,12 @@ func TestScrollView_UnboundedMainAxis(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for ScrollView with unbounded height")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "Vertical ScrollView was given unbounded height") {
-			t.Errorf("panic message should mention Vertical ScrollView and unbounded height, got: %s", msg)
+		if !strings.Contains(li.Message, "Vertical ScrollView was given unbounded height") {
+			t.Errorf("panic message should mention Vertical ScrollView and unbounded height, got: %s", li.Message)
 		}
 	}()
 
@@ -910,12 +911,12 @@ func TestScrollView_UnboundedMainAxis_Horizontal(t *testing.T) {
 		if r == nil {
 			t.Fatal("expected panic for ScrollView with unbounded width")
 		}
-		msg, ok := r.(string)
+		li, ok := r.(errors.LayoutIssue)
 		if !ok {
-			t.Fatalf("expected string panic message, got %T: %v", r, r)
+			t.Fatalf("expected errors.LayoutIssue panic, got %T: %v", r, r)
 		}
-		if !strings.Contains(msg, "Horizontal ScrollView was given unbounded width") {
-			t.Errorf("panic message should mention Horizontal ScrollView and unbounded width, got: %s", msg)
+		if !strings.Contains(li.Message, "Horizontal ScrollView was given unbounded width") {
+			t.Errorf("panic message should mention Horizontal ScrollView and unbounded width, got: %s", li.Message)
 		}
 	}()
 

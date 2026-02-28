@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-drift/drift/pkg/animation"
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/gestures"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
@@ -172,7 +173,7 @@ func (r *renderScrollView) PerformLayout() {
 			axis = "width"
 			direction = "Horizontal"
 		}
-		panic(fmt.Sprintf(
+		panic(errors.LayoutIssue{Message: fmt.Sprintf(
 			"%s ScrollView was given unbounded %s.\n\n"+
 				"Scrollable widgets expand to fill their container in the scroll direction,\n"+
 				"so they require bounded constraints. This typically happens when:\n"+
@@ -182,7 +183,7 @@ func (r *renderScrollView) PerformLayout() {
 				"- Wrap the scrollable in Expanded{} to fill remaining space in the Column/Row\n"+
 				"- Wrap in a SizedBox with a fixed %s",
 			direction, axis, axis,
-		))
+		)})
 	}
 
 	size := graphics.Size{Width: constraints.MaxWidth, Height: constraints.MaxHeight}

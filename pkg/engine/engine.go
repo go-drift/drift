@@ -625,6 +625,9 @@ func (a *appRunner) recoverFromFramePanic() func() {
 				StackTrace: errors.CaptureStack(),
 				Timestamp:  time.Now(),
 			}
+			if _, ok := r.(errors.LayoutIssue); ok {
+				err.IsLayoutIssue = true
+			}
 			a.capturedError.Store(err)
 			errors.ReportBoundaryError(err)
 			if a.root != nil {
@@ -648,6 +651,9 @@ func (a *appRunner) HandlePointer(event PointerEvent) {
 					Recovered:  r,
 					StackTrace: errors.CaptureStack(),
 					Timestamp:  time.Now(),
+				}
+				if _, ok := r.(errors.LayoutIssue); ok {
+					err.IsLayoutIssue = true
 				}
 				a.capturedError.Store(err)
 				errors.ReportBoundaryError(err)

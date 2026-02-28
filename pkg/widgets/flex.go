@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
 )
@@ -366,7 +367,7 @@ func (r *renderFlex) PerformLayout() {
 			crossAxisName = "width"
 			containerType = "Column"
 		}
-		panic(fmt.Sprintf(
+		panic(errors.LayoutIssue{Message: fmt.Sprintf(
 			"CrossAxisAlignmentStretch used in %[1]s with unbounded %[2]s.\n\n"+
 				"Children cannot stretch to fill infinite space. This happens when:\n"+
 				"- The %[1]s is inside a ScrollView (which has unbounded %[2]s)\n"+
@@ -376,7 +377,7 @@ func (r *renderFlex) PerformLayout() {
 				"- Wrap the %[1]s in a SizedBox or Container with a fixed %[2]s\n"+
 				"- Ensure the parent provides bounded %[2]s constraints",
 			containerType, crossAxisName,
-		))
+		)})
 	}
 
 	// If the main axis is unbounded, Max is meaningless (there's no finite
@@ -416,7 +417,7 @@ func (r *renderFlex) PerformLayout() {
 			containerType = "Column"
 			mainAxisName = "height"
 		}
-		panic(fmt.Sprintf(
+		panic(errors.LayoutIssue{Message: fmt.Sprintf(
 			"Expanded/Flexible used in %[1]s with unbounded %[2]s.\n\n"+
 				"Flex children need a finite main axis to divide space. This happens when:\n"+
 				"- The %[1]s is inside a ScrollView (which has unbounded %[2]s)\n\n"+
@@ -424,7 +425,7 @@ func (r *renderFlex) PerformLayout() {
 				"- Remove Expanded/Flexible and use fixed-size widgets instead\n"+
 				"- Wrap the %[1]s in a SizedBox or Container with a fixed %[2]s",
 			containerType, mainAxisName,
-		))
+		)})
 	}
 
 	remaining := max(maxMain-mainSize, 0)
