@@ -223,6 +223,7 @@ func (e *StatelessElement) Mount(parent Element, slot any) {
 	}
 	e.renderParent = e.findRenderParent()
 	e.mounted = true
+	registerGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 	e.dirty = true
 	e.RebuildIfNeeded()
 }
@@ -233,6 +234,7 @@ func (e *StatelessElement) Update(newWidget Widget) {
 }
 
 func (e *StatelessElement) Unmount() {
+	unregisterGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 	e.mounted = false
 	if e.child != nil {
 		e.child.Unmount()
@@ -294,6 +296,7 @@ func (e *StatefulElement) Mount(parent Element, slot any) {
 		setter.SetElement(e)
 	}
 	e.state.InitState()
+	registerGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 	e.dirty = true
 	e.RebuildIfNeeded()
 }
@@ -306,6 +309,7 @@ func (e *StatefulElement) Update(newWidget Widget) {
 }
 
 func (e *StatefulElement) Unmount() {
+	unregisterGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 	e.mounted = false
 	if e.child != nil {
 		e.child.Unmount()
@@ -362,6 +366,7 @@ func (e *RenderObjectElement) Mount(parent Element, slot any) {
 		e.depth = parent.Depth() + 1
 	}
 	e.mounted = true
+	registerGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 
 	// Create render object
 	widget := e.widget.(RenderObjectWidget)
@@ -384,6 +389,7 @@ func (e *RenderObjectElement) Update(newWidget Widget) {
 }
 
 func (e *RenderObjectElement) Unmount() {
+	unregisterGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 	e.mounted = false
 
 	// Unmount children first (they detach their own render objects)

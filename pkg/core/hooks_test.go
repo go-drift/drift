@@ -144,3 +144,153 @@ func TestManaged_StructType(t *testing.T) {
 		t.Errorf("Expected age 31, got %d", state.Value().Age)
 	}
 }
+
+// --- UseObservableSelector tests ---
+
+type user struct {
+	Name string
+	Age  int
+}
+
+func TestUseObservableSelector_OnlyRebuildsOnSelectorChange(t *testing.T) {
+	// Use a second StateBase wrapping the first to count SetState calls.
+	// When selector output is unchanged, SetState should not be called.
+	base := &StateBase{}
+	obs := NewObservable(user{Name: "Alice", Age: 30})
+
+	setStateCalls := 0
+	// Register a disposer that we immediately remove, just to prove the
+	// mechanism works. Instead, count via an OnChange-style wrapper:
+	// We add a listener *after* the selector to count how many times
+	// the selector triggers a rebuild vs. the raw observable.
+	UseObservableSelector(base, obs, func(u user) string { return u.Name })
+
+	// Add a second listener that counts all observable fires
+	allFires := 0
+	obs.AddListener(func(u user) { allFires++ })
+
+	// Intercept MarkNeedsBuild by giving base a real element with a buildOwner
+	owner := NewBuildOwner()
+	elem := &StatefulElement{}
+	elem.buildOwner = owner
+	elem.self = elem
+	base.SetElement(elem)
+
+	// Change age only (Name stays "Alice"): selector output unchanged
+	obs.Set(user{Name: "Alice", Age: 31})
+	setStateCalls = countDirty(owner)
+
+	if setStateCalls != 0 {
+		t.Errorf("expected 0 rebuilds when selector unchanged, got %d", setStateCalls)
+	}
+
+	// Change name: selector output changes
+	obs.Set(user{Name: "Bob", Age: 31})
+	setStateCalls = countDirty(owner)
+
+	if setStateCalls != 1 {
+		t.Errorf("expected 1 rebuild when selector changed, got %d", setStateCalls)
+	}
+
+	if allFires != 2 {
+		t.Errorf("expected 2 total observable fires, got %d", allFires)
+	}
+}
+
+// countDirty returns the number of dirty elements and drains the list.
+func countDirty(owner *BuildOwner) int {
+	owner.mu.Lock()
+	n := len(owner.dirty)
+	owner.dirty = nil
+	clear(owner.dirtySet)
+	owner.mu.Unlock()
+	return n
+}
+
+func TestUseObservableSelector_DoesNotRebuildWhenSelectorSame(t *testing.T) {
+	base := &StateBase{}
+	obs := NewObservable(user{Name: "Alice", Age: 30})
+
+	selectorCalls := 0
+	UseObservableSelector(base, obs, func(u user) string {
+		selectorCalls++
+		return u.Name
+	})
+
+	// One call happens during setup to compute initial lastSelected
+	initialCalls := selectorCalls
+
+	// Change age but not name
+	obs.Set(user{Name: "Alice", Age: 99})
+
+	// Selector should have been called once more (to check new value)
+	if selectorCalls != initialCalls+1 {
+		t.Errorf("expected %d selector calls, got %d", initialCalls+1, selectorCalls)
+	}
+}
+
+func TestUseObservableSelector_Cleanup(t *testing.T) {
+	base := &StateBase{}
+	obs := NewObservable(user{Name: "Alice", Age: 30})
+
+	UseObservableSelector(base, obs, func(u user) string { return u.Name })
+
+	initialCount := obs.ListenerCount()
+	if initialCount < 1 {
+		t.Errorf("expected at least 1 listener, got %d", initialCount)
+	}
+
+	base.Dispose()
+
+	if obs.ListenerCount() != initialCount-1 {
+		t.Errorf("expected listener removed after dispose, got %d", obs.ListenerCount())
+	}
+}
+
+func TestUseObservableSelectorWithEquality(t *testing.T) {
+	base := &StateBase{}
+	obs := NewObservable([]string{"a", "b", "c"})
+
+	selectorCalls := 0
+	UseObservableSelectorWithEquality(base, obs, func(s []string) int {
+		selectorCalls++
+		return len(s)
+	}, func(a, b int) bool {
+		return a == b
+	})
+
+	initialCalls := selectorCalls
+
+	// Same length, different content: should not trigger rebuild
+	obs.Set([]string{"x", "y", "z"})
+	if selectorCalls != initialCalls+1 {
+		t.Errorf("expected %d selector calls, got %d", initialCalls+1, selectorCalls)
+	}
+}
+
+func TestUseObservableSelector_WithDerivedObservable(t *testing.T) {
+	base := &StateBase{}
+	src := NewObservable(user{Name: "Alice", Age: 30})
+	derived := Derive(func() user { return src.Value() }, src)
+	defer derived.Dispose()
+
+	selectorCalls := 0
+	UseObservableSelector(base, derived, func(u user) int {
+		selectorCalls++
+		return u.Age
+	})
+
+	initialCalls := selectorCalls
+
+	src.Set(user{Name: "Bob", Age: 30}) // age unchanged
+	if selectorCalls != initialCalls+1 {
+		t.Errorf("expected %d selector calls, got %d", initialCalls+1, selectorCalls)
+	}
+
+	src.Set(user{Name: "Bob", Age: 31}) // age changed
+	if selectorCalls != initialCalls+2 {
+		t.Errorf("expected %d selector calls, got %d", initialCalls+2, selectorCalls)
+	}
+
+	base.Dispose()
+}

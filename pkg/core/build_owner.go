@@ -9,16 +9,45 @@ import (
 
 // BuildOwner tracks dirty elements that need rebuilding.
 type BuildOwner struct {
-	dirty    []Element
-	dirtySet map[Element]bool
-	pipeline *layout.PipelineOwner
-	mu       sync.Mutex
+	dirty      []Element
+	dirtySet   map[Element]bool
+	pipeline   *layout.PipelineOwner
+	globalKeys map[any]Element
+	mu         sync.Mutex
 
 	// OnNeedsFrame is called when a new element is scheduled for rebuild,
 	// signalling the platform that a frame should be rendered. This is
 	// necessary for on-demand frame scheduling where the display link is
 	// paused until explicitly requested.
 	OnNeedsFrame func()
+}
+
+// RegisterGlobalKey associates a global key identity with an element in the
+// owner's registry. This is called automatically by the framework when an
+// element whose widget returns a [GlobalKey] is mounted. If a key is already
+// registered, the new element silently replaces the previous entry.
+//
+// The key parameter is the inner identity pointer obtained from
+// globalKeyRegistry.globalKeyImpl(), not the GlobalKey value itself.
+func (b *BuildOwner) RegisterGlobalKey(key any, element Element) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.globalKeys == nil {
+		b.globalKeys = make(map[any]Element)
+	}
+	b.globalKeys[key] = element
+}
+
+// UnregisterGlobalKey removes a global key registration, but only if the
+// currently registered element matches the provided element. This guard
+// prevents a stale unmount from removing a registration that has already been
+// claimed by a newly mounted element with the same key.
+func (b *BuildOwner) UnregisterGlobalKey(key any, element Element) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.globalKeys[key] == element {
+		delete(b.globalKeys, key)
+	}
 }
 
 // NewBuildOwner creates a new BuildOwner.

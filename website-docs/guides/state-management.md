@@ -182,19 +182,109 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
+## Derived Observable
+
+`DerivedObservable` is a read-only observable that recomputes its value automatically when any of its dependencies change. Use it when you have a value that is always a function of one or more other observables.
+
+```go
+type myState struct {
+    core.StateBase
+    firstName *core.Observable[string]
+    lastName  *core.Observable[string]
+    fullName  *core.DerivedObservable[string]
+}
+
+func (s *myState) InitState() {
+    s.firstName = core.NewObservable("John")
+    s.lastName = core.NewObservable("Doe")
+
+    // fullName recomputes whenever firstName or lastName changes
+    s.fullName = core.Derive(func() string {
+        return s.firstName.Value() + " " + s.lastName.Value()
+    }, s.firstName, s.lastName)
+}
+```
+
+`DerivedObservable` only notifies listeners when the computed value actually changes, so setting `firstName` to the same string twice will not fire listeners a second time.
+
+### Custom Equality
+
+By default, values are compared with Go's `==` operator. For non-comparable types (slices, maps), use `DeriveWithEquality`:
+
+```go
+tags := core.DeriveWithEquality(
+    func() []string { return buildTagList(source.Value()) },
+    slices.Equal,
+    source,
+)
+```
+
+### Chaining
+
+A `DerivedObservable` satisfies `Subscribable`, so it can serve as a dependency for another derived value:
+
+```go
+doubled := core.Derive(func() int { return src.Value() * 2 }, src)
+quadrupled := core.Derive(func() int { return doubled.Value() * 2 }, doubled)
+```
+
+### Lifecycle
+
+A `DerivedObservable` subscribes to its dependencies on creation. Call `Dispose()` to unsubscribe when you no longer need it. Inside a stateful widget, prefer `UseDerived` (see below) which handles disposal automatically.
+
 ## Hooks
 
-Hooks help manage subscriptions and controllers with automatic cleanup when the state is disposed.
+Hooks help manage subscriptions and controllers with automatic cleanup when the state is disposed. Call hooks once in `InitState()`, not in `Build()`.
 
 ### UseObservable
 
-Subscribe to an `Observable` and trigger rebuilds on change:
+Subscribe to an `Observable` (or `DerivedObservable`) and trigger rebuilds on change:
 
 ```go
 func (s *myState) InitState() {
     s.counter = core.NewObservable(0)
     core.UseObservable(s, s.counter)
 }
+```
+
+### UseDerived
+
+Create a `DerivedObservable`, subscribe to it for rebuilds, and auto-dispose it when the state is disposed. This combines `Derive` + `UseObservable` + `OnDispose` in one call:
+
+```go
+func (s *myState) InitState() {
+    s.firstName = core.NewObservable("John")
+    s.lastName = core.NewObservable("Doe")
+
+    s.fullName = core.UseDerived(s, func() string {
+        return s.firstName.Value() + " " + s.lastName.Value()
+    }, s.firstName, s.lastName)
+}
+
+func (s *myState) Build(ctx core.BuildContext) core.Widget {
+    return widgets.Text{Content: s.fullName.Value()}
+}
+```
+
+### UseObservableSelector
+
+Subscribe to an observable but only trigger rebuilds when a *selected portion* of the value changes. This is useful when the observable holds a large struct but the widget only cares about one field:
+
+```go
+func (s *myState) InitState() {
+    // Only rebuilds when user.Name changes, ignoring other field updates
+    core.UseObservableSelector(s, s.user, func(u User) string {
+        return u.Name
+    })
+}
+```
+
+For non-comparable selected types, use `UseObservableSelectorWithEquality`:
+
+```go
+core.UseObservableSelectorWithEquality(s, s.store, func(st Store) []string {
+    return st.Tags
+}, slices.Equal)
 ```
 
 ### UseListenable
@@ -442,8 +532,24 @@ s.SetState(func() { s.email = newEmail })
 s.SetState(func() { s.isValid = true })
 ```
 
+## Quick Reference
+
+| Tool | Thread-safe | Use case |
+|------|:-----------:|----------|
+| `SetState` | No | Simple local mutations |
+| `Managed[T]` | No | Single value with automatic rebuild |
+| `Observable[T]` | Yes | Shared reactive value with listener support |
+| `DerivedObservable[T]` | Yes | Computed value that tracks source observables |
+| `UseObservable` | - | Subscribe to Observable or DerivedObservable for rebuilds |
+| `UseDerived` | - | Create, subscribe, and auto-dispose a DerivedObservable |
+| `UseObservableSelector` | - | Subscribe but only rebuild when a selected slice changes |
+| `UseListenable` | - | Subscribe to any Listenable for rebuilds |
+| `UseController` | - | Create a controller with automatic disposal |
+| `InheritedProvider[T]` | - | Share data down the widget tree |
+
 ## Next Steps
 
 - [Layout](/docs/guides/layout) - Arranging widgets
 - [Theming](/docs/guides/theming) - Theming your app
+- [Widget Architecture](/docs/guides/widgets) - Keys, GlobalKey, and widget types
 - [API Reference](/docs/api/core) - Core API documentation

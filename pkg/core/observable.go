@@ -105,6 +105,15 @@ func (o *Observable[T]) AddListener(fn func(T)) func() {
 	}
 }
 
+// OnChange adds an untyped callback that fires when the value changes. Unlike
+// [Observable.AddListener], the callback receives no arguments; use
+// [Observable.Value] to read the new value if needed. This method satisfies
+// the [Subscribable] interface, allowing an Observable to serve as a
+// dependency for [Derive] and [UseDerived]. Returns an unsubscribe function.
+func (o *Observable[T]) OnChange(fn func()) func() {
+	return o.AddListener(func(T) { fn() })
+}
+
 // ListenerCount returns the number of registered listeners.
 func (o *Observable[T]) ListenerCount() int {
 	o.mu.RLock()

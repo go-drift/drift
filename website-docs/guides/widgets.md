@@ -44,6 +44,51 @@ When `nil` is fine:
 - Static children that never change
 - Stateless widgets (no state to preserve)
 
+### GlobalKey
+
+A `GlobalKey` is a special key that registers its element in a global registry, enabling cross-tree access to state and context. Use it when one widget needs to read or call methods on another widget's state without a direct parent-child relationship.
+
+```go
+// Declare at package level (or in a long-lived struct) so the identity persists.
+var formKey = core.NewGlobalKey[*formState]()
+
+type formWidget struct {
+    core.StatefulBase
+}
+
+func (w formWidget) Key() any              { return formKey }
+func (formWidget) CreateState() core.State { return &formState{} }
+
+type formState struct {
+    core.StateBase
+    // ...
+}
+
+func (s *formState) Validate() bool { /* ... */ return true }
+```
+
+From anywhere else in the app, without passing references through the tree:
+
+```go
+if state := formKey.CurrentState(); state != nil {
+    valid := state.Validate()
+}
+```
+
+`GlobalKey` provides three accessors:
+
+| Method | Returns |
+|--------|---------|
+| `CurrentState()` | The typed State (or zero value if unmounted / not stateful) |
+| `CurrentElement()` | The Element (or nil) |
+| `CurrentContext()` | The BuildContext (or nil) |
+
+Each `NewGlobalKey` call creates a distinct identity. Two widgets with different GlobalKeys will never be reconciled as the same widget.
+
+:::tip
+Prefer passing data through the tree (props, InheritedProvider) when possible. GlobalKey is best for imperative operations like triggering validation, scrolling, or focus on a specific widget instance.
+:::
+
 ## Widget Types
 
 Drift has three types of widgets:

@@ -57,6 +57,7 @@ func (e *InheritedElement) MountWithSelf(parent Element, slot any, self Element)
 	}
 	e.renderParent = e.findRenderParent()
 	e.mounted = true
+	registerGlobalKeyIfNeeded(e.widget, self, e.buildOwner)
 	e.dirty = true
 	e.rebuildWithSelf(self)
 }
@@ -95,6 +96,7 @@ func (e *InheritedElement) Update(newWidget Widget) {
 }
 
 func (e *InheritedElement) Unmount() {
+	unregisterGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
 	e.mounted = false
 	if e.child != nil {
 		e.child.Unmount()
