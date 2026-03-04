@@ -95,7 +95,7 @@ type StatefulWidget interface {
 // State lifecycle methods are called in this order:
 //  1. SetElement - Framework sets the element reference
 //  2. InitState - Called once when state is first created
-//  3. DidChangeDependencies - Called when inherited dependencies change
+//  3. DidChangeDependencies - Called after InitState and whenever inherited dependencies change
 //  4. Build - Called to create the widget tree (may be called many times)
 //  5. DidUpdateWidget - Called when parent rebuilds with new widget configuration
 //  6. Dispose - Called when the widget is permanently removed from the tree
@@ -120,8 +120,8 @@ type State interface {
 	// Dispose is called when the widget is permanently removed from the tree.
 	// Use this to release resources like stream subscriptions or controllers.
 	Dispose()
-	// DidChangeDependencies is called when an inherited dependency changes.
-	// Called after InitState and whenever an InheritedWidget ancestor notifies.
+	// DidChangeDependencies is called after InitState on initial mount,
+	// and again whenever an InheritedWidget ancestor notifies of changes.
 	DidChangeDependencies()
 	// DidUpdateWidget is called when the parent rebuilds with a new widget
 	// configuration. The old widget is passed for comparison.

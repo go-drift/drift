@@ -297,6 +297,7 @@ func (e *StatefulElement) Mount(parent Element, slot any) {
 	}
 	e.state.InitState()
 	registerGlobalKeyIfNeeded(e.widget, e.self, e.buildOwner)
+	e.state.DidChangeDependencies()
 	e.dirty = true
 	e.RebuildIfNeeded()
 }

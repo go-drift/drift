@@ -1077,3 +1077,72 @@ func TestInheritedElement_Update_NonAspectAware_NotifiesAll(t *testing.T) {
 		t.Error("expected dep2 to be marked dirty (non-aspect-aware notifies all)")
 	}
 }
+
+// lifecycleState tracks the order of lifecycle method calls.
+type lifecycleState struct {
+	StateBase
+	calls []string
+}
+
+func (s *lifecycleState) InitState() {
+	s.calls = append(s.calls, "InitState")
+}
+
+func (s *lifecycleState) DidChangeDependencies() {
+	s.calls = append(s.calls, "DidChangeDependencies")
+}
+
+func (s *lifecycleState) Build(ctx BuildContext) Widget {
+	s.calls = append(s.calls, "Build")
+	return nil
+}
+
+func TestStatefulElement_Mount_CallsDidChangeDependencies(t *testing.T) {
+	var state *lifecycleState
+	widget := testStatefulWidget{
+		createStateFn: func() State {
+			state = &lifecycleState{}
+			return state
+		},
+	}
+	owner := NewBuildOwner()
+	element := newTestStatefulElement(widget, owner)
+	element.self = element
+	element.Mount(nil, nil)
+
+	// DidChangeDependencies should be called exactly once during mount.
+	count := 0
+	for _, call := range state.calls {
+		if call == "DidChangeDependencies" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected DidChangeDependencies called once during mount, got %d times; calls: %v", count, state.calls)
+	}
+}
+
+func TestStatefulElement_Mount_LifecycleOrder(t *testing.T) {
+	var state *lifecycleState
+	widget := testStatefulWidget{
+		createStateFn: func() State {
+			state = &lifecycleState{}
+			return state
+		},
+	}
+	owner := NewBuildOwner()
+	element := newTestStatefulElement(widget, owner)
+	element.self = element
+	element.Mount(nil, nil)
+
+	// Lifecycle order must be: InitState, DidChangeDependencies, Build.
+	expected := []string{"InitState", "DidChangeDependencies", "Build"}
+	if len(state.calls) < len(expected) {
+		t.Fatalf("expected at least %d lifecycle calls, got %d: %v", len(expected), len(state.calls), state.calls)
+	}
+	for i, name := range expected {
+		if state.calls[i] != name {
+			t.Errorf("lifecycle call %d: expected %q, got %q; full order: %v", i, name, state.calls[i], state.calls)
+		}
+	}
+}
