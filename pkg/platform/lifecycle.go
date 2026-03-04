@@ -44,6 +44,35 @@ const (
 // LifecycleHandler is called when lifecycle state changes.
 type LifecycleHandler func(state LifecycleState)
 
+// disposable is satisfied by *core.StateBase via structural typing. Defined
+// here because platform cannot import core without creating a cycle. If more
+// platform hooks need this, consider extracting it into a shared leaf package.
+type disposable interface {
+	OnDispose(func()) func()
+}
+
+// UseLifecycleObserver subscribes to app lifecycle changes with automatic
+// cleanup. The handler is dispatched to the UI thread via [Dispatch] (or
+// called synchronously when no dispatch is registered, e.g. in tests).
+//
+// Call once in InitState, not in Build.
+//
+//	func (s *myState) InitState() {
+//	    platform.UseLifecycleObserver(s, func(state platform.LifecycleState) {
+//	        if state == platform.LifecycleStatePaused {
+//	            s.saveProgress()
+//	        }
+//	    })
+//	}
+func UseLifecycleObserver(s disposable, handler LifecycleHandler) {
+	unsub := Lifecycle.AddHandler(func(state LifecycleState) {
+		if !Dispatch(func() { handler(state) }) {
+			handler(state)
+		}
+	})
+	s.OnDispose(unsub)
+}
+
 func init() {
 	initLifecycleListeners()
 	registerBuiltinInit(initLifecycleListeners)

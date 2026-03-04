@@ -19,6 +19,29 @@ func UseController[C Disposable](s stateBase, create func() C) C {
 	return controller
 }
 
+// UseSubscription registers a subscribe/unsubscribe pair with automatic cleanup.
+// The subscribe function is called immediately and must return an unsubscribe
+// function. That unsubscribe function runs automatically when the state is
+// disposed (in LIFO order along with other disposers).
+//
+// Call this once in InitState, not in Build.
+//
+// UseSubscription is a general-purpose building block for any service that
+// follows the "subscribe returns unsubscribe" pattern:
+//
+//	func (s *myState) InitState() {
+//	    core.UseSubscription(s, func() func() {
+//	        return eventBus.Subscribe("user.updated", func(e Event) {
+//	            s.SetState(func() { s.user = e.Payload.(User) })
+//	        })
+//	    })
+//	}
+func UseSubscription(s stateBase, subscribe func() func()) {
+	base := s.state()
+	unsub := subscribe()
+	base.OnDispose(unsub)
+}
+
 // UseListenable subscribes to a listenable and triggers rebuilds.
 // The subscription is automatically cleaned up when the state is disposed.
 //

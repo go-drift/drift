@@ -579,6 +579,7 @@ s.SetState(func() { s.isValid = true })
 |------|----------|
 | `UseController` | Create a controller with automatic disposal |
 | `UseListenable` | Subscribe to any Listenable for rebuilds |
+| `UseSubscription` | Auto-cleanup any subscribe/unsubscribe pair |
 
 ### Reactive state
 

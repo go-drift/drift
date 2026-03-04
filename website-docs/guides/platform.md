@@ -71,11 +71,11 @@ platform.Haptics.Vibrate(100)
 
 ## App Lifecycle
 
-Respond to app lifecycle state changes:
+Respond to app lifecycle state changes using `UseLifecycleObserver`. The handler is automatically cleaned up when the state is disposed, and always runs on the UI thread via `Dispatch`:
 
 ```go
 func (s *myState) InitState() {
-    removeHandler := platform.Lifecycle.AddHandler(func(state platform.LifecycleState) {
+    platform.UseLifecycleObserver(s, func(state platform.LifecycleState) {
         switch state {
         case platform.LifecycleStateResumed:
             // App came to foreground
@@ -89,10 +89,16 @@ func (s *myState) InitState() {
             // App is detached from any view
         }
     })
-
-    // Clean up when widget is disposed
-    s.OnDispose(removeHandler)
 }
+```
+
+For advanced use cases (e.g., subscribing outside a stateful widget), you can use `AddHandler` and `OnDispose` manually:
+
+```go
+removeHandler := platform.Lifecycle.AddHandler(func(state platform.LifecycleState) {
+    // handle state change
+})
+s.OnDispose(removeHandler)
 ```
 
 ### Lifecycle States

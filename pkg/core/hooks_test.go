@@ -11,6 +11,31 @@ func (m *mockDisposable) Dispose() {
 	m.disposed = true
 }
 
+func TestUseSubscription(t *testing.T) {
+	base := &StateBase{}
+
+	subscribed := false
+	unsubscribed := false
+
+	UseSubscription(base, func() func() {
+		subscribed = true
+		return func() { unsubscribed = true }
+	})
+
+	if !subscribed {
+		t.Error("subscribe should be called immediately")
+	}
+	if unsubscribed {
+		t.Error("unsubscribe should not be called before dispose")
+	}
+
+	base.Dispose()
+
+	if !unsubscribed {
+		t.Error("unsubscribe should be called on dispose")
+	}
+}
+
 func TestUseController(t *testing.T) {
 	base := &StateBase{}
 
