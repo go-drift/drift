@@ -569,17 +569,56 @@ func App() core.Widget {
         },
     }
 }
+```
 
-func buildHomeScreen(ctx core.BuildContext) core.Widget {
-    return HomeScreen{}
-}
+Each screen is a regular widget (the `buildProfileScreen` follows the same pattern). For a stateless screen, embed `StatelessBase` and implement `Build`:
 
+```go
 func buildSearchScreen(ctx core.BuildContext) core.Widget {
-    return SearchScreen{}
+    return searchScreen{}
 }
 
-func buildProfileScreen(ctx core.BuildContext) core.Widget {
-    return ProfileScreen{}
+type searchScreen struct {
+    core.StatelessBase
+}
+
+func (s searchScreen) Build(ctx core.BuildContext) core.Widget {
+    return widgets.Text{Content: "Search"}
+}
+```
+
+For a stateful screen, embed `StatefulBase` in the widget and `StateBase` in a separate state struct (see [Widgets guide](./widgets.md) for details):
+
+```go
+func buildHomeScreen(ctx core.BuildContext) core.Widget {
+    return homeScreen{}
+}
+
+type homeScreen struct {
+    core.StatefulBase
+}
+
+func (homeScreen) CreateState() core.State {
+    return &homeScreenState{}
+}
+
+type homeScreenState struct {
+    core.StateBase
+    items []string
+}
+
+func (s *homeScreenState) InitState() {
+    for i := range 30 {
+        s.items = append(s.items, fmt.Sprintf("Item %d", i))
+    }
+}
+
+func (s *homeScreenState) Build(ctx core.BuildContext) core.Widget {
+    children := make([]core.Widget, len(s.items))
+    for i, item := range s.items {
+        children[i] = widgets.Text{Content: item}
+    }
+    return widgets.ListView{Children: children}
 }
 ```
 
