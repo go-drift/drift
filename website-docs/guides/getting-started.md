@@ -105,6 +105,29 @@ func App() core.Widget {
 }
 ```
 
+### Adding Initialization
+
+If your app needs to run async setup before the UI appears (opening a database, loading config), use `OnInit`:
+
+```go
+import "context"
+
+func main() {
+    app := drift.NewApp(App())
+    app.OnInit = func(ctx context.Context) error {
+        // Runs in a background goroutine before widgets mount.
+        // The splash screen stays visible until this returns.
+        return loadConfig()
+    }
+    app.OnDispose = func() {
+        closeResources()
+    }
+    app.Run()
+}
+```
+
+See [App-Level Init and Dispose](/docs/guides/platform#app-level-init-and-dispose) for details.
+
 ## 3. Run Your App {#run-your-app}
 
 Choose your target platform:

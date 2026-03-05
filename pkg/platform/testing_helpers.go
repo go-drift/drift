@@ -19,3 +19,9 @@ func SetupTestBridge(cleanup func(func())) {
 	RegisterDispatch(func(cb func()) { cb() })
 	cleanup(ResetForTest)
 }
+
+// SetStateForTest updates the lifecycle state and notifies handlers.
+// Use only in tests.
+func (l *LifecycleService) SetStateForTest(state LifecycleState) {
+	l.updateState(state)
+}

@@ -71,6 +71,47 @@ platform.Haptics.Vibrate(100)
 
 ## App Lifecycle
 
+### App-Level Init and Dispose
+
+Use `OnInit` and `OnDispose` on `drift.App` to run one-time setup and teardown at the application level, outside the widget tree. `OnInit` runs in a background goroutine before the root widget is mounted. While it executes, the platform's native splash screen stays visible.
+
+```go
+app := drift.NewApp(root)
+app.OnInit = func(ctx context.Context) error {
+    db, err := sql.Open("sqlite3", dbPath)
+    if err != nil {
+        return err
+    }
+    appDB = db
+    return nil
+}
+app.OnDispose = func() {
+    appDB.Close()
+}
+app.Run()
+```
+
+If `OnInit` returns an error, a debug error screen is shown instead of the root widget. The user can tap "Restart" to retry with the normal root widget (OnInit does not re-run on restart).
+
+The `ctx` passed to `OnInit` is cancelled before `OnDispose` runs, so long-running initialization can select on `ctx.Done()` for clean shutdown:
+
+```go
+app.OnInit = func(ctx context.Context) error {
+    select {
+    case <-ctx.Done():
+        return ctx.Err()
+    case result := <-loadConfig():
+        return result.Err
+    }
+}
+```
+
+:::tip When to use OnInit vs InitState
+Use `OnInit` for work that must complete before any widget mounts: opening databases, loading configuration, restoring authentication tokens. Use `InitState` in a stateful widget for setup that belongs to a specific screen or component.
+:::
+
+### Widget-Level Lifecycle Observation
+
 Respond to app lifecycle state changes using `UseLifecycleObserver`. The handler is automatically cleaned up when the state is disposed, and always runs on the UI thread via `Dispatch`:
 
 ```go

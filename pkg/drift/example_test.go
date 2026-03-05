@@ -1,6 +1,8 @@
 package drift_test
 
 import (
+	"context"
+
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -28,6 +30,25 @@ func ExampleApp_withTheme() {
 		Root:        root,
 		Theme:       theme.DefaultDarkTheme(),
 		DeviceScale: 2.0, // For high-DPI displays
+	}
+	_ = app
+}
+
+// This example shows how to run async setup before the widget tree mounts.
+// OnInit runs in a background goroutine; the splash screen stays visible until it completes.
+// OnDispose runs when the app is detached.
+func ExampleApp_withOnInit() {
+	root := widgets.Center{
+		Child: widgets.Text{Content: "My App"},
+	}
+
+	app := drift.NewApp(root)
+	app.OnInit = func(ctx context.Context) error {
+		// Open database, load config, restore auth, etc.
+		return nil
+	}
+	app.OnDispose = func() {
+		// Close database, flush caches, etc.
 	}
 	_ = app
 }

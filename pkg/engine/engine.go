@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"sync"
@@ -120,9 +121,10 @@ func NeedsFrame() bool {
 }
 
 func (a *appRunner) needsFrameLocked() bool {
-	// Need frame for initial render (root not yet created)
+	// Need frame for initial render (root not yet created),
+	// but not while OnInit is running (we wait for the dispatch callback)
 	if a.root == nil {
-		return true
+		return a.lifecycle.phase != initPhaseRunning
 	}
 	// Need frame if there are pending dispatch callbacks
 	a.dispatchMu.Lock()
@@ -306,6 +308,9 @@ func RestartApp() {
 		app.capturedError.Store(nil)
 		app.errorScreenMounted = false
 
+		// If init failed, skip to done so restart doesn't re-run OnInit
+		app.lifecycle.resetFailure()
+
 		// Unmount existing tree
 		if app.root != nil {
 			app.root.Unmount()
@@ -354,6 +359,9 @@ type appRunner struct {
 	treeCountFrame        int
 	cachedRenderNodeCount int
 	cachedWidgetNodeCount int
+
+	// App init/dispose lifecycle
+	lifecycle appInit
 }
 
 func init() {
@@ -365,6 +373,14 @@ func init() {
 	widgets.RegisterRestartAppFn(RestartApp)
 	// Wire up frame scheduling so SetState triggers a render under on-demand scheduling
 	app.buildOwner.OnNeedsFrame = RequestFrame
+	// Run OnDispose when the platform detaches
+	platform.Lifecycle.AddHandler(func(state platform.LifecycleState) {
+		if state == platform.LifecycleStateDetached {
+			frameLock.Lock()
+			defer frameLock.Unlock()
+			app.lifecycle.runDispose()
+		}
+	})
 }
 
 func newAppRunner() *appRunner {
@@ -398,6 +414,27 @@ func (a *appRunner) setUserApp(root core.Widget) {
 	if a.root != nil {
 		a.root.MarkNeedsBuild()
 	}
+}
+
+// SetOnInit registers a callback that runs in a background goroutine before
+// the root widget is mounted. While it executes, the platform's native splash
+// screen remains visible. A nil return mounts the root widget on the next
+// frame. A non-nil return shows a [widgets.DebugErrorScreen].
+func SetOnInit(fn func(ctx context.Context) error) {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+	app.lifecycle.onInit = fn
+	app.lifecycle.phase = initPhasePending
+	app.lifecycle.ctx, app.lifecycle.cancel = context.WithCancel(context.Background())
+}
+
+// SetOnDispose registers a callback that runs once when the app lifecycle
+// reaches [platform.LifecycleStateDetached]. If OnInit was set, its context
+// is cancelled before OnDispose runs.
+func SetOnDispose(fn func()) {
+	frameLock.Lock()
+	defer frameLock.Unlock()
+	app.lifecycle.dispose = fn
 }
 
 func (a *appRunner) dispatch(callback func()) {
@@ -527,8 +564,15 @@ func (a *appRunner) runPipeline(size graphics.Size, traceSample *FrameSample) bo
 	}
 	a.updateFPS()
 
-	// Mount root
+	// Mount root (deferred while OnInit is Pending or Running)
 	if a.root == nil {
+		if a.lifecycle.start(Dispatch) || a.lifecycle.phase == initPhaseRunning {
+			return false
+		}
+		if err := a.lifecycle.initError(); err != nil {
+			a.capturedError.Store(err)
+		}
+
 		rootWidget := widgets.Root(engineApp{runner: a})
 		a.root = core.MountRoot(rootWidget, a.buildOwner)
 		if renderElement, ok := a.root.(interface{ RenderObject() layout.RenderObject }); ok {
@@ -1107,13 +1151,15 @@ func (a *appRunner) RenderFrame(canvas graphics.Canvas) error {
 	frameLock.Lock()
 	defer frameLock.Unlock()
 
+	canvas.Clear(graphics.Color(backgroundColor.Load()))
+
 	if a.rootRender == nil {
-		return fmt.Errorf("RenderFrame called before root render tree is available")
+		// No render tree yet (e.g. OnInit still running). The canvas has
+		// been cleared to the background color; nothing else to draw.
+		return nil
 	}
 
 	scale := a.deviceScale
-
-	canvas.Clear(graphics.Color(backgroundColor.Load()))
 	canvas.Save()
 	canvas.Scale(scale, scale)
 

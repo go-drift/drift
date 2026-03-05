@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/go-drift/drift/pkg/drift"
 )
 
@@ -13,5 +16,12 @@ func main() {
 	// 	ShowLayoutBounds: false,
 	// 	DebugServerPort:  9999,
 	// }
+	app.OnInit = func(ctx context.Context) error {
+		fmt.Println("App OnInit")
+		return nil
+	}
+	app.OnDispose = func() {
+		fmt.Println("App OnDispose")
+	}
 	app.Run()
 }
