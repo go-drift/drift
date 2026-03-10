@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"maps"
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
@@ -22,17 +23,21 @@ func buildStoragePage(_ core.BuildContext) core.Widget { return storagePage{} }
 
 type storageState struct {
 	core.StateBase
-	statusText   *core.Managed[string]
-	selectedFile *core.Managed[*platform.PickedFile]
-	selectedPath *core.Managed[string]
-	appDirs      *core.Managed[map[string]string]
+	statusText   *core.Signal[string]
+	selectedFile *core.Signal[*platform.PickedFile]
+	selectedPath *core.Signal[string]
+	appDirs      *core.Signal[map[string]string]
 }
 
 func (s *storageState) InitState() {
-	s.statusText = core.NewManaged(s, "Tap a button to pick files or directories.")
-	s.selectedFile = core.NewManaged[*platform.PickedFile](s, nil)
-	s.selectedPath = core.NewManaged(s, "")
-	s.appDirs = core.NewManaged(s, make(map[string]string))
+	s.statusText = core.NewSignal("Tap a button to pick files or directories.")
+	s.selectedFile = core.NewSignal[*platform.PickedFile](nil)
+	s.selectedPath = core.NewSignal("")
+	s.appDirs = core.NewSignalWithEquality(make(map[string]string), maps.Equal)
+	core.UseListenable(s, s.statusText)
+	core.UseListenable(s, s.selectedFile)
+	core.UseListenable(s, s.selectedPath)
+	core.UseListenable(s, s.appDirs)
 
 	// Get app directories
 	go func() {

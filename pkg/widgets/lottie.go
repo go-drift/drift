@@ -140,11 +140,9 @@ func (s *lottieState) InitState() {
 	if w.Source != nil {
 		dur := w.Source.Duration()
 		if dur > 0 {
-			s.ownController = core.UseController(s, func() *animation.AnimationController {
-				c := animation.NewAnimationController(dur)
-				c.Curve = animation.LinearCurve
-				return c
-			})
+			s.ownController = animation.NewAnimationController(dur)
+			s.ownController.Curve = animation.LinearCurve
+			core.UseDisposable(s, s.ownController)
 			s.ownController.AddStatusListener(func(status animation.AnimationStatus) {
 				s.onStatus(status)
 			})

@@ -20,17 +20,20 @@ func buildSecureStoragePage(_ core.BuildContext) core.Widget { return secureStor
 
 type secureStorageState struct {
 	core.StateBase
-	statusText      *core.Managed[string]
-	biometricStatus *core.Managed[string]
-	storedValue     *core.Managed[string]
+	statusText      *core.Signal[string]
+	biometricStatus *core.Signal[string]
+	storedValue     *core.Signal[string]
 	keyController   *platform.TextEditingController
 	valueController *platform.TextEditingController
 }
 
 func (s *secureStorageState) InitState() {
-	s.statusText = core.NewManaged(s, "Enter a key and value to store securely.")
-	s.biometricStatus = core.NewManaged(s, "Checking biometric availability...")
-	s.storedValue = core.NewManaged(s, "")
+	s.statusText = core.NewSignal("Enter a key and value to store securely.")
+	s.biometricStatus = core.NewSignal("Checking biometric availability...")
+	s.storedValue = core.NewSignal("")
+	core.UseListenable(s, s.statusText)
+	core.UseListenable(s, s.biometricStatus)
+	core.UseListenable(s, s.storedValue)
 	s.keyController = platform.NewTextEditingController("demo_key")
 	s.valueController = platform.NewTextEditingController("secret_value_123")
 

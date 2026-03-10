@@ -1,8 +1,11 @@
 package core
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
-// MockDisposable for testing UseController
+// MockDisposable for testing UseDisposable
 type mockDisposable struct {
 	disposed bool
 }
@@ -11,37 +14,11 @@ func (m *mockDisposable) Dispose() {
 	m.disposed = true
 }
 
-func TestUseSubscription(t *testing.T) {
+func TestUseDisposable(t *testing.T) {
 	base := &StateBase{}
 
-	subscribed := false
-	unsubscribed := false
-
-	UseSubscription(base, func() func() {
-		subscribed = true
-		return func() { unsubscribed = true }
-	})
-
-	if !subscribed {
-		t.Error("subscribe should be called immediately")
-	}
-	if unsubscribed {
-		t.Error("unsubscribe should not be called before dispose")
-	}
-
-	base.Dispose()
-
-	if !unsubscribed {
-		t.Error("unsubscribe should be called on dispose")
-	}
-}
-
-func TestUseController(t *testing.T) {
-	base := &StateBase{}
-
-	controller := UseController(base, func() *mockDisposable {
-		return &mockDisposable{}
-	})
+	controller := &mockDisposable{}
+	UseDisposable(base, controller)
 
 	if controller.disposed {
 		t.Error("Controller should not be disposed initially")
@@ -56,12 +33,10 @@ func TestUseController(t *testing.T) {
 
 func TestUseListenable(t *testing.T) {
 	base := &StateBase{}
-	notifier := NewNotifier()
+	notifier := &Notifier{}
 
 	UseListenable(base, notifier)
 
-	// We can't easily test SetState being called without a real element,
-	// but we can verify the subscription is set up
 	if notifier.ListenerCount() != 1 {
 		t.Errorf("Expected 1 listener, got %d", notifier.ListenerCount())
 	}
@@ -73,126 +48,85 @@ func TestUseListenable(t *testing.T) {
 	}
 }
 
-func TestUseObservable(t *testing.T) {
+func TestUseListenable_WithSignal(t *testing.T) {
 	base := &StateBase{}
-	obs := NewObservable(42)
+	sig := NewSignal(42)
 
-	UseObservable(base, obs)
+	UseListenable(base, sig)
 
 	// Verify we can read the value
-	if obs.Value() != 42 {
-		t.Errorf("Expected 42, got %d", obs.Value())
+	if sig.Value() != 42 {
+		t.Errorf("Expected 42, got %d", sig.Value())
 	}
 
-	// Verify listener was registered (observable should trigger rebuild on change)
-	obs.Set(100)
+	// Verify listener was registered (signal should trigger rebuild on change)
+	sig.Set(100)
 	// SetState was called (can't easily verify without element, but no panic = good)
 }
 
-func TestUseObservable_Cleanup(t *testing.T) {
+func TestUseListenable_WithSignal_Cleanup(t *testing.T) {
 	base := &StateBase{}
-	obs := NewObservable(0)
+	sig := NewSignal(0)
 
-	UseObservable(base, obs)
+	UseListenable(base, sig)
 
 	base.Dispose()
 
-	// After dispose, setting the observable should not panic
-	obs.Set(999)
+	// After dispose, setting the signal should not panic
+	sig.Set(999)
 }
 
-func TestManaged_Value(t *testing.T) {
+func TestUseDerivedWithEquality(t *testing.T) {
 	base := &StateBase{}
-	state := NewManaged(base, 42)
+	src := NewSignalWithEquality([]string{"a", "b"}, slices.Equal)
 
-	if state.Value() != 42 {
-		t.Errorf("Expected 42, got %d", state.Value())
+	d := UseDerivedWithEquality(base, func() []string {
+		return src.Value()
+	}, slices.Equal, src)
+
+	if !slices.Equal(d.Value(), []string{"a", "b"}) {
+		t.Errorf("expected [a b], got %v", d.Value())
+	}
+
+	// Same content, different slice: should not notify
+	callCount := 0
+	d.AddListener(func() { callCount++ })
+	src.Set([]string{"a", "b"})
+	if callCount != 0 {
+		t.Errorf("expected 0 notifications for equal slice, got %d", callCount)
+	}
+
+	// Different content: should notify
+	src.Set([]string{"a", "b", "c"})
+	if callCount != 1 {
+		t.Errorf("expected 1 notification for changed slice, got %d", callCount)
+	}
+
+	// Dispose should clean up
+	base.Dispose()
+	src.Set([]string{"x"})
+	if callCount != 1 {
+		t.Errorf("expected no further notifications after dispose, got %d", callCount)
 	}
 }
 
-func TestManaged_Set(t *testing.T) {
-	base := &StateBase{}
-	state := NewManaged(base, 0)
-
-	state.Set(100)
-
-	if state.Value() != 100 {
-		t.Errorf("Expected 100, got %d", state.Value())
-	}
-}
-
-func TestManaged_Update(t *testing.T) {
-	base := &StateBase{}
-	state := NewManaged(base, 10)
-
-	state.Update(func(v int) int { return v * 2 })
-
-	if state.Value() != 20 {
-		t.Errorf("Expected 20, got %d", state.Value())
-	}
-}
-
-func TestManaged_StringType(t *testing.T) {
-	base := &StateBase{}
-	state := NewManaged(base, "hello")
-
-	if state.Value() != "hello" {
-		t.Errorf("Expected 'hello', got '%s'", state.Value())
-	}
-
-	state.Set("world")
-
-	if state.Value() != "world" {
-		t.Errorf("Expected 'world', got '%s'", state.Value())
-	}
-}
-
-func TestManaged_StructType(t *testing.T) {
-	type Person struct {
-		Name string
-		Age  int
-	}
-
-	base := &StateBase{}
-	state := NewManaged(base, Person{Name: "Alice", Age: 30})
-
-	if state.Value().Name != "Alice" || state.Value().Age != 30 {
-		t.Errorf("Unexpected struct value: %+v", state.Value())
-	}
-
-	state.Update(func(p Person) Person {
-		p.Age++
-		return p
-	})
-
-	if state.Value().Age != 31 {
-		t.Errorf("Expected age 31, got %d", state.Value().Age)
-	}
-}
-
-// --- UseObservableSelector tests ---
+// --- UseSelector tests ---
 
 type user struct {
 	Name string
 	Age  int
 }
 
-func TestUseObservableSelector_OnlyRebuildsOnSelectorChange(t *testing.T) {
-	// Use a second StateBase wrapping the first to count SetState calls.
-	// When selector output is unchanged, SetState should not be called.
+func TestUseSelector_OnlyRebuildsOnSelectorChange(t *testing.T) {
 	base := &StateBase{}
-	obs := NewObservable(user{Name: "Alice", Age: 30})
+	sig := NewSignal(user{Name: "Alice", Age: 30})
 
 	setStateCalls := 0
-	// Register a disposer that we immediately remove, just to prove the
-	// mechanism works. Instead, count via an OnChange-style wrapper:
-	// We add a listener *after* the selector to count how many times
-	// the selector triggers a rebuild vs. the raw observable.
-	UseObservableSelector(base, obs, func(u user) string { return u.Name })
+	UseSelector(base, sig, func() string { return sig.Value().Name })
 
-	// Add a second listener that counts all observable fires
+	// Add a second listener that counts all signal fires
 	allFires := 0
-	obs.AddListener(func(u user) { allFires++ })
+	sig.AddListener(func() { allFires++ })
 
 	// Intercept MarkNeedsBuild by giving base a real element with a buildOwner
 	owner := NewBuildOwner()
@@ -202,7 +136,7 @@ func TestUseObservableSelector_OnlyRebuildsOnSelectorChange(t *testing.T) {
 	base.SetElement(elem)
 
 	// Change age only (Name stays "Alice"): selector output unchanged
-	obs.Set(user{Name: "Alice", Age: 31})
+	sig.Set(user{Name: "Alice", Age: 31})
 	setStateCalls = countDirty(owner)
 
 	if setStateCalls != 0 {
@@ -210,7 +144,7 @@ func TestUseObservableSelector_OnlyRebuildsOnSelectorChange(t *testing.T) {
 	}
 
 	// Change name: selector output changes
-	obs.Set(user{Name: "Bob", Age: 31})
+	sig.Set(user{Name: "Bob", Age: 31})
 	setStateCalls = countDirty(owner)
 
 	if setStateCalls != 1 {
@@ -218,7 +152,7 @@ func TestUseObservableSelector_OnlyRebuildsOnSelectorChange(t *testing.T) {
 	}
 
 	if allFires != 2 {
-		t.Errorf("expected 2 total observable fires, got %d", allFires)
+		t.Errorf("expected 2 total signal fires, got %d", allFires)
 	}
 }
 
@@ -232,21 +166,21 @@ func countDirty(owner *BuildOwner) int {
 	return n
 }
 
-func TestUseObservableSelector_DoesNotRebuildWhenSelectorSame(t *testing.T) {
+func TestUseSelector_DoesNotRebuildWhenSelectorSame(t *testing.T) {
 	base := &StateBase{}
-	obs := NewObservable(user{Name: "Alice", Age: 30})
+	sig := NewSignal(user{Name: "Alice", Age: 30})
 
 	selectorCalls := 0
-	UseObservableSelector(base, obs, func(u user) string {
+	UseSelector(base, sig, func() string {
 		selectorCalls++
-		return u.Name
+		return sig.Value().Name
 	})
 
 	// One call happens during setup to compute initial lastSelected
 	initialCalls := selectorCalls
 
 	// Change age but not name
-	obs.Set(user{Name: "Alice", Age: 99})
+	sig.Set(user{Name: "Alice", Age: 99})
 
 	// Selector should have been called once more (to check new value)
 	if selectorCalls != initialCalls+1 {
@@ -254,32 +188,32 @@ func TestUseObservableSelector_DoesNotRebuildWhenSelectorSame(t *testing.T) {
 	}
 }
 
-func TestUseObservableSelector_Cleanup(t *testing.T) {
+func TestUseSelector_Cleanup(t *testing.T) {
 	base := &StateBase{}
-	obs := NewObservable(user{Name: "Alice", Age: 30})
+	sig := NewSignal(user{Name: "Alice", Age: 30})
 
-	UseObservableSelector(base, obs, func(u user) string { return u.Name })
+	UseSelector(base, sig, func() string { return sig.Value().Name })
 
-	initialCount := obs.ListenerCount()
+	initialCount := sig.ListenerCount()
 	if initialCount < 1 {
 		t.Errorf("expected at least 1 listener, got %d", initialCount)
 	}
 
 	base.Dispose()
 
-	if obs.ListenerCount() != initialCount-1 {
-		t.Errorf("expected listener removed after dispose, got %d", obs.ListenerCount())
+	if sig.ListenerCount() != initialCount-1 {
+		t.Errorf("expected listener removed after dispose, got %d", sig.ListenerCount())
 	}
 }
 
-func TestUseObservableSelectorWithEquality(t *testing.T) {
+func TestUseSelectorWithEquality(t *testing.T) {
 	base := &StateBase{}
-	obs := NewObservable([]string{"a", "b", "c"})
+	sig := NewSignalWithEquality([]string{"a", "b", "c"}, slices.Equal)
 
 	selectorCalls := 0
-	UseObservableSelectorWithEquality(base, obs, func(s []string) int {
+	UseSelectorWithEquality(base, sig, func() int {
 		selectorCalls++
-		return len(s)
+		return len(sig.Value())
 	}, func(a, b int) bool {
 		return a == b
 	})
@@ -287,22 +221,22 @@ func TestUseObservableSelectorWithEquality(t *testing.T) {
 	initialCalls := selectorCalls
 
 	// Same length, different content: should not trigger rebuild
-	obs.Set([]string{"x", "y", "z"})
+	sig.Set([]string{"x", "y", "z"})
 	if selectorCalls != initialCalls+1 {
 		t.Errorf("expected %d selector calls, got %d", initialCalls+1, selectorCalls)
 	}
 }
 
-func TestUseObservableSelector_WithDerivedObservable(t *testing.T) {
+func TestUseSelector_WithDerived(t *testing.T) {
 	base := &StateBase{}
-	src := NewObservable(user{Name: "Alice", Age: 30})
-	derived := Derive(func() user { return src.Value() }, src)
+	src := NewSignal(user{Name: "Alice", Age: 30})
+	derived := NewDerived(func() user { return src.Value() }, src)
 	defer derived.Dispose()
 
 	selectorCalls := 0
-	UseObservableSelector(base, derived, func(u user) int {
+	UseSelector(base, derived, func() int {
 		selectorCalls++
-		return u.Age
+		return derived.Value().Age
 	})
 
 	initialCalls := selectorCalls

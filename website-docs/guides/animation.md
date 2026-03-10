@@ -79,9 +79,8 @@ type myState struct {
 
 func (s *myState) InitState() {
     // Create controller with duration
-    s.controller = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(300 * time.Millisecond)
-    })
+    s.controller = animation.NewAnimationController(300 * time.Millisecond)
+    core.UseDisposable(s, s.controller)
 
     // Subscribe to value changes
     core.UseListenable(s, s.controller)
@@ -210,15 +209,12 @@ type staggeredState struct {
 }
 
 func (s *staggeredState) InitState() {
-    s.controller1 = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(200 * time.Millisecond)
-    })
-    s.controller2 = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(200 * time.Millisecond)
-    })
-    s.controller3 = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(200 * time.Millisecond)
-    })
+    s.controller1 = animation.NewAnimationController(200 * time.Millisecond)
+    core.UseDisposable(s, s.controller1)
+    s.controller2 = animation.NewAnimationController(200 * time.Millisecond)
+    core.UseDisposable(s, s.controller2)
+    s.controller3 = animation.NewAnimationController(200 * time.Millisecond)
+    core.UseDisposable(s, s.controller3)
 
     core.UseListenable(s, s.controller1)
     core.UseListenable(s, s.controller2)
@@ -280,9 +276,8 @@ type fadeInState struct {
 }
 
 func (s *fadeInState) InitState() {
-    s.controller = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(300 * time.Millisecond)
-    })
+    s.controller = animation.NewAnimationController(300 * time.Millisecond)
+    core.UseDisposable(s, s.controller)
     core.UseListenable(s, s.controller)
 
     // Start animation immediately
@@ -327,7 +322,7 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 ```
 
 :::tip
-`UseController` and `UseListenable` are documented in the [State Management](/docs/guides/state-management#hooks) guide.
+`UseDisposable` and `UseListenable` are documented in the [State Management](/docs/guides/state-management#hooks) guide.
 :::
 
 ## Next Steps

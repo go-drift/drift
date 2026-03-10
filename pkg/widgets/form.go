@@ -294,7 +294,7 @@ type formScope struct {
 
 func (f formScope) ChildWidget() core.Widget { return f.child }
 
-func (f formScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (f formScope) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(formScope); ok {
 		return f.generation != old.generation
 	}

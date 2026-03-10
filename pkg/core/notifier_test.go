@@ -5,71 +5,72 @@ import (
 	"testing"
 )
 
-func TestControllerBase_AddListener(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_AddListener(t *testing.T) {
+	c := &Notifier{}
 
 	called := false
 	c.AddListener(func() {
 		called = true
 	})
 
-	c.NotifyListeners()
+	c.Notify()
 
 	if !called {
-		t.Error("Listener should be called on NotifyListeners")
+		t.Error("Listener should be called on Notify")
 	}
 }
 
-func TestControllerBase_AddListener_Unsubscribe(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_AddListener_Unsubscribe(t *testing.T) {
+	c := &Notifier{}
 
 	callCount := 0
 	unsub := c.AddListener(func() {
 		callCount++
 	})
 
-	c.NotifyListeners()
+	c.Notify()
 	unsub()
-	c.NotifyListeners()
+	c.Notify()
 
 	if callCount != 1 {
 		t.Errorf("Listener should only be called once before unsubscribe, called %d times", callCount)
 	}
 }
 
-func TestControllerBase_MultipleListeners(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_MultipleListeners(t *testing.T) {
+	c := &Notifier{}
 
 	var count1, count2 int
 	c.AddListener(func() { count1++ })
 	c.AddListener(func() { count2++ })
 
-	c.NotifyListeners()
+	c.Notify()
+	c.Notify()
 
-	if count1 != 1 || count2 != 1 {
-		t.Errorf("All listeners should be called, got %d and %d", count1, count2)
+	if count1 != 2 || count2 != 2 {
+		t.Errorf("All listeners should be called twice, got %d and %d", count1, count2)
 	}
 }
 
-func TestControllerBase_Dispose(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_Dispose(t *testing.T) {
+	c := &Notifier{}
 
 	callCount := 0
 	c.AddListener(func() {
 		callCount++
 	})
 
-	c.NotifyListeners()
+	c.Notify()
 	c.Dispose()
-	c.NotifyListeners()
+	c.Notify()
 
 	if callCount != 1 {
 		t.Errorf("Listener should not be called after Dispose, called %d times", callCount)
 	}
 }
 
-func TestControllerBase_AddListener_AfterDispose(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_AddListener_AfterDispose(t *testing.T) {
+	c := &Notifier{}
 	c.Dispose()
 
 	called := false
@@ -77,15 +78,15 @@ func TestControllerBase_AddListener_AfterDispose(t *testing.T) {
 		called = true
 	})
 
-	c.NotifyListeners()
+	c.Notify()
 
 	if called {
 		t.Error("Listener added after Dispose should not be called")
 	}
 }
 
-func TestControllerBase_IsDisposed(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_IsDisposed(t *testing.T) {
+	c := &Notifier{}
 
 	if c.IsDisposed() {
 		t.Error("Should not be disposed initially")
@@ -98,8 +99,8 @@ func TestControllerBase_IsDisposed(t *testing.T) {
 	}
 }
 
-func TestControllerBase_ListenerCount(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_ListenerCount(t *testing.T) {
+	c := &Notifier{}
 
 	if c.ListenerCount() != 0 {
 		t.Errorf("Expected 0 listeners, got %d", c.ListenerCount())
@@ -125,8 +126,8 @@ func TestControllerBase_ListenerCount(t *testing.T) {
 	}
 }
 
-func TestControllerBase_ConcurrentAccess(t *testing.T) {
-	c := &ControllerBase{}
+func TestNotifier_ConcurrentAccess(t *testing.T) {
+	c := &Notifier{}
 
 	var wg sync.WaitGroup
 	for range 100 {
@@ -138,18 +139,17 @@ func TestControllerBase_ConcurrentAccess(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			c.NotifyListeners()
+			c.Notify()
 		}()
 	}
 	wg.Wait()
 }
 
-// Test that ControllerBase implements Listenable
-func TestControllerBase_ImplementsListenable(t *testing.T) {
-	var _ Listenable = &ControllerBase{}
+// Test that Notifier implements Listenable and Disposable
+func TestNotifier_ImplementsListenable(t *testing.T) {
+	var _ Listenable = &Notifier{}
 }
 
-// Test that ControllerBase implements Disposable
-func TestControllerBase_ImplementsDisposable(t *testing.T) {
-	var _ Disposable = &ControllerBase{}
+func TestNotifier_ImplementsDisposable(t *testing.T) {
+	var _ Disposable = &Notifier{}
 }

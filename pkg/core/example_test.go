@@ -6,15 +6,15 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 )
 
-// This example shows how to create an Observable for reactive state.
-// Observable is thread-safe and can be shared across goroutines.
-func ExampleObservable() {
-	// Create an observable with an initial value
-	counter := core.NewObservable(0)
+// This example shows how to create a Signal for reactive state.
+// Signal is thread-safe and can be shared across goroutines.
+func ExampleSignal() {
+	// Create a signal with an initial value
+	counter := core.NewSignal(0)
 
 	// Add a listener that fires when the value changes
-	unsub := counter.AddListener(func(value int) {
-		fmt.Printf("Counter changed to: %d\n", value)
+	unsub := counter.AddListener(func() {
+		fmt.Printf("Counter changed to: %d\n", counter.Value())
 	})
 
 	// Update the value - this triggers all listeners
@@ -32,21 +32,21 @@ func ExampleObservable() {
 	// Current value: 5
 }
 
-// This example shows how to use Observable with a custom equality function.
+// This example shows how to use Signal with a custom equality function.
 // This is useful when you want to avoid unnecessary updates.
-func ExampleNewObservableWithEquality() {
+func ExampleNewSignalWithEquality() {
 	type User struct {
 		ID   int
 		Name string
 	}
 
 	// Only notify listeners when the user ID changes
-	user := core.NewObservableWithEquality(User{ID: 1, Name: "Alice"}, func(a, b User) bool {
+	user := core.NewSignalWithEquality(User{ID: 1, Name: "Alice"}, func(a, b User) bool {
 		return a.ID == b.ID
 	})
 
-	user.AddListener(func(u User) {
-		fmt.Printf("User changed: %s\n", u.Name)
+	user.AddListener(func() {
+		fmt.Printf("User changed: %s\n", user.Value().Name)
 	})
 
 	// This won't trigger listeners because ID is the same
@@ -59,55 +59,16 @@ func ExampleNewObservableWithEquality() {
 	// User changed: Bob
 }
 
-// This example shows the Notifier type for event broadcasting.
-// Unlike Observable, Notifier doesn't hold a value.
+// This example shows how to create a custom notifier.
 func ExampleNotifier() {
-	refresh := core.NewNotifier()
-
-	// Add a listener
-	unsub := refresh.AddListener(func() {
-		fmt.Println("Refresh triggered!")
+	notifier := &core.Notifier{}
+	unsub := notifier.AddListener(func() {
+		fmt.Println("Notifier triggered")
 	})
-
-	// Trigger the notification
-	refresh.Notify()
-
-	// Clean up
+	notifier.Notify()
 	unsub()
+	notifier.Dispose()
 
 	// Output:
-	// Refresh triggered!
-}
-
-// This example shows how to use Managed for automatic rebuilds.
-// Managed wraps a value and triggers rebuilds when it changes.
-func ExampleManaged() {
-	// Direct usage for demonstration:
-	base := &core.StateBase{}
-	count := core.NewManaged(base, 0)
-
-	// Get the current value
-	fmt.Printf("Initial: %d\n", count.Value())
-
-	// Update using transform function
-	count.Update(func(v int) int { return v + 10 })
-	fmt.Printf("After update: %d\n", count.Value())
-
-	// Output:
-	// Initial: 0
-	// After update: 10
-}
-
-// This example shows how to create a custom controller.
-func ExampleControllerBase() {
-	controller := &core.ControllerBase{}
-	unsub := controller.AddListener(func() {
-		fmt.Println("Controller notified")
-	})
-	controller.NotifyListeners()
-	unsub()
-	controller.Dispose()
-
-	// Output:
-	// Controller notified
+	// Notifier triggered
 }

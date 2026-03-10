@@ -16,11 +16,12 @@ func buildProgressPage(_ core.BuildContext) core.Widget { return progressPage{} 
 
 type progressState struct {
 	core.StateBase
-	progressValue *core.Managed[float64]
+	progressValue *core.Signal[float64]
 }
 
 func (s *progressState) InitState() {
-	s.progressValue = core.NewManaged(s, 0.35)
+	s.progressValue = core.NewSignal(0.35)
+	core.UseListenable(s, s.progressValue)
 }
 
 func (s *progressState) Build(ctx core.BuildContext) core.Widget {

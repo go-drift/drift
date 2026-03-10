@@ -29,14 +29,14 @@ type SafeAreaData struct {
 
 func (s SafeAreaData) ChildWidget() core.Widget { return s.Child }
 
-func (s SafeAreaData) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (s SafeAreaData) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(SafeAreaData); ok {
 		return s.Insets != old.Insets
 	}
 	return true
 }
 
-func (s SafeAreaData) UpdateShouldNotifyDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
+func (s SafeAreaData) ShouldRebuildDependent(oldWidget core.InheritedWidget, aspects map[any]struct{}) bool {
 	old, ok := oldWidget.(SafeAreaData)
 	if !ok {
 		return true

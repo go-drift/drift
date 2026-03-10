@@ -161,7 +161,7 @@ func (e errorBoundaryScope) CreateElement() core.Element {
 
 func (e errorBoundaryScope) ChildWidget() core.Widget { return e.child }
 
-func (e errorBoundaryScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (e errorBoundaryScope) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	return false // Scope widget never notifies - it's just for tree marking
 }
 

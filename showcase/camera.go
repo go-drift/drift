@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"strconv"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-drift/drift/pkg/core"
@@ -27,16 +27,19 @@ func buildCameraPage(_ core.BuildContext) core.Widget { return cameraPage{} }
 
 type cameraState struct {
 	core.StateBase
-	status           *core.Managed[string]
-	image            *core.Managed[image.Image]
-	permissionStatus *core.Managed[platform.PermissionStatus]
+	status           *core.Signal[string]
+	image            *core.Signal[image.Image]
+	permissionStatus *core.Signal[platform.PermissionStatus]
 	unsubscribe      func()
 }
 
 func (s *cameraState) InitState() {
-	s.status = core.NewManaged(s, "Tap a button to capture or select an image.")
-	s.image = core.NewManaged[image.Image](s, nil)
-	s.permissionStatus = core.NewManaged(s, platform.PermissionNotDetermined)
+	s.status = core.NewSignal("Tap a button to capture or select an image.")
+	s.image = core.NewSignal[image.Image](nil)
+	s.permissionStatus = core.NewSignal(platform.PermissionNotDetermined)
+	core.UseListenable(s, s.status)
+	core.UseListenable(s, s.image)
+	core.UseListenable(s, s.permissionStatus)
 
 	ctx := context.Background()
 

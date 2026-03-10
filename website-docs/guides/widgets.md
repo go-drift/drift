@@ -232,7 +232,7 @@ patterns, depending on complexity:
 ### Inline: `Stateful`
 
 `Stateful` is a closure-based alternative for small, self-contained pieces of
-state where you don't need lifecycle hooks, `Managed`, or `UseController`:
+state where you don't need lifecycle hooks or `UseDisposable`:
 
 ```go
 core.Stateful(
@@ -248,7 +248,7 @@ core.Stateful(
 The `init` function runs once; `build` is called on every rebuild with the
 current state, a `BuildContext`, and a `setState` callback that applies
 a transform function to the state. See [State Management](/docs/guides/state-management)
-for `SetState`, `Managed`, `UseController`, and other state patterns.
+for `SetState`, `UseDisposable`, and other state patterns.
 
 ### Struct-based: `StatefulBase`
 

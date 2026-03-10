@@ -18,8 +18,8 @@ type CupertinoTheme struct {
 // ChildWidget returns the child widget.
 func (t CupertinoTheme) ChildWidget() core.Widget { return t.Child }
 
-// UpdateShouldNotify returns true if the theme data has changed.
-func (t CupertinoTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+// ShouldRebuildDependents returns true if the theme data has changed.
+func (t CupertinoTheme) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(CupertinoTheme); ok {
 		return t.Data != old.Data
 	}

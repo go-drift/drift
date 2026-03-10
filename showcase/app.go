@@ -34,7 +34,7 @@ type showcaseState struct {
 	isDark             bool
 	isCupertino        bool
 	deepLinkController *navigation.DeepLinkController
-	// Memoized theme data to avoid churn in UpdateShouldNotify
+	// Memoized theme data to avoid churn in ShouldRebuildDependents
 	cachedThemeData *theme.AppThemeData
 }
 

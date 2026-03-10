@@ -139,7 +139,7 @@ type testInheritedBaseWidget struct {
 }
 
 func (w testInheritedBaseWidget) ChildWidget() Widget { return w.child }
-func (w testInheritedBaseWidget) UpdateShouldNotify(old InheritedWidget) bool {
+func (w testInheritedBaseWidget) ShouldRebuildDependents(old InheritedWidget) bool {
 	return w.value != old.(testInheritedBaseWidget).value
 }
 
@@ -174,9 +174,9 @@ type keyedInheritedBaseWidget struct {
 	child Widget
 }
 
-func (w keyedInheritedBaseWidget) Key() any                                { return w.myKey }
-func (w keyedInheritedBaseWidget) ChildWidget() Widget                     { return w.child }
-func (w keyedInheritedBaseWidget) UpdateShouldNotify(InheritedWidget) bool { return false }
+func (w keyedInheritedBaseWidget) Key() any                                     { return w.myKey }
+func (w keyedInheritedBaseWidget) ChildWidget() Widget                          { return w.child }
+func (w keyedInheritedBaseWidget) ShouldRebuildDependents(InheritedWidget) bool { return false }
 
 func TestInheritedBase_KeyOverride(t *testing.T) {
 	w := keyedInheritedBaseWidget{myKey: "custom"}

@@ -17,11 +17,12 @@ func buildClipboardPage(_ core.BuildContext) core.Widget { return clipboardPage{
 
 type clipboardState struct {
 	core.StateBase
-	statusText *core.Managed[string]
+	statusText *core.Signal[string]
 }
 
 func (s *clipboardState) InitState() {
-	s.statusText = core.NewManaged(s, "Tap a button to interact with the clipboard.")
+	s.statusText = core.NewSignal("Tap a button to interact with the clipboard.")
+	core.UseListenable(s, s.statusText)
 }
 
 func (s *clipboardState) Build(ctx core.BuildContext) core.Widget {

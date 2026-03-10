@@ -18,15 +18,17 @@ func buildPreferencesPage(_ core.BuildContext) core.Widget { return preferencesP
 
 type preferencesState struct {
 	core.StateBase
-	statusText      *core.Managed[string]
-	storedValue     *core.Managed[string]
+	statusText      *core.Signal[string]
+	storedValue     *core.Signal[string]
 	keyController   *platform.TextEditingController
 	valueController *platform.TextEditingController
 }
 
 func (s *preferencesState) InitState() {
-	s.statusText = core.NewManaged(s, "Enter a key and value to store.")
-	s.storedValue = core.NewManaged(s, "")
+	s.statusText = core.NewSignal("Enter a key and value to store.")
+	s.storedValue = core.NewSignal("")
+	core.UseListenable(s, s.statusText)
+	core.UseListenable(s, s.storedValue)
 	s.keyController = platform.NewTextEditingController("my_key")
 	s.valueController = platform.NewTextEditingController("my_value")
 }

@@ -94,8 +94,8 @@ type AppTheme struct {
 // ChildWidget returns the child widget.
 func (a AppTheme) ChildWidget() core.Widget { return a.Child }
 
-// UpdateShouldNotify returns true if the theme data has changed.
-func (a AppTheme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+// ShouldRebuildDependents returns true if the theme data has changed.
+func (a AppTheme) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	old, ok := oldWidget.(AppTheme)
 	if !ok {
 		return true

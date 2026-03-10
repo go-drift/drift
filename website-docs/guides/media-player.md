@@ -14,7 +14,7 @@ Both APIs deliver callbacks on the UI thread, so you can update widget state dir
 
 The `VideoPlayer` widget embeds a native video player (ExoPlayer on Android, AVPlayer on iOS) with built-in transport controls including play/pause, seek bar, and time display.
 
-Create a `VideoPlayerController` with `UseController`, set callbacks, and pass it to the widget:
+Create a `VideoPlayerController` with `UseDisposable`, set callbacks, and pass it to the widget:
 
 ```go
 import (
@@ -29,12 +29,14 @@ import (
 type playerState struct {
     core.StateBase
     controller *platform.VideoPlayerController
-    status     *core.Managed[string]
+    status     *core.Signal[string]
 }
 
 func (s *playerState) InitState() {
-    s.status = core.NewManaged(&s.StateBase, "Idle")
-    s.controller = core.UseController(&s.StateBase, platform.NewVideoPlayerController)
+    s.status = core.NewSignal("Idle")
+    core.UseListenable(&s.StateBase, s.status)
+    s.controller = platform.NewVideoPlayerController()
+    core.UseDisposable(&s.StateBase, s.controller)
 
     s.controller.OnPlaybackStateChanged = func(state platform.PlaybackState) {
         s.status.Set(state.String())
@@ -89,7 +91,7 @@ widgets.Row{
 
 Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
 
-`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `platform.NewVideoPlayerController()` directly and call `Dispose()` manually.
+`UseDisposable` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `platform.NewVideoPlayerController()` directly and call `Dispose()` manually.
 
 ### VideoPlayer Widget Fields
 
@@ -149,12 +151,14 @@ import (
 type audioState struct {
     core.StateBase
     controller *platform.AudioPlayerController
-    status     *core.Managed[string]
+    status     *core.Signal[string]
 }
 
 func (s *audioState) InitState() {
-    s.status = core.NewManaged(&s.StateBase, "Idle")
-    s.controller = core.UseController(&s.StateBase, platform.NewAudioPlayerController)
+    s.status = core.NewSignal("Idle")
+    core.UseListenable(&s.StateBase, s.status)
+    s.controller = platform.NewAudioPlayerController()
+    core.UseDisposable(&s.StateBase, s.controller)
 
     // Callbacks are delivered on the UI thread.
     s.controller.OnPlaybackStateChanged = func(state platform.PlaybackState) {
@@ -173,7 +177,7 @@ func (s *audioState) InitState() {
 
 Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
 
-`UseController` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `platform.NewAudioPlayerController()` directly and call `Dispose()` manually.
+`UseDisposable` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `platform.NewAudioPlayerController()` directly and call `Dispose()` manually.
 
 ### AudioPlayerController Methods
 
@@ -331,7 +335,7 @@ app:
 This adds `android:usesCleartextTraffic="true"` to the Android manifest and an `NSAppTransportSecurity` exception to the iOS Info.plist. Use HTTPS whenever possible and only enable this setting when your media source does not support it.
 
 :::tip
-`UseController` is documented in the [State Management](/docs/guides/state-management#usecontroller) guide.
+`UseDisposable` is documented in the [State Management](/docs/guides/state-management#usedisposable) guide.
 :::
 
 ## Next Steps

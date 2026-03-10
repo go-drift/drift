@@ -6,17 +6,15 @@ sidebar_position: 3
 
 # State Management
 
-Drift provides several patterns for managing state, organized here from simplest to most advanced. Most apps only need the first two sections.
+Drift provides several patterns for managing state, organized from local widget state to shared reactive patterns.
 
 For how to define stateful and stateless widget types, see [Widget Architecture](/docs/guides/widgets#stateful-widgets).
 
-## SetState and Managed
+## SetState
 
-These two tools cover the vast majority of state management needs. `SetState` handles direct mutations; `Managed` wraps a single value with automatic rebuilds.
+The simplest state pattern. Mutate fields directly and trigger a rebuild.
 
-### The SetState Pattern
-
-The most fundamental pattern is `SetState`. Always mutate state inside a `SetState` call to trigger a rebuild:
+Always mutate state inside a `SetState` call to trigger a rebuild:
 
 ```go
 // Good - explicit mutation, triggers rebuild
@@ -114,40 +112,6 @@ func (s *dataState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-### Managed
-
-`Managed` holds a value and triggers rebuilds automatically when changed:
-
-```go
-type myState struct {
-    core.StateBase
-    count *core.Managed[int]
-    name  *core.Managed[string]
-}
-
-func (s *myState) InitState() {
-    s.count = core.NewManaged(s, 0)
-    s.name = core.NewManaged(s, "")
-}
-
-func (s *myState) Build(ctx core.BuildContext) core.Widget {
-    return widgets.Column{
-        Children: []core.Widget{
-            widgets.Text{Content: fmt.Sprintf("Count: %d", s.count.Value())},
-            theme.ButtonOf(ctx, "Increment", func() {
-                s.count.Set(s.count.Value() + 1) // Automatically triggers rebuild
-            }),
-        },
-    }
-}
-```
-
-Like `SetState`, `Managed` is not thread-safe. Use `drift.Dispatch` for background updates.
-
-:::tip You can stop here
-`SetState` and `Managed` are all you need for most applications. The sections below cover sharing state across widgets, working with controllers, and reactive patterns for more complex apps. Skip ahead to [Best Practices](#best-practices) if these two tools are sufficient for your needs.
-:::
-
 ## Sharing State with InheritedWidget
 
 Share data down the widget tree without passing it through every level.
@@ -167,31 +131,33 @@ func App() core.Widget {
 
 // Consume anywhere below
 func (s *profileState) Build(ctx core.BuildContext) core.Widget {
-    user, ok := core.ProviderOf[*User](ctx)
+    user, ok := core.Provide[*User](ctx)
     if !ok {
         return widgets.Text{Content: "Not logged in"}
     }
     return widgets.Text{Content: "Hello, " + user.Name}
 }
 
-// Or use MustProviderOf when you're certain the provider exists
+// Or use MustProvide when you're certain the provider exists
 func (s *profileState) Build(ctx core.BuildContext) core.Widget {
-    user := core.MustProviderOf[*User](ctx) // panics if not found
+    user := core.MustProvide[*User](ctx) // panics if not found
     return widgets.Text{Content: "Hello, " + user.Name}
 }
 ```
 
 By default, dependents rebuild when the value changes (pointer equality for pointers, value equality for value types).
 
+**When to use `Provide` vs `MustProvide`:** Use `MustProvide` when the provider is structurally guaranteed to exist (e.g. theme data provided at the root). The panic gives a clear error during development if the tree is wired incorrectly. Use `Provide` with the `ok` check when absence is a valid runtime state (e.g. optional user session) and the widget should degrade gracefully.
+
 ### Custom Comparison
 
-Use `ShouldNotify` when you need custom comparison logic:
+Use `ShouldRebuild` when you need custom comparison logic:
 
 ```go
 core.InheritedProvider[*User]{
     Value:       currentUser,
     Child: MainContent{},
-    ShouldNotify: func(old, new *User) bool {
+    ShouldRebuild: func(old, new *User) bool {
         // Only rebuild when ID changes, ignore name updates
         return old.ID != new.ID
     },
@@ -202,7 +168,7 @@ core.InheritedProvider[*User]{
 
 For advanced use cases, implement a custom `InheritedWidget`. Embed `core.InheritedBase`
 to get `CreateElement` and `Key` for free, then implement `ChildWidget` and
-`UpdateShouldNotify`:
+`ShouldRebuildDependents`:
 
 ```go
 type UserProvider struct {
@@ -213,9 +179,9 @@ type UserProvider struct {
 
 func (u UserProvider) ChildWidget() core.Widget { return u.Child }
 
-// UpdateShouldNotify is called when this widget updates. Return true to
+// ShouldRebuildDependents is called when this widget updates. Return true to
 // rebuild all dependents, false to skip rebuilding entirely.
-func (u UserProvider) UpdateShouldNotify(old core.InheritedWidget) bool {
+func (u UserProvider) ShouldRebuildDependents(old core.InheritedWidget) bool {
     if prev, ok := old.(UserProvider); ok {
         return u.User != prev.User
     }
@@ -233,68 +199,117 @@ func UserOf(ctx core.BuildContext) *User {
 }
 ```
 
-## Controllers and Listeners
+## Custom State Holders
 
-When working with animation controllers or other resources that need lifecycle management, use `UseController` and `UseListenable`. These hooks handle subscription and cleanup automatically. Call them once in `InitState()`, not in `Build()`.
-
-### UseController
-
-Create a controller with automatic disposal:
+When state lives outside a single widget, or multiple widgets need to react to changes, build a custom state holder.
+Embed `Notifier` to get listener management and disposal for free. A state holder is any type that implements the `Listenable` interface:
 
 ```go
-func (s *myState) InitState() {
-    // Controller is automatically disposed when state is disposed
-    s.animation = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(300 * time.Millisecond)
-    })
+type Listenable interface {
+    AddListener(listener func()) func()
 }
 ```
 
-### UseListenable
+### Notifier
 
-Subscribe to any `Listenable` (animation controllers, custom notifiers) and trigger rebuilds on notification:
+Embed `Notifier` to turn any struct into a listenable state holder with built-in disposal:
 
 ```go
-func (s *myState) InitState() {
-    s.animation = animation.NewAnimationController(300 * time.Millisecond)
-    core.UseListenable(s, s.animation)
+type CartNotifier struct {
+    core.Notifier
+    items []Item
+}
+
+func (c *CartNotifier) Add(item Item) {
+    c.items = append(c.items, item)
+    c.Notify() // Triggers all listeners
+}
+
+func (c *CartNotifier) Items() []Item { return c.items }
+```
+
+If your notifier holds resources, override `Dispose` and call the embedded one:
+
+```go
+func (c *CartNotifier) Dispose() {
+    c.cleanup()
+    c.Notifier.Dispose()
 }
 ```
 
-These two hooks are often used together:
+### Valueless Event Broadcasting
+
+For a standalone event broadcaster with no value attached, use a `Notifier` directly. `Notifier` is thread-safe, so it can be shared as a package-level variable. This is useful when you need to say "something happened" without carrying data:
 
 ```go
-func (s *myState) InitState() {
-    s.animation = core.UseController(s, func() *animation.AnimationController {
-        return animation.NewAnimationController(300 * time.Millisecond)
-    })
-    core.UseListenable(s, s.animation) // Rebuild on each animation tick
-}
+var refreshNotifier = &core.Notifier{}
+
+// Producer
+refreshNotifier.Notify()
+
+// Consumer
+unsub := refreshNotifier.AddListener(func() {
+    reloadData()
+})
 ```
 
-:::tip You can stop here
-`SetState`, `Managed`, `InheritedProvider`, `UseController`, and `UseListenable` cover the needs of most applications. The next section covers reactive state patterns for apps that need cross-widget reactive state, computed values, or fine-grained subscription control.
-:::
+`Notifier` implements `Listenable`, so it works with `UseListenable` and can be passed as a `RefreshListenable` to routers.
+
+### Connecting Notifiers to Widgets
+
+Use `UseListenable` to subscribe a widget to any `Listenable` and trigger rebuilds on notification. The subscription is cleaned up automatically when the widget is removed from the tree:
+
+```go
+type cartViewState struct {
+    core.StateBase
+    cart *CartNotifier
+}
+
+func (s *cartViewState) InitState() {
+    s.cart = globalCart
+    core.UseListenable(s, s.cart) // Rebuild when cart changes
+}
+
+func (s *cartViewState) Build(ctx core.BuildContext) core.Widget {
+    return widgets.Text{
+        Content: fmt.Sprintf("%d items in cart", len(s.cart.Items())),
+    }
+}
+```
 
 ## Reactive State
 
-For apps that need thread-safe, shareable state with listener support and computed values, Drift provides `Observable`, `DerivedObservable`, and associated hooks.
+`Signal` and `Derived` provide thread-safe, typed reactive values with change notification and computed derivations.
 
-### Observable
+### Choosing Between Signal and Notifier
 
-`Observable` is a thread-safe reactive value with listener support:
+`Signal` is a ready-to-use reactive variable. `Notifier` is a building block you embed in your own types to make them listenable. They operate at different levels:
+
+- **Use `Signal[T]`** when you have a single value that changes over time. It holds a typed value, skips notifications when the value is unchanged, and works out of the box.
+- **Embed `Notifier`** when you need a custom state holder with multiple fields and manual control over when listeners fire. It provides `AddListener`, `Notify`, and `Dispose` so you don't have to implement listener management yourself.
+
+If you find yourself reaching for `Signal[MyBigStruct]` and calling `Set` with a copy of the whole struct after changing one field, that's a sign you want a custom type with an embedded `Notifier` instead.
+
+### Signal
+
+`Signal` is a thread-safe reactive value. It satisfies `Listenable`, so it works with `UseListenable` and can serve as a dependency for `NewDerived`. Setting the same value is a no-op (compared via `==`). `NewSignal` requires a `comparable` type constraint, so passing a slice or map will fail at compile time. For non-comparable types, use `NewSignalWithEquality` to provide a custom comparison.
+
+**Thread safety note:** `Signal` itself is safe to read and write from any goroutine. However, listener callbacks fire on the caller's goroutine. Since hooks like `UseListenable` and `UseDerived` call `SetState` inside those callbacks, you must call `Set` on the UI thread. From a background goroutine, wrap the call with `drift.Dispatch`.
 
 ```go
-// Create an observable
-counter := core.NewObservable(0)
+// Create a signal
+counter := core.NewSignal(0)
 
-// Add a listener
-unsub := counter.AddListener(func(value int) {
-    fmt.Println("Count changed to:", value)
+// Listen for changes
+unsub := counter.AddListener(func() {
+    fmt.Println("Count changed to:", counter.Value())
 })
 
 // Update value (notifies all listeners)
 counter.Set(5)
+
+// Read-modify-write
+counter.Update(func(v int) int { return v + 1 })
 
 // Read value
 current := counter.Value()
@@ -303,18 +318,19 @@ current := counter.Value()
 unsub()
 ```
 
-#### Observable in State
+#### Signal in State
+
+Use `UseListenable` to subscribe a widget to a `Signal` and trigger rebuilds on change:
 
 ```go
 type myState struct {
     core.StateBase
-    counter *core.Observable[int]
+    counter *core.Signal[int]
 }
 
 func (s *myState) InitState() {
-    s.counter = core.NewObservable(0)
-    // UseObservable subscribes and triggers rebuilds on change
-    core.UseObservable(s, s.counter)
+    s.counter = core.NewSignal(0)
+    core.UseListenable(s, s.counter)
 }
 
 func (s *myState) Build(ctx core.BuildContext) core.Widget {
@@ -322,37 +338,63 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-### Derived Observable
+#### Shared Signals
 
-`DerivedObservable` is a read-only observable that recomputes its value automatically when any of its dependencies change. Use it when you have a value that is always a function of one or more other observables.
+A `Signal` can live outside any widget. Multiple widgets subscribe independently:
 
 ```go
-type myState struct {
-    core.StateBase
-    firstName *core.Observable[string]
-    lastName  *core.Observable[string]
-    fullName  *core.DerivedObservable[string]
+// Package-level signal, outlives any single widget
+var currentUser = core.NewSignal[*User](nil)
+
+// Any widget can subscribe
+func (s *profileState) InitState() {
+    core.UseListenable(s, currentUser)
 }
 
-func (s *myState) InitState() {
-    s.firstName = core.NewObservable("John")
-    s.lastName = core.NewObservable("Doe")
-
-    // fullName recomputes whenever firstName or lastName changes
-    s.fullName = core.Derive(func() string {
-        return s.firstName.Value() + " " + s.lastName.Value()
-    }, s.firstName, s.lastName)
+func (s *headerState) InitState() {
+    core.UseListenable(s, currentUser)
 }
+
+// Update from anywhere (on the UI thread)
+currentUser.Set(loggedInUser)
 ```
 
-`DerivedObservable` only notifies listeners when the computed value actually changes, so setting `firstName` to the same string twice will not fire listeners a second time.
+#### InheritedProvider vs Shared Signal
+
+Both let multiple widgets access the same data. The difference is scope and rebuild semantics:
+
+- **`InheritedProvider`** is tree-scoped. Only descendants can access the value, and only dependents rebuild when it changes. Use it for data that flows top-down (theme, locale, auth session) and where you want the tree structure to control visibility.
+- **Shared `Signal`** is global. Any widget anywhere can subscribe. Use it for app-wide state that lives outside the widget tree (current user, feature flags, a shopping cart).
+
+A rule of thumb: if you're wrapping the value in a widget and passing `Child`, use `InheritedProvider`. If the value outlives any particular subtree, use a shared `Signal`.
+
+### Derived
+
+`Derived` is a read-only signal that recomputes its value automatically when any of its dependencies change. Use it when you have a value that is always a function of one or more other signals.
+
+```go
+firstName := core.NewSignal("John")
+lastName := core.NewSignal("Doe")
+
+// fullName recomputes whenever firstName or lastName changes
+fullName := core.NewDerived(func() string {
+    return firstName.Value() + " " + lastName.Value()
+}, firstName, lastName)
+defer fullName.Dispose()
+
+fmt.Println(fullName.Value()) // "John Doe"
+lastName.Set("Smith")
+fmt.Println(fullName.Value()) // "John Smith"
+```
+
+`Derived` only notifies listeners when the computed value actually changes, so setting `firstName` to the same string twice will not fire listeners a second time.
 
 #### Custom Equality
 
-By default, values are compared with Go's `==` operator. For non-comparable types (slices, maps), use `DeriveWithEquality`:
+Like `NewSignal`, `NewDerived` requires a `comparable` type constraint. For non-comparable types (slices, maps), use `NewDerivedWithEquality`:
 
 ```go
-tags := core.DeriveWithEquality(
+tags := core.NewDerivedWithEquality(
     func() []string { return buildTagList(source.Value()) },
     slices.Equal,
     source,
@@ -361,40 +403,25 @@ tags := core.DeriveWithEquality(
 
 #### Chaining
 
-A `DerivedObservable` satisfies `Subscribable`, so it can serve as a dependency for another derived value:
+A `Derived` satisfies `Listenable`, so it can serve as a dependency for another derived value:
 
 ```go
-doubled := core.Derive(func() int { return src.Value() * 2 }, src)
-quadrupled := core.Derive(func() int { return doubled.Value() * 2 }, doubled)
+doubled := core.NewDerived(func() int { return src.Value() * 2 }, src)
+quadrupled := core.NewDerived(func() int { return doubled.Value() * 2 }, doubled)
 ```
 
 #### Lifecycle
 
-A `DerivedObservable` subscribes to its dependencies on creation. Call `Dispose()` to unsubscribe when you no longer need it. Inside a stateful widget, prefer `UseDerived` (below) which handles disposal automatically.
+**Every `NewDerived` must be paired with a `Dispose()` call.** A `Derived` subscribes to its dependencies on creation. Without `Dispose()`, it keeps listening indefinitely, recomputing on every change and preventing garbage collection of both itself and its dependencies. Use `defer` for short-lived values, or `UseDerived` inside widgets (which handles disposal automatically).
 
-### Reactive Hooks
+### UseDerived
 
-These hooks connect observables to the widget rebuild cycle. Like `UseController` and `UseListenable`, call them once in `InitState()`.
-
-#### UseObservable
-
-Subscribe to an `Observable` (or `DerivedObservable`) and trigger rebuilds on change:
+Create a `Derived`, subscribe to it for rebuilds, and auto-dispose it when the state is disposed. This combines `NewDerived` + `UseListenable` + `OnDispose` in one call:
 
 ```go
 func (s *myState) InitState() {
-    s.counter = core.NewObservable(0)
-    core.UseObservable(s, s.counter)
-}
-```
-
-#### UseDerived
-
-Create a `DerivedObservable`, subscribe to it for rebuilds, and auto-dispose it when the state is disposed. This combines `Derive` + `UseObservable` + `OnDispose` in one call:
-
-```go
-func (s *myState) InitState() {
-    s.firstName = core.NewObservable("John")
-    s.lastName = core.NewObservable("Doe")
+    s.firstName = core.NewSignal("John")
+    s.lastName = core.NewSignal("Doe")
 
     s.fullName = core.UseDerived(s, func() string {
         return s.firstName.Value() + " " + s.lastName.Value()
@@ -406,25 +433,66 @@ func (s *myState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
-#### UseObservableSelector
+For non-comparable derived types (slices, maps), use `UseDerivedWithEquality`:
 
-Subscribe to an observable but only trigger rebuilds when a *selected portion* of the value changes. This is useful when the observable holds a large struct but the widget only cares about one field:
+```go
+s.tags = core.UseDerivedWithEquality(s, func() []string {
+    return buildTagList(s.source.Value())
+}, slices.Equal, s.source)
+```
+
+### UseSelector
+
+Subscribe to any `Listenable` but only trigger rebuilds when a *selected portion* of state changes. The selector closure reads the current value and extracts the part you care about:
 
 ```go
 func (s *myState) InitState() {
     // Only rebuilds when user.Name changes, ignoring other field updates
-    core.UseObservableSelector(s, s.user, func(u User) string {
-        return u.Name
+    core.UseSelector(s, s.user, func() string {
+        return s.user.Value().Name
     })
 }
 ```
 
-For non-comparable selected types, use `UseObservableSelectorWithEquality`:
+For non-comparable selected types (slices, maps), use `UseSelectorWithEquality`:
 
 ```go
-core.UseObservableSelectorWithEquality(s, s.store, func(st Store) []string {
-    return st.Tags
+core.UseSelectorWithEquality(s, s.store, func() []string {
+    return s.store.Value().Tags
 }, slices.Equal)
+```
+
+### UseDerived vs UseSelector
+
+Both prevent unnecessary rebuilds, but they serve different purposes:
+
+- **UseDerived**: Creates a new reactive node with its own value and listeners. Other widgets (or other `Derived` values) can depend on it. Use it when the computed value is reused or shared.
+- **UseSelector**: Widget-local optimization with no new reactive node. It filters an existing `Listenable`'s notifications so the widget only rebuilds when the selected portion changes. Use it when a single widget depends on one field of a large signal.
+
+Rule of thumb: if you need the computed value as a `Listenable` dependency elsewhere, use `UseDerived`. If you just want to skip rebuilds for one widget, use `UseSelector`.
+
+## Resource Hooks
+
+These hooks manage resource cleanup tied to the widget lifecycle. Call them once in `InitState()`, not in `Build()`.
+
+### UseDisposable
+
+Register any `Disposable` resource for automatic cleanup when the widget is removed from the tree:
+
+```go
+func (s *myState) InitState() {
+    s.animation = animation.NewAnimationController(300 * time.Millisecond)
+    core.UseDisposable(s, s.animation)
+    core.UseListenable(s, s.animation) // Rebuild on each animation tick
+}
+```
+
+For subscribe/unsubscribe patterns, use `OnDispose` directly:
+
+```go
+func (s *myState) InitState() {
+    s.OnDispose(dataStream.Subscribe(s.onData))
+}
 ```
 
 ## State Lifecycle
@@ -445,7 +513,7 @@ func (s *myState) InitState() {
 // Called when the widget configuration changes
 func (s *myState) DidUpdateWidget(oldWidget core.StatefulWidget) {
     old := oldWidget.(MyWidget)
-    new := s.Widget().(MyWidget)
+    new := s.Element().Widget().(MyWidget)
     if old.ID != new.ID {
         s.reloadData()
     }
@@ -453,8 +521,7 @@ func (s *myState) DidUpdateWidget(oldWidget core.StatefulWidget) {
 
 // Called when InheritedWidget dependencies change
 func (s *myState) DidChangeDependencies() {
-    theme := theme.ThemeOf(s.Context())
-    // React to theme changes
+    // React to inherited widget changes (e.g. theme, locale)
 }
 
 // Called when the state is removed from the tree
@@ -472,6 +539,8 @@ func (s *myState) Dispose() {
 3. `Build()` - Called to build the widget tree
 4. `DidUpdateWidget()` - Called when parent rebuilds with new widget configuration
 5. `Dispose()` - Called when state is removed from tree
+
+To respond to app-level lifecycle events (pause, resume, detach), see [`UseLifecycleObserver`](/docs/guides/platform#widget-level-lifecycle-observation) in the Platform guide.
 
 ## Best Practices
 
@@ -495,13 +564,12 @@ type parentState struct {
 
 ### 2. Use Hooks for Resources
 
-`UseController` and `UseListenable` ensure proper cleanup:
+`UseDisposable` and `UseListenable` ensure proper cleanup:
 
 ```go
 // Good - automatic cleanup
-s.controller = core.UseController(s, func() *Controller {
-    return NewController()
-})
+s.controller = NewController()
+core.UseDisposable(s, s.controller)
 
 // Manual cleanup required
 s.controller = NewController()
@@ -565,31 +633,24 @@ s.SetState(func() { s.isValid = true })
 
 ## Quick Reference
 
-### Core (most apps)
+### State Patterns
 
 | Tool | Thread-safe | Use case |
 |------|:-----------:|----------|
-| `SetState` | No | Simple local mutations |
-| `Managed[T]` | No | Single value with automatic rebuild |
+| `SetState` | No | Local widget state mutations |
 | `InheritedProvider[T]` | - | Share data down the widget tree |
+| `Signal[T]` | Yes | Reactive value with equality-based notification |
+| `Derived[T]` | Yes | Computed value that tracks source signals |
+| `Notifier` | Yes | Embed in custom state holders for listener management |
 
-### Controllers and listeners
+### Hooks
 
-| Tool | Use case |
+| Hook | Use case |
 |------|----------|
-| `UseController` | Create a controller with automatic disposal |
-| `UseListenable` | Subscribe to any Listenable for rebuilds |
-| `UseSubscription` | Auto-cleanup any subscribe/unsubscribe pair |
-
-### Reactive state
-
-| Tool | Thread-safe | Use case |
-|------|:-----------:|----------|
-| `Observable[T]` | Yes | Shared reactive value with listener support |
-| `DerivedObservable[T]` | Yes | Computed value that tracks source observables |
-| `UseObservable` | - | Subscribe to Observable or DerivedObservable for rebuilds |
-| `UseDerived` | - | Create, subscribe, and auto-dispose a DerivedObservable |
-| `UseObservableSelector` | - | Subscribe but only rebuild when a selected slice changes |
+| `UseListenable` | Subscribe to any `Listenable` for rebuilds (Signal, Derived, Notifier, etc.) |
+| `UseDerived` / `UseDerivedWithEquality` | Create, subscribe, and auto-dispose a Derived |
+| `UseSelector` / `UseSelectorWithEquality` | Subscribe but only rebuild when a selected portion changes |
+| `UseDisposable` | Register a Disposable resource for automatic cleanup |
 
 ## Next Steps
 

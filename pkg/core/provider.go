@@ -14,22 +14,22 @@ import "reflect"
 //	}
 //
 //	// Consume from anywhere in the subtree
-//	if user, ok := core.ProviderOf[*User](ctx); ok {
+//	if user, ok := core.Provide[*User](ctx); ok {
 //	    // use user
 //	}
 //
-// For custom comparison logic, set ShouldNotify:
+// For custom comparison logic, set ShouldRebuild:
 //
 //	core.InheritedProvider[*User]{
 //	    Value: currentUser,
 //	    Child: MainContent{},
-//	    ShouldNotify: func(old, new *User) bool {
-//	        return old.ID != new.ID  // Only notify on ID change
+//	    ShouldRebuild: func(old, new *User) bool {
+//	        return old.ID != new.ID  // Only rebuild on ID change
 //	    },
 //	}
 //
 // Note: The default comparison uses == which panics for non-comparable types
-// (slices, maps, funcs). For these types, you must provide a ShouldNotify function.
+// (slices, maps, funcs). For these types, you must provide a ShouldRebuild function.
 //
 // For more advanced use cases like aspect-based tracking, implement a custom
 // InheritedWidget instead.
@@ -43,10 +43,10 @@ type InheritedProvider[T any] struct {
 	// WidgetKey is an optional key for widget identity.
 	WidgetKey any
 
-	// ShouldNotify is an optional function to customize when dependents rebuild.
+	// ShouldRebuild is an optional function to customize when dependents rebuild.
 	// If nil, defaults to value inequality (any(old) != any(new)).
 	// Required for non-comparable types (slices, maps, funcs) to avoid panics.
-	ShouldNotify func(old, new T) bool
+	ShouldRebuild func(old, new T) bool
 }
 
 // CreateElement implements Widget.
@@ -64,16 +64,16 @@ func (p InheritedProvider[T]) ChildWidget() Widget {
 	return p.Child
 }
 
-// UpdateShouldNotify implements InheritedWidget.
+// ShouldRebuildDependents implements InheritedWidget.
 // Returns true if dependents should rebuild when this widget is updated.
-func (p InheritedProvider[T]) UpdateShouldNotify(oldWidget InheritedWidget) bool {
+func (p InheritedProvider[T]) ShouldRebuildDependents(oldWidget InheritedWidget) bool {
 	old, ok := oldWidget.(InheritedProvider[T])
 	if !ok {
 		return true
 	}
 
-	if p.ShouldNotify != nil {
-		return p.ShouldNotify(old.Value, p.Value)
+	if p.ShouldRebuild != nil {
+		return p.ShouldRebuild(old.Value, p.Value)
 	}
 
 	// Default comparison: use any() to compare values.
@@ -82,15 +82,15 @@ func (p InheritedProvider[T]) UpdateShouldNotify(oldWidget InheritedWidget) bool
 	return any(old.Value) != any(p.Value)
 }
 
-// ProviderOf finds and depends on the nearest ancestor InheritedProvider[T].
+// Provide finds and depends on the nearest ancestor InheritedProvider[T].
 // Returns the value and true if found, or the zero value and false if not found.
 //
 // Example:
 //
-//	if user, ok := core.ProviderOf[*User](ctx); ok {
+//	if user, ok := core.Provide[*User](ctx); ok {
 //	    fmt.Println("Hello,", user.Name)
 //	}
-func ProviderOf[T any](ctx BuildContext) (T, bool) {
+func Provide[T any](ctx BuildContext) (T, bool) {
 	providerType := reflect.TypeFor[InheritedProvider[T]]()
 	widget := ctx.DependOnInherited(providerType, nil)
 	if widget == nil {
@@ -104,17 +104,17 @@ func ProviderOf[T any](ctx BuildContext) (T, bool) {
 	return zero, false
 }
 
-// MustProviderOf finds and depends on the nearest ancestor InheritedProvider[T].
+// MustProvide finds and depends on the nearest ancestor InheritedProvider[T].
 // Panics if not found in the ancestor chain.
 //
 // Example:
 //
-//	user := core.MustProviderOf[*User](ctx)
+//	user := core.MustProvide[*User](ctx)
 //	fmt.Println("Hello,", user.Name)
-func MustProviderOf[T any](ctx BuildContext) T {
-	value, ok := ProviderOf[T](ctx)
+func MustProvide[T any](ctx BuildContext) T {
+	value, ok := Provide[T](ctx)
 	if !ok {
-		panic("MustProviderOf: no InheritedProvider[" + reflect.TypeFor[T]().String() + "] found in ancestors")
+		panic("MustProvide: no InheritedProvider[" + reflect.TypeFor[T]().String() + "] found in ancestors")
 	}
 	return value
 }

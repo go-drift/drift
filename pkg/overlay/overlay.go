@@ -278,7 +278,7 @@ type overlayInherited struct {
 
 func (o overlayInherited) ChildWidget() core.Widget { return o.child }
 
-func (o overlayInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (o overlayInherited) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(overlayInherited); ok {
 		return o.state != old.state
 	}

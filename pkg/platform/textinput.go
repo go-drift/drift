@@ -314,4 +314,3 @@ func (c *TextEditingController) notifyListeners() {
 		fn()
 	}
 }
-

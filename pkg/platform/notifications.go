@@ -343,4 +343,3 @@ func parseNotificationErrorWithError(data any) (NotificationError, error) {
 		Platform: parseString(m["platform"]),
 	}, nil
 }
-

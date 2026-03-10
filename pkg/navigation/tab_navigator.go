@@ -293,7 +293,7 @@ type tabNavigatorScope struct {
 func (t tabNavigatorScope) Key() any                 { return t.index }
 func (t tabNavigatorScope) ChildWidget() core.Widget { return t.child }
 
-func (t tabNavigatorScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (t tabNavigatorScope) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(tabNavigatorScope); ok {
 		return t.index != old.index || t.state != old.state
 	}

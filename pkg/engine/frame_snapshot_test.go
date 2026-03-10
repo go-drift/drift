@@ -91,7 +91,7 @@ func TestMarshalBinaryGolden(t *testing.T) {
 	}
 
 	// clip (all zero since no clip)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		if v := readF32(); v != 0 {
 			t.Fatalf("clip[%d]: expected 0, got %v", i, v)
 		}

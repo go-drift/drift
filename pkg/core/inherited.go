@@ -15,7 +15,7 @@ var dependOnAllAspects = &struct{}{}
 //
 // When a descendant calls [BuildContext.DependOnInherited], it registers as a
 // dependent of this element. When the InheritedWidget is updated and
-// [InheritedWidget.UpdateShouldNotify] returns true, all registered dependents
+// [InheritedWidget.ShouldRebuildDependents] returns true, all registered dependents
 // are notified and scheduled for rebuild.
 //
 // # Aspect-Based Tracking
@@ -23,7 +23,7 @@ var dependOnAllAspects = &struct{}{}
 // InheritedElement supports granular dependency tracking via aspects. When a
 // dependent registers with a specific aspect (non-nil), it's stored in that
 // dependent's aspect set. On update, if the widget implements
-// [AspectAwareInheritedWidget], UpdateShouldNotifyDependent is called for each
+// [AspectAwareInheritedWidget], ShouldRebuildDependent is called for each
 // dependent to determine if it should rebuild based on its registered aspects.
 //
 // Note: Aspect sets only grow during an element's lifetime. If a widget stops
@@ -67,9 +67,9 @@ func (e *InheritedElement) Update(newWidget Widget) {
 	e.widget = newWidget
 	newInherited := newWidget.(InheritedWidget)
 
-	// UpdateShouldNotify acts as a coarse-grained gate. If it returns false,
+	// ShouldRebuildDependents acts as a coarse-grained gate. If it returns false,
 	// no dependents are notified.
-	if !newInherited.UpdateShouldNotify(oldWidget) {
+	if !newInherited.ShouldRebuildDependents(oldWidget) {
 		e.MarkNeedsBuild()
 		return
 	}
@@ -87,7 +87,7 @@ func (e *InheritedElement) Update(newWidget Widget) {
 			notifyDependent(dependent)
 			continue
 		}
-		if len(aspects) == 0 || aspectAware.UpdateShouldNotifyDependent(oldWidget, aspects) {
+		if len(aspects) == 0 || aspectAware.ShouldRebuildDependent(oldWidget, aspects) {
 			notifyDependent(dependent)
 		}
 	}

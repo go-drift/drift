@@ -18,7 +18,7 @@ func buildVideoPlayerPage(_ core.BuildContext) core.Widget { return videoPlayerP
 
 type videoPlayerState struct {
 	core.StateBase
-	videoStatus         *core.Managed[string]
+	videoStatus         *core.Signal[string]
 	videoStateLabel     string
 	videoController     *platform.VideoPlayerController
 	videoLooping        bool
@@ -27,10 +27,12 @@ type videoPlayerState struct {
 }
 
 func (s *videoPlayerState) InitState() {
-	s.videoStatus = core.NewManaged(s, "Idle")
+	s.videoStatus = core.NewSignal("Idle")
 	s.videoStateLabel = "Idle"
 
-	s.videoController = core.UseController(s, platform.NewVideoPlayerController)
+	s.videoController = platform.NewVideoPlayerController()
+	core.UseDisposable(s, s.videoController)
+	core.UseListenable(s, s.videoStatus)
 
 	s.videoController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
 		s.videoStateLabel = state.String()

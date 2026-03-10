@@ -32,20 +32,16 @@
 //
 // # State Management
 //
-// Managed provides automatic rebuild triggering:
+// Signal provides thread-safe reactive values with automatic rebuild:
 //
-//	s.count = core.NewManaged(s, 0)
-//	s.count.Set(s.count.Value() + 1) // Automatically triggers rebuild
-//
-// Observable provides thread-safe reactive values:
-//
-//	counter := core.NewObservable(0)
-//	core.UseObservable(s, counter) // Subscribe to changes
+//	s.counter = core.NewSignal(0)
+//	core.UseListenable(s, s.counter) // Subscribe for rebuilds
+//	s.counter.Set(5)                 // Triggers rebuild
 //
 // # Hooks
 //
-// UseController, UseListenable, and UseObservable help manage resources
-// and subscriptions with automatic cleanup on disposal.
+// UseDisposable and UseListenable help manage resources and subscriptions
+// with automatic cleanup on disposal.
 //
 // # Constructor Conventions
 //

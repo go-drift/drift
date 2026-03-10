@@ -22,18 +22,22 @@ func buildNotificationsPage(_ core.BuildContext) core.Widget { return notificati
 
 type notificationsState struct {
 	core.StateBase
-	statusText       *core.Managed[string]
-	receivedText     *core.Managed[string]
-	openedText       *core.Managed[string]
-	permissionStatus *core.Managed[platform.PermissionStatus]
+	statusText       *core.Signal[string]
+	receivedText     *core.Signal[string]
+	openedText       *core.Signal[string]
+	permissionStatus *core.Signal[platform.PermissionStatus]
 	unsubFuncs       []func()
 }
 
 func (s *notificationsState) InitState() {
-	s.statusText = core.NewManaged(s, "Request permission to enable notifications.")
-	s.receivedText = core.NewManaged(s, "No notifications received yet.")
-	s.openedText = core.NewManaged(s, "No notification opens yet.")
-	s.permissionStatus = core.NewManaged(s, platform.PermissionNotDetermined)
+	s.statusText = core.NewSignal("Request permission to enable notifications.")
+	s.receivedText = core.NewSignal("No notifications received yet.")
+	s.openedText = core.NewSignal("No notification opens yet.")
+	s.permissionStatus = core.NewSignal(platform.PermissionNotDetermined)
+	core.UseListenable(s, s.statusText)
+	core.UseListenable(s, s.receivedText)
+	core.UseListenable(s, s.openedText)
+	core.UseListenable(s, s.permissionStatus)
 
 	ctx := context.Background()
 

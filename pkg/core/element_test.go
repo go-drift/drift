@@ -996,10 +996,10 @@ type aspectInherited struct {
 }
 
 func (a aspectInherited) ChildWidget() Widget { return a.child }
-func (a aspectInherited) UpdateShouldNotify(old InheritedWidget) bool {
+func (a aspectInherited) ShouldRebuildDependents(old InheritedWidget) bool {
 	return a.value != old.(aspectInherited).value
 }
-func (a aspectInherited) UpdateShouldNotifyDependent(old InheritedWidget, aspects map[any]struct{}) bool {
+func (a aspectInherited) ShouldRebuildDependent(old InheritedWidget, aspects map[any]struct{}) bool {
 	oldVal := old.(aspectInherited)
 	if _, ok := aspects["value"]; ok {
 		return a.value != oldVal.value
@@ -1017,7 +1017,7 @@ type nonAspectInherited struct {
 }
 
 func (n nonAspectInherited) ChildWidget() Widget { return n.child }
-func (n nonAspectInherited) UpdateShouldNotify(old InheritedWidget) bool {
+func (n nonAspectInherited) ShouldRebuildDependents(old InheritedWidget) bool {
 	return n.value != old.(nonAspectInherited).value
 }
 
@@ -1045,7 +1045,7 @@ func TestInheritedElement_Update_AspectAware_FiltersPerDependent(t *testing.T) {
 	if !valueDep.dirty {
 		t.Error("expected value-aspect dependent to be marked dirty")
 	}
-	// otherDep should NOT be dirty (filtered out by UpdateShouldNotifyDependent)
+	// otherDep should NOT be dirty (filtered out by ShouldRebuildDependent)
 	if otherDep.dirty {
 		t.Error("expected other-aspect dependent to NOT be marked dirty")
 	}

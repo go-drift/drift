@@ -400,15 +400,18 @@ go func() {
 ```go
 type cameraState struct {
     core.StateBase
-    status           *core.Managed[string]
-    image            *core.Managed[image.Image]
-    permissionStatus *core.Managed[platform.PermissionStatus]
+    status           *core.Signal[string]
+    image            *core.Signal[image.Image]
+    permissionStatus *core.Signal[platform.PermissionStatus]
 }
 
 func (s *cameraState) InitState() {
-    s.status = core.NewManaged(&s.StateBase, "Tap to capture")
-    s.image = core.NewManaged[image.Image](&s.StateBase, nil)
-    s.permissionStatus = core.NewManaged(&s.StateBase, platform.PermissionNotDetermined)
+    s.status = core.NewSignal("Tap to capture")
+    s.image = core.NewSignal[image.Image](nil)
+    s.permissionStatus = core.NewSignal(platform.PermissionNotDetermined)
+    core.UseListenable(&s.StateBase, s.status)
+    core.UseListenable(&s.StateBase, s.image)
+    core.UseListenable(&s.StateBase, s.permissionStatus)
 
     ctx := context.Background()
 

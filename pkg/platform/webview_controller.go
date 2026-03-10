@@ -12,9 +12,10 @@ import (
 // work immediately after construction.
 //
 // Create with [NewWebViewController] and manage lifecycle with
-// [core.UseController]:
+// [core.UseDisposable]:
 //
-//	s.web = core.UseController(&s.StateBase, platform.NewWebViewController)
+//	s.web = platform.NewWebViewController()
+//	core.UseDisposable(&s.StateBase, s.web)
 //	s.web.OnPageFinished = func(url string) { ... }
 //	s.web.Load("https://example.com")
 //

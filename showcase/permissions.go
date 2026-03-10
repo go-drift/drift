@@ -37,14 +37,16 @@ var otherPermissions = []permissionDemo{
 
 type permissionsState struct {
 	core.StateBase
-	statuses   *core.Managed[map[string]platform.PermissionResult]
-	statusText *core.Managed[string]
+	statuses   *core.Signal[map[string]platform.PermissionResult]
+	statusText *core.Signal[string]
 	unsubFuncs []func()
 }
 
 func (s *permissionsState) InitState() {
-	s.statuses = core.NewManaged(s, make(map[string]platform.PermissionResult))
-	s.statusText = core.NewManaged(s, "Tap 'Request' to request a permission.")
+	s.statuses = core.NewSignalWithEquality(make(map[string]platform.PermissionResult), maps.Equal)
+	s.statusText = core.NewSignal("Tap 'Request' to request a permission.")
+	core.UseListenable(s, s.statuses)
+	core.UseListenable(s, s.statusText)
 
 	ctx := context.Background()
 

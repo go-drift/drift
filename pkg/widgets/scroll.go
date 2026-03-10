@@ -772,7 +772,6 @@ func viewportExtentForPosition(p *ScrollPosition) float64 {
 	return 600
 }
 
-
 func isOverscrolled(position *ScrollPosition) bool {
 	return position.offset < position.min || position.offset > position.max
 }

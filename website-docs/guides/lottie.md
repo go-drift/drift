@@ -122,9 +122,8 @@ func (s *playerState) InitState() {
     s.anim, _ = lottie.Load(f)
 
     // Create a controller matching the animation duration
-    s.controller = core.UseController(&s.StateBase, func() *animation.AnimationController {
-        return animation.NewAnimationController(s.anim.Duration())
-    })
+    s.controller = animation.NewAnimationController(s.anim.Duration())
+    core.UseDisposable(&s.StateBase, s.controller)
 
     // Rebuild on every frame
     core.UseListenable(&s.StateBase, s.controller)
@@ -168,7 +167,7 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
 Lottie animations contain their own easing curves baked into keyframes, so the controller uses linear interpolation by default. There is no need to set a curve.
 
 :::tip
-`UseController` is documented in the [State Management](/docs/guides/state-management#usecontroller) guide. For animation curves and the controller API, see [Animation](/docs/guides/animation).
+`UseDisposable` is documented in the [State Management](/docs/guides/state-management#usedisposable) guide. For animation curves and the controller API, see [Animation](/docs/guides/animation).
 :::
 
 ## Next Steps

@@ -63,11 +63,9 @@ func (s *lottieDemoState) InitState() {
 	}
 
 	// Play-once controller: starts playing immediately
-	s.playOnceCtrl = core.UseController(s, func() *animation.AnimationController {
-		c := animation.NewAnimationController(dur)
-		c.Curve = animation.LinearCurve
-		return c
-	})
+	s.playOnceCtrl = animation.NewAnimationController(dur)
+	s.playOnceCtrl.Curve = animation.LinearCurve
+	core.UseDisposable(s, s.playOnceCtrl)
 	core.UseListenable(s, s.playOnceCtrl)
 	s.playOnceCtrl.AddStatusListener(func(status animation.AnimationStatus) {
 		if status == animation.AnimationCompleted {
@@ -79,11 +77,9 @@ func (s *lottieDemoState) InitState() {
 	s.playOnceCtrl.Forward()
 
 	// Controlled controller: starts paused at 0
-	s.controlCtrl = core.UseController(s, func() *animation.AnimationController {
-		c := animation.NewAnimationController(dur)
-		c.Curve = animation.LinearCurve
-		return c
-	})
+	s.controlCtrl = animation.NewAnimationController(dur)
+	s.controlCtrl.Curve = animation.LinearCurve
+	core.UseDisposable(s, s.controlCtrl)
 	core.UseListenable(s, s.controlCtrl)
 	s.controlCtrl.AddStatusListener(func(status animation.AnimationStatus) {
 		if status == animation.AnimationCompleted || status == animation.AnimationDismissed {

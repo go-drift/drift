@@ -18,8 +18,8 @@ type Theme struct {
 // ChildWidget returns the child widget.
 func (t Theme) ChildWidget() core.Widget { return t.Child }
 
-// UpdateShouldNotify returns true if the theme data has changed.
-func (t Theme) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+// ShouldRebuildDependents returns true if the theme data has changed.
+func (t Theme) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(Theme); ok {
 		return t.Data != old.Data
 	}

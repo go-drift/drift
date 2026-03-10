@@ -23,22 +23,28 @@ func buildLocationPage(_ core.BuildContext) core.Widget { return locationPage{} 
 
 type locationState struct {
 	core.StateBase
-	statusText      *core.Managed[string]
-	location        *core.Managed[*platform.LocationUpdate]
-	isStreaming     *core.Managed[bool]
-	isEnabled       *core.Managed[bool]
-	whenInUseStatus *core.Managed[platform.PermissionStatus]
-	alwaysStatus    *core.Managed[platform.PermissionStatus]
+	statusText      *core.Signal[string]
+	location        *core.Signal[*platform.LocationUpdate]
+	isStreaming     *core.Signal[bool]
+	isEnabled       *core.Signal[bool]
+	whenInUseStatus *core.Signal[platform.PermissionStatus]
+	alwaysStatus    *core.Signal[platform.PermissionStatus]
 	unsubFuncs      []func()
 }
 
 func (s *locationState) InitState() {
-	s.statusText = core.NewManaged(s, "Tap a button to get location.")
-	s.location = core.NewManaged[*platform.LocationUpdate](s, nil)
-	s.isStreaming = core.NewManaged(s, false)
-	s.isEnabled = core.NewManaged(s, false)
-	s.whenInUseStatus = core.NewManaged(s, platform.PermissionNotDetermined)
-	s.alwaysStatus = core.NewManaged(s, platform.PermissionNotDetermined)
+	s.statusText = core.NewSignal("Tap a button to get location.")
+	s.location = core.NewSignal[*platform.LocationUpdate](nil)
+	s.isStreaming = core.NewSignal(false)
+	s.isEnabled = core.NewSignal(false)
+	s.whenInUseStatus = core.NewSignal(platform.PermissionNotDetermined)
+	s.alwaysStatus = core.NewSignal(platform.PermissionNotDetermined)
+	core.UseListenable(s, s.statusText)
+	core.UseListenable(s, s.location)
+	core.UseListenable(s, s.isStreaming)
+	core.UseListenable(s, s.isEnabled)
+	core.UseListenable(s, s.whenInUseStatus)
+	core.UseListenable(s, s.alwaysStatus)
 
 	ctx := context.Background()
 

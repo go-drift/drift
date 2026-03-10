@@ -31,29 +31,37 @@ type formData struct {
 type formsState struct {
 	core.StateBase
 	data          formData
-	statusText    *core.Managed[string]
-	acceptTerms   *core.Managed[bool]
-	enableAlerts  *core.Managed[bool]
-	contactMethod *core.Managed[string]
-	planSelection *core.Managed[string]
+	statusText    *core.Signal[string]
+	acceptTerms   *core.Signal[bool]
+	enableAlerts  *core.Signal[bool]
+	contactMethod *core.Signal[string]
+	planSelection *core.Signal[string]
 
 	// Date & Time picker state
-	selectedDate *core.Managed[*time.Time]
-	selectedHour *core.Managed[int]
-	selectedMin  *core.Managed[int]
+	selectedDate *core.Signal[*time.Time]
+	selectedHour *core.Signal[int]
+	selectedMin  *core.Signal[int]
 }
 
 func (s *formsState) InitState() {
-	s.statusText = core.NewManaged(s, "Fill in the form and submit")
-	s.acceptTerms = core.NewManaged(s, false)
-	s.enableAlerts = core.NewManaged(s, true)
-	s.contactMethod = core.NewManaged(s, "email")
-	s.planSelection = core.NewManaged(s, "")
+	s.statusText = core.NewSignal("Fill in the form and submit")
+	s.acceptTerms = core.NewSignal(false)
+	s.enableAlerts = core.NewSignal(true)
+	s.contactMethod = core.NewSignal("email")
+	s.planSelection = core.NewSignal("")
 
 	// Initialize date/time state
-	s.selectedDate = core.NewManaged[*time.Time](s, nil)
-	s.selectedHour = core.NewManaged(s, 9)
-	s.selectedMin = core.NewManaged(s, 0)
+	s.selectedDate = core.NewSignal[*time.Time](nil)
+	s.selectedHour = core.NewSignal(9)
+	s.selectedMin = core.NewSignal(0)
+	core.UseListenable(s, s.statusText)
+	core.UseListenable(s, s.acceptTerms)
+	core.UseListenable(s, s.enableAlerts)
+	core.UseListenable(s, s.contactMethod)
+	core.UseListenable(s, s.planSelection)
+	core.UseListenable(s, s.selectedDate)
+	core.UseListenable(s, s.selectedHour)
+	core.UseListenable(s, s.selectedMin)
 }
 
 func (s *formsState) Build(ctx core.BuildContext) core.Widget {

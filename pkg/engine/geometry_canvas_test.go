@@ -356,7 +356,7 @@ func TestCapOcclusionPaths_UnderCap(t *testing.T) {
 func TestCapOcclusionPaths_OverCap(t *testing.T) {
 	// Create 10 non-overlapping paths.
 	var paths []*graphics.Path
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		p := graphics.NewPath()
 		x := float64(i * 20)
 		p.AddRect(graphics.RectFromLTWH(x, 0, 10, 10))

@@ -856,7 +856,7 @@ type navigatorInherited struct {
 
 func (n navigatorInherited) ChildWidget() core.Widget { return n.child }
 
-func (n navigatorInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (n navigatorInherited) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(navigatorInherited); ok {
 		return n.state != old.state
 	}

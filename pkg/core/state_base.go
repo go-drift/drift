@@ -6,7 +6,7 @@ import (
 )
 
 // stateBase is satisfied by any struct that embeds StateBase.
-// Hooks and NewManaged accept stateBase so callers can pass s directly.
+// Hooks accept stateBase so callers can pass s directly.
 type stateBase interface {
 	state() *StateBase
 }

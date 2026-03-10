@@ -75,16 +75,16 @@ func viewSnapshotFromCapture(cv platform.CapturedViewGeometry) ViewSnapshot {
 // decoders in UnifiedFrameOrchestrator.kt (Android) and DriftRenderer.swift
 // (iOS) must match exactly.
 //
-//   Header (8 bytes): uint32 version (1), uint32 viewCount
-//   Per view, fixed (60 bytes):
-//     int64 viewId
-//     float32 x, y, width, height
-//     float32 clipLeft, clipTop, clipRight, clipBottom
-//     float32 visibleLeft, visibleTop, visibleRight, visibleBottom
-//     uint8 flags (bit0=hasClip, bit1=visible), uint8 reserved, uint16 pathCount
-//   Per occlusion path (variable):
-//     uint16 commandCount
-//     Per command: uint8 op (0=M,1=L,2=Q,3=C,4=Z), uint8 argCount, float32[argCount]
+//	Header (8 bytes): uint32 version (1), uint32 viewCount
+//	Per view, fixed (60 bytes):
+//	  int64 viewId
+//	  float32 x, y, width, height
+//	  float32 clipLeft, clipTop, clipRight, clipBottom
+//	  float32 visibleLeft, visibleTop, visibleRight, visibleBottom
+//	  uint8 flags (bit0=hasClip, bit1=visible), uint8 reserved, uint16 pathCount
+//	Per occlusion path (variable):
+//	  uint16 commandCount
+//	  Per command: uint8 op (0=M,1=L,2=Q,3=C,4=Z), uint8 argCount, float32[argCount]
 const (
 	binaryVersion       = 1
 	headerSize          = 8  // uint32 version + uint32 viewCount

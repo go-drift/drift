@@ -68,11 +68,9 @@ type circularProgressState struct {
 }
 
 func (s *circularProgressState) InitState() {
-	s.controller = core.UseController(s, func() *animation.AnimationController {
-		c := animation.NewAnimationController(1800 * time.Millisecond)
-		c.Curve = animation.LinearCurve
-		return c
-	})
+	s.controller = animation.NewAnimationController(1800 * time.Millisecond)
+	s.controller.Curve = animation.LinearCurve
+	core.UseDisposable(s, s.controller)
 	core.UseListenable(s, s.controller)
 	s.controller.AddStatusListener(func(status animation.AnimationStatus) {
 		if status == animation.AnimationCompleted {

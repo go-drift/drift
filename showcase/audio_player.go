@@ -23,7 +23,7 @@ func buildAudioPlayerPage(_ core.BuildContext) core.Widget { return audioPlayerP
 
 type audioPlayerState struct {
 	core.StateBase
-	audioStatus     *core.Managed[string]
+	audioStatus     *core.Signal[string]
 	audioStateLabel string
 	audioController *platform.AudioPlayerController
 	audioLooping    bool
@@ -31,10 +31,12 @@ type audioPlayerState struct {
 }
 
 func (s *audioPlayerState) InitState() {
-	s.audioStatus = core.NewManaged(s, "Idle")
+	s.audioStatus = core.NewSignal("Idle")
 	s.audioStateLabel = "Idle"
 
-	s.audioController = core.UseController(s, platform.NewAudioPlayerController)
+	s.audioController = platform.NewAudioPlayerController()
+	core.UseDisposable(s, s.audioController)
+	core.UseListenable(s, s.audioStatus)
 
 	s.audioController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
 		s.audioStateLabel = state.String()

@@ -15,7 +15,7 @@ type DeviceScale struct {
 
 func (d DeviceScale) ChildWidget() core.Widget { return d.Child }
 
-func (d DeviceScale) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (d DeviceScale) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(DeviceScale); ok {
 		return d.Scale != old.Scale
 	}

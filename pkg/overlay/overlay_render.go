@@ -215,5 +215,3 @@ func getChildOffset(child layout.RenderBox) graphics.Offset {
 	}
 	return graphics.Offset{}
 }
-
-

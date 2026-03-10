@@ -17,12 +17,14 @@ func buildWebViewPage(_ core.BuildContext) core.Widget { return webViewPage{} }
 type webViewState struct {
 	core.StateBase
 	controller *platform.WebViewController
-	status     *core.Managed[string]
+	status     *core.Signal[string]
 }
 
 func (s *webViewState) InitState() {
-	s.status = core.NewManaged(s, "Idle")
-	s.controller = core.UseController(s, platform.NewWebViewController)
+	s.status = core.NewSignal("Idle")
+	s.controller = platform.NewWebViewController()
+	core.UseDisposable(s, s.controller)
+	core.UseListenable(s, s.status)
 
 	s.controller.OnPageStarted = func(url string) {
 		s.status.Set("Loading: " + url)

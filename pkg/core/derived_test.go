@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func TestDerive_InitialValue(t *testing.T) {
-	src := NewObservable(10)
-	d := Derive(func() int { return src.Value() * 2 }, src)
+func TestNewDerived_InitialValue(t *testing.T) {
+	src := NewSignal(10)
+	d := NewDerived(func() int { return src.Value() * 2 }, src)
 	defer d.Dispose()
 
 	if d.Value() != 20 {
@@ -15,9 +15,9 @@ func TestDerive_InitialValue(t *testing.T) {
 	}
 }
 
-func TestDerive_RecomputesOnChange(t *testing.T) {
-	src := NewObservable(5)
-	d := Derive(func() int { return src.Value() + 1 }, src)
+func TestNewDerived_RecomputesOnChange(t *testing.T) {
+	src := NewSignal(5)
+	d := NewDerived(func() int { return src.Value() + 1 }, src)
 	defer d.Dispose()
 
 	src.Set(10)
@@ -27,10 +27,10 @@ func TestDerive_RecomputesOnChange(t *testing.T) {
 	}
 }
 
-func TestDerive_MultipleDeps(t *testing.T) {
-	a := NewObservable("Hello")
-	b := NewObservable("World")
-	d := Derive(func() string { return a.Value() + " " + b.Value() }, a, b)
+func TestNewDerived_MultipleDeps(t *testing.T) {
+	a := NewSignal("Hello")
+	b := NewSignal("World")
+	d := NewDerived(func() string { return a.Value() + " " + b.Value() }, a, b)
 	defer d.Dispose()
 
 	if d.Value() != "Hello World" {
@@ -48,13 +48,13 @@ func TestDerive_MultipleDeps(t *testing.T) {
 	}
 }
 
-func TestDerive_SkipsNotificationOnEqualValue(t *testing.T) {
-	src := NewObservable(3)
-	d := Derive(func() int { return src.Value() / 2 }, src) // integer division
+func TestNewDerived_SkipsNotificationOnEqualValue(t *testing.T) {
+	src := NewSignal(3)
+	d := NewDerived(func() int { return src.Value() / 2 }, src) // integer division
 	defer d.Dispose()
 
 	notified := 0
-	d.AddListener(func(int) { notified++ })
+	d.AddListener(func() { notified++ })
 
 	// 3/2 = 1, 4/2 = 2 (different, should notify)
 	src.Set(4)
@@ -69,12 +69,12 @@ func TestDerive_SkipsNotificationOnEqualValue(t *testing.T) {
 	}
 }
 
-func TestDeriveWithEquality_CustomEqual(t *testing.T) {
+func TestNewDerivedWithEquality_CustomEqual(t *testing.T) {
 	type pair struct{ x, y int }
-	src := NewObservable(pair{1, 2})
+	src := NewSignal(pair{1, 2})
 
 	// Only care about x
-	d := DeriveWithEquality(
+	d := NewDerivedWithEquality(
 		func() pair { return src.Value() },
 		func(a, b pair) bool { return a.x == b.x },
 		src,
@@ -82,7 +82,7 @@ func TestDeriveWithEquality_CustomEqual(t *testing.T) {
 	defer d.Dispose()
 
 	notified := 0
-	d.AddListener(func(pair) { notified++ })
+	d.AddListener(func() { notified++ })
 
 	// Change y only: should not notify
 	src.Set(pair{1, 99})
@@ -97,13 +97,13 @@ func TestDeriveWithEquality_CustomEqual(t *testing.T) {
 	}
 }
 
-func TestDerive_AddListenerAndUnsubscribe(t *testing.T) {
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() }, src)
+func TestNewDerived_AddListenerAndUnsubscribe(t *testing.T) {
+	src := NewSignal(0)
+	d := NewDerived(func() int { return src.Value() }, src)
 	defer d.Dispose()
 
 	count := 0
-	unsub := d.AddListener(func(int) { count++ })
+	unsub := d.AddListener(func() { count++ })
 
 	src.Set(1)
 	if count != 1 {
@@ -117,9 +117,9 @@ func TestDerive_AddListenerAndUnsubscribe(t *testing.T) {
 	}
 }
 
-func TestDerive_Dispose(t *testing.T) {
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() }, src)
+func TestNewDerived_Dispose(t *testing.T) {
+	src := NewSignal(0)
+	d := NewDerived(func() int { return src.Value() }, src)
 
 	if src.ListenerCount() != 1 {
 		t.Errorf("expected 1 listener on src, got %d", src.ListenerCount())
@@ -135,10 +135,10 @@ func TestDerive_Dispose(t *testing.T) {
 	src.Set(99)
 }
 
-func TestDerive_Chained(t *testing.T) {
-	src := NewObservable(2)
-	doubled := Derive(func() int { return src.Value() * 2 }, src)
-	quadrupled := Derive(func() int { return doubled.Value() * 2 }, doubled)
+func TestNewDerived_Chained(t *testing.T) {
+	src := NewSignal(2)
+	doubled := NewDerived(func() int { return src.Value() * 2 }, src)
+	quadrupled := NewDerived(func() int { return doubled.Value() * 2 }, doubled)
 	defer doubled.Dispose()
 	defer quadrupled.Dispose()
 
@@ -155,13 +155,13 @@ func TestDerive_Chained(t *testing.T) {
 	}
 }
 
-func TestDerive_ConcurrentAccess(t *testing.T) {
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() }, src)
+func TestNewDerived_ConcurrentAccess(t *testing.T) {
+	src := NewSignal(0)
+	d := NewDerived(func() int { return src.Value() }, src)
 	defer d.Dispose()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(val int) {
 			defer wg.Done()
@@ -172,17 +172,17 @@ func TestDerive_ConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-func TestDerive_ListenerCount(t *testing.T) {
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() }, src)
+func TestNewDerived_ListenerCount(t *testing.T) {
+	src := NewSignal(0)
+	d := NewDerived(func() int { return src.Value() }, src)
 	defer d.Dispose()
 
 	if d.ListenerCount() != 0 {
 		t.Errorf("expected 0 listeners initially, got %d", d.ListenerCount())
 	}
 
-	unsub1 := d.AddListener(func(int) {})
-	unsub2 := d.AddListener(func(int) {})
+	unsub1 := d.AddListener(func() {})
+	unsub2 := d.AddListener(func() {})
 
 	if d.ListenerCount() != 2 {
 		t.Errorf("expected 2 listeners, got %d", d.ListenerCount())
@@ -199,56 +199,24 @@ func TestDerive_ListenerCount(t *testing.T) {
 	}
 }
 
-func TestDerive_OnChange(t *testing.T) {
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() }, src)
+func TestSignal_ImplementsListenable(t *testing.T) {
+	sig := NewSignal(0)
+	var _ Listenable = sig
+}
+
+func TestDerived_ImplementsListenable(t *testing.T) {
+	src := NewSignal(0)
+	d := NewDerived(func() int { return src.Value() }, src)
 	defer d.Dispose()
-
-	called := 0
-	unsub := d.OnChange(func() { called++ })
-	defer unsub()
-
-	src.Set(1)
-	if called != 1 {
-		t.Errorf("expected OnChange called 1 time, got %d", called)
-	}
+	var _ Listenable = d
 }
 
-func TestObservable_OnChange(t *testing.T) {
-	obs := NewObservable(0)
-	called := 0
-	unsub := obs.OnChange(func() { called++ })
-
-	obs.Set(1)
-	if called != 1 {
-		t.Errorf("expected 1, got %d", called)
-	}
-
-	unsub()
-	obs.Set(2)
-	if called != 1 {
-		t.Errorf("expected 1 after unsub, got %d", called)
-	}
-}
-
-func TestObservable_ImplementsSubscribable(t *testing.T) {
-	obs := NewObservable(0)
-	var _ Subscribable = obs
-}
-
-func TestDerivedObservable_ImplementsSubscribable(t *testing.T) {
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() }, src)
-	defer d.Dispose()
-	var _ Subscribable = d
-}
-
-func TestUseObservable_WithDerived(t *testing.T) {
+func TestUseListenable_WithDerived(t *testing.T) {
 	base := &StateBase{}
-	src := NewObservable(0)
-	d := Derive(func() int { return src.Value() * 2 }, src)
+	src := NewSignal(0)
+	d := NewDerived(func() int { return src.Value() * 2 }, src)
 
-	UseObservable(base, d)
+	UseListenable(base, d)
 
 	if d.ListenerCount() != 1 {
 		t.Errorf("expected 1 listener on derived, got %d", d.ListenerCount())
@@ -265,8 +233,8 @@ func TestUseObservable_WithDerived(t *testing.T) {
 
 func TestUseDerived(t *testing.T) {
 	base := &StateBase{}
-	a := NewObservable(3)
-	b := NewObservable(4)
+	a := NewSignal(3)
+	b := NewSignal(4)
 
 	d := UseDerived(base, func() int {
 		return a.Value() + b.Value()

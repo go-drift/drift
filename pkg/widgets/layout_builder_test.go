@@ -228,12 +228,12 @@ func TestLayoutBuilder_InheritedDependencyUpdate(t *testing.T) {
 	tester.SetSize(graphics.Size{Width: 400, Height: 300})
 
 	// Pump with initial inherited value. The LayoutBuilder's builder reads
-	// the inherited string via ProviderOf and renders it as Text content.
+	// the inherited string via Provide and renders it as Text content.
 	tester.PumpWidget(core.InheritedProvider[string]{
 		Value: "hello",
 		Child: widgets.LayoutBuilder{
 			Builder: func(ctx core.BuildContext, constraints layout.Constraints) core.Widget {
-				label, _ := core.ProviderOf[string](ctx)
+				label, _ := core.Provide[string](ctx)
 				return widgets.Text{Content: label}
 			},
 		},
@@ -250,7 +250,7 @@ func TestLayoutBuilder_InheritedDependencyUpdate(t *testing.T) {
 		Value: "world",
 		Child: widgets.LayoutBuilder{
 			Builder: func(ctx core.BuildContext, constraints layout.Constraints) core.Widget {
-				label, _ := core.ProviderOf[string](ctx)
+				label, _ := core.Provide[string](ctx)
 				return widgets.Text{Content: label}
 			},
 		},
@@ -267,7 +267,7 @@ func TestLayoutBuilder_InheritedDependencyUpdate(t *testing.T) {
 		Value: "again",
 		Child: widgets.LayoutBuilder{
 			Builder: func(ctx core.BuildContext, constraints layout.Constraints) core.Widget {
-				label, _ := core.ProviderOf[string](ctx)
+				label, _ := core.Provide[string](ctx)
 				return widgets.Text{Content: label}
 			},
 		},

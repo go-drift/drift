@@ -14,9 +14,10 @@ import (
 // after construction.
 //
 // Create with [NewVideoPlayerController] and manage lifecycle with
-// [core.UseController]:
+// [core.UseDisposable]:
 //
-//	s.video = core.UseController(&s.StateBase, platform.NewVideoPlayerController)
+//	s.video = platform.NewVideoPlayerController()
+//	core.UseDisposable(&s.StateBase, s.video)
 //	s.video.OnPlaybackStateChanged = func(state platform.PlaybackState) { ... }
 //	s.video.Load(url)
 //
@@ -28,7 +29,7 @@ import (
 // to ensure no events are missed.
 //
 // All methods are safe for concurrent use. Callback fields should be set
-// on the UI thread (e.g. in InitState or a UseController callback). Setting
+// on the UI thread (e.g. in InitState). Setting
 // them before calling Load ensures no events are missed.
 type VideoPlayerController struct {
 	mu     sync.RWMutex

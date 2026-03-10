@@ -23,7 +23,7 @@ type providerConsumerWidget[T any] struct {
 }
 
 func (w providerConsumerWidget[T]) Build(ctx BuildContext) Widget {
-	value, ok := ProviderOf[T](ctx)
+	value, ok := Provide[T](ctx)
 	if w.onBuild != nil {
 		w.onBuild(value, ok)
 	}
@@ -51,7 +51,7 @@ func TestInheritedProvider_BasicProvideConsume(t *testing.T) {
 	element.Mount(nil, nil)
 
 	if !capturedOK {
-		t.Fatal("expected ProviderOf to return ok=true")
+		t.Fatal("expected Provide to return ok=true")
 	}
 	if capturedUser != user {
 		t.Errorf("expected user %v, got %v", user, capturedUser)
@@ -67,7 +67,7 @@ func TestInheritedProvider_NotFound(t *testing.T) {
 	// Consumer without a provider ancestor
 	widget := testStatelessWidget{
 		buildFn: func(ctx BuildContext) Widget {
-			capturedUser, capturedOK = ProviderOf[*testUser](ctx)
+			capturedUser, capturedOK = Provide[*testUser](ctx)
 			return nil
 		},
 	}
@@ -76,7 +76,7 @@ func TestInheritedProvider_NotFound(t *testing.T) {
 	element.Mount(nil, nil)
 
 	if capturedOK {
-		t.Error("expected ProviderOf to return ok=false when no provider exists")
+		t.Error("expected Provide to return ok=false when no provider exists")
 	}
 	if capturedUser != nil {
 		t.Errorf("expected nil user, got %v", capturedUser)
@@ -124,8 +124,8 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 		Value: user,
 		Child: testStatelessWidget{
 			buildFn: func(ctx BuildContext) Widget {
-				capturedUser, userOK = ProviderOf[*testUser](ctx)
-				capturedSettings, settingsOK = ProviderOf[*testSettings](ctx)
+				capturedUser, userOK = Provide[*testUser](ctx)
+				capturedSettings, settingsOK = Provide[*testSettings](ctx)
 				return nil
 			},
 		},
@@ -151,8 +151,8 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 			Value: settings,
 			Child: testStatelessWidget{
 				buildFn: func(ctx BuildContext) Widget {
-					capturedUser, userOK = ProviderOf[*testUser](ctx)
-					capturedSettings, settingsOK = ProviderOf[*testSettings](ctx)
+					capturedUser, userOK = Provide[*testUser](ctx)
+					capturedSettings, settingsOK = Provide[*testSettings](ctx)
 					return nil
 				},
 			},
@@ -170,13 +170,13 @@ func TestInheritedProvider_TypeIsolation(t *testing.T) {
 	}
 }
 
-func TestInheritedProvider_CustomShouldNotify(t *testing.T) {
+func TestInheritedProvider_CustomShouldRebuild(t *testing.T) {
 	notifyCalled := false
 	var oldValue, newValue *testUser
 
 	oldWidget := InheritedProvider[*testUser]{
 		Value: &testUser{ID: 1, Name: "Alice"},
-		ShouldNotify: func(old, new *testUser) bool {
+		ShouldRebuild: func(old, new *testUser) bool {
 			notifyCalled = true
 			oldValue = old
 			newValue = new
@@ -187,7 +187,7 @@ func TestInheritedProvider_CustomShouldNotify(t *testing.T) {
 	// Same ID, different name - should not notify
 	newWidget := InheritedProvider[*testUser]{
 		Value: &testUser{ID: 1, Name: "Alice Updated"},
-		ShouldNotify: func(old, new *testUser) bool {
+		ShouldRebuild: func(old, new *testUser) bool {
 			notifyCalled = true
 			oldValue = old
 			newValue = new
@@ -195,10 +195,10 @@ func TestInheritedProvider_CustomShouldNotify(t *testing.T) {
 		},
 	}
 
-	shouldNotify := newWidget.UpdateShouldNotify(oldWidget)
+	shouldNotify := newWidget.ShouldRebuildDependents(oldWidget)
 
 	if !notifyCalled {
-		t.Error("expected ShouldNotify callback to be called")
+		t.Error("expected ShouldRebuild callback to be called")
 	}
 	if oldValue.Name != "Alice" {
 		t.Errorf("expected old name 'Alice', got %q", oldValue.Name)
@@ -214,12 +214,12 @@ func TestInheritedProvider_CustomShouldNotify(t *testing.T) {
 	notifyCalled = false
 	newWidget2 := InheritedProvider[*testUser]{
 		Value: &testUser{ID: 2, Name: "Bob"},
-		ShouldNotify: func(old, new *testUser) bool {
+		ShouldRebuild: func(old, new *testUser) bool {
 			return old.ID != new.ID
 		},
 	}
 
-	shouldNotify2 := newWidget2.UpdateShouldNotify(oldWidget)
+	shouldNotify2 := newWidget2.ShouldRebuildDependents(oldWidget)
 
 	if !shouldNotify2 {
 		t.Error("expected shouldNotify=true when ID changed")
@@ -233,14 +233,14 @@ func TestInheritedProvider_DefaultComparison(t *testing.T) {
 	oldWidget := InheritedProvider[*testUser]{Value: user}
 	newWidget := InheritedProvider[*testUser]{Value: user}
 
-	if newWidget.UpdateShouldNotify(oldWidget) {
+	if newWidget.ShouldRebuildDependents(oldWidget) {
 		t.Error("expected no notification for same pointer")
 	}
 
 	// Different pointer - should notify
 	newWidget2 := InheritedProvider[*testUser]{Value: &testUser{ID: 1, Name: "Alice"}}
 
-	if !newWidget2.UpdateShouldNotify(oldWidget) {
+	if !newWidget2.ShouldRebuildDependents(oldWidget) {
 		t.Error("expected notification for different pointer")
 	}
 }
@@ -251,16 +251,16 @@ func TestInheritedProvider_ValueType(t *testing.T) {
 	sameWidget := InheritedProvider[int]{Value: 42}
 	diffWidget := InheritedProvider[int]{Value: 43}
 
-	if sameWidget.UpdateShouldNotify(oldWidget) {
+	if sameWidget.ShouldRebuildDependents(oldWidget) {
 		t.Error("expected no notification for same int value")
 	}
 
-	if !diffWidget.UpdateShouldNotify(oldWidget) {
+	if !diffWidget.ShouldRebuildDependents(oldWidget) {
 		t.Error("expected notification for different int value")
 	}
 }
 
-func TestMustProviderOf_Found(t *testing.T) {
+func TestMustProvide_Found(t *testing.T) {
 	owner := NewBuildOwner()
 
 	user := &testUser{ID: 1, Name: "Alice"}
@@ -270,7 +270,7 @@ func TestMustProviderOf_Found(t *testing.T) {
 		Value: user,
 		Child: testStatelessWidget{
 			buildFn: func(ctx BuildContext) Widget {
-				capturedUser = MustProviderOf[*testUser](ctx)
+				capturedUser = MustProvide[*testUser](ctx)
 				return nil
 			},
 		},
@@ -284,7 +284,7 @@ func TestMustProviderOf_Found(t *testing.T) {
 	}
 }
 
-func TestMustProviderOf_Panics(t *testing.T) {
+func TestMustProvide_Panics(t *testing.T) {
 	owner := NewBuildOwner()
 
 	var panicValue any
@@ -294,7 +294,7 @@ func TestMustProviderOf_Panics(t *testing.T) {
 			defer func() {
 				panicValue = recover()
 			}()
-			_ = MustProviderOf[*testUser](ctx)
+			_ = MustProvide[*testUser](ctx)
 			return nil
 		},
 	}
@@ -303,7 +303,7 @@ func TestMustProviderOf_Panics(t *testing.T) {
 	element.Mount(nil, nil)
 
 	if panicValue == nil {
-		t.Fatal("expected MustProviderOf to panic when provider not found")
+		t.Fatal("expected MustProvide to panic when provider not found")
 	}
 
 	panicStr, ok := panicValue.(string)
@@ -352,14 +352,14 @@ func TestInheritedProvider_ChildWidget(t *testing.T) {
 }
 
 func TestInheritedProvider_WrongOldWidgetType(t *testing.T) {
-	// This tests the edge case where UpdateShouldNotify receives a different widget type
+	// This tests the edge case where ShouldRebuild receives a different widget type
 	widget := InheritedProvider[int]{Value: 42}
 
 	// Create a mock inherited widget of different type
 	differentWidget := InheritedProvider[string]{Value: "hello"}
 
 	// Should return true (trigger rebuild) when types don't match
-	if !widget.UpdateShouldNotify(differentWidget) {
-		t.Error("expected UpdateShouldNotify to return true for different widget types")
+	if !widget.ShouldRebuildDependents(differentWidget) {
+		t.Error("expected ShouldRebuild to return true for different widget types")
 	}
 }

@@ -31,7 +31,7 @@ var (
 // to ensure no events are missed.
 //
 // All methods are safe for concurrent use. Callback fields should be set
-// on the UI thread (e.g. in InitState or a UseController callback). Setting
+// on the UI thread (e.g. in InitState). Setting
 // them before calling Load ensures no events are missed.
 type AudioPlayerController struct {
 	svc *audioPlayerServiceState

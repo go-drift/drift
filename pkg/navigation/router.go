@@ -483,7 +483,7 @@ type routerInherited struct {
 
 func (r routerInherited) ChildWidget() core.Widget { return r.child }
 
-func (r routerInherited) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (r routerInherited) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(routerInherited); ok {
 		return r.state != old.state
 	}

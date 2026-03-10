@@ -12,10 +12,11 @@ import (
 // The native player provides standard controls (play/pause, seek bar, time display)
 // on both platforms. No Drift overlay is needed.
 //
-// Create a [platform.VideoPlayerController] with [core.UseController] and pass
+// Create a [platform.VideoPlayerController] with [core.UseDisposable] and pass
 // it to this widget:
 //
-//	s.video = core.UseController(s, platform.NewVideoPlayerController)
+//	s.video = platform.NewVideoPlayerController()
+//	core.UseDisposable(s, s.video)
 //	s.video.OnPlaybackStateChanged = func(state platform.PlaybackState) { ... }
 //	s.video.Load(url)
 //

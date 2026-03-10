@@ -17,13 +17,14 @@ func buildSharePage(_ core.BuildContext) core.Widget { return sharePage{} }
 
 type shareState struct {
 	core.StateBase
-	statusText     *core.Managed[string]
+	statusText     *core.Signal[string]
 	textController *platform.TextEditingController
 }
 
 func (s *shareState) InitState() {
-	s.statusText = core.NewManaged(s, "Tap a button to open the share sheet.")
+	s.statusText = core.NewSignal("Tap a button to open the share sheet.")
 	s.textController = platform.NewTextEditingController("Check out this amazing app!")
+	core.UseListenable(s, s.statusText)
 }
 
 func (s *shareState) Build(ctx core.BuildContext) core.Widget {

@@ -9,10 +9,11 @@ import (
 
 // NativeWebView embeds a native web browser view.
 //
-// Create a [platform.WebViewController] with [core.UseController] and pass
+// Create a [platform.WebViewController] with [core.UseDisposable] and pass
 // it to this widget:
 //
-//	s.web = core.UseController(s, platform.NewWebViewController)
+//	s.web = platform.NewWebViewController()
+//	core.UseDisposable(s, s.web)
 //	s.web.OnPageFinished = func(url string) { ... }
 //	s.web.Load("https://example.com")
 //

@@ -994,7 +994,7 @@ type bottomSheetScope struct {
 
 func (b bottomSheetScope) ChildWidget() core.Widget { return b.child }
 
-func (b bottomSheetScope) UpdateShouldNotify(oldWidget core.InheritedWidget) bool {
+func (b bottomSheetScope) ShouldRebuildDependents(oldWidget core.InheritedWidget) bool {
 	if old, ok := oldWidget.(bottomSheetScope); ok {
 		return b.controller != old.controller
 	}

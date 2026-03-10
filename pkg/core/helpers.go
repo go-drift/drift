@@ -44,7 +44,7 @@ func (StatefulBase) Key() any { return nil }
 
 // InheritedBase provides default CreateElement and Key implementations for
 // inherited widgets. Embed it in your widget struct along with a Child field
-// and implement [InheritedWidget.UpdateShouldNotify] and
+// and implement [InheritedWidget.ShouldRebuildDependents] and
 // [InheritedWidget.ChildWidget]:
 //
 //	type UserScope struct {
@@ -55,7 +55,7 @@ func (StatefulBase) Key() any { return nil }
 //
 //	func (u UserScope) ChildWidget() core.Widget { return u.Child }
 //
-//	func (u UserScope) UpdateShouldNotify(old core.InheritedWidget) bool {
+//	func (u UserScope) ShouldRebuildDependents(old core.InheritedWidget) bool {
 //	    return u.User != old.(UserScope).User
 //	}
 type InheritedBase struct{}
@@ -115,7 +115,7 @@ type RenderObjectWidget interface {
 // transforms the current state to a new state.
 //
 // For complex widgets with many state fields, lifecycle methods,
-// Managed, or UseController, embed [StatefulBase] in a named struct instead.
+// or UseDisposable, embed [StatefulBase] in a named struct instead.
 func Stateful[S any](
 	init func() S,
 	build func(state S, ctx BuildContext, setState func(func(S) S)) Widget,

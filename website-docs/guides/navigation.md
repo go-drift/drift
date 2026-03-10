@@ -251,15 +251,15 @@ navigation.Navigator{
 Use the `Redirect` callback to implement authentication guards and route protection:
 
 ```go
-// Auth state controller
+// Auth state notifier
 type AuthState struct {
-    core.ControllerBase
+    core.Notifier
     isLoggedIn bool
 }
 
 func (a *AuthState) SetLoggedIn(loggedIn bool) {
     a.isLoggedIn = loggedIn
-    a.NotifyListeners() // Triggers redirect re-evaluation
+    a.Notify() // Triggers redirect re-evaluation
 }
 
 var authState = &AuthState{}
