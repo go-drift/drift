@@ -150,6 +150,12 @@ a:hover {
   font-weight: 600;
 }
 
+/* Let the page scroll instead of the TOC having its own scrollbar */
+[class*='tableOfContents'] {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 /* Generated index cards: compact 3-column grid.
    Selectors target Docusaurus CSS-module hashed class names; may need
    updating if Docusaurus changes its internal naming. */
