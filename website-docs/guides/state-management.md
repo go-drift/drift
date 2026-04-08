@@ -112,6 +112,10 @@ func (s *dataState) Build(ctx core.BuildContext) core.Widget {
 }
 ```
 
+:::tip
+For loading images from URLs, use [NetworkImage](/docs/catalog/display/image-svg#networkimage) instead of writing your own fetch/decode/cache pipeline. It handles loading states, error display, caching, and fade-in transitions automatically.
+:::
+
 ## Sharing State with InheritedWidget
 
 Share data down the widget tree without passing it through every level.

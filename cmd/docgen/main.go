@@ -34,10 +34,11 @@ var packages = []Package{
 	{Name: "navigation", Path: "pkg/navigation", Position: 8},
 	{Name: "gestures", Path: "pkg/gestures", Position: 9},
 	{Name: "focus", Path: "pkg/focus", Position: 10},
-	{Name: "platform", Path: "pkg/platform", Position: 11},
-	{Name: "errors", Path: "pkg/errors", Position: 12},
-	{Name: "validation", Path: "pkg/validation", Position: 13},
-	{Name: "accessibility", Path: "pkg/accessibility", Position: 14},
+	{Name: "image", Path: "pkg/image", Position: 11},
+	{Name: "platform", Path: "pkg/platform", Position: 12},
+	{Name: "errors", Path: "pkg/errors", Position: 13},
+	{Name: "validation", Path: "pkg/validation", Position: 14},
+	{Name: "accessibility", Path: "pkg/accessibility", Position: 15},
 }
 
 func main() {

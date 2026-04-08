@@ -76,6 +76,17 @@ func buildImagesPage(ctx core.BuildContext) core.Widget {
 		},
 		widgets.VSpace(12),
 		fitPreview("ScaleDown", widgets.ImageFitScaleDown, logo, colors),
+		widgets.VSpace(24),
+
+		sectionTitle("Network Image", colors),
+		widgets.VSpace(12),
+		widgets.Text{Content: "Loaded from URL with caching and fade-in:", Style: labelStyle(colors)},
+		widgets.VSpace(12),
+		widgets.NetworkImage{
+			URL:   "https://go.dev/blog/go-brand/Go-Logo/PNG/Go-Logo_Blue.png",
+			Width: 180,
+			Fit:   widgets.ImageFitContain,
+		},
 		widgets.VSpace(40),
 	)
 }
