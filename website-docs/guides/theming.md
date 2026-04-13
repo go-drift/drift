@@ -169,7 +169,34 @@ currently behave like Left and Right respectively (LTR only).
 
 ## Custom Themes
 
-Create a custom theme by building `ThemeData`:
+The fastest way to build a Material theme is from a single seed color:
+
+```go
+seed, err := graphics.ParseHexColor("#6750A4")
+if err != nil {
+    panic(err)
+}
+
+colors, err := theme.ColorSchemeFromSeed(theme.ColorSchemeSeedOptions{
+    Seed:       seed,
+    Brightness: theme.BrightnessLight,
+    Contrast:   0,
+})
+if err != nil {
+    panic(err)
+}
+
+myTheme := theme.ThemeData{
+    ColorScheme: colors,
+    TextTheme:   theme.DefaultTextTheme(colors.OnBackground),
+    Brightness:  theme.BrightnessLight,
+}
+```
+
+Use `Variant` to make the generated palette more vibrant or more neutral, and
+use `Contrast` in the `[-1, 1]` range to tune foreground/background separation.
+
+For exact color control, build a `ThemeData` manually:
 
 ```go
 myTheme := theme.ThemeData{

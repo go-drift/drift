@@ -31,6 +31,26 @@ func (c Color) RGBAF() (r, g, b, a float64) {
 		float64(uint8(c>>24)) / maxByte
 }
 
+// A returns the alpha component as an 8-bit value.
+func (c Color) A() uint8 {
+	return uint8(c >> 24)
+}
+
+// R returns the red component as an 8-bit value.
+func (c Color) R() uint8 {
+	return uint8(c >> 16)
+}
+
+// G returns the green component as an 8-bit value.
+func (c Color) G() uint8 {
+	return uint8(c >> 8)
+}
+
+// B returns the blue component as an 8-bit value.
+func (c Color) B() uint8 {
+	return uint8(c)
+}
+
 // Alpha returns the alpha component as a value from 0.0 (transparent) to 1.0 (opaque).
 func (c Color) Alpha() float64 {
 	return float64(uint8(c>>24)) / maxByte
@@ -60,6 +80,32 @@ func clamp01(v float64) float64 {
 		return 1
 	}
 	return v
+}
+
+// RelativeLuminance returns the relative luminance of c per WCAG 2.1.
+// See: https://www.w3.org/WAI/GL/wiki/Relative_luminance
+func (c Color) RelativeLuminance() float64 {
+	r, g, b, _ := c.RGBAF()
+	return 0.2126*srgbLinearize(r) + 0.7152*srgbLinearize(g) + 0.0722*srgbLinearize(b)
+}
+
+// ContrastRatio returns the WCAG 2.1 contrast ratio between two colors.
+// The result ranges from 1 (identical luminance) to 21 (black on white).
+func ContrastRatio(a, b Color) float64 {
+	l1 := a.RelativeLuminance()
+	l2 := b.RelativeLuminance()
+	if l1 < l2 {
+		l1, l2 = l2, l1
+	}
+	return (l1 + 0.05) / (l2 + 0.05)
+}
+
+// srgbLinearize converts an sRGB component (0-1) to linear light.
+func srgbLinearize(v float64) float64 {
+	if v <= 0.04045 {
+		return v / 12.92
+	}
+	return math.Pow((v+0.055)/1.055, 2.4)
 }
 
 // Common colors.

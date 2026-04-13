@@ -11,7 +11,7 @@ import (
 )
 
 func TestContrastRatio_BlackOnWhite(t *testing.T) {
-	ratio := ContrastRatio(graphics.ColorBlack, graphics.ColorWhite)
+	ratio := graphics.ContrastRatio(graphics.ColorBlack, graphics.ColorWhite)
 
 	// Black on white should be 21:1
 	if math.Abs(ratio-21.0) > 0.1 {
@@ -20,7 +20,7 @@ func TestContrastRatio_BlackOnWhite(t *testing.T) {
 }
 
 func TestContrastRatio_WhiteOnBlack(t *testing.T) {
-	ratio := ContrastRatio(graphics.ColorWhite, graphics.ColorBlack)
+	ratio := graphics.ContrastRatio(graphics.ColorWhite, graphics.ColorBlack)
 
 	// Should be the same regardless of order
 	if math.Abs(ratio-21.0) > 0.1 {
@@ -29,7 +29,7 @@ func TestContrastRatio_WhiteOnBlack(t *testing.T) {
 }
 
 func TestContrastRatio_SameColor(t *testing.T) {
-	ratio := ContrastRatio(graphics.ColorWhite, graphics.ColorWhite)
+	ratio := graphics.ContrastRatio(graphics.ColorWhite, graphics.ColorWhite)
 
 	// Same color should be 1:1
 	if math.Abs(ratio-1.0) > 0.1 {
@@ -175,13 +175,13 @@ func TestMeetsWCAG_LevelA(t *testing.T) {
 
 func TestRelativeLuminance(t *testing.T) {
 	// White should have luminance of 1.0
-	whiteLum := relativeLuminance(graphics.ColorWhite)
+	whiteLum := graphics.ColorWhite.RelativeLuminance()
 	if math.Abs(whiteLum-1.0) > 0.01 {
 		t.Errorf("White luminance: expected ~1.0, got %.4f", whiteLum)
 	}
 
 	// Black should have luminance of 0.0
-	blackLum := relativeLuminance(graphics.ColorBlack)
+	blackLum := graphics.ColorBlack.RelativeLuminance()
 	if math.Abs(blackLum-0.0) > 0.01 {
 		t.Errorf("Black luminance: expected ~0.0, got %.4f", blackLum)
 	}

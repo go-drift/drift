@@ -146,10 +146,13 @@ volume := widgets.Semantics{
 ## Contrast Validation
 
 ```go
-import "github.com/go-drift/drift/pkg/validation"
+import (
+    "github.com/go-drift/drift/pkg/graphics"
+    "github.com/go-drift/drift/pkg/validation"
+)
 
 // Check contrast ratio
-ratio := validation.ContrastRatio(textColor, backgroundColor)
+ratio := graphics.ContrastRatio(textColor, backgroundColor)
 
 // Verify WCAG compliance
 if validation.MeetsWCAGAA(ratio, false) { // false = normal text

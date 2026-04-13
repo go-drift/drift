@@ -47,3 +47,26 @@ func ExampleTheme() {
 	}
 	_ = themedApp
 }
+
+// This example shows how to derive a full color scheme from a single seed.
+func ExampleColorSchemeFromSeed() {
+	seed, err := graphics.ParseHexColor("#6750A4")
+	if err != nil {
+		panic(err)
+	}
+
+	colors, err := theme.ColorSchemeFromSeed(theme.ColorSchemeSeedOptions{
+		Seed:       seed,
+		Brightness: theme.BrightnessLight,
+		Contrast:   0,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	_ = theme.ThemeData{
+		ColorScheme: colors,
+		TextTheme:   theme.DefaultTextTheme(colors.OnBackground),
+		Brightness:  theme.BrightnessLight,
+	}
+}

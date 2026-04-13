@@ -14,10 +14,10 @@ import (
 	"time"
 
 	// Register additional image decoders beyond the stdlib defaults.
+	_ "golang.org/x/image/webp"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	_ "golang.org/x/image/webp"
 )
 
 // LoadResult is the outcome of an image load operation.
