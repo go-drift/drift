@@ -9,6 +9,15 @@ All notable changes to Drift are documented here. Patch releases are grouped und
 
 ---
 
+## v0.26.0
+
+- **Network images**: `Image` widget loads from `http://` and `https://` URLs with in-memory LRU and on-disk caching
+- **Material 3 color schemes**: HCT color space and seed-based color scheme generation for dynamic theming
+- **Platform channels**: Method channels now thread `context.Context` through native calls for cancellation and deadline propagation
+- **Permissions**: Consolidated platform permission implementations behind a shared core with expanded test coverage
+
+---
+
 ## v0.25.x
 
 ### v0.25.0
