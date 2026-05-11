@@ -319,18 +319,20 @@ enum PlatformViewHandler {
                 continue
             }
 
-            targetView.frame = CGRect(
-                x: snap.x, y: snap.y,
-                width: snap.width, height: snap.height
-            )
+            let x = CGFloat(snap.x)
+            let y = CGFloat(snap.y)
+            let w = CGFloat(snap.width)
+            let h = CGFloat(snap.height)
+
+            targetView.frame = CGRect(x: x, y: y, width: w, height: h)
             // Show the view before applying clip bounds, since applyClipBounds
             // may hide it again if the clip area is zero.
             targetView.isHidden = false
             applyClipBounds(
                 viewId: snap.viewId,
                 view: targetView,
-                viewX: CGFloat(snap.x), viewY: CGFloat(snap.y),
-                viewWidth: CGFloat(snap.width), viewHeight: CGFloat(snap.height),
+                viewX: x, viewY: y,
+                viewWidth: w, viewHeight: h,
                 visibleLeft: CGFloat(snap.visibleLeft),
                 visibleTop: CGFloat(snap.visibleTop),
                 visibleRight: CGFloat(snap.visibleRight),
