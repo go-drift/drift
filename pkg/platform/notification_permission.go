@@ -10,7 +10,7 @@ type NotificationPermission interface {
 	// Uses the provided values verbatim - zero values mean that capability is NOT requested.
 	// For default behavior (Alert, Sound, Badge all enabled), use Request() instead.
 	// Options are ignored on Android.
-	RequestWithOptions(ctx context.Context, opts NotificationPermissionOptions) (PermissionStatus, error)
+	RequestWithOptions(ctx context.Context, opts NotificationPermissionOptions) (PermissionResult, error)
 }
 
 // NotificationPermissionOptions configures notification capabilities (iOS only).

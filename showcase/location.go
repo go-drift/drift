@@ -27,8 +27,8 @@ type locationState struct {
 	location        *core.Signal[*platform.LocationUpdate]
 	isStreaming     *core.Signal[bool]
 	isEnabled       *core.Signal[bool]
-	whenInUseStatus *core.Signal[platform.PermissionStatus]
-	alwaysStatus    *core.Signal[platform.PermissionStatus]
+	whenInUseStatus *core.Signal[platform.PermissionResult]
+	alwaysStatus    *core.Signal[platform.PermissionResult]
 	unsubFuncs      []func()
 }
 
@@ -67,10 +67,10 @@ func (s *locationState) InitState() {
 	}()
 
 	// Listen for permission changes
-	whenInUseUnsub := platform.Location.Permission.WhenInUse.Listen(func(status platform.PermissionStatus) {
+	whenInUseUnsub := platform.Location.Permission.WhenInUse.Listen(func(status platform.PermissionResult) {
 		drift.Dispatch(func() { s.whenInUseStatus.Set(status) })
 	})
-	alwaysUnsub := platform.Location.Permission.Always.Listen(func(status platform.PermissionStatus) {
+	alwaysUnsub := platform.Location.Permission.Always.Listen(func(status platform.PermissionResult) {
 		drift.Dispatch(func() { s.alwaysStatus.Set(status) })
 	})
 

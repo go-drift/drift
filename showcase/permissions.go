@@ -195,8 +195,7 @@ func (s *permissionsState) requestPermission(name string) {
 }
 
 func (s *permissionsState) openSettings() {
-	ctx := context.Background()
-	err := platform.OpenAppSettings(ctx)
+	err := platform.OpenAppSettings()
 	if err != nil {
 		s.statusText.Set("Error opening settings: " + err.Error())
 		return

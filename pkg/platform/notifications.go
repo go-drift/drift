@@ -124,7 +124,7 @@ var Notifications *NotificationsService
 func init() {
 	state := newNotificationService()
 	Notifications = &NotificationsService{
-		Permission: &notificationPermissionImpl{inner: newNotificationPermission()},
+		Permission: newNotificationPerm(),
 		state:      state,
 		deliveries: NewStream("drift/notifications/received", state.received, parseNotificationEventWithError),
 		opens:      NewStream("drift/notifications/opened", state.opened, parseNotificationOpenWithError),

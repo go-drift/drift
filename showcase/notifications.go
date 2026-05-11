@@ -25,7 +25,7 @@ type notificationsState struct {
 	statusText       *core.Signal[string]
 	receivedText     *core.Signal[string]
 	openedText       *core.Signal[string]
-	permissionStatus *core.Signal[platform.PermissionStatus]
+	permissionStatus *core.Signal[platform.PermissionResult]
 	unsubFuncs       []func()
 }
 
@@ -66,7 +66,7 @@ func (s *notificationsState) InitState() {
 	})
 
 	// Listen for permission changes
-	permUnsub := platform.Notifications.Permission.Listen(func(status platform.PermissionStatus) {
+	permUnsub := platform.Notifications.Permission.Listen(func(status platform.PermissionResult) {
 		drift.Dispatch(func() {
 			s.permissionStatus.Set(status)
 			s.statusText.Set("Permission status: " + string(status))

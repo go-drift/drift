@@ -373,7 +373,7 @@ func demoCard(ctx core.BuildContext, demo Demo, colors theme.ColorScheme) core.W
 }
 
 // permissionBadge renders a colored badge showing permission status.
-func permissionBadge(status platform.PermissionStatus, colors theme.ColorScheme) core.Widget {
+func permissionBadge(status platform.PermissionResult, colors theme.ColorScheme) core.Widget {
 	label := string(status)
 	if label == "" {
 		label = "unknown"

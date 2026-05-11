@@ -206,7 +206,7 @@ if platform.Camera.Permission.IsGranted(ctx) {
 }
 
 // Listen for permission changes
-unsubscribe := platform.Camera.Permission.Listen(func(status platform.PermissionStatus) {
+unsubscribe := platform.Camera.Permission.Listen(func(status platform.PermissionResult) {
     drift.Dispatch(func() {
         updateUI(status)
     })
@@ -236,10 +236,10 @@ if platform.Location.Permission.Always.IsGranted(ctx) {
 }
 
 // Listen for permission changes
-whenInUseUnsub := platform.Location.Permission.WhenInUse.Listen(func(status platform.PermissionStatus) {
+whenInUseUnsub := platform.Location.Permission.WhenInUse.Listen(func(status platform.PermissionResult) {
     drift.Dispatch(func() { updateWhenInUseUI(status) })
 })
-alwaysUnsub := platform.Location.Permission.Always.Listen(func(status platform.PermissionStatus) {
+alwaysUnsub := platform.Location.Permission.Always.Listen(func(status platform.PermissionResult) {
     drift.Dispatch(func() { updateAlwaysUI(status) })
 })
 defer whenInUseUnsub()
@@ -295,8 +295,7 @@ result, err := platform.Calendar.Permission.Request(ctx)
 
 ```go
 // Open app settings for manual permission management
-ctx := context.Background()
-platform.OpenAppSettings(ctx)
+platform.OpenAppSettings()
 ```
 
 ### Permission Results
@@ -402,7 +401,7 @@ type cameraState struct {
     core.StateBase
     status           *core.Signal[string]
     image            *core.Signal[image.Image]
-    permissionStatus *core.Signal[platform.PermissionStatus]
+    permissionStatus *core.Signal[platform.PermissionResult]
 }
 
 func (s *cameraState) InitState() {
@@ -422,7 +421,7 @@ func (s *cameraState) InitState() {
     }()
 
     // Listen for permission changes
-    unsub := platform.Camera.Permission.Listen(func(status platform.PermissionStatus) {
+    unsub := platform.Camera.Permission.Listen(func(status platform.PermissionResult) {
         drift.Dispatch(func() { s.permissionStatus.Set(status) })
     })
     s.OnDispose(unsub)

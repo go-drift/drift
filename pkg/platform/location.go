@@ -58,14 +58,13 @@ type LocationService struct {
 var Location *LocationService
 
 func init() {
-	locPerm := newLocationPermission()
 	state := newLocationService()
 	Location = &LocationService{
 		state:   state,
 		updates: NewStream("drift/location/updates", state.updates, parseLocationUpdateWithError),
 	}
-	Location.Permission.WhenInUse = &basicPermission{inner: locPerm.permissionType}
-	Location.Permission.Always = &locationAlwaysPermission{inner: locPerm}
+	Location.Permission.WhenInUse = newPerm("location")
+	Location.Permission.Always = newPerm("location_always")
 }
 
 type locationServiceState struct {

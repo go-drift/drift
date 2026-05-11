@@ -8,5 +8,5 @@ type MicrophoneService struct {
 
 // Microphone is the singleton microphone service.
 var Microphone = &MicrophoneService{
-	Permission: &basicPermission{inner: newPermission("microphone")},
+	Permission: newPerm("microphone"),
 }

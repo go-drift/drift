@@ -29,7 +29,7 @@ type cameraState struct {
 	core.StateBase
 	status           *core.Signal[string]
 	image            *core.Signal[image.Image]
-	permissionStatus *core.Signal[platform.PermissionStatus]
+	permissionStatus *core.Signal[platform.PermissionResult]
 	unsubscribe      func()
 }
 
@@ -52,7 +52,7 @@ func (s *cameraState) InitState() {
 	}()
 
 	// Listen for permission changes
-	s.unsubscribe = platform.Camera.Permission.Listen(func(status platform.PermissionStatus) {
+	s.unsubscribe = platform.Camera.Permission.Listen(func(status platform.PermissionResult) {
 		drift.Dispatch(func() {
 			s.permissionStatus.Set(status)
 		})
