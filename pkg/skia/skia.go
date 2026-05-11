@@ -308,18 +308,8 @@ func CanvasSaveLayerFiltered(
 	colorFilterData []float32,
 	imageFilterData []float32,
 ) {
-	var cfPtr *C.float
-	cfLen := C.int(0)
-	if len(colorFilterData) > 0 {
-		cfPtr = (*C.float)(unsafe.Pointer(&colorFilterData[0]))
-		cfLen = C.int(len(colorFilterData))
-	}
-	var ifPtr *C.float
-	ifLen := C.int(0)
-	if len(imageFilterData) > 0 {
-		ifPtr = (*C.float)(unsafe.Pointer(&imageFilterData[0]))
-		ifLen = C.int(len(imageFilterData))
-	}
+	cfPtr, cfLen := floatSliceData(colorFilterData)
+	ifPtr, ifLen := floatSliceData(imageFilterData)
 	C.drift_skia_canvas_save_layer_filtered(
 		C.DriftSkiaCanvas(canvas),
 		C.float(left), C.float(top), C.float(right), C.float(bottom),
@@ -343,12 +333,7 @@ func CanvasDrawRect(
 	dashIntervals []float32, dashPhase float32,
 	blendMode int32, alpha float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	C.drift_skia_canvas_draw_rect(
 		C.DriftSkiaCanvas(canvas),
 		C.float(left), C.float(top), C.float(right), C.float(bottom),
@@ -369,12 +354,7 @@ func CanvasDrawRRect(
 	dashIntervals []float32, dashPhase float32,
 	blendMode int32, alpha float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	C.drift_skia_canvas_draw_rrect(
 		C.DriftSkiaCanvas(canvas),
 		C.float(left), C.float(top), C.float(right), C.float(bottom),
@@ -398,12 +378,7 @@ func CanvasDrawCircle(
 	dashIntervals []float32, dashPhase float32,
 	blendMode int32, alpha float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	C.drift_skia_canvas_draw_circle(
 		C.DriftSkiaCanvas(canvas),
 		C.float(cx), C.float(cy), C.float(radius),
@@ -423,12 +398,7 @@ func CanvasDrawLine(
 	dashIntervals []float32, dashPhase float32,
 	blendMode int32, alpha float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	C.drift_skia_canvas_draw_line(
 		C.DriftSkiaCanvas(canvas),
 		C.float(x1), C.float(y1), C.float(x2), C.float(y2),
@@ -452,12 +422,7 @@ func CanvasDrawRectGradient(
 	centerX, centerY, radius float32,
 	colors []uint32, positions []float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_rect_gradient(
 		C.DriftSkiaCanvas(canvas),
@@ -487,12 +452,7 @@ func CanvasDrawRRectGradient(
 	centerX, centerY, radius float32,
 	colors []uint32, positions []float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_rrect_gradient(
 		C.DriftSkiaCanvas(canvas),
@@ -523,12 +483,7 @@ func CanvasDrawCircleGradient(
 	centerX, centerY, gradientRadius float32,
 	colors []uint32, positions []float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_circle_gradient(
 		C.DriftSkiaCanvas(canvas),
@@ -557,12 +512,7 @@ func CanvasDrawLineGradient(
 	centerX, centerY, radius float32,
 	colors []uint32, positions []float32,
 ) {
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_line_gradient(
 		C.DriftSkiaCanvas(canvas),
@@ -594,12 +544,7 @@ func CanvasDrawPathGradient(
 	if path == nil || path.ptr == nil {
 		return
 	}
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	cColors, cPositions, count := gradientData(colors, positions)
 	C.drift_skia_canvas_draw_path_gradient(
 		C.DriftSkiaCanvas(canvas),
@@ -986,6 +931,21 @@ func gradientData(colors []uint32, positions []float32) (*C.uint, *C.float, C.in
 	return (*C.uint)(unsafe.Pointer(&colors[0])), (*C.float)(unsafe.Pointer(&positions[0])), C.int(len(colors))
 }
 
+// Skia dash patterns require at least one on/off pair.
+func dashIntervalData(intervals []float32) (*C.float, C.int) {
+	if len(intervals) < 2 {
+		return nil, 0
+	}
+	return (*C.float)(unsafe.Pointer(&intervals[0])), C.int(len(intervals))
+}
+
+func floatSliceData(s []float32) (*C.float, C.int) {
+	if len(s) == 0 {
+		return nil, 0
+	}
+	return (*C.float)(unsafe.Pointer(&s[0])), C.int(len(s))
+}
+
 // FillType constants for path fill rules.
 const (
 	FillTypeWinding = 0
@@ -1059,12 +1019,7 @@ func CanvasDrawPath(
 	if path == nil || path.ptr == nil {
 		return
 	}
-	var dashPtr *C.float
-	dashCount := C.int(0)
-	if len(dashIntervals) >= 2 {
-		dashPtr = (*C.float)(unsafe.Pointer(&dashIntervals[0]))
-		dashCount = C.int(len(dashIntervals))
-	}
+	dashPtr, dashCount := dashIntervalData(dashIntervals)
 	C.drift_skia_canvas_draw_path(
 		C.DriftSkiaCanvas(canvas),
 		path.ptr,
