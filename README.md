@@ -76,16 +76,6 @@ Drift follows semantic versioning.
 - Deprecated APIs remain for at least 2 minor versions
 - Breaking changes only in major versions
 
-## Roadmap
-
-**v1.0.0 targets:**
-
-- Testing framework with widget tests and golden tests
-- More widgets (Dialog, BottomSheet, Drawer, Snackbar, Slider)
-- Internationalization (i18n/l10n)
-- Developer tools (widget inspector, performance profiling)
-- Hot reload
-
 ## Contributing
 
 Contributions are welcome!
