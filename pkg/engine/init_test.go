@@ -242,6 +242,56 @@ func TestNeedsFrame_FalseWhileInitRunning(t *testing.T) {
 	}
 }
 
+// TestNeedsFrame_TrueWhenDispatchPendingDuringInit guards against an iOS
+// deadlock where the OnInit completion callback (which transitions phase out
+// of Running) sits in the dispatch queue forever because needsFrame returned
+// false on phase=Running, causing the platform to pause its render loop.
+func TestNeedsFrame_TrueWhenDispatchPendingDuringInit(t *testing.T) {
+	swapApp(t)
+	app.lifecycle.phase = initPhaseRunning
+
+	app.dispatchMu.Lock()
+	app.dispatchQueue = append(app.dispatchQueue, func() {})
+	app.dispatchMu.Unlock()
+
+	frameLock.Lock()
+	needs := app.needsFrameLocked()
+	frameLock.Unlock()
+
+	if !needs {
+		t.Fatal("expected needsFrame=true so the OnInit completion callback can drain")
+	}
+}
+
+// TestInitSuccess_NeedsFrameAfterOnInitCompletes is the end-to-end version of
+// the same invariant: once the OnInit goroutine returns and enqueues its
+// dispatch callback, needsFrame must report true so the platform reschedules
+// the render loop and the callback can transition phase to Done.
+func TestInitSuccess_NeedsFrameAfterOnInitCompletes(t *testing.T) {
+	swapApp(t)
+	app.lifecycle.phase = initPhasePending
+	app.lifecycle.ctx, app.lifecycle.cancel = context.WithCancel(context.Background())
+	app.lifecycle.onInit = func(ctx context.Context) error { return nil }
+
+	if runPipelineLocked() {
+		t.Fatal("expected first frame to return false while OnInit starts")
+	}
+
+	waitForDispatch(t, 2*time.Second)
+
+	frameLock.Lock()
+	needs := app.needsFrameLocked()
+	phase := app.lifecycle.phase
+	frameLock.Unlock()
+
+	if phase != initPhaseRunning {
+		t.Fatalf("expected phase still Running before dispatch drains, got %d", phase)
+	}
+	if !needs {
+		t.Fatal("expected needsFrame=true with OnInit completion callback queued")
+	}
+}
+
 func TestLifecycleDetachedTriggersDispose(t *testing.T) {
 	swapApp(t)
 

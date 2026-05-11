@@ -121,17 +121,19 @@ func NeedsFrame() bool {
 }
 
 func (a *appRunner) needsFrameLocked() bool {
-	// Need frame for initial render (root not yet created),
-	// but not while OnInit is running (we wait for the dispatch callback)
-	if a.root == nil {
-		return a.lifecycle.phase != initPhaseRunning
-	}
-	// Need frame if there are pending dispatch callbacks
+	// Pending dispatch callbacks must drain even when root is nil — the OnInit
+	// completion callback that transitions phase out of Running arrives via the
+	// dispatch queue, so gating it behind a mounted root would deadlock.
 	a.dispatchMu.Lock()
 	hasCallbacks := len(a.dispatchQueue) > 0
 	a.dispatchMu.Unlock()
 	if hasCallbacks {
 		return true
+	}
+	// Need frame for initial render (root not yet created),
+	// but not while OnInit is running (we wait for the dispatch callback)
+	if a.root == nil {
+		return a.lifecycle.phase != initPhaseRunning
 	}
 	// Need frame if explicitly requested
 	if a.pendingFrameRequest.Load() {
