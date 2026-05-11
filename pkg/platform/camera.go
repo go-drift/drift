@@ -159,7 +159,7 @@ func (c *CameraService) CapturePhoto(ctx context.Context, opts CapturePhotoOptio
 	defer sub.Cancel()
 
 	// Trigger native camera with request ID
-	_, err := c.state.channel.Invoke("capturePhoto", map[string]any{
+	_, err := c.state.channel.Invoke(ctx, "capturePhoto", map[string]any{
 		"useFrontCamera": opts.UseFrontCamera,
 		"requestId":      requestID,
 	})
@@ -237,7 +237,7 @@ func (c *CameraService) PickFromGallery(ctx context.Context, opts PickFromGaller
 	})
 	defer sub.Cancel()
 
-	_, err := c.state.channel.Invoke("pickFromGallery", map[string]any{
+	_, err := c.state.channel.Invoke(ctx, "pickFromGallery", map[string]any{
 		"allowMultiple": opts.AllowMultiple,
 		"requestId":     requestID,
 	})

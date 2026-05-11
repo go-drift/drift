@@ -48,13 +48,11 @@ func (s *permissionsState) InitState() {
 	core.UseListenable(s, s.statuses)
 	core.UseListenable(s, s.statusText)
 
-	ctx := context.Background()
-
 	// Check initial status of all permissions
 	go func() {
 		statuses := make(map[string]platform.PermissionResult)
 		for _, p := range otherPermissions {
-			if result, err := p.permission.Status(ctx); err == nil {
+			if result, err := p.permission.Status(); err == nil {
 				statuses[p.name] = result
 			}
 		}

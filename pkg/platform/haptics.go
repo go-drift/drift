@@ -1,5 +1,7 @@
 package platform
 
+import "context"
+
 // HapticsService provides haptic feedback functionality.
 var Haptics = &HapticsService{
 	channel: NewMethodChannel("drift/haptics"),
@@ -38,7 +40,7 @@ const (
 
 // Impact triggers an impact haptic feedback.
 func (h *HapticsService) Impact(style HapticFeedbackType) error {
-	_, err := h.channel.Invoke("impact", map[string]any{
+	_, err := h.channel.Invoke(context.Background(), "impact", map[string]any{
 		"style": string(style),
 	})
 	return err
@@ -67,7 +69,7 @@ func (h *HapticsService) SelectionClick() error {
 
 // Vibrate triggers a vibration for the specified duration in milliseconds.
 func (h *HapticsService) Vibrate(durationMs int) error {
-	_, err := h.channel.Invoke("vibrate", map[string]any{
+	_, err := h.channel.Invoke(context.Background(), "vibrate", map[string]any{
 		"duration": durationMs,
 	})
 	return err

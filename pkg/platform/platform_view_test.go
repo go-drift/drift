@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -22,7 +23,7 @@ type testBridgeCall struct {
 	args    any // JSON-decoded
 }
 
-func (b *testBridge) InvokeMethod(channel, method string, argsData []byte) ([]byte, error) {
+func (b *testBridge) InvokeMethod(_ context.Context, channel, method string, argsData []byte) ([]byte, error) {
 	var args any
 	if len(argsData) > 0 {
 		json.Unmarshal(argsData, &args)

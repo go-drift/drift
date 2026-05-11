@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -36,7 +37,7 @@ func ShowDatePicker(config DatePickerConfig) (time.Time, error) {
 		args["maxDate"] = config.MaxDate.Unix()
 	}
 
-	result, err := datePickerChannel.Invoke("show", args)
+	result, err := datePickerChannel.Invoke(context.Background(), "show", args)
 	if err != nil {
 		return time.Time{}, err
 	}

@@ -46,11 +46,9 @@ func (s *locationState) InitState() {
 	core.UseListenable(s, s.whenInUseStatus)
 	core.UseListenable(s, s.alwaysStatus)
 
-	ctx := context.Background()
-
 	// Check if location services are enabled
 	go func() {
-		enabled, _ := platform.Location.IsEnabled(ctx)
+		enabled, _ := platform.Location.IsEnabled()
 		drift.Dispatch(func() {
 			s.isEnabled.Set(enabled)
 		})
@@ -58,8 +56,8 @@ func (s *locationState) InitState() {
 
 	// Check initial permission statuses
 	go func() {
-		whenInUse, _ := platform.Location.Permission.WhenInUse.Status(ctx)
-		always, _ := platform.Location.Permission.Always.Status(ctx)
+		whenInUse, _ := platform.Location.Permission.WhenInUse.Status()
+		always, _ := platform.Location.Permission.Always.Status()
 		drift.Dispatch(func() {
 			s.whenInUseStatus.Set(whenInUse)
 			s.alwaysStatus.Set(always)
@@ -243,8 +241,7 @@ func (s *locationState) getCurrentLocation() {
 	s.statusText.Set("Getting location...")
 
 	go func() {
-		ctx := context.Background()
-		loc, err := platform.Location.GetCurrent(ctx, platform.LocationOptions{
+		loc, err := platform.Location.GetCurrent(platform.LocationOptions{
 			HighAccuracy: true,
 		})
 		drift.Dispatch(func() {
@@ -263,10 +260,8 @@ func (s *locationState) getCurrentLocation() {
 }
 
 func (s *locationState) toggleUpdates() {
-	ctx := context.Background()
-
 	if s.isStreaming.Value() {
-		err := platform.Location.StopUpdates(ctx)
+		err := platform.Location.StopUpdates()
 		if err != nil {
 			s.statusText.Set("Error stopping: " + err.Error())
 			return
@@ -274,7 +269,7 @@ func (s *locationState) toggleUpdates() {
 		s.isStreaming.Set(false)
 		s.statusText.Set("Location updates stopped")
 	} else {
-		err := platform.Location.StartUpdates(ctx, platform.LocationOptions{
+		err := platform.Location.StartUpdates(platform.LocationOptions{
 			HighAccuracy:   true,
 			DistanceFilter: 10, // 10 meters
 		})

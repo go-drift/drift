@@ -35,7 +35,7 @@ func (b *permissionsBridge) on(method string, fn func(args map[string]any) (any,
 	b.mu.Unlock()
 }
 
-func (b *permissionsBridge) InvokeMethod(channel, method string, args []byte) ([]byte, error) {
+func (b *permissionsBridge) InvokeMethod(_ context.Context, channel, method string, args []byte) ([]byte, error) {
 	var argsMap map[string]any
 	if len(args) > 0 {
 		decoded, _ := DefaultCodec.Decode(args)
@@ -336,7 +336,7 @@ func TestLocationAlways_ShouldShowRationale(t *testing.T) {
 	})
 	setupPermissions(t, bridge)
 
-	if _, err := newPerm("location_always").ShouldShowRationale(context.Background()); err != nil {
+	if _, err := newPerm("location_always").ShouldShowRationale(); err != nil {
 		t.Fatalf("ShouldShowRationale: %v", err)
 	}
 
@@ -400,44 +400,48 @@ func TestNotifications_RequestWithOptions(t *testing.T) {
 	t.Fatal("no request call recorded")
 }
 
-// Status and ShouldShowRationale currently ignore ctx cancellation.
-// These tests lock that documented behavior in so future changes can't
-// silently introduce half-cancellation semantics.
-func TestStatus_IgnoresCanceledCtx(t *testing.T) {
+// TestRequest_PreCanceledCtx covers the new ctx-aware path through
+// requestAndWait → status(ctx). With a pre-canceled ctx, the initial status
+// check should fast-fail; no native "request" call should be made.
+// Cancellation is normalized to ErrCanceled (not raw context.Canceled).
+func TestRequest_PreCanceledCtx(t *testing.T) {
 	bridge := newPermissionsBridge()
 	bridge.on("check", func(map[string]any) (any, error) {
-		return map[string]any{"status": "granted"}, nil
+		return map[string]any{"status": "not_determined"}, nil
 	})
+	bridge.on("request", func(map[string]any) (any, error) { return nil, nil })
 	setupPermissions(t, bridge)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	got, err := newPerm("camera").Status(ctx)
-	if err != nil {
-		t.Fatalf("Status returned error on canceled ctx: %v", err)
+	_, err := newPerm("camera").Request(ctx)
+	if !errors.Is(err, ErrCanceled) {
+		t.Fatalf("err = %v, want ErrCanceled", err)
 	}
-	if got != PermissionGranted {
-		t.Errorf("status = %q, want %q", got, PermissionGranted)
+	for _, c := range bridge.snapshot() {
+		if c.Method == "request" {
+			t.Errorf("expected no native request call when ctx pre-canceled; got %+v", c)
+		}
 	}
 }
 
-func TestShouldShowRationale_IgnoresCanceledCtx(t *testing.T) {
+// TestRequest_PreCanceledCtx_DeadlineExceeded asserts that a ctx whose deadline
+// already passed maps to ErrTimeout (not raw context.DeadlineExceeded).
+func TestRequest_PreCanceledCtx_DeadlineExceeded(t *testing.T) {
 	bridge := newPermissionsBridge()
-	bridge.on("shouldShowRationale", func(map[string]any) (any, error) {
-		return map[string]any{"shouldShow": true}, nil
+	bridge.on("check", func(map[string]any) (any, error) {
+		return map[string]any{"status": "not_determined"}, nil
 	})
+	bridge.on("request", func(map[string]any) (any, error) { return nil, nil })
 	setupPermissions(t, bridge)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
 
-	got, err := newPerm("camera").ShouldShowRationale(ctx)
-	if err != nil {
-		t.Fatalf("ShouldShowRationale returned error on canceled ctx: %v", err)
-	}
-	if !got {
-		t.Errorf("shouldShow = false, want true")
+	_, err := newPerm("camera").Request(ctx)
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("err = %v, want ErrTimeout", err)
 	}
 }
 
@@ -449,7 +453,7 @@ func TestShouldShowRationale_PropagatesBridgeError(t *testing.T) {
 	})
 	setupPermissions(t, bridge)
 
-	got, err := newPerm("camera").ShouldShowRationale(context.Background())
+	got, err := newPerm("camera").ShouldShowRationale()
 	if err == nil {
 		t.Fatal("expected error from bridge, got nil")
 	}

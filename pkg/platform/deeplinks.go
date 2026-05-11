@@ -44,8 +44,8 @@ func newDeepLinkService() *deepLinkServiceState {
 }
 
 // GetInitial returns the launch deep link, if available.
-func (d *DeepLinkService) GetInitial(ctx context.Context) (*DeepLink, error) {
-	result, err := d.state.channel.Invoke("getInitial", nil)
+func (d *DeepLinkService) GetInitial() (*DeepLink, error) {
+	result, err := d.state.channel.Invoke(context.Background(), "getInitial", nil)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,6 @@
 package navigation
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 
@@ -59,7 +58,7 @@ func (c *DeepLinkController) start() {
 	}
 	c.stopCh = make(chan struct{})
 	go func() {
-		link, err := platform.DeepLinks.GetInitial(context.Background())
+		link, err := platform.DeepLinks.GetInitial()
 		if err != nil {
 			c.handleError(err)
 		} else if link != nil {

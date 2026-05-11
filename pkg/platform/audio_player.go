@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -227,7 +228,7 @@ func (c *AudioPlayerController) Load(url string) error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("load", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "load", map[string]any{
 		"playerId": id,
 		"url":      url,
 	})
@@ -243,7 +244,7 @@ func (c *AudioPlayerController) Play() error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("play", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "play", map[string]any{
 		"playerId": id,
 	})
 	return err
@@ -257,7 +258,7 @@ func (c *AudioPlayerController) Pause() error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("pause", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "pause", map[string]any{
 		"playerId": id,
 	})
 	return err
@@ -273,7 +274,7 @@ func (c *AudioPlayerController) Stop() error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("stop", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "stop", map[string]any{
 		"playerId": id,
 	})
 	return err
@@ -287,7 +288,7 @@ func (c *AudioPlayerController) SeekTo(position time.Duration) error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("seekTo", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "seekTo", map[string]any{
 		"playerId":   id,
 		"positionMs": position.Milliseconds(),
 	})
@@ -303,7 +304,7 @@ func (c *AudioPlayerController) SetVolume(volume float64) error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("setVolume", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "setVolume", map[string]any{
 		"playerId": id,
 		"volume":   volume,
 	})
@@ -318,7 +319,7 @@ func (c *AudioPlayerController) SetLooping(looping bool) error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("setLooping", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "setLooping", map[string]any{
 		"playerId": id,
 		"looping":  looping,
 	})
@@ -334,7 +335,7 @@ func (c *AudioPlayerController) SetPlaybackSpeed(rate float64) error {
 	if id == 0 {
 		return ErrDisposed
 	}
-	_, err := c.svc.channel.Invoke("setPlaybackSpeed", map[string]any{
+	_, err := c.svc.channel.Invoke(context.Background(), "setPlaybackSpeed", map[string]any{
 		"playerId": id,
 		"rate":     rate,
 	})
@@ -357,7 +358,7 @@ func (c *AudioPlayerController) Dispose() {
 	delete(audioRegistry, id)
 	audioRegistryMu.Unlock()
 
-	c.svc.channel.Invoke("dispose", map[string]any{
+	c.svc.channel.Invoke(context.Background(), "dispose", map[string]any{
 		"playerId": id,
 	})
 }

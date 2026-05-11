@@ -1,5 +1,7 @@
 package platform
 
+import "context"
+
 // ClipboardService provides access to the system clipboard.
 var Clipboard = &ClipboardService{
 	channel: NewMethodChannel("drift/clipboard"),
@@ -18,7 +20,7 @@ type ClipboardData struct {
 // GetText retrieves text from the clipboard.
 // Returns empty string if clipboard is empty or contains non-text data.
 func (c *ClipboardService) GetText() (string, error) {
-	result, err := c.channel.Invoke("getText", nil)
+	result, err := c.channel.Invoke(context.Background(), "getText", nil)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +46,7 @@ func (c *ClipboardService) GetText() (string, error) {
 
 // SetText copies text to the clipboard.
 func (c *ClipboardService) SetText(text string) error {
-	_, err := c.channel.Invoke("setText", map[string]any{
+	_, err := c.channel.Invoke(context.Background(), "setText", map[string]any{
 		"text": text,
 	})
 	return err
@@ -52,7 +54,7 @@ func (c *ClipboardService) SetText(text string) error {
 
 // HasText returns true if the clipboard contains text.
 func (c *ClipboardService) HasText() (bool, error) {
-	result, err := c.channel.Invoke("hasText", nil)
+	result, err := c.channel.Invoke(context.Background(), "hasText", nil)
 	if err != nil {
 		return false, err
 	}
@@ -66,6 +68,6 @@ func (c *ClipboardService) HasText() (bool, error) {
 
 // Clear removes all data from the clipboard.
 func (c *ClipboardService) Clear() error {
-	_, err := c.channel.Invoke("clear", nil)
+	_, err := c.channel.Invoke(context.Background(), "clear", nil)
 	return err
 }

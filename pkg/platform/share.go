@@ -1,6 +1,10 @@
 package platform
 
-import "github.com/go-drift/drift/pkg/errors"
+import (
+	"context"
+
+	"github.com/go-drift/drift/pkg/errors"
+)
 
 // ShareService provides access to the system share sheet.
 var Share = &ShareService{
@@ -87,7 +91,7 @@ type ShareFile struct {
 }
 
 func (s *ShareService) share(data map[string]any) (ShareResult, error) {
-	result, err := s.channel.Invoke("share", data)
+	result, err := s.channel.Invoke(context.Background(), "share", data)
 	if err != nil {
 		return ShareResultUnavailable, err
 	}

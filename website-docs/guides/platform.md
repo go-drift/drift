@@ -8,6 +8,24 @@ sidebar_position: 1
 
 Drift provides access to native platform capabilities through the `platform` package.
 
+## Context conventions
+
+Most platform methods are simple native invocations or native-owned waits where
+Drift does not expose cancellation.
+
+`ctx` is reserved for APIs with a **caller-visible Go-side wait** — the call
+subscribes to a result event from native and `select`s on `ctx.Done()`, so ctx
+cancellation actually unblocks the Go caller:
+
+- `Permission.Request(ctx)` and `NotificationPermission.RequestWithOptions(ctx)`
+- `Camera.CapturePhoto(ctx, ...)`, `Camera.PickFromGallery(ctx, ...)`
+- `Storage.PickFile(ctx, ...)`, `Storage.PickDirectory(ctx)`, `Storage.SaveFile(ctx, ...)`
+
+When ctx fires on these methods, the Go caller is unblocked promptly with the
+package's stable error sentinels (`ErrCanceled` / `ErrTimeout` for permissions,
+`ctx.Err()` for camera/storage). The native operation continues to completion
+in the background and its result is discarded — CGO has no abort path.
+
 ## Clipboard
 
 Copy and paste text:
@@ -192,7 +210,7 @@ Permissions are attached to the features that use them. Each feature service pro
 ctx := context.Background()
 
 // Check status
-status, err := platform.Camera.Permission.Status(ctx)
+status, err := platform.Camera.Permission.Status()
 
 // Request permission
 result, err := platform.Camera.Permission.Request(ctx)
@@ -201,7 +219,7 @@ if result == platform.PermissionGranted {
 }
 
 // Convenience checks
-if platform.Camera.Permission.IsGranted(ctx) {
+if platform.Camera.Permission.IsGranted() {
     // Camera is available
 }
 
@@ -222,16 +240,16 @@ Location has two permission levels - when in use and always (background):
 ctx := context.Background()
 
 // When-in-use location
-status, err := platform.Location.Permission.WhenInUse.Status(ctx)
+status, err := platform.Location.Permission.WhenInUse.Status()
 result, err := platform.Location.Permission.WhenInUse.Request(ctx)
 
 // Background (always) location
 // Note: On iOS, WhenInUse must be granted before requesting Always.
-status, err := platform.Location.Permission.Always.Status(ctx)
+status, err := platform.Location.Permission.Always.Status()
 result, err := platform.Location.Permission.Always.Request(ctx)
 
 // Convenience check
-if platform.Location.Permission.Always.IsGranted(ctx) {
+if platform.Location.Permission.Always.IsGranted() {
     // Background location available
 }
 
@@ -275,19 +293,19 @@ For permissions without dedicated feature services:
 ctx := context.Background()
 
 // Microphone
-status, err := platform.Microphone.Permission.Status(ctx)
+status, err := platform.Microphone.Permission.Status()
 result, err := platform.Microphone.Permission.Request(ctx)
 
 // Photos
-status, err := platform.Photos.Permission.Status(ctx)
+status, err := platform.Photos.Permission.Status()
 result, err := platform.Photos.Permission.Request(ctx)
 
 // Contacts
-status, err := platform.Contacts.Permission.Status(ctx)
+status, err := platform.Contacts.Permission.Status()
 result, err := platform.Contacts.Permission.Request(ctx)
 
 // Calendar
-status, err := platform.Calendar.Permission.Status(ctx)
+status, err := platform.Calendar.Permission.Status()
 result, err := platform.Calendar.Permission.Request(ctx)
 ```
 
@@ -328,7 +346,7 @@ import "github.com/go-drift/drift/pkg/platform"
 
 // Request permission first
 ctx := context.Background()
-if !platform.Camera.Permission.IsGranted(ctx) {
+if !platform.Camera.Permission.IsGranted() {
     platform.Camera.Permission.Request(ctx)
 }
 
@@ -416,7 +434,7 @@ func (s *cameraState) InitState() {
 
     // Check initial permission
     go func() {
-        status, _ := platform.Camera.Permission.Status(ctx)
+        status, _ := platform.Camera.Permission.Status()
         drift.Dispatch(func() { s.permissionStatus.Set(status) })
     }()
 
@@ -476,7 +494,7 @@ ctx := context.Background()
 platform.Location.Permission.WhenInUse.Request(ctx)
 
 // Get current location (synchronous)
-loc, err := platform.Location.GetCurrent(ctx, platform.LocationOptions{
+loc, err := platform.Location.GetCurrent(platform.LocationOptions{
     HighAccuracy: true,
 })
 if err == nil {
@@ -484,7 +502,7 @@ if err == nil {
 }
 
 // Start continuous location updates
-platform.Location.StartUpdates(ctx, platform.LocationOptions{
+platform.Location.StartUpdates(platform.LocationOptions{
     HighAccuracy:   true,
     DistanceFilter: 10, // meters
 })
@@ -498,13 +516,13 @@ unsubscribe := platform.Location.Updates().Listen(func(update platform.LocationU
 defer unsubscribe()
 
 // Stop updates when done
-platform.Location.StopUpdates(ctx)
+platform.Location.StopUpdates()
 
 // Check if location services are enabled
-enabled, err := platform.Location.IsEnabled(ctx)
+enabled, err := platform.Location.IsEnabled()
 
 // Get last known location without triggering a new request
-lastKnown, err := platform.Location.LastKnown(ctx)
+lastKnown, err := platform.Location.LastKnown()
 ```
 
 ### Location Data
@@ -532,7 +550,7 @@ status, err := platform.Notifications.Permission.RequestWithOptions(ctx,
 )
 
 // Schedule a local notification
-platform.Notifications.Schedule(ctx, platform.NotificationRequest{
+platform.Notifications.Schedule(platform.NotificationRequest{
     ID:    "reminder-1",
     Title: "Reminder",
     Body:  "Meeting in 5 minutes",
@@ -541,16 +559,16 @@ platform.Notifications.Schedule(ctx, platform.NotificationRequest{
 })
 
 // Cancel a notification
-platform.Notifications.Cancel(ctx, "reminder-1")
+platform.Notifications.Cancel("reminder-1")
 
 // Cancel all notifications
-platform.Notifications.CancelAll(ctx)
+platform.Notifications.CancelAll()
 
 // Set app badge count
-platform.Notifications.SetBadge(ctx, 3)
+platform.Notifications.SetBadge(3)
 
 // Get notification settings
-settings, err := platform.Notifications.Settings(ctx)
+settings, err := platform.Notifications.Settings()
 ```
 
 ### Listening for Notifications

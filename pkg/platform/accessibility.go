@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"context"
 	"github.com/go-drift/drift/pkg/semantics"
 )
 
@@ -93,7 +94,7 @@ func (c *accessibilityChannel) SendSemanticsUpdate(update semantics.SemanticsUpd
 		"removals": update.Removals,
 	}
 
-	_, err := c.method.Invoke("updateSemantics", args)
+	_, err := c.method.Invoke(context.Background(), "updateSemantics", args)
 	return err
 }
 
@@ -103,7 +104,7 @@ func (c *accessibilityChannel) Announce(message string, politeness AnnouncePolit
 		"message":    message,
 		"politeness": politenessToString(politeness),
 	}
-	_, err := c.method.Invoke("announce", args)
+	_, err := c.method.Invoke(context.Background(), "announce", args)
 	return err
 }
 
@@ -112,19 +113,19 @@ func (c *accessibilityChannel) SetAccessibilityFocus(nodeID int64) error {
 	args := map[string]any{
 		"nodeId": nodeID,
 	}
-	_, err := c.method.Invoke("setAccessibilityFocus", args)
+	_, err := c.method.Invoke(context.Background(), "setAccessibilityFocus", args)
 	return err
 }
 
 // ClearAccessibilityFocus clears the current accessibility focus.
 func (c *accessibilityChannel) ClearAccessibilityFocus() error {
-	_, err := c.method.Invoke("clearAccessibilityFocus", nil)
+	_, err := c.method.Invoke(context.Background(), "clearAccessibilityFocus", nil)
 	return err
 }
 
 // IsAccessibilityEnabled queries whether accessibility services are enabled.
 func (c *accessibilityChannel) IsAccessibilityEnabled() (bool, error) {
-	result, err := c.method.Invoke("isAccessibilityEnabled", nil)
+	result, err := c.method.Invoke(context.Background(), "isAccessibilityEnabled", nil)
 	if err != nil {
 		return false, err
 	}

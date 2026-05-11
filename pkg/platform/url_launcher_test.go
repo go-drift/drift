@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -25,7 +26,7 @@ type urlLauncherBridge struct {
 	err      error
 }
 
-func (b *urlLauncherBridge) InvokeMethod(channel, method string, args []byte) ([]byte, error) {
+func (b *urlLauncherBridge) InvokeMethod(_ context.Context, channel, method string, args []byte) ([]byte, error) {
 	if b.err != nil {
 		return nil, b.err
 	}

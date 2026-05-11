@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -37,9 +38,10 @@ func (c *MethodChannel) SetHandler(handler MethodHandler) {
 }
 
 // Invoke calls a method on the native side and returns the result.
-// This blocks until the native side responds or an error occurs.
-func (c *MethodChannel) Invoke(method string, args any) (any, error) {
-	return invokeNative(c.name, method, args)
+// Blocks until the native side responds, an error occurs, or ctx is canceled.
+// See [invokeNative] for the ctx cancellation contract.
+func (c *MethodChannel) Invoke(ctx context.Context, method string, args any) (any, error) {
+	return invokeNative(ctx, c.name, method, args)
 }
 
 // handleCall processes an incoming method call from native code.

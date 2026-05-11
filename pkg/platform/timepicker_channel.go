@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"errors"
 )
 
@@ -37,7 +38,7 @@ func ShowTimePicker(config TimePickerConfig) (hour, minute int, err error) {
 		args["is24Hour"] = *config.Is24Hour
 	}
 
-	result, err := timePickerChannel.Invoke("show", args)
+	result, err := timePickerChannel.Invoke(context.Background(), "show", args)
 	if err != nil {
 		return 0, 0, err
 	}

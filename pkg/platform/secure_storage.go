@@ -1,8 +1,10 @@
 package platform
 
-import "maps"
-
-import "fmt"
+import (
+	"context"
+	"fmt"
+	"maps"
+)
 
 // SecureStorage provides secure key-value storage using platform-native encryption.
 // On iOS, this uses the Keychain with optional LocalAuthentication.
@@ -150,7 +152,7 @@ func (s *SecureStorageService) Set(key, value string, opts *SecureStorageOptions
 		maps.Copy(args, opts.toArgs())
 	}
 
-	result, err := s.channel.Invoke("set", args)
+	result, err := s.channel.Invoke(context.Background(), "set", args)
 	if err != nil {
 		return s.wrapError(err)
 	}
@@ -185,7 +187,7 @@ func (s *SecureStorageService) Get(key string, opts *SecureStorageOptions) (stri
 		}
 	}
 
-	result, err := s.channel.Invoke("get", args)
+	result, err := s.channel.Invoke(context.Background(), "get", args)
 	if err != nil {
 		return "", s.wrapError(err)
 	}
@@ -227,7 +229,7 @@ func (s *SecureStorageService) Delete(key string, opts *SecureStorageOptions) er
 		args["service"] = opts.Service
 	}
 
-	result, err := s.channel.Invoke("delete", args)
+	result, err := s.channel.Invoke(context.Background(), "delete", args)
 	if err != nil {
 		return s.wrapError(err)
 	}
@@ -254,7 +256,7 @@ func (s *SecureStorageService) Contains(key string, opts *SecureStorageOptions) 
 		args["service"] = opts.Service
 	}
 
-	result, err := s.channel.Invoke("contains", args)
+	result, err := s.channel.Invoke(context.Background(), "contains", args)
 	if err != nil {
 		return false, s.wrapError(err)
 	}
@@ -282,7 +284,7 @@ func (s *SecureStorageService) GetAllKeys(opts *SecureStorageOptions) ([]string,
 		}
 	}
 
-	result, err := s.channel.Invoke("getAllKeys", args)
+	result, err := s.channel.Invoke(context.Background(), "getAllKeys", args)
 	if err != nil {
 		return nil, s.wrapError(err)
 	}
@@ -316,7 +318,7 @@ func (s *SecureStorageService) DeleteAll(opts *SecureStorageOptions) error {
 		}
 	}
 
-	result, err := s.channel.Invoke("deleteAll", args)
+	result, err := s.channel.Invoke(context.Background(), "deleteAll", args)
 	if err != nil {
 		return s.wrapError(err)
 	}
@@ -331,7 +333,7 @@ func (s *SecureStorageService) DeleteAll(opts *SecureStorageOptions) error {
 
 // IsBiometricAvailable checks if biometric authentication is available on the device.
 func (s *SecureStorageService) IsBiometricAvailable() (bool, error) {
-	result, err := s.channel.Invoke("isBiometricAvailable", nil)
+	result, err := s.channel.Invoke(context.Background(), "isBiometricAvailable", nil)
 	if err != nil {
 		return false, s.wrapError(err)
 	}
@@ -347,7 +349,7 @@ func (s *SecureStorageService) IsBiometricAvailable() (bool, error) {
 
 // GetBiometricType returns the type of biometric authentication available on the device.
 func (s *SecureStorageService) GetBiometricType() (BiometricType, error) {
-	result, err := s.channel.Invoke("getBiometricType", nil)
+	result, err := s.channel.Invoke(context.Background(), "getBiometricType", nil)
 	if err != nil {
 		return BiometricTypeNone, s.wrapError(err)
 	}

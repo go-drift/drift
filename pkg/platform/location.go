@@ -80,9 +80,8 @@ func newLocationService() *locationServiceState {
 }
 
 // GetCurrent returns the current device location.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (l *LocationService) GetCurrent(ctx context.Context, opts LocationOptions) (*LocationUpdate, error) {
-	result, err := l.state.channel.Invoke("getCurrentLocation", map[string]any{
+func (l *LocationService) GetCurrent(opts LocationOptions) (*LocationUpdate, error) {
+	result, err := l.state.channel.Invoke(context.Background(), "getCurrentLocation", map[string]any{
 		"highAccuracy":      opts.HighAccuracy,
 		"distanceFilter":    opts.DistanceFilter,
 		"intervalMs":        opts.IntervalMs,
@@ -99,9 +98,8 @@ func (l *LocationService) GetCurrent(ctx context.Context, opts LocationOptions) 
 }
 
 // StartUpdates begins continuous location updates.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (l *LocationService) StartUpdates(ctx context.Context, opts LocationOptions) error {
-	_, err := l.state.channel.Invoke("startUpdates", map[string]any{
+func (l *LocationService) StartUpdates(opts LocationOptions) error {
+	_, err := l.state.channel.Invoke(context.Background(), "startUpdates", map[string]any{
 		"highAccuracy":      opts.HighAccuracy,
 		"distanceFilter":    opts.DistanceFilter,
 		"intervalMs":        opts.IntervalMs,
@@ -111,9 +109,8 @@ func (l *LocationService) StartUpdates(ctx context.Context, opts LocationOptions
 }
 
 // StopUpdates stops location updates.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (l *LocationService) StopUpdates(ctx context.Context) error {
-	_, err := l.state.channel.Invoke("stopUpdates", nil)
+func (l *LocationService) StopUpdates() error {
+	_, err := l.state.channel.Invoke(context.Background(), "stopUpdates", nil)
 	return err
 }
 
@@ -123,9 +120,8 @@ func (l *LocationService) Updates() *Stream[LocationUpdate] {
 }
 
 // IsEnabled checks if location services are enabled on the device.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (l *LocationService) IsEnabled(ctx context.Context) (bool, error) {
-	result, err := l.state.channel.Invoke("isEnabled", nil)
+func (l *LocationService) IsEnabled() (bool, error) {
+	result, err := l.state.channel.Invoke(context.Background(), "isEnabled", nil)
 	if err != nil {
 		return false, err
 	}
@@ -136,9 +132,8 @@ func (l *LocationService) IsEnabled(ctx context.Context) (bool, error) {
 }
 
 // LastKnown returns the last known location without triggering a new request.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (l *LocationService) LastKnown(ctx context.Context) (*LocationUpdate, error) {
-	result, err := l.state.channel.Invoke("getLastKnown", nil)
+func (l *LocationService) LastKnown() (*LocationUpdate, error) {
+	result, err := l.state.channel.Invoke(context.Background(), "getLastKnown", nil)
 	if err != nil {
 		return nil, err
 	}

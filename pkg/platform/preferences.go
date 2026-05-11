@@ -1,5 +1,7 @@
 package platform
 
+import "context"
+
 // Preferences provides simple, unencrypted key-value storage using
 // platform-native mechanisms (UserDefaults on iOS, SharedPreferences on Android).
 // For sensitive data, use SecureStorage instead.
@@ -16,7 +18,7 @@ type PreferencesService struct {
 // Returns empty string and nil error if the key doesn't exist.
 // Use Contains to distinguish a missing key from a key set to "".
 func (p *PreferencesService) Get(key string) (string, error) {
-	result, err := p.channel.Invoke("get", map[string]any{
+	result, err := p.channel.Invoke(context.Background(), "get", map[string]any{
 		"key": key,
 	})
 	if err != nil {
@@ -38,7 +40,7 @@ func (p *PreferencesService) Get(key string) (string, error) {
 
 // Set stores a string value for the given key.
 func (p *PreferencesService) Set(key, value string) error {
-	_, err := p.channel.Invoke("set", map[string]any{
+	_, err := p.channel.Invoke(context.Background(), "set", map[string]any{
 		"key":   key,
 		"value": value,
 	})
@@ -47,7 +49,7 @@ func (p *PreferencesService) Set(key, value string) error {
 
 // Delete removes the value for the given key.
 func (p *PreferencesService) Delete(key string) error {
-	_, err := p.channel.Invoke("delete", map[string]any{
+	_, err := p.channel.Invoke(context.Background(), "delete", map[string]any{
 		"key": key,
 	})
 	return err
@@ -55,7 +57,7 @@ func (p *PreferencesService) Delete(key string) error {
 
 // Contains checks if a key exists in preferences.
 func (p *PreferencesService) Contains(key string) (bool, error) {
-	result, err := p.channel.Invoke("contains", map[string]any{
+	result, err := p.channel.Invoke(context.Background(), "contains", map[string]any{
 		"key": key,
 	})
 	if err != nil {
@@ -73,7 +75,7 @@ func (p *PreferencesService) Contains(key string) (bool, error) {
 
 // GetAllKeys returns all keys stored in preferences.
 func (p *PreferencesService) GetAllKeys() ([]string, error) {
-	result, err := p.channel.Invoke("getAllKeys", nil)
+	result, err := p.channel.Invoke(context.Background(), "getAllKeys", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +97,6 @@ func (p *PreferencesService) GetAllKeys() ([]string, error) {
 
 // DeleteAll removes all values from preferences.
 func (p *PreferencesService) DeleteAll() error {
-	_, err := p.channel.Invoke("deleteAll", nil)
+	_, err := p.channel.Invoke(context.Background(), "deleteAll", nil)
 	return err
 }

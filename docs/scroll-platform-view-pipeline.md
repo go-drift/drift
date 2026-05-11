@@ -149,7 +149,7 @@ A `CompositingCanvas` wraps the real Skia canvas and tracks an accumulated trans
 `FlushGeometryBatch()` (engine.go:647) encodes all queued geometry updates as JSON and calls the native side via JNI:
 
 ```go
-channel.Invoke("batchSetGeometry", map[string]any{
+channel.Invoke(ctx, "batchSetGeometry", map[string]any{
     "frameSeq":   N,
     "geometries": [{viewId, x, y, width, height, clip...}],
 })

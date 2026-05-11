@@ -152,9 +152,8 @@ func newNotificationService() *notificationServiceState {
 }
 
 // Settings returns current notification settings and permission status.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (n *NotificationsService) Settings(ctx context.Context) (NotificationSettings, error) {
-	result, err := n.state.channel.Invoke("getSettings", nil)
+func (n *NotificationsService) Settings() (NotificationSettings, error) {
+	result, err := n.state.channel.Invoke(context.Background(), "getSettings", nil)
 	if err != nil {
 		return NotificationSettings{Status: PermissionResultUnknown}, err
 	}
@@ -169,8 +168,7 @@ func (n *NotificationsService) Settings(ctx context.Context) (NotificationSettin
 }
 
 // Schedule schedules a local notification.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (n *NotificationsService) Schedule(ctx context.Context, req NotificationRequest) error {
+func (n *NotificationsService) Schedule(req NotificationRequest) error {
 	args := map[string]any{
 		"id":              req.ID,
 		"title":           req.Title,
@@ -187,28 +185,25 @@ func (n *NotificationsService) Schedule(ctx context.Context, req NotificationReq
 	if req.Badge != nil {
 		args["badge"] = *req.Badge
 	}
-	_, err := n.state.channel.Invoke("schedule", args)
+	_, err := n.state.channel.Invoke(context.Background(), "schedule", args)
 	return err
 }
 
 // Cancel cancels a scheduled notification by ID.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (n *NotificationsService) Cancel(ctx context.Context, id string) error {
-	_, err := n.state.channel.Invoke("cancel", map[string]any{"id": id})
+func (n *NotificationsService) Cancel(id string) error {
+	_, err := n.state.channel.Invoke(context.Background(), "cancel", map[string]any{"id": id})
 	return err
 }
 
 // CancelAll cancels all scheduled notifications.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (n *NotificationsService) CancelAll(ctx context.Context) error {
-	_, err := n.state.channel.Invoke("cancelAll", nil)
+func (n *NotificationsService) CancelAll() error {
+	_, err := n.state.channel.Invoke(context.Background(), "cancelAll", nil)
 	return err
 }
 
 // SetBadge sets the app badge count.
-// The ctx parameter is currently unused and reserved for future cancellation support.
-func (n *NotificationsService) SetBadge(ctx context.Context, count int) error {
-	_, err := n.state.channel.Invoke("setBadge", map[string]any{"count": count})
+func (n *NotificationsService) SetBadge(count int) error {
+	_, err := n.state.channel.Invoke(context.Background(), "setBadge", map[string]any{"count": count})
 	return err
 }
 
@@ -234,14 +229,14 @@ func (n *NotificationsService) Errors() *Stream[NotificationError] {
 
 // RegisterForPush registers the device for push notifications.
 // On iOS, call Permission.Request() first. On Android, this triggers FCM token retrieval.
-func (n *NotificationsService) RegisterForPush(ctx context.Context) error {
-	_, err := n.state.channel.Invoke("registerForPush", nil)
+func (n *NotificationsService) RegisterForPush() error {
+	_, err := n.state.channel.Invoke(context.Background(), "registerForPush", nil)
 	return err
 }
 
 // GetPushToken returns the current push token if available.
-func (n *NotificationsService) GetPushToken(ctx context.Context) (string, error) {
-	result, err := n.state.channel.Invoke("getPushToken", nil)
+func (n *NotificationsService) GetPushToken() (string, error) {
+	result, err := n.state.channel.Invoke(context.Background(), "getPushToken", nil)
 	if err != nil {
 		return "", err
 	}
@@ -252,24 +247,24 @@ func (n *NotificationsService) GetPushToken(ctx context.Context) (string, error)
 }
 
 // SubscribeToTopic subscribes to a push notification topic.
-func (n *NotificationsService) SubscribeToTopic(ctx context.Context, topic string) error {
-	_, err := n.state.channel.Invoke("subscribeToTopic", map[string]any{
+func (n *NotificationsService) SubscribeToTopic(topic string) error {
+	_, err := n.state.channel.Invoke(context.Background(), "subscribeToTopic", map[string]any{
 		"topic": topic,
 	})
 	return err
 }
 
 // UnsubscribeFromTopic unsubscribes from a push notification topic.
-func (n *NotificationsService) UnsubscribeFromTopic(ctx context.Context, topic string) error {
-	_, err := n.state.channel.Invoke("unsubscribeFromTopic", map[string]any{
+func (n *NotificationsService) UnsubscribeFromTopic(topic string) error {
+	_, err := n.state.channel.Invoke(context.Background(), "unsubscribeFromTopic", map[string]any{
 		"topic": topic,
 	})
 	return err
 }
 
 // DeletePushToken deletes the current push token.
-func (n *NotificationsService) DeletePushToken(ctx context.Context) error {
-	_, err := n.state.channel.Invoke("deletePushToken", nil)
+func (n *NotificationsService) DeletePushToken() error {
+	_, err := n.state.channel.Invoke(context.Background(), "deletePushToken", nil)
 	return err
 }
 

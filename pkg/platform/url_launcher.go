@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 )
@@ -20,7 +21,7 @@ func (u *URLLauncherService) OpenURL(rawURL string) error {
 	if err := validateURL(rawURL); err != nil {
 		return err
 	}
-	_, err := u.channel.Invoke("openURL", map[string]any{
+	_, err := u.channel.Invoke(context.Background(), "openURL", map[string]any{
 		"url": rawURL,
 	})
 	return err
@@ -37,7 +38,7 @@ func (u *URLLauncherService) CanOpenURL(rawURL string) (bool, error) {
 	if err := validateURL(rawURL); err != nil {
 		return false, err
 	}
-	result, err := u.channel.Invoke("canOpenURL", map[string]any{
+	result, err := u.channel.Invoke(context.Background(), "canOpenURL", map[string]any{
 		"url": rawURL,
 	})
 	if err != nil {

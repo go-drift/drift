@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -79,7 +80,12 @@ func registerBuiltinInit(fn func()) {
 // NativeBridge defines the interface for calling native platform code.
 type NativeBridge interface {
 	// InvokeMethod calls a method on the native side.
-	InvokeMethod(channel, method string, args []byte) ([]byte, error)
+	//
+	// Cancellation: see [invokeNative]. Bridge implementations may honor ctx
+	// natively but are not required to. CGO bridges typically can't (the
+	// native call is synchronous from Go's perspective); for those, ctx is
+	// enforced at the caller boundary by [invokeNative].
+	InvokeMethod(ctx context.Context, channel, method string, args []byte) ([]byte, error)
 
 	// StartEventStream tells native to start sending events for a channel.
 	StartEventStream(channel string) error
@@ -126,26 +132,60 @@ func SetNativeBridge(bridge NativeBridge) {
 	}
 }
 
-// invokeNative calls a method on the native side.
-func invokeNative(channel, method string, args any) (any, error) {
-	if nativeBridge == nil {
+// invokeNative dispatches a method call to the native bridge.
+//
+// Cancellation contract: when ctx fires, the Go caller is unblocked promptly
+// with ctx.Err(). The underlying native operation continues to completion in
+// the background and its result is discarded. CGO has no abort path; this is
+// what "cancellation" means at this boundary. Native-side resources held by
+// the in-flight call (UI dialogs, file handles, etc.) are released only when
+// native finishes.
+func invokeNative(ctx context.Context, channel, method string, args any) (any, error) {
+	// Snapshot the bridge so a concurrent ResetForTest cannot swap it out
+	// while the goroutine is still in flight on a canceled call.
+	bridge := nativeBridge
+	if bridge == nil {
 		return nil, ErrPlatformUnavailable
 	}
-
-	// Encode arguments
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	argsData, err := DefaultCodec.Encode(args)
 	if err != nil {
 		return nil, err
 	}
 
-	// Call native
-	resultData, err := nativeBridge.InvokeMethod(channel, method, argsData)
-	if err != nil {
-		return nil, err
+	// Fast path: a non-cancelable ctx (Background, TODO) cannot fire, so the
+	// goroutine + select would just be overhead. Call directly.
+	if ctx.Done() == nil {
+		resultData, err := bridge.InvokeMethod(ctx, channel, method, argsData)
+		if err != nil {
+			return nil, err
+		}
+		return DefaultCodec.Decode(resultData)
 	}
 
-	// Decode result
-	return DefaultCodec.Decode(resultData)
+	// Cancelable path: wrap the synchronous bridge call so ctx unblocks the
+	// caller. See cancellation contract above.
+	type nativeResult struct {
+		data []byte
+		err  error
+	}
+	resultCh := make(chan nativeResult, 1)
+	go func() {
+		data, err := bridge.InvokeMethod(ctx, channel, method, argsData)
+		resultCh <- nativeResult{data: data, err: err}
+	}()
+
+	select {
+	case r := <-resultCh:
+		if r.err != nil {
+			return nil, r.err
+		}
+		return DefaultCodec.Decode(r.data)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // startEventStream notifies native to start sending events.

@@ -39,11 +39,9 @@ func (s *notificationsState) InitState() {
 	core.UseListenable(s, s.openedText)
 	core.UseListenable(s, s.permissionStatus)
 
-	ctx := context.Background()
-
 	// Check initial permission status
 	go func() {
-		status, _ := platform.Notifications.Permission.Status(ctx)
+		status, _ := platform.Notifications.Permission.Status()
 		drift.Dispatch(func() {
 			s.permissionStatus.Set(status)
 		})
@@ -152,8 +150,6 @@ func (s *notificationsState) requestPermissions() {
 }
 
 func (s *notificationsState) scheduleLocal() {
-	ctx := context.Background()
-
 	request := platform.NotificationRequest{
 		ID:    fmt.Sprintf("demo-%d", time.Now().Unix()),
 		Title: "Drift Notification",
@@ -164,7 +160,7 @@ func (s *notificationsState) scheduleLocal() {
 		},
 	}
 
-	if err := platform.Notifications.Schedule(ctx, request); err != nil {
+	if err := platform.Notifications.Schedule(request); err != nil {
 		s.receivedText.Set("Schedule error: " + err.Error())
 		return
 	}

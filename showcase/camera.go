@@ -41,11 +41,9 @@ func (s *cameraState) InitState() {
 	core.UseListenable(s, s.image)
 	core.UseListenable(s, s.permissionStatus)
 
-	ctx := context.Background()
-
 	// Check initial permission status
 	go func() {
-		status, _ := platform.Camera.Permission.Status(ctx)
+		status, _ := platform.Camera.Permission.Status()
 		drift.Dispatch(func() {
 			s.permissionStatus.Set(status)
 		})

@@ -61,6 +61,7 @@ package main
 import "C"
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -90,7 +91,12 @@ func init() {
 }
 
 // InvokeMethod calls a method on the native side.
-func (b *nativePlatformBridge) InvokeMethod(channel, method string, args []byte) ([]byte, error) {
+//
+// The ctx parameter is accepted for API consistency but ignored here:
+// the underlying CGO call is synchronous and cannot be aborted mid-flight.
+// Cancellation is enforced by the invokeNative wrap in pkg/platform/registry.go,
+// which selects on ctx.Done() and abandons the result if ctx wins.
+func (b *nativePlatformBridge) InvokeMethod(_ context.Context, channel, method string, args []byte) ([]byte, error) {
 	// Check if native handler is registered
 	if C.hasNativeMethodHandler() == 0 {
 		return nil, platform.ErrPlatformUnavailable

@@ -75,13 +75,13 @@ func newBackgroundService() *backgroundServiceState {
 }
 
 // Schedule schedules a background task.
-func (b *BackgroundService) Schedule(ctx context.Context, request TaskRequest) error {
+func (b *BackgroundService) Schedule(request TaskRequest) error {
 	taskType := string(request.TaskType)
 	if taskType == "" {
 		taskType = string(TaskTypeOneTime)
 	}
 
-	_, err := b.state.channel.Invoke("scheduleTask", map[string]any{
+	_, err := b.state.channel.Invoke(context.Background(), "scheduleTask", map[string]any{
 		"id":               request.ID,
 		"taskType":         taskType,
 		"tag":              request.Tag,
@@ -101,30 +101,30 @@ func (b *BackgroundService) Schedule(ctx context.Context, request TaskRequest) e
 }
 
 // Cancel cancels a scheduled background task.
-func (b *BackgroundService) Cancel(ctx context.Context, id string) error {
-	_, err := b.state.channel.Invoke("cancelTask", map[string]any{
+func (b *BackgroundService) Cancel(id string) error {
+	_, err := b.state.channel.Invoke(context.Background(), "cancelTask", map[string]any{
 		"id": id,
 	})
 	return err
 }
 
 // CancelAll cancels all scheduled background tasks.
-func (b *BackgroundService) CancelAll(ctx context.Context) error {
-	_, err := b.state.channel.Invoke("cancelAllTasks", nil)
+func (b *BackgroundService) CancelAll() error {
+	_, err := b.state.channel.Invoke(context.Background(), "cancelAllTasks", nil)
 	return err
 }
 
 // CancelByTag cancels all tasks with the given tag.
-func (b *BackgroundService) CancelByTag(ctx context.Context, tag string) error {
-	_, err := b.state.channel.Invoke("cancelTasksByTag", map[string]any{
+func (b *BackgroundService) CancelByTag(tag string) error {
+	_, err := b.state.channel.Invoke(context.Background(), "cancelTasksByTag", map[string]any{
 		"tag": tag,
 	})
 	return err
 }
 
 // Complete signals completion of a background task.
-func (b *BackgroundService) Complete(ctx context.Context, id string, success bool) error {
-	_, err := b.state.channel.Invoke("completeTask", map[string]any{
+func (b *BackgroundService) Complete(id string, success bool) error {
+	_, err := b.state.channel.Invoke(context.Background(), "completeTask", map[string]any{
 		"id":      id,
 		"success": success,
 	})
@@ -132,8 +132,8 @@ func (b *BackgroundService) Complete(ctx context.Context, id string, success boo
 }
 
 // IsRefreshAvailable checks if background refresh is available.
-func (b *BackgroundService) IsRefreshAvailable(ctx context.Context) (bool, error) {
-	result, err := b.state.channel.Invoke("isBackgroundRefreshAvailable", nil)
+func (b *BackgroundService) IsRefreshAvailable() (bool, error) {
+	result, err := b.state.channel.Invoke(context.Background(), "isBackgroundRefreshAvailable", nil)
 	if err != nil {
 		return false, err
 	}

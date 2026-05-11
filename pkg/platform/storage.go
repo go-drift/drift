@@ -168,7 +168,7 @@ func (s *StorageService) invokePicker(ctx context.Context, method string, args m
 	}
 	args["requestId"] = requestID
 
-	_, err := s.state.channel.Invoke(method, args)
+	_, err := s.state.channel.Invoke(ctx, method, args)
 	if err != nil {
 		return StorageResult{}, err
 	}
@@ -188,7 +188,7 @@ func (s *StorageService) invokePicker(ctx context.Context, method string, args m
 
 // ReadFile reads the contents of a file.
 func (s *StorageService) ReadFile(pathOrURI string) ([]byte, error) {
-	result, err := s.state.channel.Invoke("readFile", map[string]any{
+	result, err := s.state.channel.Invoke(context.Background(), "readFile", map[string]any{
 		"path": pathOrURI,
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func (s *StorageService) ReadFile(pathOrURI string) ([]byte, error) {
 
 // WriteFile writes data to a file.
 func (s *StorageService) WriteFile(pathOrURI string, data []byte) error {
-	_, err := s.state.channel.Invoke("writeFile", map[string]any{
+	_, err := s.state.channel.Invoke(context.Background(), "writeFile", map[string]any{
 		"path": pathOrURI,
 		"data": data,
 	})
@@ -216,7 +216,7 @@ func (s *StorageService) WriteFile(pathOrURI string, data []byte) error {
 
 // DeleteFile deletes a file.
 func (s *StorageService) DeleteFile(pathOrURI string) error {
-	_, err := s.state.channel.Invoke("deleteFile", map[string]any{
+	_, err := s.state.channel.Invoke(context.Background(), "deleteFile", map[string]any{
 		"path": pathOrURI,
 	})
 	return err
@@ -224,7 +224,7 @@ func (s *StorageService) DeleteFile(pathOrURI string) error {
 
 // GetFileInfo returns metadata about a file.
 func (s *StorageService) GetFileInfo(pathOrURI string) (*FileInfo, error) {
-	result, err := s.state.channel.Invoke("getFileInfo", map[string]any{
+	result, err := s.state.channel.Invoke(context.Background(), "getFileInfo", map[string]any{
 		"path": pathOrURI,
 	})
 	if err != nil {
@@ -238,7 +238,7 @@ func (s *StorageService) GetFileInfo(pathOrURI string) (*FileInfo, error) {
 
 // GetAppDirectory returns the path to a standard app directory.
 func (s *StorageService) GetAppDirectory(dir AppDirectory) (string, error) {
-	result, err := s.state.channel.Invoke("getAppDirectory", map[string]any{
+	result, err := s.state.channel.Invoke(context.Background(), "getAppDirectory", map[string]any{
 		"directory": string(dir),
 	})
 	if err != nil {

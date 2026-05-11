@@ -1,6 +1,10 @@
 package platform
 
-import "github.com/go-drift/drift/pkg/graphics"
+import (
+	"context"
+
+	"github.com/go-drift/drift/pkg/graphics"
+)
 
 // StatusBarStyle indicates the status bar icon color scheme.
 type StatusBarStyle string
@@ -39,6 +43,6 @@ func SetSystemUI(style SystemUIStyle) error {
 		args["backgroundColor"] = uint32(*style.BackgroundColor)
 	}
 
-	_, err := systemUIChannel.Invoke("setStyle", args)
+	_, err := systemUIChannel.Invoke(context.Background(), "setStyle", args)
 	return err
 }

@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"context"
 	"maps"
 	"sync"
 	"sync/atomic"
@@ -174,7 +175,7 @@ func (r *PlatformViewRegistry) Create(viewType string, params map[string]any) (P
 	r.mu.Unlock()
 
 	// Notify native to create the view
-	_, err = r.channel.Invoke("create", map[string]any{
+	_, err = r.channel.Invoke(context.Background(), "create", map[string]any{
 		"viewId":   viewID,
 		"viewType": viewType,
 		"params":   params,
@@ -204,7 +205,7 @@ func (r *PlatformViewRegistry) Dispose(viewID int64) {
 	if ok {
 		view.Dispose()
 		// Notify native to destroy the view
-		r.channel.Invoke("dispose", map[string]any{
+		r.channel.Invoke(context.Background(), "dispose", map[string]any{
 			"viewId": viewID,
 		})
 	}
@@ -353,7 +354,7 @@ func (r *PlatformViewRegistry) ClearGeometryCache(viewID int64) {
 
 // SetViewVisible notifies native to show or hide a view.
 func (r *PlatformViewRegistry) SetViewVisible(viewID int64, visible bool) error {
-	_, err := r.channel.Invoke("setVisible", map[string]any{
+	_, err := r.channel.Invoke(context.Background(), "setVisible", map[string]any{
 		"viewId":  viewID,
 		"visible": visible,
 	})
@@ -362,7 +363,7 @@ func (r *PlatformViewRegistry) SetViewVisible(viewID int64, visible bool) error 
 
 // SetViewEnabled notifies native to enable or disable a view.
 func (r *PlatformViewRegistry) SetViewEnabled(viewID int64, enabled bool) error {
-	_, err := r.channel.Invoke("setEnabled", map[string]any{
+	_, err := r.channel.Invoke(context.Background(), "setEnabled", map[string]any{
 		"viewId":  viewID,
 		"enabled": enabled,
 	})
@@ -381,7 +382,7 @@ func (r *PlatformViewRegistry) InvokeViewMethod(viewID int64, method string, arg
 	maps.Copy(invokeArgs, args)
 	invokeArgs["viewId"] = viewID
 	invokeArgs["method"] = method
-	return r.channel.Invoke("invokeViewMethod", invokeArgs)
+	return r.channel.Invoke(context.Background(), "invokeViewMethod", invokeArgs)
 }
 
 // handleMethodCall processes incoming method calls from native code.

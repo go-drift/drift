@@ -71,7 +71,7 @@ sequenceDiagram
 
         Go->>Go: FlushGeometryBatch()<br/>platform_view.go:356<br/>Encode batch as JSON
 
-        Go->>MT: channel.Invoke("batchSetGeometry")<br/>platform_view.go:431<br/>JNI call runs on GL thread
+        Go->>MT: channel.Invoke(ctx, "batchSetGeometry")<br/>platform_view.go:431<br/>JNI call runs on GL thread
         Note over MT: handleMethodCallNative()<br/>PlatformChannel.kt:98<br/>Called ON GL THREAD via JNI
 
         MT->>MT: batchSetGeometry()<br/>PlatformView.kt:371<br/>Looper != MainLooper (GL thread)<br/>geometryHandler.postAtFrontOfQueue(closure)

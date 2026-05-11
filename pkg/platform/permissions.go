@@ -2,7 +2,9 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"time"
 
 	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
@@ -59,10 +61,10 @@ var (
 // location when-in-use, location_always). Notifications wraps it with
 // notificationPermission to add RequestWithOptions.
 //
-// Context usage: ctx is honored on Request via [requestAndWait]. Status,
-// IsGranted, IsDenied, and ShouldShowRationale accept ctx for API consistency
-// but route through MethodChannel.Invoke, which does not currently support
-// cancellation. The Permission interface documents this.
+// Context usage: only Request takes ctx because it owns a caller-visible
+// Go-side wait that ctx can abandon. Status / IsGranted / IsDenied /
+// ShouldShowRationale are simple native invocations, so the high-level
+// permission API does not expose ctx for them.
 type permission struct {
 	name      string
 	requestMu sync.Mutex
@@ -75,8 +77,15 @@ func newPerm(name string) *permission {
 }
 
 // Status returns the current status of the permission.
-func (p *permission) Status(ctx context.Context) (PermissionResult, error) {
-	result, err := permissionsChannel.Invoke("check", map[string]any{"permission": p.name})
+func (p *permission) Status() (PermissionResult, error) {
+	return p.status(context.Background())
+}
+
+// status is the ctx-aware variant used by internal callers (requestAndWait)
+// that already have a ctx in hand and want the initial status check to honor
+// cancellation.
+func (p *permission) status(ctx context.Context) (PermissionResult, error) {
+	result, err := permissionsChannel.Invoke(ctx, "check", map[string]any{"permission": p.name})
 	if err != nil {
 		return PermissionResultUnknown, err
 	}
@@ -90,8 +99,8 @@ func (p *permission) Request(ctx context.Context) (PermissionResult, error) {
 }
 
 // IsGranted returns true if the permission is currently granted.
-func (p *permission) IsGranted(ctx context.Context) bool {
-	status, err := p.Status(ctx)
+func (p *permission) IsGranted() bool {
+	status, err := p.Status()
 	if err != nil {
 		return false
 	}
@@ -99,8 +108,8 @@ func (p *permission) IsGranted(ctx context.Context) bool {
 }
 
 // IsDenied returns true if the permission is denied or permanently denied.
-func (p *permission) IsDenied(ctx context.Context) bool {
-	status, err := p.Status(ctx)
+func (p *permission) IsDenied() bool {
+	status, err := p.Status()
 	if err != nil {
 		return false
 	}
@@ -110,8 +119,8 @@ func (p *permission) IsDenied(ctx context.Context) bool {
 // ShouldShowRationale returns whether the app should show a rationale before
 // requesting this permission. Android-specific; always returns (false, nil) on iOS.
 // Native bridge errors are returned directly; a malformed payload returns (false, nil).
-func (p *permission) ShouldShowRationale(ctx context.Context) (bool, error) {
-	result, err := permissionsChannel.Invoke("shouldShowRationale", map[string]any{"permission": p.name})
+func (p *permission) ShouldShowRationale() (bool, error) {
+	result, err := permissionsChannel.Invoke(context.Background(), "shouldShowRationale", map[string]any{"permission": p.name})
 	if err != nil {
 		return false, err
 	}
@@ -163,9 +172,12 @@ func requestAndWait(ctx context.Context, p *permission, args map[string]any) (Pe
 	p.requestMu.Lock()
 	defer p.requestMu.Unlock()
 
-	currentStatus, err := p.Status(ctx)
+	// Initial status: honor caller's ctx via the private status() helper.
+	// If ctx is already canceled, status(ctx) returns context.Canceled here;
+	// normalize to the platform's stable error contract.
+	currentStatus, err := p.status(ctx)
 	if err != nil {
-		return PermissionResultUnknown, err
+		return PermissionResultUnknown, normalizePermissionCtxErr(err)
 	}
 	if isTerminalStatus(currentStatus) {
 		return currentStatus, nil
@@ -183,15 +195,22 @@ func requestAndWait(ctx context.Context, p *permission, args map[string]any) (Pe
 	})
 	defer unsubscribe()
 
-	if _, err := permissionsChannel.Invoke("request", args); err != nil {
-		return PermissionResultUnknown, err
+	if _, err := permissionsChannel.Invoke(ctx, "request", args); err != nil {
+		return PermissionResultUnknown, normalizePermissionCtxErr(err)
 	}
 
 	select {
 	case result := <-resultChan:
 		return result, nil
 	case <-ctx.Done():
-		if finalStatus, err := p.Status(ctx); err == nil && isTerminalStatus(finalStatus) {
+		// Final missed-event re-check covers the race where a permission
+		// change event arrived between Listen setup and ctx firing. Bound it
+		// with its own short timeout — the caller's ctx is already canceled
+		// and we promised them a prompt return, so we can't wait forever for
+		// native status if it hangs.
+		recheckCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+		if finalStatus, err := p.status(recheckCtx); err == nil && isTerminalStatus(finalStatus) {
 			return finalStatus, nil
 		}
 		if ctx.Err() == context.DeadlineExceeded {
@@ -199,6 +218,20 @@ func requestAndWait(ctx context.Context, p *permission, args map[string]any) (Pe
 		}
 		return PermissionResultUnknown, ErrCanceled
 	}
+}
+
+// normalizePermissionCtxErr maps raw context.Canceled / context.DeadlineExceeded
+// (returned from ctx-aware Invoke calls) to the permission package's stable
+// sentinels. Other errors pass through unchanged. Preserves the public error
+// contract: callers can keep using `errors.Is(err, ErrCanceled)`.
+func normalizePermissionCtxErr(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrTimeout
+	}
+	if errors.Is(err, context.Canceled) {
+		return ErrCanceled
+	}
+	return err
 }
 
 // isTerminalStatus reports whether the status will not change as a result of
@@ -270,11 +303,7 @@ func parsePermissionChange(data any) (permissionChange, error) {
 //
 // On iOS, opens the Settings app to the app's settings page.
 // On Android, opens the App Info screen in system settings.
-//
-// Cancellation: this call cannot be canceled today because MethodChannel.Invoke
-// is synchronous. A ctx parameter will be added when the channel layer grows
-// ctx support.
 func OpenAppSettings() error {
-	_, err := permissionsChannel.Invoke("openSettings", nil)
+	_, err := permissionsChannel.Invoke(context.Background(), "openSettings", nil)
 	return err
 }
