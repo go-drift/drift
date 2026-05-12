@@ -4,7 +4,15 @@ package platform
 
 import (
 	"context"
+
+	drifterrors "github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/semantics"
+)
+
+const (
+	accessibilityMethodChannel  = "drift/accessibility"
+	accessibilityStateChannel   = "drift/accessibility/state"
+	accessibilityActionsChannel = "drift/accessibility/actions"
 )
 
 // AnnouncePoliteness indicates the urgency of an accessibility announcement.
@@ -27,9 +35,22 @@ type accessibilityChannel struct {
 
 // Accessibility is the global accessibility channel instance.
 var Accessibility = &accessibilityChannel{
-	method:       NewMethodChannel("drift/accessibility"),
-	stateEvents:  NewEventChannel("drift/accessibility/state"),
-	actionEvents: NewEventChannel("drift/accessibility/actions"),
+	method:       NewMethodChannel(accessibilityMethodChannel),
+	stateEvents:  NewEventChannel(accessibilityStateChannel),
+	actionEvents: NewEventChannel(accessibilityActionsChannel),
+}
+
+// reportArg routes a parse error through errors.Report tagged with the given
+// accessibility channel, then returns the error so callers can `return nil,
+// c.reportArg(...)` in one line.
+func (c *accessibilityChannel) reportArg(channel, op string, err error) error {
+	drifterrors.Report(&drifterrors.DriftError{
+		Op:      "accessibility." + op,
+		Kind:    drifterrors.KindParsing,
+		Channel: channel,
+		Err:     err,
+	})
+	return err
 }
 
 func init() {
@@ -52,27 +73,44 @@ func initAccessibilityListeners() {
 	// Listen for accessibility state changes from platform
 	Accessibility.stateEvents.Listen(EventHandler{
 		OnEvent: func(data any) {
-			if m, ok := data.(map[string]any); ok {
-				if enabled, ok := m["enabled"].(bool); ok {
-					binding := semantics.GetSemanticsBinding()
-					binding.SetEnabled(enabled)
-				}
+			const op = "stateEvent"
+			args, err := requireMap(op, data)
+			if err != nil {
+				Accessibility.reportArg(accessibilityStateChannel, op, err)
+				return
 			}
+			enabled, err := requireBool(op, args, "enabled")
+			if err != nil {
+				Accessibility.reportArg(accessibilityStateChannel, op, err)
+				return
+			}
+			semantics.GetSemanticsBinding().SetEnabled(enabled)
 		},
 	})
 
 	// Listen for accessibility action events from platform
 	Accessibility.actionEvents.Listen(EventHandler{
 		OnEvent: func(data any) {
-			if m, ok := data.(map[string]any); ok {
-				nodeID, _ := toInt64(m["nodeId"])
-				actionValue, _ := toInt64(m["action"])
-				actionArgs := m["args"]
-
-				action := semantics.SemanticsAction(uint64(actionValue))
-				binding := semantics.GetSemanticsBinding()
-				binding.HandleAction(nodeID, action, actionArgs)
+			const op = "actionEvent"
+			args, err := requireMap(op, data)
+			if err != nil {
+				Accessibility.reportArg(accessibilityActionsChannel, op, err)
+				return
 			}
+			nodeID, err := requireInt64(op, args, "nodeId")
+			if err != nil {
+				Accessibility.reportArg(accessibilityActionsChannel, op, err)
+				return
+			}
+			actionValue, err := requireInt64(op, args, "action")
+			if err != nil {
+				Accessibility.reportArg(accessibilityActionsChannel, op, err)
+				return
+			}
+			actionArgs := args["args"] // optional, no require
+
+			action := semantics.SemanticsAction(uint64(actionValue))
+			semantics.GetSemanticsBinding().HandleAction(nodeID, action, actionArgs)
 		},
 	})
 }
@@ -138,13 +176,16 @@ func (c *accessibilityChannel) IsAccessibilityEnabled() (bool, error) {
 }
 
 // handleSetEnabled processes an accessibility enabled state change from the platform.
-func (c *accessibilityChannel) handleSetEnabled(args any) (any, error) {
-	m, ok := args.(map[string]any)
-	if !ok {
-		return nil, ErrInvalidArguments
+func (c *accessibilityChannel) handleSetEnabled(raw any) (any, error) {
+	const op = "handleSetEnabled"
+	args, err := requireMap(op, raw)
+	if err != nil {
+		return nil, c.reportArg(accessibilityMethodChannel, op, err)
 	}
-
-	enabled, _ := m["enabled"].(bool)
+	enabled, err := requireBool(op, args, "enabled")
+	if err != nil {
+		return nil, c.reportArg(accessibilityMethodChannel, op, err)
+	}
 
 	// Update the semantics binding
 	binding := semantics.GetSemanticsBinding()

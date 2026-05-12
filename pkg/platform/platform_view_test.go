@@ -3,9 +3,11 @@ package platform
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 
+	drifterrors "github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/graphics"
 )
 
@@ -72,6 +74,305 @@ func newTestRegistry(viewIDs ...int64) *PlatformViewRegistry {
 		r.views[id] = &stubView{id: id}
 	}
 	return r
+}
+
+// --- Dispatch + errors.Report capture helpers ---
+
+// installImmediateDispatch swaps dispatchFunc for one that runs callbacks
+// inline, so tests can observe view-callback side effects synchronously.
+// Snapshots+restores under dispatchMu instead of RegisterDispatch(nil) to
+// avoid leaking state between tests.
+func installImmediateDispatch(t *testing.T) func() {
+	t.Helper()
+	dispatchMu.Lock()
+	prev := dispatchFunc
+	dispatchFunc = func(cb func()) { cb() }
+	dispatchMu.Unlock()
+	return func() {
+		dispatchMu.Lock()
+		dispatchFunc = prev
+		dispatchMu.Unlock()
+	}
+}
+
+// captureErrorReports installs a fresh capturingHandler (defined in
+// permissions_test.go) and restores the previous handler on cleanup. Returns
+// the handler so the caller can read accumulated errors via snapshot().
+func captureErrorReports(t *testing.T) *capturingHandler {
+	t.Helper()
+	h := &capturingHandler{}
+	prev := drifterrors.DefaultHandler
+	drifterrors.SetHandler(h)
+	t.Cleanup(func() { drifterrors.SetHandler(prev) })
+	return h
+}
+
+// --- Handler tests: per-view fakes ---
+
+type fakeTextInputClient struct {
+	mu          sync.Mutex
+	textCalls   []textCall
+	actionCalls []TextInputAction
+	focusCalls  []bool
+}
+
+type textCall struct {
+	text            string
+	selBase, selExt int
+}
+
+func (c *fakeTextInputClient) OnTextChanged(text string, b, e int) {
+	c.mu.Lock()
+	c.textCalls = append(c.textCalls, textCall{text, b, e})
+	c.mu.Unlock()
+}
+func (c *fakeTextInputClient) OnAction(a TextInputAction) {
+	c.mu.Lock()
+	c.actionCalls = append(c.actionCalls, a)
+	c.mu.Unlock()
+}
+func (c *fakeTextInputClient) OnFocusChanged(focused bool) {
+	c.mu.Lock()
+	c.focusCalls = append(c.focusCalls, focused)
+	c.mu.Unlock()
+}
+
+type fakeSwitchClient struct {
+	mu     sync.Mutex
+	values []bool
+}
+
+func (c *fakeSwitchClient) OnValueChanged(v bool) {
+	c.mu.Lock()
+	c.values = append(c.values, v)
+	c.mu.Unlock()
+}
+
+func registerView(r *PlatformViewRegistry, v PlatformView) {
+	r.mu.Lock()
+	r.views[v.ViewID()] = v
+	r.mu.Unlock()
+}
+
+func validTextChangedArgs(viewID int64) map[string]any {
+	return map[string]any{
+		"viewId":          float64(viewID),
+		"text":            "hello",
+		"selectionBase":   float64(2),
+		"selectionExtent": float64(3),
+	}
+}
+
+// assertArgErrorReport asserts at least one report matches op/channel and
+// wraps *argError. Returns the matched DriftError for further inspection.
+func assertArgErrorReport(t *testing.T, h *capturingHandler, op, channel string) *drifterrors.DriftError {
+	t.Helper()
+	for _, e := range h.snapshot() {
+		if e.Op != op || e.Channel != channel || e.Kind != drifterrors.KindParsing {
+			continue
+		}
+		var ae *argError
+		if errors.As(e.Err, &ae) {
+			return e
+		}
+	}
+	t.Fatalf("no matching argError report for op=%s channel=%s; got: %+v", op, channel, h.snapshot())
+	return nil
+}
+
+func TestHandleTextChanged(t *testing.T) {
+	defer installImmediateDispatch(t)()
+
+	const viewID int64 = 7
+	const op = "platform_view.handleTextChanged"
+
+	t.Run("happy", func(t *testing.T) {
+		reg := newTestRegistry()
+		client := &fakeTextInputClient{}
+		view := NewTextInputView(viewID, TextInputViewConfig{}, client)
+		registerView(reg, view)
+
+		_, err := reg.handleTextChanged(validTextChangedArgs(viewID))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(client.textCalls) != 1 || client.textCalls[0] != (textCall{"hello", 2, 3}) {
+			t.Fatalf("client did not receive call: %+v", client.textCalls)
+		}
+	})
+
+	t.Run("args not map", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		_, err := reg.handleTextChanged("garbage")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		var ae *argError
+		if !errors.As(err, &ae) {
+			t.Fatalf("expected *argError, got %T", err)
+		}
+		assertArgErrorReport(t, h, op, platformViewsChannel)
+	})
+
+	t.Run("missing viewId", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		args := validTextChangedArgs(viewID)
+		delete(args, "viewId")
+		_, err := reg.handleTextChanged(args)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		assertArgErrorReport(t, h, op, platformViewsChannel)
+	})
+
+	t.Run("non-integral viewId", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		args := validTextChangedArgs(viewID)
+		args["viewId"] = 1.5
+		_, err := reg.handleTextChanged(args)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		assertArgErrorReport(t, h, op, platformViewsChannel)
+	})
+
+	t.Run("wrong-type text", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		args := validTextChangedArgs(viewID)
+		args["text"] = 42
+		_, err := reg.handleTextChanged(args)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		assertArgErrorReport(t, h, op, platformViewsChannel)
+	})
+
+	t.Run("unknown view tolerated", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		// No view registered. Should be a silent no-op (dispose race).
+		_, err := reg.handleTextChanged(validTextChangedArgs(viewID))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(h.snapshot()) != 0 {
+			t.Fatalf("expected no reports, got %+v", h.snapshot())
+		}
+	})
+
+	t.Run("wrong view type", func(t *testing.T) {
+		reg := newTestRegistry(viewID) // registers stubView, not TextInputView
+		h := captureErrorReports(t)
+		_, err := reg.handleTextChanged(validTextChangedArgs(viewID))
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, errViewTypeMismatch) {
+			t.Fatalf("expected errViewTypeMismatch, got %v", err)
+		}
+		// Type mismatch is reported (not an argError, just the wrapped sentinel).
+		found := false
+		for _, e := range h.snapshot() {
+			if e.Op == op && e.Channel == platformViewsChannel && errors.Is(e.Err, errViewTypeMismatch) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected type-mismatch report, got %+v", h.snapshot())
+		}
+	})
+}
+
+func TestHandleSwitchChanged(t *testing.T) {
+	defer installImmediateDispatch(t)()
+
+	const viewID int64 = 11
+	t.Run("happy", func(t *testing.T) {
+		reg := newTestRegistry()
+		client := &fakeSwitchClient{}
+		view := NewSwitchView(viewID, SwitchViewConfig{}, client)
+		registerView(reg, view)
+
+		args := map[string]any{
+			"viewId": float64(viewID),
+			"value":  true,
+		}
+		_, err := reg.handleSwitchChanged(args)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(client.values) != 1 || client.values[0] != true {
+			t.Fatalf("client did not receive call: %+v", client.values)
+		}
+	})
+
+	t.Run("missing value", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		args := map[string]any{"viewId": float64(viewID)}
+		_, err := reg.handleSwitchChanged(args)
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		assertArgErrorReport(t, h, "platform_view.handleSwitchChanged", platformViewsChannel)
+	})
+
+	t.Run("wrong-type value (string 'true' rejected)", func(t *testing.T) {
+		reg := newTestRegistry()
+		h := captureErrorReports(t)
+		args := map[string]any{"viewId": float64(viewID), "value": "true"}
+		_, err := reg.handleSwitchChanged(args)
+		if err == nil {
+			t.Fatal("expected error for non-bool value")
+		}
+		assertArgErrorReport(t, h, "platform_view.handleSwitchChanged", platformViewsChannel)
+	})
+}
+
+func TestHandleEvent_UnknownMethodReported(t *testing.T) {
+	reg := newTestRegistry()
+	h := captureErrorReports(t)
+	reg.handleEvent(map[string]any{"method": "onSomethingNobodyKnows"})
+	assertArgErrorReport(t, h, "platform_view.handleEvent", platformViewsChannel)
+}
+
+func TestHandleEvent_BadMethodTypeReported(t *testing.T) {
+	reg := newTestRegistry()
+	h := captureErrorReports(t)
+	reg.handleEvent(map[string]any{"method": 42})
+	assertArgErrorReport(t, h, "platform_view.handleEvent", platformViewsChannel)
+}
+
+func TestHandleEvent_NonMapReported(t *testing.T) {
+	reg := newTestRegistry()
+	h := captureErrorReports(t)
+	reg.handleEvent("not a map")
+	assertArgErrorReport(t, h, "platform_view.handleEvent", platformViewsChannel)
+}
+
+func TestHandleMethodCall_OnViewDisposedNoArgs(t *testing.T) {
+	reg := newTestRegistry()
+	h := captureErrorReports(t)
+	res, err := reg.handleMethodCall("onViewDisposed", nil)
+	if err != nil || res != nil {
+		t.Fatalf("expected (nil, nil); got (%v, %v)", res, err)
+	}
+	if len(h.snapshot()) != 0 {
+		t.Fatalf("expected no reports for onViewDisposed; got %+v", h.snapshot())
+	}
+}
+
+func TestHandleMethodCall_UnknownMethodReturnsNotFound(t *testing.T) {
+	reg := newTestRegistry()
+	_, err := reg.handleMethodCall("noSuchMethod", map[string]any{})
+	if !errors.Is(err, ErrMethodNotFound) {
+		t.Fatalf("expected ErrMethodNotFound, got %v", err)
+	}
 }
 
 // capturedForView finds the captured geometry for a given viewID, or nil.
