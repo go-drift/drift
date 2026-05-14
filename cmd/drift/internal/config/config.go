@@ -320,5 +320,12 @@ func validateAppID(appID string) error {
 			}
 		}
 	}
+	// com.drift.runner is the fixed package for the plugin host interface
+	// and registrant. Reject any app.id that starts with this prefix so the
+	// user's Kotlin package never collides with the framework's runner
+	// support files.
+	if appID == "com.drift.runner" || strings.HasPrefix(appID, "com.drift.runner.") {
+		return fmt.Errorf("app.id %q is reserved by Drift's plugin runtime; choose a different package id", appID)
+	}
 	return nil
 }

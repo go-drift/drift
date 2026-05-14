@@ -29,19 +29,22 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.drift.runner.DriftPluginHost
+import com.drift.runner.DriftPluginRegistrant
+import com.drift.runner.MethodHandler
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 
-/** Handler type for platform channel method calls. */
-typealias MethodHandler = (method: String, args: Any?) -> Pair<Any?, Exception?>
-
 /**
  * Manages platform channel handlers and dispatches calls between Go and Android.
+ *
+ * Adopts com.drift.runner.DriftPluginHost so third-party plugins can register
+ * channels and send events without depending on the user's app package.
  */
-object PlatformChannelManager {
-    private lateinit var context: Context
+object PlatformChannelManager : DriftPluginHost {
+    override lateinit var context: Context
     private var view: View? = null
     private var currentActivity: Activity? = null
     private val handlers = mutableMapOf<String, MethodHandler>()
@@ -49,14 +52,32 @@ object PlatformChannelManager {
     private var lastError: String? = null
     @Volatile
     private var onFrameNeeded: (() -> Unit)? = null
+    @Volatile
+    private var lifecycleObserverInstalled = false
 
     /**
      * Initializes the platform channel manager with the application context.
+     *
+     * Idempotent: MainActivity.onCreate() calls init() on every activity
+     * creation (process death restoration, configChanges not declared in the
+     * manifest, etc.). The object singleton survives across recreations, so
+     * we clear the handler map before re-registering built-ins and plugins.
+     * Without this, register()'s duplicate-detection panic would crash the
+     * app on any recreation.
+     *
+     * The Application-scoped lifecycle observer registers exactly once:
+     * Android does not allow safe removal of activity lifecycle callbacks
+     * during recreation, so a second registration would leak a duplicate.
      */
     fun init(context: Context) {
         this.context = context.applicationContext
+        handlers.clear()
         registerBuiltInChannels()
-        setupLifecycleObserver()
+        if (!lifecycleObserverInstalled) {
+            setupLifecycleObserver()
+            lifecycleObserverInstalled = true
+        }
+        DriftPluginRegistrant.registerAll(this)
     }
 
     /**
@@ -86,7 +107,19 @@ object PlatformChannelManager {
      * Registers a handler for a platform channel.
      */
     fun register(channel: String, handler: MethodHandler) {
+        if (handlers.containsKey(channel)) {
+            throw IllegalStateException(
+                "drift: platform channel \"$channel\" is already registered. " +
+                    "Built-in channels run first; plugins must choose a unique " +
+                    "<vendor>/<feature> namespace."
+            )
+        }
         handlers[channel] = handler
+    }
+
+    /** DriftPluginHost: register a channel handler from a plugin source. */
+    override fun registerChannel(name: String, handler: MethodHandler) {
+        register(name, handler)
     }
 
     /**
@@ -153,7 +186,7 @@ object PlatformChannelManager {
      * Sends an event to Go listeners.
      * After dispatching, wakes the frame loop so the engine renders the state change.
      */
-    fun sendEvent(channel: String, data: Any?) {
+    override fun sendEvent(channel: String, data: Any?) {
         val encoded = codec.encode(data)
         NativeBridge.platformHandleEvent(channel, encoded, encoded.size)
         onFrameNeeded?.invoke()
@@ -162,14 +195,14 @@ object PlatformChannelManager {
     /**
      * Sends an error to Go event listeners.
      */
-    fun sendEventError(channel: String, code: String, message: String) {
+    override fun sendEventError(channel: String, code: String, message: String) {
         NativeBridge.platformHandleEventError(channel, code, message)
     }
 
     /**
      * Notifies Go that an event stream has ended.
      */
-    fun sendEventDone(channel: String) {
+    override fun sendEventDone(channel: String) {
         NativeBridge.platformHandleEventDone(channel)
     }
 

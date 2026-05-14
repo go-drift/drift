@@ -3,11 +3,13 @@ module github.com/go-drift/drift
 go 1.24.0
 
 require (
+	github.com/beevik/etree v1.6.0
 	github.com/danielpaulus/go-ios v1.0.202
 	github.com/fsnotify/fsnotify v1.9.0
 	golang.org/x/image v0.34.0
 	golang.org/x/mod v0.30.0
 	gopkg.in/yaml.v3 v3.0.1
+	howett.net/plist v1.0.1
 )
 
 require (
@@ -18,6 +20,7 @@ require (
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/uuid v1.1.2 // indirect
 	github.com/grandcat/zeroconf v1.0.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/miekg/dns v1.1.57 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
@@ -38,6 +41,5 @@ require (
 	golang.org/x/tools v0.39.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	gvisor.dev/gvisor v0.0.0-20240405191320-0878b34101b5 // indirect
-	howett.net/plist v0.0.0-20200419221736-3b63eb3a43b5 // indirect
 	software.sslmate.com/src/go-pkcs12 v0.2.0 // indirect
 )

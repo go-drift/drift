@@ -81,6 +81,8 @@ func runRun(args []string) error {
 
 	config.CheckVersionMismatch(root, cache.NormalizeVersion(Version))
 
+	workspace.SetCLIVersion(Version)
+
 	ws, err := workspace.Prepare(root, cfg, platform)
 	if err != nil {
 		return err

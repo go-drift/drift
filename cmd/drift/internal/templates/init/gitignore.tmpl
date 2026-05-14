@@ -1,0 +1,13 @@
+# Drift build artefacts
+/platform/*/build/
+/platform/*/.gradle/
+*.app
+
+# Plugin bridge compiled binary (if a local cache is used). The source file
+# tools/drift-plugins/main.go is generated from drift.yaml and SHOULD be
+# committed so CI and teammates pick up plugin changes atomically.
+tools/drift-plugins/bridge
+tools/drift-plugins/bridge.exe
+
+# Local drift workspace metadata
+.drift.env

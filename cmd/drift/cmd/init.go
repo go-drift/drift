@@ -39,6 +39,7 @@ Examples:
 // initTemplateData contains the data for init template substitution.
 type initTemplateData struct {
 	ModulePath string
+	AppName    string
 }
 
 // runInit creates a new Drift project. The first argument is the directory path
@@ -128,6 +129,7 @@ func scaffoldProject(dir, modulePath string) error {
 
 	data := initTemplateData{
 		ModulePath: modulePath,
+		AppName:    filepath.Base(dir),
 	}
 
 	initFiles := []struct {
@@ -136,6 +138,8 @@ func scaffoldProject(dir, modulePath string) error {
 	}{
 		{"init/go.mod.tmpl", "go.mod"},
 		{"init/main.go.tmpl", "main.go"},
+		{"init/drift.yaml.tmpl", "drift.yaml"},
+		{"init/gitignore.tmpl", ".gitignore"},
 	}
 
 	for _, f := range initFiles {

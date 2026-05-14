@@ -324,6 +324,17 @@ func ejectAndroid(platformDir string, data *templates.TemplateData, projectRoot,
 		return err
 	}
 
+	// Drift plugin runner support files always land under com/drift/runner/
+	// regardless of the user's app package. PlatformChannel.kt (in the user
+	// package) imports com.drift.runner.*, so opening a freshly-ejected
+	// project in Android Studio before the first `drift build` requires
+	// these files to exist on disk. EnsureRunnerSupport during build is a
+	// belt-and-braces second write.
+	runnerDir := filepath.Join(srcDir, "java", "com", "drift", "runner")
+	if err := templates.CopyTree("android/runner", runnerDir, data, nil); err != nil {
+		return err
+	}
+
 	// Write C++ files
 	if err := templates.CopyTree("android/cpp", cppDir, data, nil); err != nil {
 		return err

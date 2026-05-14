@@ -116,6 +116,8 @@ func runBuild(args []string) error {
 
 	config.CheckVersionMismatch(root, cache.NormalizeVersion(Version))
 
+	workspace.SetCLIVersion(Version)
+
 	// Check if platform is ejected
 	ejected := workspace.IsEjected(root, platform)
 

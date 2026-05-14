@@ -38,7 +38,7 @@ func App() core.Widget {
 
 - **Go 1.24** or later
 - **Android**: Android SDK + NDK, Java 17+
-- **iOS**: macOS with Xcode, or Linux with [xtool](/docs/guides/xtool-setup)
+- **iOS**: macOS with Xcode 16+, or Linux with [xtool](/docs/guides/xtool-setup)
 
 ## Get Started
 
