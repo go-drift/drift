@@ -61,7 +61,7 @@ myapp/
 
 After ejecting, you can open the project directly:
 
-- **iOS**: Open `platform/ios/Runner.xcodeproj` in Xcode
+- **iOS**: Open `platform/ios/Runner.xcodeproj` in Xcode 16+ (the ejected project uses the synchronized-group project format, which is unsupported in Xcode 15)
 - **Android**: Open `platform/android/` in Android Studio
 
 ## Check Eject Status

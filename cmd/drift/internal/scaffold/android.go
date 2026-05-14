@@ -112,6 +112,14 @@ func WriteAndroid(root string, settings Settings) error {
 		return err
 	}
 
+	// Drift plugin runner support files always land under com/drift/runner/
+	// regardless of the user's app package, so plugin sources don't depend on
+	// the consumer project.
+	runnerDir := filepath.Join(srcDir, "java", "com", "drift", "runner")
+	if err := templates.CopyTree("android/runner", runnerDir, tmplData, nil); err != nil {
+		return err
+	}
+
 	// Write C/C++ files from templates
 	if err := templates.CopyTree("android/cpp", cppDir, tmplData, nil); err != nil {
 		return err

@@ -32,7 +32,7 @@ Ensure an Android device is connected via USB (with USB debugging enabled) or an
 
 ### iOS
 
-**On macOS**: Install Xcode from the App Store.
+**On macOS**: Install Xcode 16 or newer from the App Store. (Drift's iOS template uses the synchronized-group project format which requires Xcode 16+.)
 
 **On Linux**: See [iOS on Linux with xtool](/docs/guides/xtool-setup) to build iOS apps without a Mac.
 
@@ -161,7 +161,7 @@ drift run ios --device --team-id YOUR_TEAM_ID
 ```
 
 Requires:
-- Xcode 15+ with command line tools installed
+- Xcode 16+ with command line tools installed
 - A connected device with developer mode enabled (iOS 17+)
 - Your Apple Developer Team ID (find it in Xcode or Apple Developer portal)
 

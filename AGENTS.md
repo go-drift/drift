@@ -33,6 +33,10 @@ go run cmd/docgen/main.go # Generate Docusaurus docs
 - iOS: Swift embedder, Metal rendering
 - Keep bridge functions thin; delegate logic to Go
 
+## Toolchain Requirements
+- **Xcode 16+** for iOS builds: the iOS template ships in project format 77 (`PBXFileSystemSynchronizedRootGroup`). `drift build ios` preflight aborts on older Xcode with `Drift requires Xcode 16+`. xtool builds are unaffected.
+- Plugin runner support files live under `app/src/main/java/com/drift/runner/` (Android) and `Runner/` (iOS). The package id `com.drift.runner` is reserved; `validateAppID` rejects user app ids that collide.
+
 ## Platform Native Code
 When adding iOS or Android native code, ensure these files in `cmd/drift/internal/templates/` are updated:
 - **iOS**: Info.plist, xcodeproj, and xtool project templates
