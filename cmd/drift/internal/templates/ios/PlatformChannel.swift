@@ -162,10 +162,16 @@ final class JsonCodec {
 /// Adopts `DriftPluginHost` so third-party plugins can register channels and
 /// send events without depending on host internals. `MethodHandler` is
 /// declared at top level in `DriftPluginHost.swift`.
-final class PlatformChannelManager: DriftPluginHost {
+///
+/// Also adopts `DriftOverlayHost` so plugins that need to install full-screen
+/// overlay views (e.g. native splash) can grab the active root view via a
+/// down-cast. Kept as a separate protocol so `DriftPluginHost` stays narrow.
+final class PlatformChannelManager: DriftPluginHost, DriftOverlayHost {
     static let shared = PlatformChannelManager()
 
     private var handlers: [String: MethodHandler] = [:]
+    private var eventObservers: [String: [UUID: (Any?) -> Void]] = [:]
+    private let eventObserversLock = NSLock()
     private let codec = JsonCodec()
 
     private init() {
@@ -187,6 +193,15 @@ final class PlatformChannelManager: DriftPluginHost {
     /// `DriftPluginHost`: register a channel handler from a plugin source.
     func registerChannel(_ name: String, handler: @escaping MethodHandler) {
         register(channel: name, handler: handler)
+    }
+
+    /// `DriftOverlayHost`: returns the active root view for plugins that
+    /// install full-screen overlays. Mirrors the existing `activeWindow`
+    /// lookup used elsewhere in this file.
+    func driftRootView() -> UIView? {
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first?.rootViewController?.view
     }
 
     /// `DriftPluginHost`-shaped event sender. Wraps the existing labeled
@@ -227,13 +242,53 @@ final class PlatformChannelManager: DriftPluginHost {
         return (resultData, nil)
     }
 
-    /// Sends an event to Go listeners.
+    /// Sends an event to Go listeners. Also fans out to any native-side
+    /// observers registered via `observeEvent(_:handler:)`, so plugins can
+    /// react to events originating from other native modules (e.g. the
+    /// splash plugin reacting to `drift/rendering/frame_events` posted by
+    /// `DriftRenderer`).
     func sendEvent(channel: String, data: Any?) {
+        notifyEventObservers(channel: channel, data: data)
         let encoded = codec.encode(data)
         encoded.withUnsafeBytes { ptr in
             channel.withCString { channelPtr in
                 DriftPlatformHandleEvent(channelPtr, ptr.baseAddress, Int32(encoded.count))
             }
+        }
+    }
+
+    /// Implements `DriftPluginHost.observeEvent`. Returns a
+    /// `DriftSubscription` token; the token's `cancel()` unsubscribes.
+    /// Multiple observers per channel are supported.
+    ///
+    /// Observers are invoked synchronously inside `sendEvent` on the thread
+    /// that called `sendEvent`. Handlers that need main-thread access
+    /// should dispatch themselves.
+    func observeEvent(_ channel: String, handler: @escaping (Any?) -> Void) -> DriftSubscription {
+        let id = UUID()
+        eventObserversLock.lock()
+        if eventObservers[channel] == nil {
+            eventObservers[channel] = [:]
+        }
+        eventObservers[channel]?[id] = handler
+        eventObserversLock.unlock()
+        return DriftSubscription { [weak self] in
+            guard let self = self else { return }
+            self.eventObserversLock.lock()
+            self.eventObservers[channel]?.removeValue(forKey: id)
+            if self.eventObservers[channel]?.isEmpty ?? false {
+                self.eventObservers.removeValue(forKey: channel)
+            }
+            self.eventObserversLock.unlock()
+        }
+    }
+
+    private func notifyEventObservers(channel: String, data: Any?) {
+        eventObserversLock.lock()
+        let snapshot = eventObservers[channel].map { Array($0.values) } ?? []
+        eventObserversLock.unlock()
+        for handler in snapshot {
+            handler(data)
         }
     }
 

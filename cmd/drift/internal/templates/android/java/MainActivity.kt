@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import com.drift.runner.DriftPluginRegistrant
 
 class MainActivity : AppCompatActivity() {
 
@@ -20,6 +21,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var orchestrator: UnifiedFrameOrchestrator
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Pre-Activity plugin hook. Plugins that need access to the Activity
+        // before super.onCreate (e.g. the splash plugin's installSplashScreen
+        // call on Android 12+) register a symbol here at build time and the
+        // generated DriftPluginRegistrant.preActivityCreate body invokes it.
+        // With no contributing plugins, the body is empty.
+        DriftPluginRegistrant.preActivityCreate(this)
+
         setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
 

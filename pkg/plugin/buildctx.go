@@ -53,6 +53,13 @@ func NewTestCtx() *BuildCtx {
 	return newBuildCtx("test/plugin", "test", "/test/project", "/test/build", "all")
 }
 
+// NewTestCtxAt returns a BuildCtx whose projectRoot is the supplied path so
+// ResolveAsset reads from a real on-disk directory. Use this when a Build
+// implementation needs ResolveAsset to succeed during testing.
+func NewTestCtxAt(projectRoot string) *BuildCtx {
+	return newBuildCtx("test/plugin", "test", projectRoot, projectRoot, "all")
+}
+
 // Ops returns the ops recorded so far in the context.
 func (b *BuildCtx) Ops() []Op {
 	out := make([]Op, len(b.ops))
@@ -254,6 +261,33 @@ func (s *AndroidScope) Registrant(symbol string) {
 	s.b.push(&OpRegistrantAndroid{
 		Base:   newBase(s.b, ClassAdditive),
 		Symbol: symbol,
+	})
+}
+
+// PreActivityRegistrant records a Kotlin symbol to be called from the
+// generated DriftPluginRegistrant.preActivityCreate(activity) body. Used by
+// plugins that need to run before MainActivity.super.onCreate (e.g. calling
+// androidx.core.splashscreen.installSplashScreen()). Symbol is the
+// fully-qualified Kotlin identifier, e.g.
+// com.foo.splash.Android12SplashController.install.
+func (s *AndroidScope) PreActivityRegistrant(symbol string) {
+	s.b.push(&OpAndroidPreActivityRegistrant{
+		Base:   newBase(s.b, ClassAdditive),
+		Symbol: symbol,
+	})
+}
+
+// AddGradleDependency records a single Gradle dependency line to be inserted
+// into the app's build.gradle dependencies block. Configuration is the
+// Gradle dependency configuration ("implementation", "api", etc.); coord is
+// the full coordinate including version ("group:artifact:version"). Pin
+// versions explicitly; floating versions in generated build files are a CI
+// heisenbug factory.
+func (s *AndroidScope) AddGradleDependency(configuration, coord string) {
+	s.b.push(&OpAndroidGradleAddDependency{
+		Base:          newBase(s.b, ClassAdditive),
+		Configuration: configuration,
+		Coord:         coord,
 	})
 }
 

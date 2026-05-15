@@ -366,6 +366,52 @@ func (o *OpRegistrantAndroid) Identity() string       { return o.Type() + "|" + 
 func (o *OpRegistrantAndroid) ContentHash() string    { return hashBytes(o.Symbol) }
 func (o *OpRegistrantAndroid) Platform() string       { return "android" }
 
+// OpAndroidPreActivityRegistrant records a Kotlin symbol to be called from
+// the generated DriftPluginRegistrant.preActivityCreate(activity) body. The
+// hook runs before super.onCreate, giving plugins (e.g. the splash plugin's
+// Android 12+ controller) a place to call APIs like installSplashScreen()
+// that require the Activity but must run pre-super.onCreate.
+//
+// Shape mirrors OpRegistrantAndroid: additive merge, identity keyed on the
+// symbol, content hash of the symbol.
+type OpAndroidPreActivityRegistrant struct {
+	Base
+	Symbol string `json:"symbol"`
+}
+
+func (o *OpAndroidPreActivityRegistrant) Type() string           { return "android.pre_activity_registrant" }
+func (o *OpAndroidPreActivityRegistrant) MergeClass() MergeClass { return ClassAdditive }
+func (o *OpAndroidPreActivityRegistrant) Identity() string       { return o.Type() + "|" + o.Symbol }
+func (o *OpAndroidPreActivityRegistrant) ContentHash() string    { return hashBytes(o.Symbol) }
+func (o *OpAndroidPreActivityRegistrant) Platform() string       { return "android" }
+
+// OpAndroidGradleAddDependency records a single dependency to be inserted
+// into the app's Gradle dependencies block. Configuration is the Gradle
+// dependency configuration name ("implementation", "api", "testImplementation",
+// etc.); Coord is the full Gradle coordinate including the version
+// ("group:artifact:version").
+//
+// Additive merge with identity keyed on (configuration, coord). Two plugins
+// requesting the exact same coord+config collapse to a single dependency
+// line; two plugins requesting the same artifact at different versions land
+// as distinct entries, which Gradle then reconciles via standard conflict
+// resolution.
+type OpAndroidGradleAddDependency struct {
+	Base
+	Configuration string `json:"configuration"`
+	Coord         string `json:"coord"`
+}
+
+func (o *OpAndroidGradleAddDependency) Type() string           { return "android.gradle.add_dependency" }
+func (o *OpAndroidGradleAddDependency) MergeClass() MergeClass { return ClassAdditive }
+func (o *OpAndroidGradleAddDependency) Identity() string {
+	return o.Type() + "|" + o.Configuration + "|" + o.Coord
+}
+func (o *OpAndroidGradleAddDependency) ContentHash() string {
+	return hashBytes(o.Configuration, o.Coord)
+}
+func (o *OpAndroidGradleAddDependency) Platform() string { return "android" }
+
 // ---- Dispatch tables ----------------------------------------------------
 
 // opConstructors maps JSON discriminators to fresh-instance constructors so
@@ -390,6 +436,8 @@ var opConstructors = map[string]func() Op{
 	"android.drawable.write":                func() Op { return &OpAndroidWriteDrawable{} },
 	"android.resource.write_xml":            func() Op { return &OpAndroidWriteResourceXML{} },
 	"android.source.add":                    func() Op { return &OpAddKotlinSource{} },
+	"android.pre_activity_registrant":       func() Op { return &OpAndroidPreActivityRegistrant{} },
+	"android.gradle.add_dependency":         func() Op { return &OpAndroidGradleAddDependency{} },
 	"android.registrant":                    func() Op { return &OpRegistrantAndroid{} },
 }
 

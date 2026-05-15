@@ -63,6 +63,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This guard handles the case where scene is not a UIWindowScene.
         guard let windowScene = scene as? UIWindowScene else { return }
 
+        // Force eager init of PlatformChannelManager.shared. The singleton
+        // is lazy; without this touch, plugin registration only runs the
+        // first time Go invokes a method via the channel, which can land
+        // after the system launch screen has torn down. Plugins that
+        // install UI overlays during register (e.g. the native splash
+        // plugin) need to attach synchronously while the launch screen
+        // is still visible to avoid a one-frame flash.
+        _ = PlatformChannelManager.shared
+
         if !connectionOptions.urlContexts.isEmpty {
             for context in connectionOptions.urlContexts {
                 DeepLinkHandler.handle(url: context.url, source: "launch")

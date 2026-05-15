@@ -29,8 +29,10 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.drift.runner.DriftOverlayHost
 import com.drift.runner.DriftPluginHost
 import com.drift.runner.DriftPluginRegistrant
+import com.drift.runner.DriftSubscription
 import com.drift.runner.MethodHandler
 import java.io.File
 import org.json.JSONArray
@@ -42,8 +44,12 @@ import org.json.JSONTokener
  *
  * Adopts com.drift.runner.DriftPluginHost so third-party plugins can register
  * channels and send events without depending on the user's app package.
+ *
+ * Also adopts com.drift.runner.DriftOverlayHost so plugins that need to install
+ * full-screen overlay views (e.g. native splash) can grab the active root view
+ * via a down-cast. Kept as a separate interface so DriftPluginHost stays narrow.
  */
-object PlatformChannelManager : DriftPluginHost {
+object PlatformChannelManager : DriftPluginHost, DriftOverlayHost {
     override lateinit var context: Context
     private var view: View? = null
     private var currentActivity: Activity? = null
@@ -101,6 +107,16 @@ object PlatformChannelManager : DriftPluginHost {
 
     fun isAppForeground(): Boolean {
         return currentActivity != null
+    }
+
+    /**
+     * DriftOverlayHost: returns the active activity's decorView so plugins
+     * can install full-screen overlays. Returns null if no activity is
+     * currently attached (e.g. before MainActivity.onCreate). Mirrors the
+     * activity.window.decorView access pattern used elsewhere in this file.
+     */
+    override fun driftRootView(): View? {
+        return currentActivity?.window?.decorView
     }
 
     /**
@@ -183,13 +199,57 @@ object PlatformChannelManager : DriftPluginHost {
     }
 
     /**
-     * Sends an event to Go listeners.
-     * After dispatching, wakes the frame loop so the engine renders the state change.
+     * Sends an event to Go listeners. Also fans out to any native-side
+     * observers registered via `observeEvent(channel, handler)`, so plugins
+     * can react to events originating from other native modules (e.g. the
+     * splash plugin reacting to `drift/rendering/frame_events` posted by
+     * `SkiaHostView`).
+     *
+     * After dispatching, wakes the frame loop so the engine renders the
+     * state change.
      */
     override fun sendEvent(channel: String, data: Any?) {
+        notifyEventObservers(channel, data)
         val encoded = codec.encode(data)
         NativeBridge.platformHandleEvent(channel, encoded, encoded.size)
         onFrameNeeded?.invoke()
+    }
+
+    private val eventObservers = mutableMapOf<String, MutableMap<Long, (Any?) -> Unit>>()
+    private val eventObserversLock = Any()
+    @Volatile private var nextObserverId = 1L
+
+    /**
+     * Implements [DriftPluginHost.observeEvent]. Returns a
+     * [DriftSubscription] token; the token's `cancel()` unsubscribes.
+     * Multiple observers per channel are supported.
+     *
+     * Observers are invoked synchronously inside sendEvent on the thread
+     * that called sendEvent. Handlers that need main-thread access should
+     * post to a Handler themselves.
+     */
+    override fun observeEvent(channel: String, handler: (Any?) -> Unit): DriftSubscription {
+        val id = synchronized(eventObserversLock) {
+            val id = nextObserverId++
+            val perChannel = eventObservers.getOrPut(channel) { mutableMapOf() }
+            perChannel[id] = handler
+            id
+        }
+        return DriftSubscription {
+            synchronized(eventObserversLock) {
+                eventObservers[channel]?.remove(id)
+                if (eventObservers[channel]?.isEmpty() == true) {
+                    eventObservers.remove(channel)
+                }
+            }
+        }
+    }
+
+    private fun notifyEventObservers(channel: String, data: Any?) {
+        val snapshot = synchronized(eventObserversLock) {
+            eventObservers[channel]?.values?.toList() ?: emptyList()
+        }
+        for (h in snapshot) h(data)
     }
 
     /**
