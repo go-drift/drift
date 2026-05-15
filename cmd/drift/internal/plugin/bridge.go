@@ -97,7 +97,13 @@ func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, in
 	}
 	fmt.Fprintln(os.Stderr, "Building Drift plugin bridge…")
 
-	cmd := exec.Command("go", "build", "-tags", "drift_tool", "-o", binPath, "./"+filepath.ToSlash(filepath.Dir(BridgeFilePath)))
+	// -mod=mod so go.sum is updated in place if the bridge file's imports
+	// pull in transitive deps the user's go.sum doesn't yet pin. Without
+	// this, a fresh project's first `drift run` fails on a missing go.sum
+	// entry (e.g. yaml.v3, reached transitively through pkg/plugin)
+	// because the bridge file is generated *after* the user's last
+	// `go mod tidy`. -mod=mod lets the build resolve those silently.
+	cmd := exec.Command("go", "build", "-mod=mod", "-tags", "drift_tool", "-o", binPath, "./"+filepath.ToSlash(filepath.Dir(BridgeFilePath)))
 	cmd.Dir = projectRoot
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

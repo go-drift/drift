@@ -15,6 +15,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        // Force eager init of PlatformChannelManager.shared. The singleton is
+        // lazy; without this touch, plugin registration only runs the first
+        // time Go invokes a method via the channel, which can land after the
+        // system launch screen has torn down. Plugins that install UI
+        // overlays during register (e.g. the native splash plugin) need to
+        // attach synchronously while the launch screen is still visible to
+        // avoid a one-frame flash. (The iOS template does this in
+        // SceneDelegate; xtool uses SwiftUI's @main App pattern with no
+        // SceneDelegate, so the touch lives here.)
+        _ = PlatformChannelManager.shared
+
         NotificationHandler.start()
         return true
     }

@@ -65,6 +65,7 @@ type opBag struct {
 	drawables     []*driftplugin.OpAndroidWriteDrawable
 	resXML        []*driftplugin.OpAndroidWriteResourceXML
 	kotlinSources []*driftplugin.OpAddKotlinSource
+	gradleDeps    []*driftplugin.OpAndroidGradleAddDependency
 }
 
 func bundleByPlatform(ops []driftplugin.Op, platform string) *opBag {
@@ -143,7 +144,9 @@ func bundleAndroidOp(bag *opBag, op driftplugin.Op) {
 		bag.resXML = append(bag.resXML, v)
 	case *driftplugin.OpAddKotlinSource:
 		bag.kotlinSources = append(bag.kotlinSources, v)
-	case *driftplugin.OpRegistrantAndroid:
+	case *driftplugin.OpAndroidGradleAddDependency:
+		bag.gradleDeps = append(bag.gradleDeps, v)
+	case *driftplugin.OpRegistrantAndroid, *driftplugin.OpAndroidPreActivityRegistrant:
 		// Consumed by WriteRegistrant, not Apply.
 	default:
 		reportUnknownOp(op)
@@ -270,6 +273,17 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 			return changed, err
 		}
 		changed = append(changed, paths...)
+	}
+
+	if len(bag.gradleDeps) > 0 {
+		gradlePath := filepath.Join(buildDir, "app", "build.gradle")
+		path, ch, err := mutate.ApplyGradleAddDependencies(gradlePath, bag.gradleDeps)
+		if err != nil {
+			return changed, err
+		}
+		if ch {
+			changed = append(changed, path)
+		}
 	}
 
 	return changed, nil

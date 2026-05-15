@@ -45,6 +45,23 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
     @Volatile override var engineReady = false
         private set
 
+    /**
+     * One-shot guard for the first-frame post-present event. Flipped to true
+     * the first time renderFrame() submits a frame and registers a
+     * ViewTreeObserver.registerFrameCommitCallback.
+     *
+     * Plan called for HardwareRenderer.FrameCompleteCallback (closest to true
+     * post-present); that API is not public to app code (the per-window
+     * HardwareRenderer is owned internally by ViewRootImpl). The next-best
+     * public alternative is ViewTreeObserver.registerFrameCommitCallback
+     * (API 29+, available given Drift's minSdk 29), which fires after the
+     * next frame is committed to the rendering pipeline — meaningfully later
+     * than Choreographer.postFrameCallback's next-vsync timing, and the
+     * closest a public API gets to "the GPU has handed the frame to
+     * SurfaceFlinger."
+     */
+    @Volatile private var firstFrameRendered = false
+
     /** Callback to request a new frame. Set by MainActivity after construction. */
     var onFrameNeeded: (() -> Unit)? = null
 
@@ -125,6 +142,23 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
 
         // Mark this View dirty so onDraw runs during TRAVERSAL
         invalidate()
+
+        // Fire the one-shot "first_frame" event after the next frame is
+        // committed to the rendering pipeline. registerFrameCommitCallback
+        // fires on the RenderThread once the GPU work for the upcoming
+        // frame has been issued — closer to "user can see pixels" than
+        // Choreographer.postFrameCallback's next-vsync timing. Subscribers
+        // to drift/rendering/frame_events (Go-side and Kotlin-side both)
+        // treat this as the first-frame-on-screen signal.
+        if (!firstFrameRendered) {
+            firstFrameRendered = true
+            viewTreeObserver.registerFrameCommitCallback {
+                PlatformChannelManager.sendEvent(
+                    "drift/rendering/frame_events",
+                    mapOf("type" to "first_frame")
+                )
+            }
+        }
     }
 
     override fun onDraw(canvas: Canvas) {

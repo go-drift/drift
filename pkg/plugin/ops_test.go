@@ -29,6 +29,8 @@ func fixtureOps() []Op {
 		&OpAndroidWriteResourceXML{Base: base, RelPath: "raw/foo.xml", Content: "<x/>"},
 		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "Foo.kt", Content: "AA=="},
 		&OpRegistrantAndroid{Base: base, Symbol: "com.foo.Foo.register"},
+		&OpAndroidPreActivityRegistrant{Base: base, Symbol: "com.foo.Foo.preCreate"},
+		&OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "androidx.core:core-splashscreen:1.0.1"},
 	}
 }
 

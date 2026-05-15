@@ -71,6 +71,11 @@ final class DriftRenderer {
     /// The command queue for presenting drawables.
     private let commandQueue: MTLCommandQueue
 
+    /// One-shot guard for the first-frame post-present event. Set to true the
+    /// first time a drawable's `addPresentedHandler` fires. Subsequent frames
+    /// skip registration so we don't emit `first_frame` more than once.
+    private var firstFrameRendered = false
+
     /// Initializes the renderer with the default Metal device.
     init() {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -118,6 +123,21 @@ final class DriftRenderer {
         guard result == 0 else { return }
 
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+
+        // Register a one-shot post-present handler that fires `first_frame`
+        // on the drift/rendering/frame_events channel. Drawable presented
+        // handlers fire after the buffer is actually on screen, so this is
+        // the most accurate "user can see pixels" signal iOS exposes.
+        if !firstFrameRendered {
+            firstFrameRendered = true
+            drawable.addPresentedHandler { _ in
+                PlatformChannelManager.shared.sendEvent(
+                    "drift/rendering/frame_events",
+                    data: ["type": "first_frame"]
+                )
+            }
+        }
+
         if synchronous {
             commandBuffer.commit()
             commandBuffer.waitUntilScheduled()

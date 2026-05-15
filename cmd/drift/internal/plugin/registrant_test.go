@@ -28,11 +28,49 @@ func TestWriteRegistrantEmptyAndroid(t *testing.T) {
 	if !strings.Contains(s, "package com.drift.runner") {
 		t.Errorf("registrant missing package decl")
 	}
+	if !strings.Contains(s, "import android.app.Activity") {
+		t.Errorf("registrant missing Activity import (needed by preActivityCreate)")
+	}
 	if !strings.Contains(s, "object DriftPluginRegistrant") {
 		t.Errorf("registrant missing object")
 	}
 	if !strings.Contains(s, "fun registerAll(host: DriftPluginHost)") {
 		t.Errorf("registrant missing registerAll signature")
+	}
+	if !strings.Contains(s, "fun preActivityCreate(activity: Activity)") {
+		t.Errorf("registrant missing preActivityCreate signature")
+	}
+}
+
+func TestWriteRegistrantWithPreActivityEntries(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpAndroidPreActivityRegistrant{
+			Base:   driftplugin.Base{Pkg: "github.com/foo/splash"},
+			Symbol: "com.foo.splash.Android12SplashController.install",
+		},
+		&driftplugin.OpAndroidPreActivityRegistrant{
+			Base:   driftplugin.Base{Pkg: "github.com/bar/other"},
+			Symbol: "com.bar.other.OtherController.init",
+		},
+	}
+	if _, err := WriteRegistrant(dir, "android", ops); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "app/src/main/java/com/drift/runner/DriftPluginRegistrant.kt"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	s := string(body)
+	if !strings.Contains(s, "com.foo.splash.Android12SplashController.install(activity)") {
+		t.Errorf("preActivityCreate missing splash call:\n%s", s)
+	}
+	if !strings.Contains(s, "com.bar.other.OtherController.init(activity)") {
+		t.Errorf("preActivityCreate missing other call:\n%s", s)
+	}
+	// Sorted order: bar < foo alphabetically.
+	if strings.Index(s, "com.bar.other") > strings.Index(s, "com.foo.splash") {
+		t.Errorf("preActivityCreate calls not in sorted order:\n%s", s)
 	}
 }
 
@@ -86,8 +124,9 @@ func TestEnsureRunnerSupportAndroidWritesHostAndHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureRunnerSupport: %v", err)
 	}
-	if len(changed) != 2 {
-		t.Fatalf("expected 2 files written, got %d (%v)", len(changed), changed)
+	if len(changed) != len(AndroidRunnerSupportFiles) {
+		t.Fatalf("expected %d files written (one per AndroidRunnerSupportFiles entry), got %d (%v)",
+			len(AndroidRunnerSupportFiles), len(changed), changed)
 	}
 	host, err := os.ReadFile(filepath.Join(dir, "app/src/main/java/com/drift/runner/DriftPluginHost.kt"))
 	if err != nil {
@@ -95,6 +134,13 @@ func TestEnsureRunnerSupportAndroidWritesHostAndHandler(t *testing.T) {
 	}
 	if !strings.Contains(string(host), "interface DriftPluginHost") {
 		t.Errorf("host file does not declare the interface")
+	}
+	overlay, err := os.ReadFile(filepath.Join(dir, "app/src/main/java/com/drift/runner/DriftOverlayHost.kt"))
+	if err != nil {
+		t.Fatalf("read overlay host: %v", err)
+	}
+	if !strings.Contains(string(overlay), "interface DriftOverlayHost") {
+		t.Errorf("overlay-host file does not declare the interface")
 	}
 }
 

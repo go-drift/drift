@@ -1,0 +1,17 @@
+app:
+  name: SplashDemo
+  id: com.example.driftsplashdemo
+  orientation: portrait
+
+plugins:
+  # The splash plugin supports iOS (Xcode 16+) and Android. xtool builds
+  # currently skip iOS-side emission with a warning — Assets.xcassets is
+  # not yet supported upstream by xtool.
+  - package: github.com/go-drift/drift/plugins/splash/plugin
+    config:
+      image: assets/splash.png
+      background_color: "#FFFFFF"
+      fade_duration_ms: 200
+      android_12:
+        icon: assets/splash.png
+        icon_background_color: "#FFFFFF"

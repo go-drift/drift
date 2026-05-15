@@ -79,12 +79,24 @@ func (s *Subscription) IsCanceled() bool {
 }
 
 // EventChannel provides stream-based event communication from native to Go.
+//
+// When constructed via [NewStickyEventChannel], the channel remembers the most
+// recently dispatched event payload (a single slot, overwritten on each
+// dispatch). New subscribers receive that remembered payload exactly once on
+// [Listen], before any subsequent live event. This solves the late-subscriber
+// problem for one-shot events such as "first frame rendered."
 type EventChannel struct {
 	name          string
 	codec         MessageCodec
 	subscriptions []*Subscription
 	started       bool // whether native event stream is active
 	mu            sync.Mutex
+
+	// sticky and replay form the per-channel single-slot buffer for
+	// late-subscriber replay. Both are protected by mu.
+	sticky      bool
+	replayValid bool
+	replayData  any
 }
 
 // NewEventChannel creates a new event channel with the given name.
@@ -97,9 +109,36 @@ func NewEventChannel(name string) *EventChannel {
 	return ch
 }
 
+// NewStickyEventChannel creates an event channel that remembers the most
+// recently dispatched event payload and replays it to each new subscriber on
+// [Listen]. Use this for one-shot lifecycle signals (e.g. first-frame
+// rendered) where a subscriber registering after the event still needs to
+// observe it.
+//
+// Sticky storage holds a single slot, overwritten on every subsequent
+// dispatch. Errors and Done do not populate the slot.
+func NewStickyEventChannel(name string) *EventChannel {
+	ch := &EventChannel{
+		name:   name,
+		codec:  DefaultCodec,
+		sticky: true,
+	}
+	registry.registerEvent(name, ch)
+	return ch
+}
+
 // Name returns the channel name.
 func (c *EventChannel) Name() string {
 	return c.name
+}
+
+// IsSticky reports whether the channel was constructed via
+// [NewStickyEventChannel]. Sticky channels remember the most recent
+// emission and replay it to subscribers that register after the fact.
+// Callers can use this to assert framework-level expectations (e.g. that
+// a lifecycle channel is sticky in tests).
+func (c *EventChannel) IsSticky() bool {
+	return c.sticky
 }
 
 // Listen subscribes to events on this channel.
@@ -119,7 +158,19 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 	if shouldStart {
 		c.started = true
 	}
+	var replay any
+	hasReplay := c.sticky && c.replayValid
+	if hasReplay {
+		replay = c.replayData
+	}
 	c.mu.Unlock()
+
+	// Replay the most recent sticky event to this fresh subscriber before
+	// the live stream resumes. Delivered synchronously from Listen so the
+	// caller can observe the replay before returning.
+	if hasReplay && handler.OnEvent != nil && !sub.IsCanceled() {
+		handler.OnEvent(replay)
+	}
 
 	// Notify native that we're listening. Skip if:
 	// - bridge not yet set (SetNativeBridge will start pending streams), or
@@ -163,8 +214,16 @@ func (c *EventChannel) removeSubscription(sub *Subscription) {
 }
 
 // dispatchEvent sends an event to all subscribers.
+//
+// On sticky channels, the event payload is stored in the channel's single
+// replay slot before being broadcast, so subscribers that join afterwards
+// will receive it via [Listen]. Errors and Done do not populate the slot.
 func (c *EventChannel) dispatchEvent(data any) {
 	c.mu.Lock()
+	if c.sticky {
+		c.replayValid = true
+		c.replayData = data
+	}
 	subs := make([]*Subscription, len(c.subscriptions))
 	copy(subs, c.subscriptions)
 	c.mu.Unlock()
