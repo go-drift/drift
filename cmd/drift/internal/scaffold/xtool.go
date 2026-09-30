@@ -65,7 +65,11 @@ func WriteXtool(root string, settings Settings) error {
 		return err
 	}
 
-	// Generate app icon (xtool uses iconPath in xtool.yml, not Assets.xcassets)
+	// Generate app icon (xtool uses iconPath in xtool.yml, not Assets.xcassets).
+	// FUTURE(xtool#219): xtool allows one asset catalog per product, so the
+	// icon moves into the Drift-owned Assets.xcassets shared with plugin image
+	// sets (the catalog's AppIcon wins over iconPath, with a warning).
+	// https://github.com/xtool-org/xtool/pull/219
 	iconSrc, err := icongen.LoadSource(settings.ProjectRoot, settings.Icon)
 	if err != nil {
 		return fmt.Errorf("failed to load icon: %w", err)

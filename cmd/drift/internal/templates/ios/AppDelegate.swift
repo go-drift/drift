@@ -40,30 +40,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     /// Called when the application finishes launching.
     ///
-    /// This is the first opportunity to execute code after the app starts.
-    /// For scene-based apps, most setup happens in SceneDelegate instead.
-    ///
-    /// - Parameters:
-    ///   - application: The singleton app instance.
-    ///   - launchOptions: A dictionary indicating the reason the app was launched.
-    ///                    For example, it may contain a URL or notification info.
-    ///
-    /// - Returns: `true` to indicate successful launch. Returning `false` would
-    ///            indicate a launch failure, but this is rarely used.
+    /// All built-in dispatchers (NotificationHandler.start, etc.) and plugin
+    /// registrant fan-out happen inside DriftPluginRegistrant. AppDelegate
+    /// methods are thin pass-throughs; the registrant is the single dispatch
+    /// path. UIKit's launch Bool is "did I handle the launch URL," not
+    /// "abort launch," so the registrant is Void and AppDelegate returns
+    /// `true` unconditionally.
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        NotificationHandler.start()
-        return true
-    }
-
-    func application(
-        _ application: UIApplication,
-        open url: URL,
-        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
-    ) -> Bool {
-        DeepLinkHandler.handle(url: url, source: "open_url")
+        DriftPluginRegistrant.didFinishLaunching(application: application, launchOptions: launchOptions)
         return true
     }
 
@@ -71,14 +58,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        NotificationHandler.handleDeviceToken(deviceToken)
+        DriftPluginRegistrant.didRegisterForRemoteNotifications(application: application, deviceToken: deviceToken)
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        NotificationHandler.handleRemoteNotificationError(error)
+        DriftPluginRegistrant.didFailToRegisterForRemoteNotifications(application: application, error: error)
     }
 
     func application(
@@ -86,8 +73,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)
-        completionHandler(.newData)
+        DriftPluginRegistrant.didReceiveRemoteNotification(
+            application: application,
+            userInfo: userInfo,
+            completionHandler: completionHandler
+        )
     }
 
     /// Provides the configuration for a new scene session.

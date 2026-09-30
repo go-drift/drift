@@ -284,7 +284,9 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 			_ = os.Remove(bridgePath)
 		}
 
-		// Zero-plugin fast path. Still emit support files + empty registrant.
+		// Zero-plugin fast path. Still emit support files, an empty
+		// registrant, and (for iOS) reset the SwiftPM sidecar to its
+		// empty state so the scaffolded local-package reference resolves.
 		c1, err := driftpluginCLI.EnsureRunnerSupport(platformDir, platform)
 		if err != nil {
 			return err
@@ -294,6 +296,11 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 			return err
 		}
 		changed = append(append(changed, c1...), c2...)
+		c3, err := driftpluginCLI.Apply(nil, platformDir, platform)
+		if err != nil {
+			return err
+		}
+		changed = append(changed, c3...)
 		if ejected {
 			reportChangedFiles(changed, root)
 		}
@@ -340,6 +347,12 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 	normalized, err := driftpluginCLI.Validate(ops)
 	if err != nil {
 		return err
+	}
+
+	if ejected && platform == "ios" {
+		if err := driftpluginCLI.CheckEjectedIOS(platformDir, normalized); err != nil {
+			return err
+		}
 	}
 
 	appliedPaths, err := driftpluginCLI.Apply(normalized, platformDir, platform)

@@ -72,17 +72,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // is still visible to avoid a one-frame flash.
         _ = PlatformChannelManager.shared
 
-        if !connectionOptions.urlContexts.isEmpty {
-            for context in connectionOptions.urlContexts {
-                DeepLinkHandler.handle(url: context.url, source: "launch")
-            }
+        // URLs and activities that launched the app. Routed through the
+        // generated registrant so plugins can claim them before Drift's
+        // deep-link channel sees them.
+        for context in connectionOptions.urlContexts {
+            DriftPluginRegistrant.openURL(context.url, source: "launch")
         }
-        if !connectionOptions.userActivities.isEmpty {
-            for activity in connectionOptions.userActivities {
-                if let url = activity.webpageURL {
-                    DeepLinkHandler.handle(url: url, source: "launch")
-                }
-            }
+        for activity in connectionOptions.userActivities {
+            DriftPluginRegistrant.continueUserActivity(activity, source: "launch")
         }
 
         // Create a new window attached to this window scene.
@@ -101,16 +98,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
     }
 
+    /// URLs opened while the app is running. In a scene-based app these
+    /// arrive here, not at UIApplicationDelegate.application(_:open:options:).
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {
-            DeepLinkHandler.handle(url: context.url, source: "open_url")
+            DriftPluginRegistrant.openURL(context.url, source: "open_url")
         }
     }
 
+    /// User activities (universal links, Handoff) continued while the app is
+    /// running. Scene-based apps receive these here, not at the app delegate.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        if let url = userActivity.webpageURL {
-            DeepLinkHandler.handle(url: url, source: "user_activity")
-        }
+        DriftPluginRegistrant.continueUserActivity(userActivity, source: "user_activity")
     }
 
     /// Called when the scene has moved to the foreground and is active.

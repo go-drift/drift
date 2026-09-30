@@ -148,6 +148,65 @@ func (s *IOSScope) Registrant(symbol string) {
 	})
 }
 
+// AddPackageDependency records a SwiftPM dependency for the iOS app to
+// link. Both build paths (xcodeproj and xtool) consume the same sidecar
+// Drift/Plugins/Package.swift; one call produces one `.package(url:...)`
+// declaration plus one `.product(name:package:)` per entry in products.
+// Products are referenced against the package identity derived from the
+// URL (e.g. "firebase-ios-sdk"), matching SwiftPM's own resolution rule.
+//
+// Panics on an invalid dependency (see ValidateSPMDependency) so mistakes
+// surface at the plugin's call site.
+func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products []string) {
+	if err := ValidateSPMDependency(url, req, products); err != nil {
+		panic(err)
+	}
+	s.b.push(&OpIOSAddPackageDependency{
+		Base:        newBase(s.b, ClassAdditive),
+		URL:         url,
+		Requirement: req,
+		Products:    append([]string(nil), products...),
+	})
+}
+
+// AppDelegateRegistrant records a Swift static-function symbol to be called
+// from the generated DriftPluginRegistrant.<callback>(...) method. callback
+// names a fixed app-level hook (see IOSAppDelegateCallbacks); the plugin's
+// symbol must implement the signature documented on that constant.
+// Multiple plugins may register on the same callback; the codegen fans out
+// in lex-sorted symbol order. Panics on an unknown callback or empty symbol
+// so typos in plugin Build code surface immediately.
+func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol string) {
+	if err := ValidateIOSAppDelegateCallback(callback); err != nil {
+		panic(err)
+	}
+	if symbol == "" {
+		panic("AppDelegateRegistrant: empty symbol")
+	}
+	s.b.push(&OpIOSAppDelegateRegistrant{
+		Base:     newBase(s.b, ClassAdditive),
+		Callback: callback,
+		Symbol:   symbol,
+	})
+}
+
+// AddBundleResource records a file to copy into the root of the iOS app
+// bundle, where Bundle.main and UIImage(named:) find it. Use for files that
+// SDKs look up in the main bundle (Firebase's GoogleService-Info.plist),
+// images, fonts, JSON data, or ML models. name is a plain file name: both
+// iOS build paths flatten resources into the bundle root. Panics on an
+// invalid name (see ValidateBundleFileName).
+func (s *IOSScope) AddBundleResource(name string, content []byte) {
+	if err := ValidateBundleFileName(name); err != nil {
+		panic(err)
+	}
+	s.b.push(&OpIOSAddBundleResource{
+		Base:    newBase(s.b, ClassExclusive),
+		Path:    name,
+		Content: encodeBytes(content),
+	})
+}
+
 // IOSInfoScope records Info.plist mutations.
 type IOSInfoScope struct{ b *BuildCtx }
 
@@ -288,6 +347,56 @@ func (s *AndroidScope) AddGradleDependency(configuration, coord string) {
 		Base:          newBase(s.b, ClassAdditive),
 		Configuration: configuration,
 		Coord:         coord,
+	})
+}
+
+// ApplyGradlePlugin records an `apply plugin: "<id>"` line for the app's
+// build.gradle, inserted after the android { } block (plugins such as
+// Firebase's com.google.gms.google-services need the android block
+// configured first). A non-empty version also declares the plugin in the
+// project-level build.gradle plugins { } block so Gradle can resolve it;
+// pass "" when the plugin is already on the build classpath. Panics on an
+// empty id.
+func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
+	if id == "" {
+		panic("ApplyGradlePlugin: empty plugin id")
+	}
+	s.b.push(&OpAndroidGradleApplyPlugin{
+		Base:    newBase(s.b, ClassAdditive),
+		ID:      id,
+		Version: version,
+	})
+}
+
+// AddAsset records a file to drop into the Android app's assets/ directory
+// at the assets-relative path. Gradle auto-bundles app/src/main/assets/, so
+// no manifest edits are needed. Use for fonts, ML models, or other static
+// content the app reads via AssetManager. Build-time config files belong in
+// AddAppModuleFile. Panics on an invalid path (see ValidateAssetRelPath).
+func (s *AndroidScope) AddAsset(path string, content []byte) {
+	if err := ValidateAssetRelPath(path); err != nil {
+		panic(err)
+	}
+	s.b.push(&OpAndroidAddAsset{
+		Base:    newBase(s.b, ClassExclusive),
+		Path:    path,
+		Content: encodeBytes(content),
+	})
+}
+
+// AddAppModuleFile records a file to drop into the Android app module
+// directory, next to app/build.gradle. Use for build-time config that Gradle
+// plugins read from there, such as Firebase's google-services.json. name is
+// a plain file name; scaffold-owned names (build.gradle, src, ...) are
+// rejected. Panics on an invalid name (see ValidateAppModuleFileName).
+func (s *AndroidScope) AddAppModuleFile(name string, content []byte) {
+	if err := ValidateAppModuleFileName(name); err != nil {
+		panic(err)
+	}
+	s.b.push(&OpAndroidAddAppModuleFile{
+		Base:    newBase(s.b, ClassExclusive),
+		Name:    name,
+		Content: encodeBytes(content),
 	})
 }
 
