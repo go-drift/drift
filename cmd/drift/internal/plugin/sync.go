@@ -30,8 +30,9 @@ type SyncResult struct {
 
 // Sync implements the drift plugin sync command. It regenerates
 // tools/drift-plugins/main.go, rebuilds the cached bridge if needed, runs
-// schema validation against drift.yaml, and (optionally) runs go mod tidy.
-// Sync never edits go.mod on its own; --tidy delegates to `go mod tidy`.
+// schema validation against drift.yaml. It never edits go.mod or go.sum on
+// its own; with Tidy it runs `go mod tidy` after regenerating the bridge
+// source and before building it.
 func Sync(opts SyncOptions) (*SyncResult, error) {
 	plugins, err := LoadFromDriftYAML(opts.ProjectRoot)
 	if err != nil {
@@ -68,6 +69,21 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 	}
 	if len(res.Missing) > 0 {
 		return res, &MissingPluginError{Packages: res.Missing}
+	}
+
+	if opts.Tidy {
+		// Tidy against the regenerated bridge source, before building it:
+		// the build is -mod=readonly and needs the entries tidy adds.
+		if _, err := writeBridgeSource(opts.ProjectRoot, plugins); err != nil {
+			return res, err
+		}
+		cmd := exec.Command("go", "mod", "tidy")
+		cmd.Dir = opts.ProjectRoot
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return res, fmt.Errorf("go mod tidy: %w", err)
+		}
 	}
 
 	bridge, err := EnsureBridge(opts.ProjectRoot, opts.CLIVersion, plugins, infos)
@@ -107,15 +123,6 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		res.Diagnostics = append(res.Diagnostics, schema.ValidateConfig(cfg, opts.ProjectRoot)...)
 	}
 
-	if opts.Tidy {
-		cmd := exec.Command("go", "mod", "tidy")
-		cmd.Dir = opts.ProjectRoot
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return res, fmt.Errorf("go mod tidy: %w", err)
-		}
-	}
 	return res, nil
 }
 

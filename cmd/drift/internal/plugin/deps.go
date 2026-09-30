@@ -1,8 +1,11 @@
 package plugin
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 )
@@ -140,4 +143,63 @@ func CheckPluginDeps(plugins []ConfiguredPlugin, resolver PackageResolver) ([]*P
 		return nil, &MissingPluginError{Packages: missing}
 	}
 	return out, nil
+}
+
+// hasLocalSources reports whether any source in the bridge build lives on
+// the local filesystem rather than at a pinned module version: a plugin
+// package in the main module or a workspace module, a directory replace
+// anywhere in the module graph (including github.com/go-drift/drift
+// itself), or a go.work spanning more than one module.
+func hasLocalSources(projectRoot string, infos []*PackageInfo) (bool, error) {
+	for _, info := range infos {
+		if info != nil && info.Module != nil && (info.Module.Replace != nil || info.Module.Version == "") {
+			return true, nil
+		}
+	}
+	cmd := exec.Command("go", "list", "-mod=readonly", "-m", "-json", "all")
+	cmd.Dir = projectRoot
+	out, err := cmd.Output()
+	if err != nil {
+		msg := commandError(err).Error()
+		if needsTidy(msg) {
+			return false, fmt.Errorf("go list -m all: %s%s", msg, tidyHint(projectRoot))
+		}
+		return false, fmt.Errorf("go list -m all: %s", msg)
+	}
+	return graphHasLocalModules(out)
+}
+
+// graphHasLocalModules decodes the `go list -m -json all` stream and
+// reports a directory replace (a replace without a version) or more than
+// one main module (a multi-module workspace).
+func graphHasLocalModules(data []byte) (bool, error) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	mains := 0
+	for {
+		var m struct {
+			Main    bool
+			Replace *struct{ Version string }
+		}
+		if err := dec.Decode(&m); err == io.EOF {
+			break
+		} else if err != nil {
+			return false, fmt.Errorf("decode go list -m output: %w", err)
+		}
+		if m.Main {
+			mains++
+		}
+		if m.Replace != nil && m.Replace.Version == "" {
+			return true, nil
+		}
+	}
+	return mains > 1, nil
+}
+
+// commandError returns err with the command's stderr when available.
+func commandError(err error) error {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		return errors.New(strings.TrimSpace(string(ee.Stderr)))
+	}
+	return err
 }

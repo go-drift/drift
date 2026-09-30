@@ -17,8 +17,8 @@ import (
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// BridgeSource is the canonical content of tools/drift-plugins/main.go for
-// a given plugin list. Exported for tests.
+// bridgeTemplateVersion versions the generated bridge layout; bumping it
+// invalidates every cached bridge binary.
 const bridgeTemplateVersion = "1"
 
 // BridgeFilePath is the relative path of the generated bridge tool.
@@ -30,88 +30,100 @@ type Bridge struct {
 }
 
 // EnsureBridge generates tools/drift-plugins/main.go from the plugin list,
-// builds the cached bridge binary if needed, and returns the path of the
-// runnable binary.
+// builds the bridge binary if needed, and returns the path of the runnable
+// binary.
+//
+// The build never edits go.mod or go.sum (-mod=readonly); missing entries
+// fail with a `go mod tidy` hint. Binaries are cached by a key over
+// everything that feeds the build, except when any source in the build is
+// local (a plugin in the main module, a directory replace such as a local
+// github.com/go-drift/drift checkout, or a multi-module go.work): then the
+// key cannot see source edits, so the bridge is rebuilt every time into a
+// fixed per-project path, which the Go build cache keeps cheap.
 func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, infos []*PackageInfo) (*Bridge, error) {
-	if len(plugins) == 0 {
-		return nil, fmt.Errorf("EnsureBridge: no plugins")
-	}
 	if len(plugins) != len(infos) {
 		return nil, fmt.Errorf("EnsureBridge: plugin/info length mismatch")
 	}
-
-	src, err := GenerateBridgeSource(plugins)
+	src, err := writeBridgeSource(projectRoot, plugins)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := writeBridgeFileAtomic(filepath.Join(projectRoot, BridgeFilePath), src); err != nil {
+	env, err := readGoToolchain(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	local, err := hasLocalSources(projectRoot, infos)
+	if err != nil {
 		return nil, err
 	}
 
-	// Bypass the shared bridge cache whenever a plugin's source is local:
-	//   - Module.Replace != nil: explicit `replace` directive in go.mod
-	//   - Module.Version == "": main module (Module.Main=true is reported
-	//     with empty Version) or a `go.work use` workspace member
-	// In all these cases the (package, module-version) tuple captured in the
-	// cache key does not reflect source-level edits, so reusing a cached
-	// bridge would silently miss the plugin changes. A per-build temp dir
-	// forces a fresh `go build` against the current sources.
-	bypass := false
-	for _, info := range infos {
-		if info == nil || info.Module == nil {
-			continue
-		}
-		if info.Module.Replace != nil || info.Module.Version == "" {
-			bypass = true
-			break
-		}
+	binName := "bridge"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
 	}
-
-	var outDir string
-	if bypass {
-		// Per-build temp dir
-		tmp, err := os.MkdirTemp("", "drift-bridge-")
-		if err != nil {
-			return nil, fmt.Errorf("temp bridge dir: %w", err)
-		}
-		outDir = tmp
+	var binPath string
+	if local {
+		binPath = filepath.Join(cacheBridgesRoot(), "local", sha256hex([]byte(projectRoot))[:12], binName)
 	} else {
-		key, err := BridgeCacheKey(projectRoot, cliVersion, plugins, infos, src)
+		key, err := bridgeCacheKey(projectRoot, cliVersion, env, plugins, infos, src)
 		if err != nil {
 			return nil, err
 		}
-		outDir = filepath.Join(cacheBridgesRoot(), key)
-	}
-	binPath := filepath.Join(outDir, "bridge")
-	if runtime.GOOS == "windows" {
-		binPath += ".exe"
-	}
-
-	if _, err := os.Stat(binPath); err == nil && !bypass {
-		return &Bridge{BinaryPath: binPath}, nil
+		binPath = filepath.Join(cacheBridgesRoot(), key, binName)
+		if info, err := os.Stat(binPath); err == nil && info.Mode().IsRegular() {
+			return &Bridge{BinaryPath: binPath}, nil
+		}
 	}
 
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create bridge dir: %w", err)
-	}
 	fmt.Fprintln(os.Stderr, "Building Drift plugin bridge…")
+	if err := buildBridge(projectRoot, binPath); err != nil {
+		return nil, err
+	}
+	return &Bridge{BinaryPath: binPath}, nil
+}
 
-	// -mod=mod so go.sum is updated in place if the bridge file's imports
-	// pull in transitive deps the user's go.sum doesn't yet pin. Without
-	// this, a fresh project's first `drift run` fails on a missing go.sum
-	// entry (e.g. yaml.v3, reached transitively through pkg/plugin)
-	// because the bridge file is generated *after* the user's last
-	// `go mod tidy`. -mod=mod lets the build resolve those silently.
-	cmd := exec.Command("go", "build", "-mod=mod", "-tags", "drift_tool", "-o", binPath, "./"+filepath.ToSlash(filepath.Dir(BridgeFilePath)))
+// writeBridgeSource writes tools/drift-plugins/main.go for plugins (only
+// when its content changed) and returns the source.
+func writeBridgeSource(projectRoot string, plugins []ConfiguredPlugin) ([]byte, error) {
+	src, err := GenerateBridgeSource(plugins)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeBridgeFileAtomic(filepath.Join(projectRoot, BridgeFilePath), src); err != nil {
+		return nil, err
+	}
+	return src, nil
+}
+
+// buildBridge compiles the bridge tool to binPath atomically: the binary is
+// linked under a temporary name in the same directory and renamed into
+// place, so an interrupted or concurrent build never leaves a truncated
+// binary at binPath.
+func buildBridge(projectRoot, binPath string) error {
+	dir := filepath.Dir(binPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create bridge dir: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".bridge-*.tmp")
+	if err != nil {
+		return fmt.Errorf("temp bridge binary: %w", err)
+	}
+	tmp.Close()
+	defer os.Remove(tmp.Name()) // no-op after a successful rename
+
+	cmd := exec.Command("go", "build", "-mod=readonly", "-tags", "drift_tool", "-o", tmp.Name(), "./"+filepath.ToSlash(filepath.Dir(BridgeFilePath)))
 	cmd.Dir = projectRoot
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return nil, decorateBuildError(stderr.String(), err)
+		return decorateBuildError(projectRoot, stderr.String(), err)
 	}
-	return &Bridge{BinaryPath: binPath}, nil
+	if err := os.Rename(tmp.Name(), binPath); err != nil {
+		return fmt.Errorf("install bridge binary: %w", err)
+	}
+	return nil
 }
 
 func cacheBridgesRoot() string {
@@ -122,8 +134,33 @@ func cacheBridgesRoot() string {
 	return filepath.Join(root, "cache", "bridges")
 }
 
-// BridgeCacheKey returns the hash key for a given plugin set and project state.
-func BridgeCacheKey(projectRoot, cliVersion string, plugins []ConfiguredPlugin, infos []*PackageInfo, src []byte) (string, error) {
+// goToolchain is the part of `go env` that changes what `go build`
+// produces for the same sources.
+type goToolchain struct {
+	Version string `json:"GOVERSION"`
+	Flags   string `json:"GOFLAGS"`
+	// Work is the active go.work file, or "" / "off".
+	Work string `json:"GOWORK"`
+}
+
+func readGoToolchain(projectRoot string) (goToolchain, error) {
+	cmd := exec.Command("go", "env", "-json", "GOVERSION", "GOFLAGS", "GOWORK")
+	cmd.Dir = projectRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return goToolchain{}, fmt.Errorf("go env: %w", commandError(err))
+	}
+	var env goToolchain
+	if err := json.Unmarshal(out, &env); err != nil {
+		return goToolchain{}, fmt.Errorf("decode go env: %w", err)
+	}
+	return env, nil
+}
+
+// bridgeCacheKey hashes every input of the bridge build: the CLI and
+// protocol versions, the go toolchain, the plugin pins, the bridge source,
+// and the project's go.mod, go.sum and active go.work.
+func bridgeCacheKey(projectRoot, cliVersion string, env goToolchain, plugins []ConfiguredPlugin, infos []*PackageInfo, src []byte) (string, error) {
 	type pluginPin struct {
 		Package string `json:"package"`
 		Module  string `json:"module"`
@@ -140,31 +177,39 @@ func BridgeCacheKey(projectRoot, cliVersion string, plugins []ConfiguredPlugin, 
 	}
 	sort.Slice(pins, func(i, j int) bool { return pins[i].Package < pins[j].Package })
 
-	goSumHash, err := hashFile(filepath.Join(projectRoot, "go.sum"))
-	if err != nil {
-		return "", err
+	files := map[string]string{}
+	paths := []string{filepath.Join(projectRoot, "go.mod"), filepath.Join(projectRoot, "go.sum")}
+	if env.Work != "" && env.Work != "off" {
+		paths = append(paths, env.Work, env.Work+".sum")
+	}
+	for _, p := range paths {
+		h, err := hashFile(p)
+		if err != nil {
+			return "", err
+		}
+		files[filepath.Base(p)] = h
 	}
 
 	desc := struct {
-		CLIVersion       string      `json:"cli_version"`
-		APIVersion       int         `json:"api_version"`
-		GoVersion        string      `json:"go_version"`
-		GOOS             string      `json:"goos"`
-		GOARCH           string      `json:"goarch"`
-		Plugins          []pluginPin `json:"plugins"`
-		BridgeTemplate   string      `json:"bridge_template"`
-		BridgeSourceHash string      `json:"bridge_source_hash"`
-		GoSumHash        string      `json:"go_sum_hash"`
+		CLIVersion       string            `json:"cli_version"`
+		APIVersion       int               `json:"api_version"`
+		Go               goToolchain       `json:"go"`
+		GOOS             string            `json:"goos"`
+		GOARCH           string            `json:"goarch"`
+		Plugins          []pluginPin       `json:"plugins"`
+		BridgeTemplate   string            `json:"bridge_template"`
+		BridgeSourceHash string            `json:"bridge_source_hash"`
+		Files            map[string]string `json:"files"`
 	}{
 		CLIVersion:       cliVersion,
 		APIVersion:       protocol.APIVersion,
-		GoVersion:        runtime.Version(),
+		Go:               env,
 		GOOS:             runtime.GOOS,
 		GOARCH:           runtime.GOARCH,
 		Plugins:          pins,
 		BridgeTemplate:   bridgeTemplateVersion,
 		BridgeSourceHash: sha256hex(src),
-		GoSumHash:        goSumHash,
+		Files:            files,
 	}
 	enc, err := json.Marshal(desc)
 	if err != nil {
@@ -301,19 +346,36 @@ func writeBridgeFileAtomic(path string, content []byte) error {
 	return nil
 }
 
-func decorateBuildError(stderr string, err error) error {
+func decorateBuildError(projectRoot, stderr string, err error) error {
 	if stderr == "" {
 		return fmt.Errorf("build plugin bridge: %w", err)
 	}
 	hint := ""
-	if strings.Contains(stderr, ".Plugin") && (strings.Contains(stderr, "undefined") || strings.Contains(stderr, "cannot infer")) {
+	switch {
+	case strings.Contains(stderr, ".Plugin") && (strings.Contains(stderr, "undefined") || strings.Contains(stderr, "cannot infer")):
 		hint = "\n\nHint: each plugin package must export a typed Plugin value:\n" +
 			"    var Plugin driftplugin.Plugin[Config] = MyType{}\n" +
 			"The concrete-struct form (var Plugin = MyType{}) does not work because\n" +
 			"generic inference cannot reach the Config type parameter from a method\n" +
 			"signature."
+	case needsTidy(stderr):
+		hint = tidyHint(projectRoot)
 	}
 	return fmt.Errorf("build plugin bridge: %w\n%s%s", err, strings.TrimRight(stderr, "\n"), hint)
+}
+
+// needsTidy reports whether go output says go.mod or go.sum lacks entries,
+// which Drift never adds itself.
+func needsTidy(stderr string) bool {
+	return strings.Contains(stderr, "missing go.sum entry") ||
+		strings.Contains(stderr, "updates to go.mod needed") ||
+		strings.Contains(stderr, "no required module provides package")
+}
+
+func tidyHint(projectRoot string) string {
+	return "\n\nHint: go.mod/go.sum are missing entries the plugin bridge needs. Drift does not edit them itself; run:\n" +
+		"    cd " + projectRoot + " && go mod tidy\n" +
+		"(or `drift plugin sync --tidy`), then commit go.mod, go.sum and tools/drift-plugins/main.go together."
 }
 
 // RunBridge executes the bridge binary with a build envelope and returns the
