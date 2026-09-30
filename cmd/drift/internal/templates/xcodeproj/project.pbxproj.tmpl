@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		A11111111111111111111110 /* libdrift.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A11111111111111111111010 /* libdrift.a */; };
 		A11111111111111111111111 /* libdrift_skia.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A11111111111111111111012 /* libdrift_skia.a */; };
+		A11111111111111111111120 /* DriftPlugins in Frameworks */ = {isa = PBXBuildFile; productRef = A11111111111111111111900 /* DriftPlugins */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,7 @@
 			files = (
 				A11111111111111111111110 /* libdrift.a in Frameworks */,
 				A11111111111111111111111 /* libdrift_skia.a in Frameworks */,
+				A11111111111111111111120 /* DriftPlugins in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +92,9 @@
 				A11111111111111111111301 /* Runner */,
 			);
 			name = Runner;
+			packageProductDependencies = (
+				A11111111111111111111900 /* DriftPlugins */,
+			);
 			productName = Runner;
 			productReference = A11111111111111111111000 /* Runner.app */;
 			productType = "com.apple.product-type.application";
@@ -117,6 +122,9 @@
 				Base,
 			);
 			mainGroup = A11111111111111111111300;
+			packageReferences = (
+				A11111111111111111111910 /* XCLocalSwiftPackageReference "Drift/Plugins" */,
+			);
 			productRefGroup = A11111111111111111111302 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -300,6 +308,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A11111111111111111111910 /* XCLocalSwiftPackageReference "Drift/Plugins" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Drift/Plugins";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A11111111111111111111900 /* DriftPlugins */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DriftPlugins;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A11111111111111111111600 /* Project object */;
 }

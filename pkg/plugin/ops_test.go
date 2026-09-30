@@ -18,6 +18,17 @@ func fixtureOps() []Op {
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<storyboard/>"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
 		&OpRegistrantIOS{Base: base, Symbol: "Foo.register"},
+		&OpIOSAppDelegateRegistrant{Base: base, Callback: IOSCallbackDidFinishLaunching, Symbol: "FooPlugin.didFinishLaunching"},
+		&OpIOSAddBundleResource{Base: base, Path: "GoogleService-Info.plist", Content: "AA=="},
+		&OpAndroidAddAsset{Base: base, Path: "models/model.tflite", Content: "AA=="},
+		&OpAndroidAddAppModuleFile{Base: base, Name: "google-services.json", Content: "AA=="},
+		&OpAndroidGradleApplyPlugin{Base: base, ID: "com.google.gms.google-services", Version: "4.4.0"},
+		&OpIOSAddPackageDependency{
+			Base:        base,
+			URL:         "https://github.com/firebase/firebase-ios-sdk",
+			Requirement: SPMRequirementFrom("10.0.0"),
+			Products:    []string{"FirebaseAnalytics", "FirebaseAuth"},
+		},
 		&OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"},
 		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<intent-filter/>"},
 		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/X"},
@@ -129,6 +140,222 @@ func TestIdempotentIdentityIgnoresValue(t *testing.T) {
 	}
 	if a.ContentHash() == b.ContentHash() {
 		t.Errorf("idempotent ContentHash should differ on value")
+	}
+}
+
+func TestValidateSPMRequirement(t *testing.T) {
+	good := []SPMRequirement{
+		{Kind: "from", Value: "10.0.0"},
+		{Kind: "exact", Value: "1.2.3"},
+		{Kind: "branch", Value: "main"},
+		{Kind: "revision", Value: "abc123"},
+		{Kind: "upToNextMajor", Value: "10.0.0"},
+		{Kind: "upToNextMinor", Value: "10.5.0"},
+		{Kind: "range", Value: "10.0.0", Upper: "11.0.0"},
+	}
+	for _, r := range good {
+		if err := ValidateSPMRequirement(r); err != nil {
+			t.Errorf("expected %+v valid: %v", r, err)
+		}
+	}
+	bad := []SPMRequirement{
+		{Kind: "", Value: "10.0.0"},
+		{Kind: "from", Value: ""},
+		{Kind: "exatc", Value: "1.0"},                  // typo
+		{Kind: "range", Value: "1.0.0"},                // missing Upper
+		{Kind: "from", Value: "1.0.0", Upper: "2.0.0"}, // Upper outside range
+		{Kind: "branch", Value: `main"; evil`},         // breaks the Swift literal
+	}
+	for _, r := range bad {
+		if err := ValidateSPMRequirement(r); err == nil {
+			t.Errorf("expected %+v invalid", r)
+		}
+	}
+}
+
+// Two ops on the same URL with divergent requirements produce different
+// content hashes, so Validate (in conflict.go) flags them as additive
+// collisions rather than silently picking one.
+func TestSPMAddPackageDivergentRequirementsCollide(t *testing.T) {
+	a := &OpIOSAddPackageDependency{
+		Base:        Base{Pkg: "a"},
+		URL:         "https://github.com/firebase/firebase-ios-sdk",
+		Requirement: SPMRequirementFrom("10.0.0"),
+	}
+	b := &OpIOSAddPackageDependency{
+		Base:        Base{Pkg: "b"},
+		URL:         "https://github.com/firebase/firebase-ios-sdk",
+		Requirement: SPMRequirementFrom("11.0.0"),
+	}
+	if a.Identity() != b.Identity() {
+		t.Errorf("same URL must share Identity for collision detection")
+	}
+	if a.ContentHash() == b.ContentHash() {
+		t.Errorf("divergent requirements must produce different ContentHash")
+	}
+}
+
+func TestValidateSPMDependency(t *testing.T) {
+	req := SPMRequirementFrom("10.0.0")
+	good := []struct {
+		url      string
+		products []string
+	}{
+		{"https://github.com/firebase/firebase-ios-sdk", []string{"FirebaseCore"}},
+		{"https://github.com/firebase/firebase-ios-sdk.git", []string{"FirebaseCore", "FirebaseAuth"}},
+		{"git@github.com:getsentry/sentry-cocoa.git", []string{"Sentry"}},
+	}
+	for _, c := range good {
+		if err := ValidateSPMDependency(c.url, req, c.products); err != nil {
+			t.Errorf("expected %q valid: %v", c.url, err)
+		}
+	}
+	bad := []struct {
+		name     string
+		url      string
+		products []string
+	}{
+		{"empty url", "", []string{"X"}},
+		{"local path", "../Foo", []string{"X"}},
+		{"http", "http://example.com/foo", []string{"X"}},
+		{"no products", "https://github.com/a/b", nil},
+		{"empty product", "https://github.com/a/b", []string{""}},
+		{"quote in product", "https://github.com/a/b", []string{`X"`}},
+		{"quote in url", `https://github.com/a/b"`, []string{"X"}},
+		{"no identity", "https://", []string{"X"}},
+	}
+	for _, c := range bad {
+		if err := ValidateSPMDependency(c.url, req, c.products); err == nil {
+			t.Errorf("%s: expected %q invalid", c.name, c.url)
+		}
+	}
+}
+
+func TestSPMPackageIdentity(t *testing.T) {
+	cases := map[string]string{
+		"https://github.com/firebase/firebase-ios-sdk":     "firebase-ios-sdk",
+		"https://github.com/firebase/firebase-ios-sdk.git": "firebase-ios-sdk",
+		"https://github.com/firebase/firebase-ios-sdk/":    "firebase-ios-sdk",
+		"git@github.com:getsentry/sentry-cocoa.git":        "sentry-cocoa",
+		"git@example.com:toplevel.git":                     "toplevel",
+	}
+	for url, want := range cases {
+		if got := SPMPackageIdentity(url); got != want {
+			t.Errorf("SPMPackageIdentity(%q) = %q, want %q", url, got, want)
+		}
+	}
+}
+
+func TestValidateBundleFileName(t *testing.T) {
+	good := []string{
+		"foo.json",
+		"with spaces and-dashes.png",
+		"GoogleService-Info.plist",
+		"logo@2x.png",
+		"model.mlmodelc",
+		"Font.ttf",
+	}
+	for _, p := range good {
+		if err := ValidateBundleFileName(p); err != nil {
+			t.Errorf("expected %q valid: %v", p, err)
+		}
+	}
+	bad := []string{
+		"",
+		".",
+		"..",
+		"nested/file.json",
+		`win\file.json`,
+		"/abs.json",
+		"Info.plist",
+		"Extra.swift",
+		"Header.h",
+		"Main.storyboard",
+		"View.xib",
+		"Assets.xcassets",
+		"Model.xcdatamodeld",
+		"en.lproj",
+	}
+	for _, p := range bad {
+		if err := ValidateBundleFileName(p); err == nil {
+			t.Errorf("expected %q invalid", p)
+		}
+	}
+}
+
+func TestValidateAssetRelPath(t *testing.T) {
+	good := []string{
+		"foo.json",
+		"deep/nested/path/file.bin",
+		"with spaces and-dashes.png",
+		"foo..bar.txt",
+	}
+	for _, p := range good {
+		if err := ValidateAssetRelPath(p); err != nil {
+			t.Errorf("expected %q valid: %v", p, err)
+		}
+	}
+	bad := []string{
+		"",
+		"/abs/path",
+		`\win\abs`,
+		"C:/drive",
+		"../escape",
+		"a/../b",
+		`a\..\b`,
+	}
+	for _, p := range bad {
+		if err := ValidateAssetRelPath(p); err == nil {
+			t.Errorf("expected %q invalid", p)
+		}
+	}
+}
+
+func TestValidateAppModuleFileName(t *testing.T) {
+	for _, p := range []string{"google-services.json", "agconnect-services.json"} {
+		if err := ValidateAppModuleFileName(p); err != nil {
+			t.Errorf("expected %q valid: %v", p, err)
+		}
+	}
+	for _, p := range []string{"", ".", "..", "src", "libs", "build", "build.gradle", "build.gradle.kts", "proguard-rules.pro", "sub/file.json"} {
+		if err := ValidateAppModuleFileName(p); err == nil {
+			t.Errorf("expected %q invalid", p)
+		}
+	}
+}
+
+func TestValidateIOSAppDelegateCallback(t *testing.T) {
+	for _, c := range IOSAppDelegateCallbacks {
+		if err := ValidateIOSAppDelegateCallback(c); err != nil {
+			t.Errorf("known callback %q rejected: %v", c, err)
+		}
+	}
+	if err := ValidateIOSAppDelegateCallback("didFinishLaunchin"); err == nil {
+		t.Error("expected error for typo'd callback")
+	}
+	if err := ValidateIOSAppDelegateCallback(""); err == nil {
+		t.Error("expected error for empty callback")
+	}
+}
+
+// Two ops on the same callback with different symbols must produce distinct
+// identities so additive merge keeps both. Symbols register independently.
+func TestIOSAppDelegateRegistrantIdentityIncludesSymbol(t *testing.T) {
+	a := &OpIOSAppDelegateRegistrant{
+		Base:     Base{Pkg: "p1"},
+		Callback: IOSCallbackOpenURL,
+		Symbol:   "PluginA.openURL",
+	}
+	b := &OpIOSAppDelegateRegistrant{
+		Base:     Base{Pkg: "p2"},
+		Callback: IOSCallbackOpenURL,
+		Symbol:   "PluginB.openURL",
+	}
+	if a.Identity() == b.Identity() {
+		t.Errorf("additive identity should distinguish symbols: %q", a.Identity())
+	}
+	if a.MergeClass() != ClassAdditive {
+		t.Errorf("expected ClassAdditive, got %v", a.MergeClass())
 	}
 }
 

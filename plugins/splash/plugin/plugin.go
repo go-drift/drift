@@ -29,21 +29,22 @@
 //
 // # Platform support
 //
-// Supported: iOS (Xcode 16+) and Android.
+// Supported: iOS (Xcode 16+), xtool, and Android.
 //
-// Not supported: xtool. The plugin relies on Assets.xcassets to bundle the
-// splash image, and xtool currently has no actool-equivalent to compile
-// asset catalogues on Linux. When the build target is xtool the plugin
-// emits no iOS ops and logs a warning to stderr; splash.Preserve() and
-// splash.Remove() become no-ops because the native channel handler is
-// never registered. Tracking upstream:
-// https://forums.swift.org/t/xtool-cross-platform-xcode-replacement-build-ios-apps-on-linux-and-more/79803
+// On xtool, which cannot compile asset catalogs, the Drift pipeline ships
+// the DriftSplash image set as a loose DriftSplash.png in the app bundle
+// root; UIImage(named:) resolves it the same way, so the native code is
+// shared. Whether the replaced launch storyboard renders on xtool builds is
+// unverified (xtool does not compile storyboards on Linux).
+//
+// FUTURE(xtool#219): with asset-catalog support in xtool, a dark splash
+// image set variant becomes possible on every iOS build path.
+// https://github.com/xtool-org/xtool/pull/219
 package plugin
 
 import (
 	"embed"
 	"fmt"
-	"os"
 
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
 )
@@ -74,21 +75,6 @@ func (s splash) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 }
 
 func emitIOS(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
-	if ctx.Platform() == "xtool" {
-		// xtool has no actool replacement on Linux today (asset catalogue
-		// compilation is unimplemented upstream). The plugin's iOS path
-		// depends on Assets.xcassets to bundle the splash image, so emit
-		// nothing and warn the developer. splash.Preserve / splash.Remove
-		// become no-ops because the native channel handler is never
-		// registered. See the package doc for the upstream tracking link.
-		fmt.Fprintln(os.Stderr,
-			"splash plugin: xtool target skipped — Assets.xcassets is not yet "+
-				"supported by xtool. The splash overlay will not render and "+
-				"splash.Preserve/Remove will no-op. Build for iOS via Xcode "+
-				"to use the splash plugin.")
-		return nil
-	}
-
 	img, err := ctx.ResolveAsset(r.Image)
 	if err != nil {
 		return fmt.Errorf("splash: read image %q: %w", r.Image, err)

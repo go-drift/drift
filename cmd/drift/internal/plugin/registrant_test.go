@@ -118,6 +118,251 @@ func TestWriteRegistrantIdempotent(t *testing.T) {
 	}
 }
 
+// Zero AppDelegate ops still produce all six callback methods (empty plugin
+// fan-out, built-in dispatchers present). The AppDelegate template calls
+// these unconditionally so they must exist.
+func TestWriteRegistrantIOSAppDelegateMethodsAlwaysEmitted(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := WriteRegistrant(dir, "ios", nil); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	s := string(body)
+	requiredSignatures := []string{
+		"static func didFinishLaunching(",
+		"static func openURL(",
+		"static func continueUserActivity(",
+		"static func didRegisterForRemoteNotifications(",
+		"static func didFailToRegisterForRemoteNotifications(",
+		"static func didReceiveRemoteNotification(",
+	}
+	for _, sig := range requiredSignatures {
+		if !strings.Contains(s, sig) {
+			t.Errorf("expected %q in generated registrant:\n%s", sig, s)
+		}
+	}
+	// Built-ins must run even with zero plugin entries.
+	requiredBuiltins := []string{
+		"NotificationHandler.start()",
+		"DeepLinkHandler.handle(url: url, source: source)",
+		"NotificationHandler.handleDeviceToken(deviceToken)",
+		"NotificationHandler.handleRemoteNotificationError(error)",
+		"NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)",
+	}
+	for _, call := range requiredBuiltins {
+		if !strings.Contains(s, call) {
+			t.Errorf("expected built-in %q in registrant:\n%s", call, s)
+		}
+	}
+	// Zero-plugins didReceiveRemoteNotification hands the coordinator an
+	// empty handler list, which reports .newData (Drift's historical result).
+	if !strings.Contains(s, "let handlers: [DriftPluginCoordinator.BackgroundFetchHandler] = []") {
+		t.Errorf("zero-plugin handlers list should be empty:\n%s", s)
+	}
+	if !strings.Contains(s, "DriftPluginCoordinator.dispatchBackgroundFetch(") {
+		t.Errorf("didReceiveRemoteNotification must delegate to dispatchBackgroundFetch:\n%s", s)
+	}
+	// No `var` in generated code: an unmutated var is a Swift warning.
+	if strings.Contains(s, "var ") {
+		t.Errorf("generated registrant should not declare vars:\n%s", s)
+	}
+	if !strings.Contains(s, "import UIKit") {
+		t.Errorf("registrant missing import UIKit (needed for UIApplication, UIBackgroundFetchResult)")
+	}
+}
+
+// One plugin per callback produces the call inside each method, sorted lex,
+// with the right argument shape.
+func TestWriteRegistrantIOSAppDelegateOneCallbackEach(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "github.com/foo/firebase"},
+			Callback: driftplugin.IOSCallbackDidFinishLaunching,
+			Symbol:   "FirebaseDriftPlugin.didFinishLaunching",
+		},
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "github.com/bar/branch"},
+			Callback: driftplugin.IOSCallbackOpenURL,
+			Symbol:   "BranchDriftPlugin.openURL",
+		},
+	}
+	if _, err := WriteRegistrant(dir, "ios", ops); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	s := string(body)
+	if !strings.Contains(s, "FirebaseDriftPlugin.didFinishLaunching(application: application, launchOptions: launchOptions)") {
+		t.Errorf("didFinishLaunching call missing or malformed:\n%s", s)
+	}
+	if !strings.Contains(s, "if BranchDriftPlugin.openURL(url: url) { return }") {
+		t.Errorf("openURL plugin claim check missing:\n%s", s)
+	}
+}
+
+// Two plugins on the same callback both appear, in lex order.
+func TestWriteRegistrantIOSAppDelegateLexSorted(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "p"},
+			Callback: driftplugin.IOSCallbackDidFinishLaunching,
+			Symbol:   "ZetaPlugin.didFinishLaunching",
+		},
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "p"},
+			Callback: driftplugin.IOSCallbackDidFinishLaunching,
+			Symbol:   "AlphaPlugin.didFinishLaunching",
+		},
+	}
+	if _, err := WriteRegistrant(dir, "ios", ops); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	s := string(body)
+	alpha := strings.Index(s, "AlphaPlugin.didFinishLaunching")
+	zeta := strings.Index(s, "ZetaPlugin.didFinishLaunching")
+	if alpha < 0 || zeta < 0 {
+		t.Fatalf("both plugin calls must appear:\n%s", s)
+	}
+	if alpha > zeta {
+		t.Errorf("plugin calls not lex-sorted (Alpha should precede Zeta):\n%s", s)
+	}
+}
+
+// One plugin on didReceiveRemoteNotification produces a handlers array with
+// one plugin closure (the built-in dispatch runs before it, outside the
+// merge), delegating dispatch to the
+// coordinator. The lock + timer + once-only scaffolding lives in
+// DriftPluginCoordinator.swift (testable separately), not in codegen.
+func TestWriteRegistrantIOSAppDelegateCoordinatorDelegates(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "p"},
+			Callback: driftplugin.IOSCallbackDidReceiveRemoteNotification,
+			Symbol:   "FCMDriftPlugin.didReceiveRemoteNotification",
+		},
+	}
+	if _, err := WriteRegistrant(dir, "ios", ops); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	s := string(body)
+	required := []string{
+		"let handlers: [DriftPluginCoordinator.BackgroundFetchHandler] = [",
+		"NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)",
+		"FCMDriftPlugin.didReceiveRemoteNotification(userInfo: userInfo, completion: completion)",
+		"DriftPluginCoordinator.dispatchBackgroundFetch(",
+	}
+	for _, want := range required {
+		if !strings.Contains(s, want) {
+			t.Errorf("coordinator delegation missing %q:\n%s", want, s)
+		}
+	}
+	// Race-condition surface must NOT be in codegen — it lives in the
+	// hand-written coordinator file the swift-test harness exercises.
+	forbidden := []string{
+		"DispatchGroup()",
+		"NSLock()",
+		"perPluginFired_",
+	}
+	for _, bad := range forbidden {
+		if strings.Contains(s, bad) {
+			t.Errorf("codegen should delegate scaffold to coordinator, found %q in generated body:\n%s", bad, s)
+		}
+	}
+}
+
+// Two plugins on didReceiveRemoteNotification both appear as closures in
+// the handlers array, in lex-sorted symbol order.
+func TestWriteRegistrantIOSAppDelegateMultiplePluginsHandlers(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "p"},
+			Callback: driftplugin.IOSCallbackDidReceiveRemoteNotification,
+			Symbol:   "ZetaPlugin.didReceiveRemoteNotification",
+		},
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "p"},
+			Callback: driftplugin.IOSCallbackDidReceiveRemoteNotification,
+			Symbol:   "AlphaPlugin.didReceiveRemoteNotification",
+		},
+	}
+	if _, err := WriteRegistrant(dir, "ios", ops); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	s := string(body)
+	alpha := strings.Index(s, "AlphaPlugin.didReceiveRemoteNotification(userInfo: userInfo, completion: completion)")
+	zeta := strings.Index(s, "ZetaPlugin.didReceiveRemoteNotification(userInfo: userInfo, completion: completion)")
+	if alpha < 0 || zeta < 0 {
+		t.Fatalf("both plugin closures must appear in handlers array:\n%s", s)
+	}
+	if alpha > zeta {
+		t.Errorf("plugin closures not lex-sorted (Alpha should precede Zeta):\n%s", s)
+	}
+}
+
+// xtool writes to Sources/Runner/, not Runner/. Same body shape.
+func TestWriteRegistrantXtoolAppDelegateMethods(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{
+			Base:     driftplugin.Base{Pkg: "p"},
+			Callback: driftplugin.IOSCallbackOpenURL,
+			Symbol:   "BranchDriftPlugin.openURL",
+		},
+	}
+	if _, err := WriteRegistrant(dir, "xtool", ops); err != nil {
+		t.Fatalf("WriteRegistrant xtool: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Sources/Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read registrant: %v", err)
+	}
+	if !strings.Contains(string(body), "if BranchDriftPlugin.openURL(url: url) { return }") {
+		t.Errorf("xtool registrant missing openURL plugin call:\n%s", body)
+	}
+}
+
+// The placeholder DriftPluginRegistrant.swift template must be byte-identical
+// to what writeIOSRegistrant emits for zero ops. Otherwise every plugin sync
+// rewrites the file on a fresh scaffold and produces a spurious diff.
+func TestIOSRegistrantPlaceholderMatchesEmptyCodegen(t *testing.T) {
+	tmpl, err := templates.ReadFile("ios/DriftPluginRegistrant.swift")
+	if err != nil {
+		t.Fatalf("read template: %v", err)
+	}
+	dir := t.TempDir()
+	if _, err := WriteRegistrant(dir, "ios", nil); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	generated, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatalf("read generated: %v", err)
+	}
+	if !bytes.Equal(tmpl, generated) {
+		t.Errorf("placeholder template and empty-input codegen drift; fix the template so plugin sync stays idempotent on a fresh scaffold.\n--- template ---\n%s\n--- generated ---\n%s", tmpl, generated)
+	}
+}
+
 func TestEnsureRunnerSupportAndroidWritesHostAndHandler(t *testing.T) {
 	dir := t.TempDir()
 	changed, err := EnsureRunnerSupport(dir, "android")
@@ -184,13 +429,124 @@ func TestMethodHandlerUsesOperatorInvoke(t *testing.T) {
 	}
 }
 
-func TestEnsureRunnerSupportIOSNoop(t *testing.T) {
-	dir := t.TempDir()
-	changed, err := EnsureRunnerSupport(dir, "ios")
-	if err != nil {
-		t.Fatalf("EnsureRunnerSupport: %v", err)
+// CheckEjectedIOS looks for the generated-registrant call sites that the
+// current templates contain. If a template stops calling one, ejected
+// checks would demand wiring the templates themselves lack.
+func TestIOSCallbackCallSitesPresentInTemplates(t *testing.T) {
+	for _, cb := range driftplugin.IOSAppDelegateCallbacks {
+		file, call := iosCallbackCallSite(cb)
+		body, err := templates.ReadFile("ios/" + file)
+		if err != nil {
+			t.Fatalf("read ios/%s: %v", file, err)
+		}
+		if !strings.Contains(string(body), call) {
+			t.Errorf("ios/%s does not call %s", file, call)
+		}
 	}
-	if len(changed) != 0 {
-		t.Errorf("EnsureRunnerSupport ios should be no-op, got %v", changed)
+}
+
+func TestCheckEjectedIOS(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite := func(rel, content string) {
+		t.Helper()
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A project ejected before plugin hooks existed.
+	mustWrite("Runner/AppDelegate.swift", "NotificationHandler.start()\n")
+	mustWrite("Runner/SceneDelegate.swift", "DeepLinkHandler.handle(url: url, source: \"open_url\")\n")
+	mustWrite("Runner.xcodeproj/project.pbxproj", "// no package refs\n")
+
+	base := driftplugin.Base{Pkg: "github.com/acme/signin"}
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{Base: base, Callback: driftplugin.IOSCallbackOpenURL, Symbol: "SignIn.openURL"},
+		&driftplugin.OpIOSAddPackageDependency{Base: base, URL: "https://github.com/google/GoogleSignIn-iOS", Requirement: driftplugin.SPMRequirementFrom("7.0.0"), Products: []string{"GoogleSignIn"}},
+	}
+	err := CheckEjectedIOS(dir, ops)
+	if err == nil {
+		t.Fatalf("expected wiring error")
+	}
+	for _, want := range []string{"SceneDelegate.swift", "DriftPluginRegistrant.openURL(", "github.com/acme/signin", "Drift/Plugins"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should mention %q:\n%v", want, err)
+		}
+	}
+
+	// Current templates are fully wired.
+	scene, _ := templates.ReadFile("ios/SceneDelegate.swift")
+	mustWrite("Runner/SceneDelegate.swift", string(scene))
+	pbx, _ := templates.ReadFile("xcodeproj/project.pbxproj.tmpl")
+	mustWrite("Runner.xcodeproj/project.pbxproj", string(pbx))
+	if err := CheckEjectedIOS(dir, ops); err != nil {
+		t.Errorf("template-wired project should pass: %v", err)
+	}
+	// No plugin features in use: nothing to check.
+	mustWrite("Runner/SceneDelegate.swift", "")
+	if err := CheckEjectedIOS(dir, nil); err != nil {
+		t.Errorf("no ops should pass: %v", err)
+	}
+}
+
+// Ejected projects predate DriftPluginCoordinator; EnsureRunnerSupport must
+// supply it next to the generated registrant, byte-identical to the template.
+func TestEnsureRunnerSupportIOSWritesCoordinator(t *testing.T) {
+	for platform, rel := range map[string]string{"ios": "Runner", "xtool": "Sources/Runner"} {
+		dir := t.TempDir()
+		if _, err := EnsureRunnerSupport(dir, platform); err != nil {
+			t.Fatalf("%s: %v", platform, err)
+		}
+		got, err := os.ReadFile(filepath.Join(dir, rel, "DriftPluginCoordinator.swift"))
+		if err != nil {
+			t.Fatalf("%s: %v", platform, err)
+		}
+		want, _ := templates.ReadFile("ios/DriftPluginCoordinator.swift")
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s: coordinator differs from template", platform)
+		}
+		changed, err := EnsureRunnerSupport(dir, platform)
+		if err != nil || len(changed) != 0 {
+			t.Errorf("%s: rerun should be a no-op, got %v, %v", platform, changed, err)
+		}
+	}
+}
+
+// Plugins get first refusal on a URL, in lex order; Drift's deep-link
+// channel only sees it when no plugin claims it.
+func TestWriteRegistrantIOSOpenURLClaimOrder(t *testing.T) {
+	dir := t.TempDir()
+	ops := []driftplugin.Op{
+		&driftplugin.OpIOSAppDelegateRegistrant{Base: driftplugin.Base{Pkg: "p"}, Callback: driftplugin.IOSCallbackOpenURL, Symbol: "ZetaPlugin.openURL"},
+		&driftplugin.OpIOSAppDelegateRegistrant{Base: driftplugin.Base{Pkg: "p"}, Callback: driftplugin.IOSCallbackOpenURL, Symbol: "AlphaPlugin.openURL"},
+		&driftplugin.OpIOSAppDelegateRegistrant{Base: driftplugin.Base{Pkg: "p"}, Callback: driftplugin.IOSCallbackContinueUserActivity, Symbol: "AlphaPlugin.continueUserActivity"},
+	}
+	if _, err := WriteRegistrant(dir, "ios", ops); err != nil {
+		t.Fatalf("WriteRegistrant: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "Runner/DriftPluginRegistrant.swift"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(body)
+	wantOpenURL := "    static func openURL(_ url: URL, source: String) {\n" +
+		"        if AlphaPlugin.openURL(url: url) { return }\n" +
+		"        if ZetaPlugin.openURL(url: url) { return }\n" +
+		"        DeepLinkHandler.handle(url: url, source: source)\n" +
+		"    }\n"
+	if !strings.Contains(s, wantOpenURL) {
+		t.Errorf("openURL dispatch wrong, want:\n%s\ngot:\n%s", wantOpenURL, s)
+	}
+	wantActivity := "    static func continueUserActivity(_ userActivity: NSUserActivity, source: String) {\n" +
+		"        if AlphaPlugin.continueUserActivity(userActivity: userActivity) { return }\n" +
+		"        if let url = userActivity.webpageURL {\n" +
+		"            DeepLinkHandler.handle(url: url, source: source)\n" +
+		"        }\n" +
+		"    }\n"
+	if !strings.Contains(s, wantActivity) {
+		t.Errorf("continueUserActivity dispatch wrong, want:\n%s\ngot:\n%s", wantActivity, s)
 	}
 }

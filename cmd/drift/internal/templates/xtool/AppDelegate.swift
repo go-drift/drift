@@ -26,16 +26,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // SceneDelegate, so the touch lives here.)
         _ = PlatformChannelManager.shared
 
-        NotificationHandler.start()
-        return true
-    }
-
-    func application(
-        _ application: UIApplication,
-        open url: URL,
-        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
-    ) -> Bool {
-        DeepLinkHandler.handle(url: url, source: "open_url")
+        DriftPluginRegistrant.didFinishLaunching(application: application, launchOptions: launchOptions)
         return true
     }
 
@@ -43,14 +34,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        NotificationHandler.handleDeviceToken(deviceToken)
+        DriftPluginRegistrant.didRegisterForRemoteNotifications(application: application, deviceToken: deviceToken)
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        NotificationHandler.handleRemoteNotificationError(error)
+        DriftPluginRegistrant.didFailToRegisterForRemoteNotifications(application: application, error: error)
     }
 
     func application(
@@ -58,7 +49,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)
-        completionHandler(.newData)
+        DriftPluginRegistrant.didReceiveRemoteNotification(
+            application: application,
+            userInfo: userInfo,
+            completionHandler: completionHandler
+        )
     }
 }

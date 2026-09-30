@@ -11,13 +11,24 @@ let package = Package(
     products: [
         .library(name: "{{.AppName}}", targets: ["{{.AppName}}"]),
     ],
+    dependencies: [
+        // Sidecar package owned by `drift plugin sync`. Its Package.swift is
+        // regenerated from the plugin op list on every build; touch
+        // Drift/Plugins/ only via plugin contributions, never by hand.
+        .package(path: "Drift/Plugins"),
+    ],
     targets: [
         .systemLibrary(name: "CDrift", path: "Libraries/CDrift"),
         .systemLibrary(name: "CSkia", path: "Libraries/CSkia"),
         .target(
             name: "{{.AppName}}",
-            dependencies: ["CDrift", "CSkia"],
+            dependencies: ["CDrift", "CSkia", "DriftPlugins"],
             path: "Sources/Runner",
+            // Info.plist and AppIcon.png are referenced explicitly via
+            // xtool.yml. Plugin bundle resources do not go through SwiftPM:
+            // SwiftPM resources land in Runner_Runner.bundle, which
+            // Bundle.main cannot see. They are listed under xtool.yml
+            // `resources:` instead (see mutate.SetXtoolResources).
             exclude: ["Resources/Info.plist", "Resources/AppIcon.png"],
             resources: [.process("Resources/LaunchScreen.storyboard")],
             linkerSettings: [

@@ -9,5 +9,11 @@
 tools/drift-plugins/bridge
 tools/drift-plugins/bridge.exe
 
+# SwiftPM resolution caches for the plugin sidecar. The sidecar's
+# Package.swift and Empty.swift are committed (reproducibility); the
+# resolve/build caches under .build/ and .swiftpm/ are not.
+**/Drift/Plugins/.build/
+**/Drift/Plugins/.swiftpm/
+
 # Local drift workspace metadata
 .drift.env
