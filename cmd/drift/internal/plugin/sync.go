@@ -104,7 +104,7 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 			})
 			continue
 		}
-		res.Diagnostics = append(res.Diagnostics, schema.ValidateConfig(cfg)...)
+		res.Diagnostics = append(res.Diagnostics, schema.ValidateConfig(cfg, opts.ProjectRoot)...)
 	}
 
 	if opts.Tidy {

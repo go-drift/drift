@@ -49,6 +49,12 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 ```
 
 - Config decodes with unknown keys rejected, so `drift.yaml` typos fail the build.
+- `drift:"..."` tags declare config rules, checked recursively through nested structs, lists of structs and `yaml:",inline"` embeds by the same code on `drift plugin sync` and on build:
+  - `required`: the key must be present (an explicit `false` or `""` counts).
+  - `default=<literal>`: used when the key is absent. Scalars only; cannot combine with `required`.
+  - `hex`: a `#RRGGBB` or `#RRGGBBAA` string.
+  - `asset`: a canonical project-relative path to an existing file.
+  - A malformed tag (unknown validator, unparseable default) panics when the bridge starts.
 - `Build` must not touch disk; it only records ops on `ctx`.
 - Every op validates its input when recorded. Invalid input is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI validates again when decoding the bridge response, so mutators only see valid ops.
 - `driftplugin.NewTestCtx()` plus `ctx.Ops()` lets plugin authors unit test `Build`.
