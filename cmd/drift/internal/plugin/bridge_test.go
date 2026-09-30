@@ -94,28 +94,73 @@ func TestSanitizeAliasReplacesHyphens(t *testing.T) {
 	}
 }
 
-func TestBridgeCacheKeyChangesWithGoSum(t *testing.T) {
+func TestBridgeCacheKeyCoversBuildInputs(t *testing.T) {
 	dir := t.TempDir()
 	plugins := []ConfiguredPlugin{{Package: "github.com/foo/p/plugin"}}
 	infos := []*PackageInfo{{Module: &ModuleInfo{Path: "github.com/foo/p", Version: "v1"}}}
 	src, _ := GenerateBridgeSource(plugins)
+	env := goToolchain{Version: "go1.24.0"}
 
-	// No go.sum yet; should still produce a stable key.
-	key1, err := BridgeCacheKey(dir, "v0.1.0", plugins, infos, src)
-	if err != nil {
-		t.Fatalf("key1: %v", err)
+	key := func(env goToolchain) string {
+		t.Helper()
+		k, err := bridgeCacheKey(dir, "v0.1.0", env, plugins, infos, src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return k
+	}
+	base := key(env)
+	if key(env) != base {
+		t.Fatal("key is not deterministic")
 	}
 
-	// Write a go.sum: key must change.
-	if err := writeFile(dir+"/go.sum", "fakesum"); err != nil {
-		t.Fatalf("write go.sum: %v", err)
+	steps := []struct {
+		name   string
+		mutate func()
+		env    goToolchain
+	}{
+		{"go.sum", func() { mustWrite(t, dir+"/go.sum", "sum") }, env},
+		{"go.mod", func() { mustWrite(t, dir+"/go.mod", "module x\nreplace a => a v1.0.1\n") }, env},
+		{"go version", func() {}, goToolchain{Version: "go1.25.0"}},
+		{"GOFLAGS", func() {}, goToolchain{Version: "go1.25.0", Flags: "-tags=foo"}},
 	}
-	key2, err := BridgeCacheKey(dir, "v0.1.0", plugins, infos, src)
-	if err != nil {
-		t.Fatalf("key2: %v", err)
+	prev := base
+	for _, s := range steps {
+		s.mutate()
+		got := key(s.env)
+		if got == prev {
+			t.Errorf("cache key did not change with %s", s.name)
+		}
+		prev = got
 	}
-	if key1 == key2 {
-		t.Errorf("cache key did not change when go.sum changed: %s", key1)
+}
+
+func TestGraphHasLocalModules(t *testing.T) {
+	cases := []struct {
+		name string
+		list string
+		want bool
+	}{
+		{"pinned only", `{"Path":"app","Main":true}{"Path":"github.com/go-drift/drift","Version":"v0.3.0"}`, false},
+		{"version replace", `{"Path":"app","Main":true}{"Path":"a","Version":"v1.0.0","Replace":{"Path":"b","Version":"v1.1.0"}}`, false},
+		{"directory replace of drift", `{"Path":"app","Main":true}{"Path":"github.com/go-drift/drift","Version":"v0.0.0","Replace":{"Path":"../drift"}}`, true},
+		{"multi-module workspace", `{"Path":"app","Main":true}{"Path":"plug","Main":true}`, true},
+	}
+	for _, c := range cases {
+		got, err := graphHasLocalModules([]byte(c.list))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := writeFile(path, content); err != nil {
+		t.Fatal(err)
 	}
 }
 
