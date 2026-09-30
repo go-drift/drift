@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 const baseManifest = `<?xml version="1.0" encoding="utf-8"?>
@@ -38,9 +38,9 @@ func writeManifest(t *testing.T) string {
 
 func TestApplyAndroidManifestAddPermission(t *testing.T) {
 	path := writeManifest(t)
-	ops := []*driftplugin.OpAndroidManifestAddPermission{
-		{Base: driftplugin.Base{Pkg: "a"}, Name: "android.permission.CAMERA"},
-		{Base: driftplugin.Base{Pkg: "a"}, Name: "android.permission.INTERNET"}, // dedupe
+	ops := []*protocol.OpAndroidManifestAddPermission{
+		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.CAMERA"},
+		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.INTERNET"}, // dedupe
 	}
 	changed, err := ApplyAndroidManifest(path, ops, nil, nil, nil)
 	if err != nil {
@@ -63,8 +63,8 @@ func TestApplyAndroidManifestAddPermission(t *testing.T) {
 
 func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 	path := writeManifest(t)
-	ops := []*driftplugin.OpAndroidManifestSetActivityAttr{
-		{Base: driftplugin.Base{Pkg: "p"}, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/Splash"},
+	ops := []*protocol.OpAndroidManifestSetActivityAttr{
+		{Base: protocol.Base{Pkg: "p"}, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/Splash"},
 	}
 	if _, err := ApplyAndroidManifest(path, nil, nil, ops, nil); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -78,8 +78,8 @@ func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 func TestApplyAndroidColorsCreates(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values/plugin_colors.xml")
-	ops := []*driftplugin.OpAndroidColorSet{
-		{Base: driftplugin.Base{Pkg: "p"}, Name: "splash_bg", Value: "#FFFFFF"},
+	ops := []*protocol.OpAndroidColorSet{
+		{Base: protocol.Base{Pkg: "p"}, Name: "splash_bg", Value: "#FFFFFF"},
 	}
 	wrote, changed, err := ApplyAndroidColors(path, ops)
 	if err != nil {
@@ -97,12 +97,12 @@ func TestApplyAndroidColorsCreates(t *testing.T) {
 func TestApplyAndroidStylesReplacesItems(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values/plugin_styles.xml")
-	ops := []*driftplugin.OpAndroidStyleSet{
+	ops := []*protocol.OpAndroidStyleSet{
 		{
-			Base:   driftplugin.Base{Pkg: "p"},
+			Base:   protocol.Base{Pkg: "p"},
 			Name:   "SplashTheme",
 			Parent: "Theme.AppCompat",
-			Items:  []driftplugin.StyleItem{{Name: "android:windowBackground", Value: "@drawable/splash"}},
+			Items:  []protocol.StyleItem{{Name: "android:windowBackground", Value: "@drawable/splash"}},
 		},
 	}
 	_, _, err := ApplyAndroidStyles(path, ops)

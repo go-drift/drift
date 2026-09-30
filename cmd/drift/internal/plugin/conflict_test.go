@@ -5,16 +5,17 @@ import (
 	"testing"
 
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-func mkBase(pkg string) driftplugin.Base {
-	return driftplugin.Base{Pkg: pkg, Ident: pkg}
+func mkBase(pkg string) protocol.Base {
+	return protocol.Base{Pkg: pkg, Ident: pkg}
 }
 
 func TestValidateCollapsesIdenticalIdempotent(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "bar"},
-		&driftplugin.OpInfoPlistSetString{Base: mkBase("b"), Key: "Foo", Value: "bar"},
+	ops := []protocol.Op{
+		&protocol.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "bar"},
+		&protocol.OpInfoPlistSetString{Base: mkBase("b"), Key: "Foo", Value: "bar"},
 	}
 	out, err := Validate(ops)
 	if err != nil {
@@ -26,9 +27,9 @@ func TestValidateCollapsesIdenticalIdempotent(t *testing.T) {
 }
 
 func TestValidateDivergentIdempotentFails(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "x"},
-		&driftplugin.OpInfoPlistSetString{Base: mkBase("b"), Key: "Foo", Value: "y"},
+	ops := []protocol.Op{
+		&protocol.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "x"},
+		&protocol.OpInfoPlistSetString{Base: mkBase("b"), Key: "Foo", Value: "y"},
 	}
 	_, err := Validate(ops)
 	if err == nil {
@@ -44,10 +45,10 @@ func TestValidateDivergentIdempotentFails(t *testing.T) {
 }
 
 func TestValidateAdditiveMerges(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidManifestAddPermission{Base: mkBase("a"), Name: "android.permission.CAMERA"},
-		&driftplugin.OpAndroidManifestAddPermission{Base: mkBase("b"), Name: "android.permission.CAMERA"},
-		&driftplugin.OpAndroidManifestAddPermission{Base: mkBase("c"), Name: "android.permission.INTERNET"},
+	ops := []protocol.Op{
+		&protocol.OpAndroidManifestAddPermission{Base: mkBase("a"), Name: "android.permission.CAMERA"},
+		&protocol.OpAndroidManifestAddPermission{Base: mkBase("b"), Name: "android.permission.CAMERA"},
+		&protocol.OpAndroidManifestAddPermission{Base: mkBase("c"), Name: "android.permission.INTERNET"},
 	}
 	out, err := Validate(ops)
 	if err != nil {
@@ -59,9 +60,9 @@ func TestValidateAdditiveMerges(t *testing.T) {
 }
 
 func TestValidateExclusiveSameContentCollapses(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSReplaceLaunchScreen{Base: mkBase("a"), Content: "<x/>"},
-		&driftplugin.OpIOSReplaceLaunchScreen{Base: mkBase("b"), Content: "<x/>"},
+	ops := []protocol.Op{
+		&protocol.OpIOSReplaceLaunchScreen{Base: mkBase("a"), Content: "<x/>"},
+		&protocol.OpIOSReplaceLaunchScreen{Base: mkBase("b"), Content: "<x/>"},
 	}
 	out, err := Validate(ops)
 	if err != nil {
@@ -73,9 +74,9 @@ func TestValidateExclusiveSameContentCollapses(t *testing.T) {
 }
 
 func TestValidateExclusiveDivergentFails(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSReplaceLaunchScreen{Base: mkBase("a"), Content: "<a/>"},
-		&driftplugin.OpIOSReplaceLaunchScreen{Base: mkBase("b"), Content: "<b/>"},
+	ops := []protocol.Op{
+		&protocol.OpIOSReplaceLaunchScreen{Base: mkBase("a"), Content: "<a/>"},
+		&protocol.OpIOSReplaceLaunchScreen{Base: mkBase("b"), Content: "<b/>"},
 	}
 	_, err := Validate(ops)
 	var ce *ConflictError
@@ -89,14 +90,14 @@ func TestValidateExclusiveDivergentFails(t *testing.T) {
 // SPM cannot reconcile two version constraints inside a single package
 // graph; the user has to choose.
 func TestValidateSPMDivergentRequirementsFail(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAddPackageDependency{
+	ops := []protocol.Op{
+		&protocol.OpIOSAddPackageDependency{
 			Base:        mkBase("a"),
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
 			Requirement: driftplugin.SPMRequirementFrom("10.0.0"),
 			Products:    []string{"FirebaseAnalytics"},
 		},
-		&driftplugin.OpIOSAddPackageDependency{
+		&protocol.OpIOSAddPackageDependency{
 			Base:        mkBase("b"),
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
 			Requirement: driftplugin.SPMRequirementFrom("11.0.0"),
@@ -113,14 +114,14 @@ func TestValidateSPMDivergentRequirementsFail(t *testing.T) {
 // Two plugins on the same SwiftPM URL with identical payloads collapse
 // silently (cooperating plugins both depending on Firebase is normal).
 func TestValidateSPMIdenticalRequirementsCollapse(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAddPackageDependency{
+	ops := []protocol.Op{
+		&protocol.OpIOSAddPackageDependency{
 			Base:        mkBase("a"),
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
 			Requirement: driftplugin.SPMRequirementFrom("10.0.0"),
 			Products:    []string{"FirebaseAnalytics"},
 		},
-		&driftplugin.OpIOSAddPackageDependency{
+		&protocol.OpIOSAddPackageDependency{
 			Base:        mkBase("b"),
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
 			Requirement: driftplugin.SPMRequirementFrom("10.0.0"),
@@ -140,13 +141,13 @@ func TestValidateSPMIdenticalRequirementsCollapse(t *testing.T) {
 // must conflict. Gradle cannot apply one plugin id at two versions inside
 // a single build.
 func TestValidateGradleApplyPluginDivergentClasspathFails(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidGradleApplyPlugin{
+	ops := []protocol.Op{
+		&protocol.OpAndroidGradleApplyPlugin{
 			Base:    mkBase("a"),
 			ID:      "com.google.gms.google-services",
 			Version: "4.4.0",
 		},
-		&driftplugin.OpAndroidGradleApplyPlugin{
+		&protocol.OpAndroidGradleApplyPlugin{
 			Base:    mkBase("b"),
 			ID:      "com.google.gms.google-services",
 			Version: "4.3.15",
@@ -161,13 +162,13 @@ func TestValidateGradleApplyPluginDivergentClasspathFails(t *testing.T) {
 
 // Same Gradle plugin id + same classpath_artifact collapse silently.
 func TestValidateGradleApplyPluginIdenticalCollapse(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidGradleApplyPlugin{
+	ops := []protocol.Op{
+		&protocol.OpAndroidGradleApplyPlugin{
 			Base:    mkBase("a"),
 			ID:      "com.google.gms.google-services",
 			Version: "4.4.0",
 		},
-		&driftplugin.OpAndroidGradleApplyPlugin{
+		&protocol.OpAndroidGradleApplyPlugin{
 			Base:    mkBase("b"),
 			ID:      "com.google.gms.google-services",
 			Version: "4.4.0",

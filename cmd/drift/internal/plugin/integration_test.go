@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // TestPipelineEndToEndAndroid exercises the CLI-side pipeline that runs
@@ -21,42 +21,42 @@ func TestPipelineEndToEndAndroid(t *testing.T) {
 	seedAndroidScaffold(t, dir)
 
 	kotlinBody := "package com.example.splash\nclass SplashPlugin\n"
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidManifestAddPermission{
-			Base: driftplugin.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+	ops := []protocol.Op{
+		&protocol.OpAndroidManifestAddPermission{
+			Base: protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
 			Name: "android.permission.POST_NOTIFICATIONS",
 		},
-		&driftplugin.OpAndroidManifestSetActivityAttr{
-			Base:     driftplugin.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+		&protocol.OpAndroidManifestSetActivityAttr{
+			Base:     protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
 			Activity: ".MainActivity",
 			Attr:     "android:theme",
 			Value:    "@style/Drift.Splash",
 		},
-		&driftplugin.OpAndroidColorSet{
-			Base:  driftplugin.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+		&protocol.OpAndroidColorSet{
+			Base:  protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
 			Name:  "drift_splash_background",
 			Value: "#1A2238",
 		},
-		&driftplugin.OpAndroidStyleSet{
-			Base:   driftplugin.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+		&protocol.OpAndroidStyleSet{
+			Base:   protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
 			Name:   "Drift.Splash",
 			Parent: "Theme.AppCompat.NoActionBar",
-			Items:  []driftplugin.StyleItem{{Name: "android:windowBackground", Value: "@color/drift_splash_background"}},
+			Items:  []protocol.StyleItem{{Name: "android:windowBackground", Value: "@color/drift_splash_background"}},
 		},
-		&driftplugin.OpAddKotlinSource{
-			Base:    driftplugin.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+		&protocol.OpAddKotlinSource{
+			Base:    protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
 			Package: "com.example.splash",
 			RelPath: "SplashPlugin.kt",
 			Content: b64.StdEncoding.EncodeToString([]byte(kotlinBody)),
 		},
 		// Two plugins emitting the same permission must collapse without
 		// surfacing a conflict.
-		&driftplugin.OpAndroidManifestAddPermission{
-			Base: driftplugin.Base{Pkg: "github.com/example/other", Ident: "other"},
+		&protocol.OpAndroidManifestAddPermission{
+			Base: protocol.Base{Pkg: "github.com/example/other", Ident: "other"},
 			Name: "android.permission.POST_NOTIFICATIONS",
 		},
-		&driftplugin.OpRegistrantAndroid{
-			Base:   driftplugin.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+		&protocol.OpRegistrantAndroid{
+			Base:   protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
 			Symbol: "com.example.splash.SplashPlugin.register",
 		},
 	}
@@ -116,13 +116,13 @@ func TestPipelineEndToEndAndroid(t *testing.T) {
 // TestPipelineRejectsIncompatibleExclusiveOps confirms the validate stage
 // surfaces ConflictError before any file is touched.
 func TestPipelineRejectsIncompatibleExclusiveOps(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSReplaceLaunchScreen{
-			Base:    driftplugin.Base{Pkg: "a", Ident: "a"},
+	ops := []protocol.Op{
+		&protocol.OpIOSReplaceLaunchScreen{
+			Base:    protocol.Base{Pkg: "a", Ident: "a"},
 			Content: "<one/>",
 		},
-		&driftplugin.OpIOSReplaceLaunchScreen{
-			Base:    driftplugin.Base{Pkg: "b", Ident: "b"},
+		&protocol.OpIOSReplaceLaunchScreen{
+			Base:    protocol.Base{Pkg: "b", Ident: "b"},
 			Content: "<two/>",
 		},
 	}
@@ -173,7 +173,7 @@ func readFile(t *testing.T, path string) string {
 	return string(b)
 }
 
-func countOpType(ops []driftplugin.Op, typ string) int {
+func countOpType(ops []protocol.Op, typ string) int {
 	n := 0
 	for _, op := range ops {
 		if op.Type() == typ {

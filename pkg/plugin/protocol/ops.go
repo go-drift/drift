@@ -1,6 +1,8 @@
-package plugin
+package protocol
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -70,13 +72,6 @@ type Op interface {
 type Base struct {
 	Pkg   string `json:"plugin"`
 	Ident string `json:"plugin_id,omitempty"`
-}
-
-func newBase(b *BuildCtx, _ MergeClass) Base {
-	return Base{
-		Pkg:   b.pluginPackage,
-		Ident: b.pluginName,
-	}
 }
 
 func (b Base) PluginPackage() string { return b.Pkg }
@@ -234,12 +229,6 @@ type SPMRequirement struct {
 	Kind  SPMRequirementKind `json:"kind"`
 	Value string             `json:"value"`
 	Upper string             `json:"upper,omitempty"`
-}
-
-// SPMRequirementFrom is sugar for the most common form (`from:`, which is
-// SwiftPM's up-to-next-major shorthand).
-func SPMRequirementFrom(version string) SPMRequirement {
-	return SPMRequirement{Kind: SPMFrom, Value: version}
 }
 
 // ValidateSPMRequirement errors on unknown Kind, missing Value, a range
@@ -902,6 +891,20 @@ func UnmarshalOp(data []byte) (Op, error) {
 	return op, nil
 }
 
+// DecodeOps converts a slice of raw JSON ops into typed Ops, the boundary parser
+// for a bridge Response.Ops list.
+func DecodeOps(raws []json.RawMessage) ([]Op, error) {
+	out := make([]Op, 0, len(raws))
+	for i, raw := range raws {
+		op, err := UnmarshalOp(raw)
+		if err != nil {
+			return nil, fmt.Errorf("op %d: %w", i, err)
+		}
+		out = append(out, op)
+	}
+	return out, nil
+}
+
 // MarshalOpList encodes a slice of ops as a JSON array.
 func MarshalOpList(ops []Op) ([]byte, error) {
 	parts := make([]json.RawMessage, len(ops))
@@ -1033,5 +1036,29 @@ func marshalSortedMap(m map[string]json.RawMessage) ([]byte, error) {
 // bytes. Callers must know which ops have a Content field; this is a
 // convenience for mutators.
 func DecodeContent(s string) ([]byte, error) {
-	return decodeBytes(s)
+	if s == "" {
+		return nil, nil
+	}
+	return base64.StdEncoding.DecodeString(s)
+}
+
+// EncodeContent is the inverse of DecodeContent: the base64 wire form of a
+// file payload carried in an op's Content field.
+func EncodeContent(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// hashBytes returns a hex sha256 of the input.
+func hashBytes(parts ...string) string {
+	h := sha256.New()
+	for i, p := range parts {
+		if i > 0 {
+			h.Write([]byte{0})
+		}
+		h.Write([]byte(p))
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

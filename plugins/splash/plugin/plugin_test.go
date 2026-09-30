@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // stubAsset writes a 1x1 PNG-shaped fake at projectRoot/<rel> so
@@ -26,7 +27,7 @@ func stubAsset(t *testing.T, projectRoot, rel string) {
 // runBuild constructs a NewTestCtx, points its projectRoot at a temp dir
 // seeded with the requested assets, and invokes splash{}.Build. Returns
 // the recorded ops for assertion.
-func runBuild(t *testing.T, cfg Config, assets ...string) []driftplugin.Op {
+func runBuild(t *testing.T, cfg Config, assets ...string) []protocol.Op {
 	t.Helper()
 	root := t.TempDir()
 	for _, a := range assets {
@@ -44,7 +45,7 @@ func runBuild(t *testing.T, cfg Config, assets ...string) []driftplugin.Op {
 
 // hasOpType returns true if the op list contains at least one op with the
 // given JSON discriminator.
-func hasOpType(ops []driftplugin.Op, typ string) bool {
+func hasOpType(ops []protocol.Op, typ string) bool {
 	for _, op := range ops {
 		if op.Type() == typ {
 			return true
@@ -106,7 +107,7 @@ func TestBuild_Android12_EmitsGradleAndPreActivity(t *testing.T) {
 
 	// Verify the gradle dep coord pins core-splashscreen 1.0.1 (no floating).
 	for _, op := range ops {
-		if dep, ok := op.(*driftplugin.OpAndroidGradleAddDependency); ok {
+		if dep, ok := op.(*protocol.OpAndroidGradleAddDependency); ok {
 			if !strings.Contains(dep.Coord, "androidx.core:core-splashscreen:") {
 				t.Errorf("gradle dep coord wrong: %s", dep.Coord)
 			}
@@ -129,7 +130,7 @@ func TestBuild_DarkVariant_AddsNightBucketResources(t *testing.T) {
 
 	var sawNightDrawable, sawNightColors bool
 	for _, op := range ops {
-		if rx, ok := op.(*driftplugin.OpAndroidWriteResourceXML); ok {
+		if rx, ok := op.(*protocol.OpAndroidWriteResourceXML); ok {
 			if strings.Contains(rx.RelPath, "drawable-night/") {
 				sawNightDrawable = true
 			}
@@ -170,11 +171,11 @@ func TestBuild_RegistrantSymbol(t *testing.T) {
 	var sawIOS, sawAndroid bool
 	for _, op := range ops {
 		switch v := op.(type) {
-		case *driftplugin.OpRegistrantIOS:
+		case *protocol.OpRegistrantIOS:
 			if v.Symbol == "DriftSplashPlugin.register" {
 				sawIOS = true
 			}
-		case *driftplugin.OpRegistrantAndroid:
+		case *protocol.OpRegistrantAndroid:
 			if v.Symbol == "com.drift.plugin.splash.DriftSplashPlugin.register" {
 				sawAndroid = true
 			}

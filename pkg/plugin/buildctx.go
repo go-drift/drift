@@ -1,9 +1,7 @@
 package plugin
 
 import (
-	"crypto/sha256"
 	"embed"
-	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -12,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // BuildCtx is passed to Plugin.Build. It records ops on platform-specific
@@ -25,7 +25,7 @@ type BuildCtx struct {
 	buildDir      string
 	platform      string
 
-	ops []Op
+	ops []protocol.Op
 
 	// deferredErr captures the first error from a recorder that cannot
 	// return an error to its caller (e.g. Sources.AddFS walking an
@@ -61,8 +61,8 @@ func NewTestCtxAt(projectRoot string) *BuildCtx {
 }
 
 // Ops returns the ops recorded so far in the context.
-func (b *BuildCtx) Ops() []Op {
-	out := make([]Op, len(b.ops))
+func (b *BuildCtx) Ops() []protocol.Op {
+	out := make([]protocol.Op, len(b.ops))
 	copy(out, b.ops)
 	return out
 }
@@ -125,7 +125,7 @@ func newBuildCtx(pluginPackage, pluginName, projectRoot, buildDir, platform stri
 	return b
 }
 
-func (b *BuildCtx) push(op Op) {
+func (b *BuildCtx) push(op protocol.Op) {
 	b.ops = append(b.ops, op)
 }
 
@@ -142,8 +142,8 @@ type IOSScope struct {
 // Registrant records an iOS registrant entry that the generated
 // DriftPluginRegistrant.swift will call as `symbol(host: host)`.
 func (s *IOSScope) Registrant(symbol string) {
-	s.b.push(&OpRegistrantIOS{
-		Base:   newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpRegistrantIOS{
+		Base:   newBase(s.b),
 		Symbol: symbol,
 	})
 }
@@ -158,11 +158,11 @@ func (s *IOSScope) Registrant(symbol string) {
 // Panics on an invalid dependency (see ValidateSPMDependency) so mistakes
 // surface at the plugin's call site.
 func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products []string) {
-	if err := ValidateSPMDependency(url, req, products); err != nil {
+	if err := protocol.ValidateSPMDependency(url, req, products); err != nil {
 		panic(err)
 	}
-	s.b.push(&OpIOSAddPackageDependency{
-		Base:        newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpIOSAddPackageDependency{
+		Base:        newBase(s.b),
 		URL:         url,
 		Requirement: req,
 		Products:    append([]string(nil), products...),
@@ -177,14 +177,14 @@ func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products
 // in lex-sorted symbol order. Panics on an unknown callback or empty symbol
 // so typos in plugin Build code surface immediately.
 func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol string) {
-	if err := ValidateIOSAppDelegateCallback(callback); err != nil {
+	if err := protocol.ValidateIOSAppDelegateCallback(callback); err != nil {
 		panic(err)
 	}
 	if symbol == "" {
 		panic("AppDelegateRegistrant: empty symbol")
 	}
-	s.b.push(&OpIOSAppDelegateRegistrant{
-		Base:     newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpIOSAppDelegateRegistrant{
+		Base:     newBase(s.b),
 		Callback: callback,
 		Symbol:   symbol,
 	})
@@ -197,13 +197,13 @@ func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol
 // iOS build paths flatten resources into the bundle root. Panics on an
 // invalid name (see ValidateBundleFileName).
 func (s *IOSScope) AddBundleResource(name string, content []byte) {
-	if err := ValidateBundleFileName(name); err != nil {
+	if err := protocol.ValidateBundleFileName(name); err != nil {
 		panic(err)
 	}
-	s.b.push(&OpIOSAddBundleResource{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpIOSAddBundleResource{
+		Base:    newBase(s.b),
 		Path:    name,
-		Content: encodeBytes(content),
+		Content: protocol.EncodeContent(content),
 	})
 }
 
@@ -211,40 +211,40 @@ func (s *IOSScope) AddBundleResource(name string, content []byte) {
 type IOSInfoScope struct{ b *BuildCtx }
 
 func (s *IOSInfoScope) SetString(key, value string) {
-	s.b.push(&OpInfoPlistSetString{
-		Base:  newBase(s.b, ClassIdempotent),
+	s.b.push(&protocol.OpInfoPlistSetString{
+		Base:  newBase(s.b),
 		Key:   key,
 		Value: value,
 	})
 }
 
 func (s *IOSInfoScope) SetBool(key string, value bool) {
-	s.b.push(&OpInfoPlistSetBool{
-		Base:  newBase(s.b, ClassIdempotent),
+	s.b.push(&protocol.OpInfoPlistSetBool{
+		Base:  newBase(s.b),
 		Key:   key,
 		Value: value,
 	})
 }
 
 func (s *IOSInfoScope) SetStringArray(key string, values []string) {
-	s.b.push(&OpInfoPlistSetStringArray{
-		Base:   newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpInfoPlistSetStringArray{
+		Base:   newBase(s.b),
 		Key:    key,
 		Values: append([]string(nil), values...),
 	})
 }
 
 func (s *IOSInfoScope) AppendArrayItem(key, value string) {
-	s.b.push(&OpInfoPlistAppendArrayItem{
-		Base:  newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpInfoPlistAppendArrayItem{
+		Base:  newBase(s.b),
 		Key:   key,
 		Value: value,
 	})
 }
 
 func (s *IOSInfoScope) SetDict(key string, dict map[string]any) {
-	s.b.push(&OpInfoPlistSetDict{
-		Base:  newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpInfoPlistSetDict{
+		Base:  newBase(s.b),
 		Key:   key,
 		Value: copyDict(dict),
 	})
@@ -256,10 +256,10 @@ type IOSAssetsScope struct{ b *BuildCtx }
 // AddImageSet adds a single-resolution image set named `name` containing img.
 // The image is treated as the 1x universal entry.
 func (s *IOSAssetsScope) AddImageSet(name string, img []byte) {
-	s.b.push(&OpIOSAssetsAddImageSet{
-		Base:  newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpIOSAssetsAddImageSet{
+		Base:  newBase(s.b),
 		Name:  name,
-		Image: encodeBytes(img),
+		Image: protocol.EncodeContent(img),
 	})
 }
 
@@ -270,8 +270,8 @@ type IOSStoryboardsScope struct{ b *BuildCtx }
 // supplied content. This op is exclusive: two plugins that try to replace
 // the launch screen with divergent content conflict.
 func (s *IOSStoryboardsScope) ReplaceLaunchScreen(content string) {
-	s.b.push(&OpIOSReplaceLaunchScreen{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpIOSReplaceLaunchScreen{
+		Base:    newBase(s.b),
 		Content: content,
 	})
 }
@@ -284,22 +284,22 @@ type IOSSourcesScope struct{ b *BuildCtx }
 // Runner/Plugins/<group>/<relpath> in the generated project tree.
 func (s *IOSSourcesScope) AddFS(group string, sources embed.FS, root string) {
 	s.b.walkEmbedFS(sources, root, func(rel string, content []byte) {
-		s.b.push(&OpAddIOSSource{
-			Base:    newBase(s.b, ClassExclusive),
+		s.b.push(&protocol.OpAddIOSSource{
+			Base:    newBase(s.b),
 			Group:   group,
 			RelPath: rel,
-			Content: encodeBytes(content),
+			Content: protocol.EncodeContent(content),
 		})
 	})
 }
 
 // AddFile records a single Swift source file at Runner/Plugins/<group>/<rel>.
 func (s *IOSSourcesScope) AddFile(group, rel string, content []byte) {
-	s.b.push(&OpAddIOSSource{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpAddIOSSource{
+		Base:    newBase(s.b),
 		Group:   group,
 		RelPath: rel,
-		Content: encodeBytes(content),
+		Content: protocol.EncodeContent(content),
 	})
 }
 
@@ -317,8 +317,8 @@ type AndroidScope struct {
 // DriftPluginRegistrant.kt will call as `<symbol>(host)`. Symbol is the
 // fully-qualified Kotlin identifier, e.g. com.foo.camera.CameraPlugin.register.
 func (s *AndroidScope) Registrant(symbol string) {
-	s.b.push(&OpRegistrantAndroid{
-		Base:   newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpRegistrantAndroid{
+		Base:   newBase(s.b),
 		Symbol: symbol,
 	})
 }
@@ -330,8 +330,8 @@ func (s *AndroidScope) Registrant(symbol string) {
 // fully-qualified Kotlin identifier, e.g.
 // com.foo.splash.Android12SplashController.install.
 func (s *AndroidScope) PreActivityRegistrant(symbol string) {
-	s.b.push(&OpAndroidPreActivityRegistrant{
-		Base:   newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpAndroidPreActivityRegistrant{
+		Base:   newBase(s.b),
 		Symbol: symbol,
 	})
 }
@@ -343,8 +343,8 @@ func (s *AndroidScope) PreActivityRegistrant(symbol string) {
 // versions explicitly; floating versions in generated build files are a CI
 // heisenbug factory.
 func (s *AndroidScope) AddGradleDependency(configuration, coord string) {
-	s.b.push(&OpAndroidGradleAddDependency{
-		Base:          newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpAndroidGradleAddDependency{
+		Base:          newBase(s.b),
 		Configuration: configuration,
 		Coord:         coord,
 	})
@@ -361,8 +361,8 @@ func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
 	if id == "" {
 		panic("ApplyGradlePlugin: empty plugin id")
 	}
-	s.b.push(&OpAndroidGradleApplyPlugin{
-		Base:    newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpAndroidGradleApplyPlugin{
+		Base:    newBase(s.b),
 		ID:      id,
 		Version: version,
 	})
@@ -374,13 +374,13 @@ func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
 // content the app reads via AssetManager. Build-time config files belong in
 // AddAppModuleFile. Panics on an invalid path (see ValidateAssetRelPath).
 func (s *AndroidScope) AddAsset(path string, content []byte) {
-	if err := ValidateAssetRelPath(path); err != nil {
+	if err := protocol.ValidateAssetRelPath(path); err != nil {
 		panic(err)
 	}
-	s.b.push(&OpAndroidAddAsset{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpAndroidAddAsset{
+		Base:    newBase(s.b),
 		Path:    path,
-		Content: encodeBytes(content),
+		Content: protocol.EncodeContent(content),
 	})
 }
 
@@ -390,13 +390,13 @@ func (s *AndroidScope) AddAsset(path string, content []byte) {
 // a plain file name; scaffold-owned names (build.gradle, src, ...) are
 // rejected. Panics on an invalid name (see ValidateAppModuleFileName).
 func (s *AndroidScope) AddAppModuleFile(name string, content []byte) {
-	if err := ValidateAppModuleFileName(name); err != nil {
+	if err := protocol.ValidateAppModuleFileName(name); err != nil {
 		panic(err)
 	}
-	s.b.push(&OpAndroidAddAppModuleFile{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpAndroidAddAppModuleFile{
+		Base:    newBase(s.b),
 		Name:    name,
-		Content: encodeBytes(content),
+		Content: protocol.EncodeContent(content),
 	})
 }
 
@@ -404,23 +404,23 @@ func (s *AndroidScope) AddAppModuleFile(name string, content []byte) {
 type AndroidManifestScope struct{ b *BuildCtx }
 
 func (s *AndroidManifestScope) AddPermission(name string) {
-	s.b.push(&OpAndroidManifestAddPermission{
-		Base: newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpAndroidManifestAddPermission{
+		Base: newBase(s.b),
 		Name: name,
 	})
 }
 
 func (s *AndroidManifestScope) AddIntentFilter(activity string, xml string) {
-	s.b.push(&OpAndroidManifestAddIntentFilter{
-		Base:     newBase(s.b, ClassAdditive),
+	s.b.push(&protocol.OpAndroidManifestAddIntentFilter{
+		Base:     newBase(s.b),
 		Activity: activity,
 		XML:      xml,
 	})
 }
 
 func (s *AndroidManifestScope) SetActivityAttr(activity, attr, value string) {
-	s.b.push(&OpAndroidManifestSetActivityAttr{
-		Base:     newBase(s.b, ClassIdempotent),
+	s.b.push(&protocol.OpAndroidManifestSetActivityAttr{
+		Base:     newBase(s.b),
 		Activity: activity,
 		Attr:     attr,
 		Value:    value,
@@ -433,8 +433,8 @@ func (s *AndroidManifestScope) SetActivityTheme(activity, theme string) {
 }
 
 func (s *AndroidManifestScope) AddMetaData(parent, name, value string) {
-	s.b.push(&OpAndroidManifestAddMetaData{
-		Base:   newBase(s.b, ClassIdempotent),
+	s.b.push(&protocol.OpAndroidManifestAddMetaData{
+		Base:   newBase(s.b),
 		Parent: parent,
 		Name:   name,
 		Value:  value,
@@ -452,8 +452,8 @@ type AndroidResourcesScope struct {
 // WriteXML writes an arbitrary resource XML file under res/<relPath>.
 // relPath is slash-separated and rooted at res/.
 func (s *AndroidResourcesScope) WriteXML(relPath, content string) {
-	s.b.push(&OpAndroidWriteResourceXML{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpAndroidWriteResourceXML{
+		Base:    newBase(s.b),
 		RelPath: relPath,
 		Content: content,
 	})
@@ -468,14 +468,14 @@ type AndroidValuesScope struct {
 func (s *AndroidValuesScope) Set(name, value string) {
 	switch s.kind {
 	case "color":
-		s.b.push(&OpAndroidColorSet{
-			Base:  newBase(s.b, ClassIdempotent),
+		s.b.push(&protocol.OpAndroidColorSet{
+			Base:  newBase(s.b),
 			Name:  name,
 			Value: value,
 		})
 	case "string":
-		s.b.push(&OpAndroidStringSet{
-			Base:  newBase(s.b, ClassIdempotent),
+		s.b.push(&protocol.OpAndroidStringSet{
+			Base:  newBase(s.b),
 			Name:  name,
 			Value: value,
 		})
@@ -494,12 +494,12 @@ func (s *AndroidStylesScope) Set(name, parent string, items map[string]string) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	pairs := make([]StyleItem, len(keys))
+	pairs := make([]protocol.StyleItem, len(keys))
 	for i, k := range keys {
-		pairs[i] = StyleItem{Name: k, Value: items[k]}
+		pairs[i] = protocol.StyleItem{Name: k, Value: items[k]}
 	}
-	s.b.push(&OpAndroidStyleSet{
-		Base:   newBase(s.b, ClassIdempotent),
+	s.b.push(&protocol.OpAndroidStyleSet{
+		Base:   newBase(s.b),
 		Name:   name,
 		Parent: parent,
 		Items:  pairs,
@@ -510,10 +510,10 @@ func (s *AndroidStylesScope) Set(name, parent string, items map[string]string) {
 type AndroidDrawablesScope struct{ b *BuildCtx }
 
 func (s *AndroidDrawablesScope) AddBitmap(name string, content []byte) {
-	s.b.push(&OpAndroidWriteDrawable{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpAndroidWriteDrawable{
+		Base:    newBase(s.b),
 		Name:    name,
-		Content: encodeBytes(content),
+		Content: protocol.EncodeContent(content),
 	})
 }
 
@@ -526,22 +526,22 @@ type AndroidSourcesScope struct{ b *BuildCtx }
 // dot-separated Kotlin package converted to slashes.
 func (s *AndroidSourcesScope) AddFS(pkg string, sources embed.FS, root string) {
 	s.b.walkEmbedFS(sources, root, func(rel string, content []byte) {
-		s.b.push(&OpAddKotlinSource{
-			Base:    newBase(s.b, ClassExclusive),
+		s.b.push(&protocol.OpAddKotlinSource{
+			Base:    newBase(s.b),
 			Package: pkg,
 			RelPath: rel,
-			Content: encodeBytes(content),
+			Content: protocol.EncodeContent(content),
 		})
 	})
 }
 
 // AddFile records a single Kotlin file under the given package.
 func (s *AndroidSourcesScope) AddFile(pkg, rel string, content []byte) {
-	s.b.push(&OpAddKotlinSource{
-		Base:    newBase(s.b, ClassExclusive),
+	s.b.push(&protocol.OpAddKotlinSource{
+		Base:    newBase(s.b),
 		Package: pkg,
 		RelPath: rel,
-		Content: encodeBytes(content),
+		Content: protocol.EncodeContent(content),
 	})
 }
 
@@ -574,20 +574,6 @@ func (b *BuildCtx) walkEmbedFS(sources embed.FS, root string, emit func(rel stri
 	}
 }
 
-func encodeBytes(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-func decodeBytes(s string) ([]byte, error) {
-	if s == "" {
-		return nil, nil
-	}
-	return base64.StdEncoding.DecodeString(s)
-}
-
 func copyDict(d map[string]any) map[string]any {
 	if d == nil {
 		return nil
@@ -597,14 +583,9 @@ func copyDict(d map[string]any) map[string]any {
 	return out
 }
 
-// hashBytes returns a hex sha256 of the input.
-func hashBytes(parts ...string) string {
-	h := sha256.New()
-	for i, p := range parts {
-		if i > 0 {
-			h.Write([]byte{0})
-		}
-		h.Write([]byte(p))
+func newBase(b *BuildCtx) protocol.Base {
+	return protocol.Base{
+		Pkg:   b.pluginPackage,
+		Ident: b.pluginName,
 	}
-	return fmt.Sprintf("%x", h.Sum(nil))
 }

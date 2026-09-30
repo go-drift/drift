@@ -10,7 +10,7 @@ import (
 
 	"github.com/beevik/etree"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // ApplyAndroidManifest applies manifest ops to the file at path. Existing
@@ -18,10 +18,10 @@ import (
 // Returns changed=true iff the file's bytes actually changed.
 func ApplyAndroidManifest(
 	path string,
-	addPerms []*driftplugin.OpAndroidManifestAddPermission,
-	addIntents []*driftplugin.OpAndroidManifestAddIntentFilter,
-	setAttrs []*driftplugin.OpAndroidManifestSetActivityAttr,
-	addMeta []*driftplugin.OpAndroidManifestAddMetaData,
+	addPerms []*protocol.OpAndroidManifestAddPermission,
+	addIntents []*protocol.OpAndroidManifestAddIntentFilter,
+	setAttrs []*protocol.OpAndroidManifestSetActivityAttr,
+	addMeta []*protocol.OpAndroidManifestAddMetaData,
 ) (bool, error) {
 	doc, original, err := loadXML(path)
 	if err != nil {
@@ -183,7 +183,7 @@ func ensureMetaData(parent *etree.Element, name, value string) {
 
 // ApplyAndroidColors writes/updates a colors.xml at path with the given
 // OpAndroidColorSet entries.
-func ApplyAndroidColors(path string, ops []*driftplugin.OpAndroidColorSet) (string, bool, error) {
+func ApplyAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {
 	return applyValuesXML(path, "color", func(d *etree.Document) {
 		root := ensureResourcesRoot(d)
 		for _, op := range ops {
@@ -193,7 +193,7 @@ func ApplyAndroidColors(path string, ops []*driftplugin.OpAndroidColorSet) (stri
 }
 
 // ApplyAndroidStrings writes/updates a strings.xml at path.
-func ApplyAndroidStrings(path string, ops []*driftplugin.OpAndroidStringSet) (string, bool, error) {
+func ApplyAndroidStrings(path string, ops []*protocol.OpAndroidStringSet) (string, bool, error) {
 	return applyValuesXML(path, "string", func(d *etree.Document) {
 		root := ensureResourcesRoot(d)
 		for _, op := range ops {
@@ -203,7 +203,7 @@ func ApplyAndroidStrings(path string, ops []*driftplugin.OpAndroidStringSet) (st
 }
 
 // ApplyAndroidStyles writes/updates a styles.xml at path.
-func ApplyAndroidStyles(path string, ops []*driftplugin.OpAndroidStyleSet) (string, bool, error) {
+func ApplyAndroidStyles(path string, ops []*protocol.OpAndroidStyleSet) (string, bool, error) {
 	return applyValuesXML(path, "style", func(d *etree.Document) {
 		root := ensureResourcesRoot(d)
 		for _, op := range ops {
@@ -256,7 +256,7 @@ func setValueEntry(root *etree.Element, tag, name, value string) {
 	entry.SetText(value)
 }
 
-func setStyleEntry(root *etree.Element, op *driftplugin.OpAndroidStyleSet) {
+func setStyleEntry(root *etree.Element, op *protocol.OpAndroidStyleSet) {
 	var style *etree.Element
 	for _, el := range root.SelectElements("style") {
 		if attr := el.SelectAttr("name"); attr != nil && attr.Value == op.Name {
@@ -289,14 +289,14 @@ func setStyleEntry(root *etree.Element, op *driftplugin.OpAndroidStyleSet) {
 
 // WriteAndroidDrawables writes raw bitmap files under drawableDir. Returns
 // the paths that actually changed.
-func WriteAndroidDrawables(drawableDir string, ops []*driftplugin.OpAndroidWriteDrawable) ([]string, error) {
+func WriteAndroidDrawables(drawableDir string, ops []*protocol.OpAndroidWriteDrawable) ([]string, error) {
 	var changed []string
 	if err := os.MkdirAll(drawableDir, 0o755); err != nil {
 		return changed, fmt.Errorf("mkdir drawable: %w", err)
 	}
 	for _, op := range ops {
 		dest := filepath.Join(drawableDir, op.Name+drawableExtension(op.Name))
-		content, err := driftplugin.DecodeContent(op.Content)
+		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("decode drawable %s: %w", op.Name, err)
 		}
@@ -322,7 +322,7 @@ func drawableExtension(name string) string {
 }
 
 // WriteAndroidResourceXML writes arbitrary res/<relPath> XML files.
-func WriteAndroidResourceXML(resRoot string, ops []*driftplugin.OpAndroidWriteResourceXML) ([]string, error) {
+func WriteAndroidResourceXML(resRoot string, ops []*protocol.OpAndroidWriteResourceXML) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
 		dest := filepath.Join(resRoot, filepath.FromSlash(op.RelPath))

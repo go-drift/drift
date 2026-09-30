@@ -6,32 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
-
-// Envelope is the JSON object the Drift CLI sends on the bridge stdin.
-type Envelope struct {
-	APIVersion  int              `json:"api_version"`
-	Cmd         string           `json:"cmd"`
-	Platform    string           `json:"platform,omitempty"`
-	ProjectRoot string           `json:"project_root,omitempty"`
-	BuildDir    string           `json:"build_dir,omitempty"`
-	Plugins     []EnvelopePlugin `json:"plugins,omitempty"`
-}
-
-// EnvelopePlugin is one entry in the plugins array of the envelope.
-type EnvelopePlugin struct {
-	Package    string `json:"package"`
-	ConfigYAML string `json:"config_yaml,omitempty"`
-}
-
-// Response is the JSON object the bridge writes to the response file.
-type Response struct {
-	APIVersion int                     `json:"api_version"`
-	Ops        []json.RawMessage       `json:"ops,omitempty"`
-	Schemas    map[string]PluginSchema `json:"schemas,omitempty"`
-	Version    string                  `json:"version,omitempty"`
-	Error      string                  `json:"error,omitempty"`
-}
 
 // Main is the bridge tool entry point. The generated tools/drift-plugins/main.go
 // calls Main with one Binding per configured plugin.
@@ -56,15 +33,15 @@ func Main(bindings ...Binding) {
 	if err != nil {
 		fatal("read stdin: %v", err)
 	}
-	var env Envelope
+	var env protocol.Envelope
 	if err := json.Unmarshal(envBytes, &env); err != nil {
 		fatal("decode envelope: %v", err)
 	}
-	if env.APIVersion != APIVersion {
-		fatal("api version mismatch: bridge=%d cli=%d", APIVersion, env.APIVersion)
+	if env.APIVersion != protocol.APIVersion {
+		fatal("api version mismatch: bridge=%d cli=%d", protocol.APIVersion, env.APIVersion)
 	}
 
-	resp := Response{APIVersion: APIVersion}
+	resp := protocol.Response{APIVersion: protocol.APIVersion}
 
 	switch env.Cmd {
 	case "build":
@@ -72,7 +49,7 @@ func Main(bindings ...Binding) {
 	case "schema":
 		resp = doSchema(bindings)
 	case "version":
-		resp.Version = fmt.Sprintf("drift-plugin-bridge api=%d", APIVersion)
+		resp.Version = fmt.Sprintf("drift-plugin-bridge api=%d", protocol.APIVersion)
 	default:
 		resp.Error = fmt.Sprintf("unknown cmd %q", env.Cmd)
 	}
@@ -103,14 +80,14 @@ func checkBindings(bindings []Binding) {
 	}
 }
 
-func doBuild(env Envelope, bindings []Binding) Response {
+func doBuild(env protocol.Envelope, bindings []Binding) protocol.Response {
 	byPkg := make(map[string]Binding, len(bindings))
 	for _, b := range bindings {
 		byPkg[b.Package] = b
 	}
 
 	var allOps []json.RawMessage
-	resp := Response{APIVersion: APIVersion}
+	resp := protocol.Response{APIVersion: protocol.APIVersion}
 
 	for _, ep := range env.Plugins {
 		b, ok := byPkg[ep.Package]
@@ -132,7 +109,7 @@ func doBuild(env Envelope, bindings []Binding) Response {
 			return resp
 		}
 		for _, op := range ctx.ops {
-			raw, err := MarshalOp(op)
+			raw, err := protocol.MarshalOp(op)
 			if err != nil {
 				resp.Error = fmt.Sprintf("plugin %s op encode: %v", b.Package, err)
 				return resp
@@ -145,15 +122,15 @@ func doBuild(env Envelope, bindings []Binding) Response {
 	return resp
 }
 
-func doSchema(bindings []Binding) Response {
-	out := Response{APIVersion: APIVersion, Schemas: make(map[string]PluginSchema, len(bindings))}
+func doSchema(bindings []Binding) protocol.Response {
+	out := protocol.Response{APIVersion: protocol.APIVersion, Schemas: make(map[string]protocol.PluginSchema, len(bindings))}
 	for _, b := range bindings {
 		out.Schemas[b.Package] = b.schema
 	}
 	return out
 }
 
-func writeResponse(path string, r Response) error {
+func writeResponse(path string, r protocol.Response) error {
 	data, err := json.Marshal(r)
 	if err != nil {
 		return err

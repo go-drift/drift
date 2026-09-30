@@ -15,7 +15,7 @@ import (
 	driftpluginCLI "github.com/go-drift/drift/cmd/drift/internal/plugin"
 	"github.com/go-drift/drift/cmd/drift/internal/scaffold"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // cliVersion records the CLI version for use by the plugin pipeline. Set by
@@ -318,17 +318,17 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 		return err
 	}
 
-	configsYAML := make([]driftplugin.EnvelopePlugin, len(plugins))
+	configsYAML := make([]protocol.EnvelopePlugin, len(plugins))
 	for i, p := range plugins {
 		y, err := p.ConfigYAML()
 		if err != nil {
 			return err
 		}
-		configsYAML[i] = driftplugin.EnvelopePlugin{Package: p.Package, ConfigYAML: y}
+		configsYAML[i] = protocol.EnvelopePlugin{Package: p.Package, ConfigYAML: y}
 	}
 
-	resp, err := driftpluginCLI.RunBridge(bridge, driftplugin.Envelope{
-		APIVersion:  driftplugin.APIVersion,
+	resp, err := driftpluginCLI.RunBridge(bridge, protocol.Envelope{
+		APIVersion:  protocol.APIVersion,
 		Cmd:         "build",
 		Platform:    platform,
 		ProjectRoot: root,
@@ -339,7 +339,7 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 		return err
 	}
 
-	ops, err := driftpluginCLI.DecodeOps(resp.Ops)
+	ops, err := protocol.DecodeOps(resp.Ops)
 	if err != nil {
 		return err
 	}

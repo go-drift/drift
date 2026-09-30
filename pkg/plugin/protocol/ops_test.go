@@ -1,7 +1,8 @@
-package plugin
+package protocol
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func fixtureOps() []Op {
 		&OpIOSAddPackageDependency{
 			Base:        base,
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
-			Requirement: SPMRequirementFrom("10.0.0"),
+			Requirement: spmFrom("10.0.0"),
 			Products:    []string{"FirebaseAnalytics", "FirebaseAuth"},
 		},
 		&OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"},
@@ -180,12 +181,12 @@ func TestSPMAddPackageDivergentRequirementsCollide(t *testing.T) {
 	a := &OpIOSAddPackageDependency{
 		Base:        Base{Pkg: "a"},
 		URL:         "https://github.com/firebase/firebase-ios-sdk",
-		Requirement: SPMRequirementFrom("10.0.0"),
+		Requirement: spmFrom("10.0.0"),
 	}
 	b := &OpIOSAddPackageDependency{
 		Base:        Base{Pkg: "b"},
 		URL:         "https://github.com/firebase/firebase-ios-sdk",
-		Requirement: SPMRequirementFrom("11.0.0"),
+		Requirement: spmFrom("11.0.0"),
 	}
 	if a.Identity() != b.Identity() {
 		t.Errorf("same URL must share Identity for collision detection")
@@ -196,7 +197,7 @@ func TestSPMAddPackageDivergentRequirementsCollide(t *testing.T) {
 }
 
 func TestValidateSPMDependency(t *testing.T) {
-	req := SPMRequirementFrom("10.0.0")
+	req := spmFrom("10.0.0")
 	good := []struct {
 		url      string
 		products []string
@@ -390,5 +391,35 @@ func TestSetDictContentHashStableAcrossNestedConcreteTypes(t *testing.T) {
 	if generic.ContentHash() != typed.ContentHash() {
 		t.Errorf("nested typed/generic maps must produce the same hash; got %q vs %q",
 			generic.ContentHash(), typed.ContentHash())
+	}
+}
+
+func spmFrom(v string) SPMRequirement { return SPMRequirement{Kind: SPMFrom, Value: v} }
+
+func TestDecodeOpsParsesJSONList(t *testing.T) {
+	ops := []Op{
+		&OpInfoPlistSetString{Base: Base{Pkg: "p"}, Key: "K", Value: "V"},
+	}
+	raw, err := MarshalOpList(ops)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var raws []json.RawMessage
+	if err := json.Unmarshal(raw, &raws); err != nil {
+		t.Fatalf("unmarshal list: %v", err)
+	}
+	decoded, err := DecodeOps(raws)
+	if err != nil {
+		t.Fatalf("DecodeOps: %v", err)
+	}
+	if len(decoded) != 1 {
+		t.Errorf("expected 1 op, got %d", len(decoded))
+	}
+}
+
+func TestDecodeOpsRejectsUnknown(t *testing.T) {
+	raws := []json.RawMessage{[]byte(`{"type":"not.a.real.op"}`)}
+	if _, err := DecodeOps(raws); err == nil || !strings.Contains(err.Error(), "not.a.real.op") {
+		t.Errorf("expected unknown-op error, got %v", err)
 	}
 }

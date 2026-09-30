@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 func TestWriteRegistrantEmptyAndroid(t *testing.T) {
@@ -44,13 +45,13 @@ func TestWriteRegistrantEmptyAndroid(t *testing.T) {
 
 func TestWriteRegistrantWithPreActivityEntries(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidPreActivityRegistrant{
-			Base:   driftplugin.Base{Pkg: "github.com/foo/splash"},
+	ops := []protocol.Op{
+		&protocol.OpAndroidPreActivityRegistrant{
+			Base:   protocol.Base{Pkg: "github.com/foo/splash"},
 			Symbol: "com.foo.splash.Android12SplashController.install",
 		},
-		&driftplugin.OpAndroidPreActivityRegistrant{
-			Base:   driftplugin.Base{Pkg: "github.com/bar/other"},
+		&protocol.OpAndroidPreActivityRegistrant{
+			Base:   protocol.Base{Pkg: "github.com/bar/other"},
 			Symbol: "com.bar.other.OtherController.init",
 		},
 	}
@@ -76,9 +77,9 @@ func TestWriteRegistrantWithPreActivityEntries(t *testing.T) {
 
 func TestWriteRegistrantWithIOSEntries(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpRegistrantIOS{Base: driftplugin.Base{Pkg: "p"}, Symbol: "FooPlugin.register"},
-		&driftplugin.OpRegistrantIOS{Base: driftplugin.Base{Pkg: "p"}, Symbol: "BarPlugin.register"},
+	ops := []protocol.Op{
+		&protocol.OpRegistrantIOS{Base: protocol.Base{Pkg: "p"}, Symbol: "FooPlugin.register"},
+		&protocol.OpRegistrantIOS{Base: protocol.Base{Pkg: "p"}, Symbol: "BarPlugin.register"},
 	}
 	changed, err := WriteRegistrant(dir, "ios", ops)
 	if err != nil {
@@ -178,15 +179,15 @@ func TestWriteRegistrantIOSAppDelegateMethodsAlwaysEmitted(t *testing.T) {
 // with the right argument shape.
 func TestWriteRegistrantIOSAppDelegateOneCallbackEach(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "github.com/foo/firebase"},
-			Callback: driftplugin.IOSCallbackDidFinishLaunching,
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "github.com/foo/firebase"},
+			Callback: protocol.IOSCallbackDidFinishLaunching,
 			Symbol:   "FirebaseDriftPlugin.didFinishLaunching",
 		},
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "github.com/bar/branch"},
-			Callback: driftplugin.IOSCallbackOpenURL,
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "github.com/bar/branch"},
+			Callback: protocol.IOSCallbackOpenURL,
 			Symbol:   "BranchDriftPlugin.openURL",
 		},
 	}
@@ -209,15 +210,15 @@ func TestWriteRegistrantIOSAppDelegateOneCallbackEach(t *testing.T) {
 // Two plugins on the same callback both appear, in lex order.
 func TestWriteRegistrantIOSAppDelegateLexSorted(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "p"},
-			Callback: driftplugin.IOSCallbackDidFinishLaunching,
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "p"},
+			Callback: protocol.IOSCallbackDidFinishLaunching,
 			Symbol:   "ZetaPlugin.didFinishLaunching",
 		},
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "p"},
-			Callback: driftplugin.IOSCallbackDidFinishLaunching,
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "p"},
+			Callback: protocol.IOSCallbackDidFinishLaunching,
 			Symbol:   "AlphaPlugin.didFinishLaunching",
 		},
 	}
@@ -246,10 +247,10 @@ func TestWriteRegistrantIOSAppDelegateLexSorted(t *testing.T) {
 // DriftPluginCoordinator.swift (testable separately), not in codegen.
 func TestWriteRegistrantIOSAppDelegateCoordinatorDelegates(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "p"},
-			Callback: driftplugin.IOSCallbackDidReceiveRemoteNotification,
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "p"},
+			Callback: protocol.IOSCallbackDidReceiveRemoteNotification,
 			Symbol:   "FCMDriftPlugin.didReceiveRemoteNotification",
 		},
 	}
@@ -290,15 +291,15 @@ func TestWriteRegistrantIOSAppDelegateCoordinatorDelegates(t *testing.T) {
 // the handlers array, in lex-sorted symbol order.
 func TestWriteRegistrantIOSAppDelegateMultiplePluginsHandlers(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "p"},
-			Callback: driftplugin.IOSCallbackDidReceiveRemoteNotification,
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "p"},
+			Callback: protocol.IOSCallbackDidReceiveRemoteNotification,
 			Symbol:   "ZetaPlugin.didReceiveRemoteNotification",
 		},
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "p"},
-			Callback: driftplugin.IOSCallbackDidReceiveRemoteNotification,
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "p"},
+			Callback: protocol.IOSCallbackDidReceiveRemoteNotification,
 			Symbol:   "AlphaPlugin.didReceiveRemoteNotification",
 		},
 	}
@@ -323,10 +324,10 @@ func TestWriteRegistrantIOSAppDelegateMultiplePluginsHandlers(t *testing.T) {
 // xtool writes to Sources/Runner/, not Runner/. Same body shape.
 func TestWriteRegistrantXtoolAppDelegateMethods(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{
-			Base:     driftplugin.Base{Pkg: "p"},
-			Callback: driftplugin.IOSCallbackOpenURL,
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{
+			Base:     protocol.Base{Pkg: "p"},
+			Callback: protocol.IOSCallbackOpenURL,
 			Symbol:   "BranchDriftPlugin.openURL",
 		},
 	}
@@ -433,7 +434,7 @@ func TestMethodHandlerUsesOperatorInvoke(t *testing.T) {
 // current templates contain. If a template stops calling one, ejected
 // checks would demand wiring the templates themselves lack.
 func TestIOSCallbackCallSitesPresentInTemplates(t *testing.T) {
-	for _, cb := range driftplugin.IOSAppDelegateCallbacks {
+	for _, cb := range protocol.IOSAppDelegateCallbacks {
 		file, call := iosCallbackCallSite(cb)
 		body, err := templates.ReadFile("ios/" + file)
 		if err != nil {
@@ -462,10 +463,10 @@ func TestCheckEjectedIOS(t *testing.T) {
 	mustWrite("Runner/SceneDelegate.swift", "DeepLinkHandler.handle(url: url, source: \"open_url\")\n")
 	mustWrite("Runner.xcodeproj/project.pbxproj", "// no package refs\n")
 
-	base := driftplugin.Base{Pkg: "github.com/acme/signin"}
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{Base: base, Callback: driftplugin.IOSCallbackOpenURL, Symbol: "SignIn.openURL"},
-		&driftplugin.OpIOSAddPackageDependency{Base: base, URL: "https://github.com/google/GoogleSignIn-iOS", Requirement: driftplugin.SPMRequirementFrom("7.0.0"), Products: []string{"GoogleSignIn"}},
+	base := protocol.Base{Pkg: "github.com/acme/signin"}
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{Base: base, Callback: protocol.IOSCallbackOpenURL, Symbol: "SignIn.openURL"},
+		&protocol.OpIOSAddPackageDependency{Base: base, URL: "https://github.com/google/GoogleSignIn-iOS", Requirement: driftplugin.SPMRequirementFrom("7.0.0"), Products: []string{"GoogleSignIn"}},
 	}
 	err := CheckEjectedIOS(dir, ops)
 	if err == nil {
@@ -519,10 +520,10 @@ func TestEnsureRunnerSupportIOSWritesCoordinator(t *testing.T) {
 // channel only sees it when no plugin claims it.
 func TestWriteRegistrantIOSOpenURLClaimOrder(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAppDelegateRegistrant{Base: driftplugin.Base{Pkg: "p"}, Callback: driftplugin.IOSCallbackOpenURL, Symbol: "ZetaPlugin.openURL"},
-		&driftplugin.OpIOSAppDelegateRegistrant{Base: driftplugin.Base{Pkg: "p"}, Callback: driftplugin.IOSCallbackOpenURL, Symbol: "AlphaPlugin.openURL"},
-		&driftplugin.OpIOSAppDelegateRegistrant{Base: driftplugin.Base{Pkg: "p"}, Callback: driftplugin.IOSCallbackContinueUserActivity, Symbol: "AlphaPlugin.continueUserActivity"},
+	ops := []protocol.Op{
+		&protocol.OpIOSAppDelegateRegistrant{Base: protocol.Base{Pkg: "p"}, Callback: protocol.IOSCallbackOpenURL, Symbol: "ZetaPlugin.openURL"},
+		&protocol.OpIOSAppDelegateRegistrant{Base: protocol.Base{Pkg: "p"}, Callback: protocol.IOSCallbackOpenURL, Symbol: "AlphaPlugin.openURL"},
+		&protocol.OpIOSAppDelegateRegistrant{Base: protocol.Base{Pkg: "p"}, Callback: protocol.IOSCallbackContinueUserActivity, Symbol: "AlphaPlugin.continueUserActivity"},
 	}
 	if _, err := WriteRegistrant(dir, "ios", ops); err != nil {
 		t.Fatalf("WriteRegistrant: %v", err)

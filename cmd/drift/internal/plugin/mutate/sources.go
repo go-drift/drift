@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // WriteIOSAssets writes one Contents.json + image bundle per OpIOSAssetsAddImageSet
 // under the supplied Assets.xcassets directory. Each set lives at
 // <Assets.xcassets>/<Name>.imageset/.
-func WriteIOSAssets(assetsRoot string, ops []*driftplugin.OpIOSAssetsAddImageSet) ([]string, error) {
+func WriteIOSAssets(assetsRoot string, ops []*protocol.OpIOSAssetsAddImageSet) ([]string, error) {
 	var changed []string
 	if err := ensureAssetsRoot(assetsRoot); err != nil {
 		return changed, err
@@ -24,7 +24,7 @@ func WriteIOSAssets(assetsRoot string, ops []*driftplugin.OpIOSAssetsAddImageSet
 		if err := os.MkdirAll(setDir, 0o755); err != nil {
 			return changed, fmt.Errorf("mkdir imageset: %w", err)
 		}
-		content, err := driftplugin.DecodeContent(op.Image)
+		content, err := protocol.DecodeContent(op.Image)
 		if err != nil {
 			return changed, fmt.Errorf("decode image %s: %w", op.Name, err)
 		}
@@ -91,7 +91,7 @@ func imagesetContentsJSON(filename string) ([]byte, error) {
 
 // ReplaceLaunchScreen writes a new LaunchScreen.storyboard at path. Returns
 // the path and a changed flag.
-func ReplaceLaunchScreen(path string, op *driftplugin.OpIOSReplaceLaunchScreen) (string, bool, error) {
+func ReplaceLaunchScreen(path string, op *protocol.OpIOSReplaceLaunchScreen) (string, bool, error) {
 	ch, err := writeIfDifferent(path, []byte(op.Content))
 	if err != nil {
 		return path, false, fmt.Errorf("write LaunchScreen: %w", err)
@@ -100,14 +100,14 @@ func ReplaceLaunchScreen(path string, op *driftplugin.OpIOSReplaceLaunchScreen) 
 }
 
 // WriteIOSSources writes Swift sources under <pluginsRoot>/<group>/<rel>.
-func WriteIOSSources(pluginsRoot string, ops []*driftplugin.OpAddIOSSource) ([]string, error) {
+func WriteIOSSources(pluginsRoot string, ops []*protocol.OpAddIOSSource) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
 		dest := filepath.Join(pluginsRoot, sanitizePath(op.Group), filepath.FromSlash(op.RelPath))
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return changed, fmt.Errorf("mkdir iOS source: %w", err)
 		}
-		content, err := driftplugin.DecodeContent(op.Content)
+		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("decode iOS source %s: %w", op.RelPath, err)
 		}
@@ -124,7 +124,7 @@ func WriteIOSSources(pluginsRoot string, ops []*driftplugin.OpAddIOSSource) ([]s
 
 // WriteKotlinSources writes Kotlin sources under
 // <javaRoot>/<packagePath>/<rel> where packagePath = pkg with dots to slashes.
-func WriteKotlinSources(javaRoot string, ops []*driftplugin.OpAddKotlinSource) ([]string, error) {
+func WriteKotlinSources(javaRoot string, ops []*protocol.OpAddKotlinSource) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
 		pkgSegments := strings.Split(op.Package, ".")
@@ -134,7 +134,7 @@ func WriteKotlinSources(javaRoot string, ops []*driftplugin.OpAddKotlinSource) (
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return changed, fmt.Errorf("mkdir Kotlin source: %w", err)
 		}
-		content, err := driftplugin.DecodeContent(op.Content)
+		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("decode Kotlin source %s: %w", op.RelPath, err)
 		}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 const basePlist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -38,8 +38,8 @@ func writePlist(t *testing.T) string {
 
 func TestApplyInfoPlistSetString(t *testing.T) {
 	path := writePlist(t)
-	ops := []*driftplugin.OpInfoPlistSetString{
-		{Base: driftplugin.Base{Pkg: "p"}, Key: "NSCameraUsageDescription", Value: "Take photos"},
+	ops := []*protocol.OpInfoPlistSetString{
+		{Base: protocol.Base{Pkg: "p"}, Key: "NSCameraUsageDescription", Value: "Take photos"},
 	}
 	changed, err := ApplyInfoPlist(path, ops, nil, nil, nil, nil)
 	if err != nil {
@@ -59,8 +59,8 @@ func TestApplyInfoPlistSetString(t *testing.T) {
 
 func TestApplyInfoPlistIdempotent(t *testing.T) {
 	path := writePlist(t)
-	ops := []*driftplugin.OpInfoPlistSetString{
-		{Base: driftplugin.Base{Pkg: "p"}, Key: "NSCameraUsageDescription", Value: "Take photos"},
+	ops := []*protocol.OpInfoPlistSetString{
+		{Base: protocol.Base{Pkg: "p"}, Key: "NSCameraUsageDescription", Value: "Take photos"},
 	}
 	if _, err := ApplyInfoPlist(path, ops, nil, nil, nil, nil); err != nil {
 		t.Fatalf("first apply: %v", err)
@@ -76,10 +76,10 @@ func TestApplyInfoPlistIdempotent(t *testing.T) {
 
 func TestApplyInfoPlistAppendArrayItem(t *testing.T) {
 	path := writePlist(t)
-	ops := []*driftplugin.OpInfoPlistAppendArrayItem{
-		{Base: driftplugin.Base{Pkg: "a"}, Key: "Schemes", Value: "myapp"},
-		{Base: driftplugin.Base{Pkg: "b"}, Key: "Schemes", Value: "other"},
-		{Base: driftplugin.Base{Pkg: "c"}, Key: "Schemes", Value: "myapp"}, // dedupe
+	ops := []*protocol.OpInfoPlistAppendArrayItem{
+		{Base: protocol.Base{Pkg: "a"}, Key: "Schemes", Value: "myapp"},
+		{Base: protocol.Base{Pkg: "b"}, Key: "Schemes", Value: "other"},
+		{Base: protocol.Base{Pkg: "c"}, Key: "Schemes", Value: "myapp"}, // dedupe
 	}
 	if _, err := ApplyInfoPlist(path, nil, nil, nil, ops, nil); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -95,8 +95,8 @@ func TestApplyInfoPlistAppendArrayItem(t *testing.T) {
 
 func TestApplyInfoPlistSetBool(t *testing.T) {
 	path := writePlist(t)
-	ops := []*driftplugin.OpInfoPlistSetBool{
-		{Base: driftplugin.Base{Pkg: "p"}, Key: "MyFlag", Value: true},
+	ops := []*protocol.OpInfoPlistSetBool{
+		{Base: protocol.Base{Pkg: "p"}, Key: "MyFlag", Value: true},
 	}
 	if _, err := ApplyInfoPlist(path, nil, ops, nil, nil, nil); err != nil {
 		t.Fatalf("apply: %v", err)

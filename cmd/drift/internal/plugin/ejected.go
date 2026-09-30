@@ -7,17 +7,17 @@ import (
 	"sort"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // iosCallbackCallSite names the template file that must call the generated
 // DriftPluginRegistrant method for a callback. The method name is the
 // callback's string value. URL and user-activity events arrive at the scene,
 // not the app delegate, so their call sites live in SceneDelegate.swift.
-func iosCallbackCallSite(cb driftplugin.IOSAppDelegateCallback) (file, call string) {
+func iosCallbackCallSite(cb protocol.IOSAppDelegateCallback) (file, call string) {
 	call = "DriftPluginRegistrant." + string(cb) + "("
 	switch cb {
-	case driftplugin.IOSCallbackOpenURL, driftplugin.IOSCallbackContinueUserActivity:
+	case protocol.IOSCallbackOpenURL, protocol.IOSCallbackContinueUserActivity:
 		return "SceneDelegate.swift", call
 	default:
 		return "AppDelegate.swift", call
@@ -30,16 +30,16 @@ func iosCallbackCallSite(cb driftplugin.IOSAppDelegateCallback) (file, call stri
 // before a feature existed would otherwise build fine and silently drop the
 // plugin's integration. Each problem is reported with the fix to apply by
 // hand; auto-patching user-edited Swift and pbxproj files is too fragile.
-func CheckEjectedIOS(projectDir string, ops []driftplugin.Op) error {
+func CheckEjectedIOS(projectDir string, ops []protocol.Op) error {
 	var problems []string
 
-	needed := make(map[driftplugin.IOSAppDelegateCallback][]string)
+	needed := make(map[protocol.IOSAppDelegateCallback][]string)
 	needsSPM := false
 	for _, op := range ops {
 		switch v := op.(type) {
-		case *driftplugin.OpIOSAppDelegateRegistrant:
+		case *protocol.OpIOSAppDelegateRegistrant:
 			needed[v.Callback] = append(needed[v.Callback], v.PluginPackage())
-		case *driftplugin.OpIOSAddPackageDependency:
+		case *protocol.OpIOSAddPackageDependency:
 			needsSPM = true
 		}
 	}
@@ -53,7 +53,7 @@ func CheckEjectedIOS(projectDir string, ops []driftplugin.Op) error {
 		sources[name] = string(data)
 		return sources[name]
 	}
-	for _, cb := range driftplugin.IOSAppDelegateCallbacks {
+	for _, cb := range protocol.IOSAppDelegateCallbacks {
 		plugins, ok := needed[cb]
 		if !ok {
 			continue

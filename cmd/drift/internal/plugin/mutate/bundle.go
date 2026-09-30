@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // bundleResourceWarnBytes is the soft threshold at which the bundle mutator
@@ -23,7 +23,7 @@ const bundleResourceWarnBytes = 5 * 1024 * 1024 // 5 MB
 var warnSink io.Writer = os.Stderr
 
 // BundleFile is one decoded file destined for the root of the iOS app
-// bundle. Name is a plain file name (driftplugin.ValidateBundleFileName).
+// bundle. Name is a plain file name (protocol.ValidateBundleFileName).
 type BundleFile struct {
 	Name    string
 	Content []byte
@@ -31,7 +31,7 @@ type BundleFile struct {
 }
 
 // IOSBundleFiles decodes OpIOSAddBundleResource ops into BundleFiles.
-func IOSBundleFiles(ops []*driftplugin.OpIOSAddBundleResource) ([]BundleFile, error) {
+func IOSBundleFiles(ops []*protocol.OpIOSAddBundleResource) ([]BundleFile, error) {
 	out := make([]BundleFile, 0, len(ops))
 	for _, op := range ops {
 		f, err := decodeBundleFile(op.Path, op.Content, op.PluginPackage())
@@ -52,7 +52,7 @@ func IOSBundleFiles(ops []*driftplugin.OpIOSAddBundleResource) ([]BundleFile, er
 // FUTURE(xtool#219): once xtool compiles asset catalogs, xtool builds can
 // write image sets with WriteIOSAssets like xcodeproj builds and this
 // conversion goes away. https://github.com/xtool-org/xtool/pull/219
-func ImageSetBundleFiles(ops []*driftplugin.OpIOSAssetsAddImageSet) ([]BundleFile, error) {
+func ImageSetBundleFiles(ops []*protocol.OpIOSAssetsAddImageSet) ([]BundleFile, error) {
 	out := make([]BundleFile, 0, len(ops))
 	for _, op := range ops {
 		f, err := decodeBundleFile(op.Name+".png", op.Image, op.PluginPackage())
@@ -67,10 +67,10 @@ func ImageSetBundleFiles(ops []*driftplugin.OpIOSAssetsAddImageSet) ([]BundleFil
 func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
 	// ValidateBundleFileName in the recorder is the boundary check; re-run
 	// it for ops decoded from JSON without going through the recorder.
-	if err := driftplugin.ValidateBundleFileName(name); err != nil {
+	if err := protocol.ValidateBundleFileName(name); err != nil {
 		return BundleFile{}, err
 	}
-	decoded, err := driftplugin.DecodeContent(content)
+	decoded, err := protocol.DecodeContent(content)
 	if err != nil {
 		return BundleFile{}, fmt.Errorf("decode content: %w", err)
 	}
@@ -154,13 +154,13 @@ func pruneDir(dir string, keep map[string]BundleFile) ([]string, error) {
 // WriteAndroidAssets writes each OpAndroidAddAsset verbatim under assetsRoot
 // (typically app/src/main/assets/) at the op's relative path. Gradle's
 // build pipeline picks up the directory automatically; no manifest edits.
-func WriteAndroidAssets(assetsRoot string, ops []*driftplugin.OpAndroidAddAsset) ([]string, error) {
+func WriteAndroidAssets(assetsRoot string, ops []*protocol.OpAndroidAddAsset) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
-		if err := driftplugin.ValidateAssetRelPath(op.Path); err != nil {
+		if err := protocol.ValidateAssetRelPath(op.Path); err != nil {
 			return changed, fmt.Errorf("Android asset: %w", err)
 		}
-		content, err := driftplugin.DecodeContent(op.Content)
+		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("Android asset %s: decode content: %w", op.Path, err)
 		}
@@ -180,13 +180,13 @@ func WriteAndroidAssets(assetsRoot string, ops []*driftplugin.OpAndroidAddAsset)
 // WriteAndroidAppModuleFiles writes each OpAndroidAddAppModuleFile into the
 // app module directory (appDir, i.e. <project>/app), where Gradle plugins
 // such as google-services read their config.
-func WriteAndroidAppModuleFiles(appDir string, ops []*driftplugin.OpAndroidAddAppModuleFile) ([]string, error) {
+func WriteAndroidAppModuleFiles(appDir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
-		if err := driftplugin.ValidateAppModuleFileName(op.Name); err != nil {
+		if err := protocol.ValidateAppModuleFileName(op.Name); err != nil {
 			return changed, fmt.Errorf("Android app module file: %w", err)
 		}
-		content, err := driftplugin.DecodeContent(op.Content)
+		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("Android app module file %s: decode content: %w", op.Name, err)
 		}
