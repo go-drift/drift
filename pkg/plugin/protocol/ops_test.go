@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -81,25 +82,8 @@ func TestOpsRoundTrip(t *testing.T) {
 		if decoded.Type() != op.Type() {
 			t.Errorf("type changed: %s -> %s", op.Type(), decoded.Type())
 		}
-		if decoded.Identity() != op.Identity() {
-			t.Errorf("%s identity changed: %q -> %q", op.Type(), op.Identity(), decoded.Identity())
-		}
-		if decoded.ContentHash() != op.ContentHash() {
-			t.Errorf("%s content hash changed: %q -> %q", op.Type(), op.ContentHash(), decoded.ContentHash())
-		}
-		if decoded.MergeClass() != op.MergeClass() {
-			t.Errorf("%s merge class changed", op.Type())
-		}
-	}
-}
-
-func TestOpsMergeClassesDeclared(t *testing.T) {
-	for _, op := range fixtureOps() {
-		switch op.MergeClass() {
-		case ClassIdempotent, ClassAdditive, ClassExclusive:
-			// OK
-		default:
-			t.Errorf("%s has unrecognised merge class %d", op.Type(), op.MergeClass())
+		if !reflect.DeepEqual(decoded.Targets(), op.Targets()) {
+			t.Errorf("%s targets changed: %v -> %v", op.Type(), op.Targets(), decoded.Targets())
 		}
 	}
 }
@@ -133,17 +117,6 @@ func TestUnmarshalUnknownType(t *testing.T) {
 	}
 }
 
-func TestIdempotentIdentityIgnoresValue(t *testing.T) {
-	a := &OpInfoPlistSetString{Base: Base{Pkg: "a"}, Key: "K", Value: "v1"}
-	b := &OpInfoPlistSetString{Base: Base{Pkg: "b"}, Key: "K", Value: "v2"}
-	if a.Identity() != b.Identity() {
-		t.Errorf("idempotent identity should ignore value: %q vs %q", a.Identity(), b.Identity())
-	}
-	if a.ContentHash() == b.ContentHash() {
-		t.Errorf("idempotent ContentHash should differ on value")
-	}
-}
-
 func TestValidateSPMRequirement(t *testing.T) {
 	good := []SPMRequirement{
 		{Kind: "from", Value: "10.0.0"},
@@ -171,28 +144,6 @@ func TestValidateSPMRequirement(t *testing.T) {
 		if err := validateSPMRequirement(r); err == nil {
 			t.Errorf("expected %+v invalid", r)
 		}
-	}
-}
-
-// Two ops on the same URL with divergent requirements produce different
-// content hashes, so Validate (in conflict.go) flags them as additive
-// collisions rather than silently picking one.
-func TestSPMAddPackageDivergentRequirementsCollide(t *testing.T) {
-	a := &OpIOSAddPackageDependency{
-		Base:        Base{Pkg: "a"},
-		URL:         "https://github.com/firebase/firebase-ios-sdk",
-		Requirement: spmFrom("10.0.0"),
-	}
-	b := &OpIOSAddPackageDependency{
-		Base:        Base{Pkg: "b"},
-		URL:         "https://github.com/firebase/firebase-ios-sdk",
-		Requirement: spmFrom("11.0.0"),
-	}
-	if a.Identity() != b.Identity() {
-		t.Errorf("same URL must share Identity for collision detection")
-	}
-	if a.ContentHash() == b.ContentHash() {
-		t.Errorf("divergent requirements must produce different ContentHash")
 	}
 }
 
@@ -344,61 +295,6 @@ func TestValidateIOSAppDelegateCallback(t *testing.T) {
 	}
 }
 
-// Two ops on the same callback with different symbols must produce distinct
-// identities so additive merge keeps both. Symbols register independently.
-func TestIOSAppDelegateRegistrantIdentityIncludesSymbol(t *testing.T) {
-	a := &OpIOSAppDelegateRegistrant{
-		Base:     Base{Pkg: "p1"},
-		Callback: IOSCallbackOpenURL,
-		Symbol:   "PluginA.openURL",
-	}
-	b := &OpIOSAppDelegateRegistrant{
-		Base:     Base{Pkg: "p2"},
-		Callback: IOSCallbackOpenURL,
-		Symbol:   "PluginB.openURL",
-	}
-	if a.Identity() == b.Identity() {
-		t.Errorf("additive identity should distinguish symbols: %q", a.Identity())
-	}
-	if a.MergeClass() != ClassAdditive {
-		t.Errorf("expected ClassAdditive, got %v", a.MergeClass())
-	}
-}
-
-func TestAdditiveIdentityIncludesValue(t *testing.T) {
-	a := &OpInfoPlistAppendArrayItem{Base: Base{Pkg: "a"}, Key: "K", Value: "x"}
-	b := &OpInfoPlistAppendArrayItem{Base: Base{Pkg: "b"}, Key: "K", Value: "y"}
-	if a.Identity() == b.Identity() {
-		t.Errorf("additive identity should include value: both %q", a.Identity())
-	}
-}
-
-// Two ops carrying the same logical dict but built from different concrete
-// Go types (map[string]any vs nested map[string]string) must hash equal so
-// the merge layer treats them as identical exclusive content. Without the
-// JSON-roundtrip in canonicalJSON, the typed-map branch would fall through
-// to json.Marshal and produce unsorted keys.
-func TestSetDictContentHashStableAcrossNestedConcreteTypes(t *testing.T) {
-	generic := &OpInfoPlistSetDict{
-		Base: Base{Pkg: "p"},
-		Key:  "K",
-		Value: map[string]any{
-			"inner": map[string]any{"b": "2", "a": "1"},
-		},
-	}
-	typed := &OpInfoPlistSetDict{
-		Base: Base{Pkg: "p"},
-		Key:  "K",
-		Value: map[string]any{
-			"inner": map[string]string{"b": "2", "a": "1"},
-		},
-	}
-	if generic.ContentHash() != typed.ContentHash() {
-		t.Errorf("nested typed/generic maps must produce the same hash; got %q vs %q",
-			generic.ContentHash(), typed.ContentHash())
-	}
-}
-
 func spmFrom(v string) SPMRequirement { return SPMRequirement{Kind: SPMFrom, Value: v} }
 
 func TestDecodeOpsParsesJSONList(t *testing.T) {
@@ -499,5 +395,30 @@ func TestDecodeOpsRejectsInvalid(t *testing.T) {
 	_, err = DecodeOps([]json.RawMessage{raw})
 	if err == nil || !strings.Contains(err.Error(), "android.assets.add") {
 		t.Fatalf("expected validation error naming the op, got %v", err)
+	}
+}
+
+func TestEveryOpHasTargets(t *testing.T) {
+	for _, op := range fixtureOps() {
+		if len(op.Targets()) == 0 {
+			t.Errorf("%s declares no targets, so it can never conflict", op.Type())
+		}
+	}
+}
+
+// Two dicts carrying the same logical value built from different concrete
+// Go types (map[string]any vs nested map[string]string) must target the
+// same content, or identical plugin output would spuriously conflict.
+// Without the JSON round trip in canonicalJSON the typed map would fall
+// through to json.Marshal with unsorted keys.
+func TestSetDictTargetStableAcrossNestedConcreteTypes(t *testing.T) {
+	generic := &OpInfoPlistSetDict{Base: Base{Pkg: "p"}, Key: "K", Value: map[string]any{
+		"inner": map[string]any{"b": "2", "a": "1"},
+	}}
+	typed := &OpInfoPlistSetDict{Base: Base{Pkg: "p"}, Key: "K", Value: map[string]any{
+		"inner": map[string]string{"b": "2", "a": "1"},
+	}}
+	if !reflect.DeepEqual(generic.Targets(), typed.Targets()) {
+		t.Errorf("targets differ: %v vs %v", generic.Targets(), typed.Targets())
 	}
 }

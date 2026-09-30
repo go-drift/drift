@@ -261,8 +261,8 @@ func (s *IOSAssetsScope) AddImageSet(name string, img []byte) {
 type IOSStoryboardsScope struct{ b *BuildCtx }
 
 // ReplaceLaunchScreen replaces Runner/LaunchScreen.storyboard with the
-// supplied content. This op is exclusive: two plugins that try to replace
-// the launch screen with divergent content conflict.
+// supplied content. Two plugins that try to replace the launch screen with
+// divergent content conflict.
 func (s *IOSStoryboardsScope) ReplaceLaunchScreen(content string) {
 	s.b.push(&protocol.OpIOSReplaceLaunchScreen{
 		Base:    newBase(s.b),

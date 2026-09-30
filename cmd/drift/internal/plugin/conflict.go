@@ -2,102 +2,89 @@ package plugin
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// ConflictError is returned when two ops with the same identity can't be
-// merged. The plugin packages that contributed each op are listed.
+// ConflictError reports two ops that write the same target incompatibly.
 type ConflictError struct {
-	Identity string
-	OpType   string
-	Plugins  []string
+	// Target is the contested location, e.g. "plist:NSCameraUsageDescription".
+	Target string
+	// First and Second are the earlier and later op on the target.
+	First, Second protocol.Op
+	// Mixed is true when one op replaces the whole location while the
+	// other adds an element to it; otherwise they write different values.
+	Mixed bool
 }
 
 func (e *ConflictError) Error() string {
-	pluginList := strings.Join(e.Plugins, " and ")
-	return fmt.Sprintf("plugin conflict: %s (op %s, key %s)", pluginList, e.OpType, e.Identity)
+	how := "write different values"
+	if e.Mixed {
+		how = "disagree: one replaces the whole value, the other adds to it"
+	}
+	return fmt.Sprintf("plugin conflict on %s: %s (%s) and %s (%s) %s",
+		e.Target, e.First.PluginPackage(), e.First.Type(), e.Second.PluginPackage(), e.Second.Type(), how)
 }
 
-// Validate normalises an op list per the conflict policy and returns the
-// deduped, merged result. Errors are *ConflictError on collision.
+// Validate checks every op's targets against those of the ops before it
+// (see protocol.Target for the rule) and returns the ops in their original
+// order minus exact duplicates: an op is dropped only when each of its
+// targets was already written identically by an earlier op. Errors are
+// *ConflictError.
 func Validate(ops []protocol.Op) ([]protocol.Op, error) {
-	type bucket struct {
-		op        protocol.Op
-		hash      string
-		plugins   []string // ordered
-		pluginSet map[string]bool
+	type claim struct {
+		op      protocol.Op
+		content string
 	}
+	type keyState struct {
+		owner       *claim
+		firstMember *claim
+		members     map[string]*claim
+	}
+	keys := make(map[string]*keyState)
 
-	buckets := make(map[string]*bucket)
-	order := make([]string, 0, len(ops)) // identity insertion order
-
+	out := make([]protocol.Op, 0, len(ops))
 	for _, op := range ops {
-		id := op.Identity()
-		hash := op.ContentHash()
-		pkg := op.PluginPackage()
-
-		b, exists := buckets[id]
-		if !exists {
-			b = &bucket{op: op, hash: hash, pluginSet: map[string]bool{pkg: true}, plugins: []string{pkg}}
-			buckets[id] = b
-			order = append(order, id)
-			continue
-		}
-
-		switch op.MergeClass() {
-		case protocol.ClassIdempotent:
-			if b.hash != hash {
-				return nil, &ConflictError{
-					Identity: id,
-					OpType:   op.Type(),
-					Plugins:  uniquePlugins(append(append([]string{}, b.plugins...), pkg)),
+		fresh := false
+		for _, t := range op.Targets() {
+			ks := keys[t.Key]
+			if ks == nil {
+				ks = &keyState{members: map[string]*claim{}}
+				keys[t.Key] = ks
+			}
+			var prev *claim
+			if t.Member == "" {
+				if ks.firstMember != nil {
+					return nil, &ConflictError{Target: t.String(), First: ks.firstMember.op, Second: op, Mixed: true}
+				}
+				prev = ks.owner
+				if prev == nil {
+					ks.owner = &claim{op: op, content: t.Content}
+				}
+			} else {
+				if ks.owner != nil {
+					return nil, &ConflictError{Target: t.String(), First: ks.owner.op, Second: op, Mixed: true}
+				}
+				prev = ks.members[t.Member]
+				if prev == nil {
+					c := &claim{op: op, content: t.Content}
+					ks.members[t.Member] = c
+					if ks.firstMember == nil {
+						ks.firstMember = c
+					}
 				}
 			}
-			// Same payload, collapse.
-			if !b.pluginSet[pkg] {
-				b.plugins = append(b.plugins, pkg)
-				b.pluginSet[pkg] = true
+			if prev == nil {
+				fresh = true
+				continue
 			}
-		case protocol.ClassAdditive:
-			// Same identity covers full payload; collapse silently.
-			if !b.pluginSet[pkg] {
-				b.plugins = append(b.plugins, pkg)
-				b.pluginSet[pkg] = true
-			}
-		case protocol.ClassExclusive:
-			if b.hash != hash {
-				return nil, &ConflictError{
-					Identity: id,
-					OpType:   op.Type(),
-					Plugins:  uniquePlugins(append(append([]string{}, b.plugins...), pkg)),
-				}
-			}
-			if !b.pluginSet[pkg] {
-				b.plugins = append(b.plugins, pkg)
-				b.pluginSet[pkg] = true
+			if prev.content != t.Content {
+				return nil, &ConflictError{Target: t.String(), First: prev.op, Second: op}
 			}
 		}
-	}
-
-	out := make([]protocol.Op, 0, len(order))
-	for _, id := range order {
-		out = append(out, buckets[id].op)
+		if fresh {
+			out = append(out, op)
+		}
 	}
 	return out, nil
-}
-
-func uniquePlugins(in []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(in))
-	for _, p := range in {
-		if !seen[p] {
-			seen[p] = true
-			out = append(out, p)
-		}
-	}
-	sort.Strings(out)
-	return out
 }

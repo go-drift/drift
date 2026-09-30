@@ -216,3 +216,34 @@ let package = Package(
 		t.Errorf("snapshot drift; if intentional, update the golden literal in this test.\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
+
+// Plugins sharing a package (same URL and requirement, which Validate
+// guarantees) declare it once with the union of their products.
+func TestApplyPluginPackageMergesSharedPackage(t *testing.T) {
+	root := t.TempDir()
+	mk := func(pkg string, products ...string) *protocol.OpIOSAddPackageDependency {
+		return &protocol.OpIOSAddPackageDependency{
+			Base:        protocol.Base{Pkg: pkg},
+			URL:         "https://github.com/firebase/firebase-ios-sdk",
+			Requirement: driftplugin.SPMRequirementFrom("11.0.0"),
+			Products:    products,
+		}
+	}
+	ops := []*protocol.OpIOSAddPackageDependency{mk("a", "FirebaseMessaging", "FirebaseCore"), mk("b", "FirebaseCore", "FirebaseAnalytics")}
+	if _, err := ApplyPluginPackage(root, ops); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, "Package.swift"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(got)
+	if n := strings.Count(s, ".package(url:"); n != 1 {
+		t.Errorf("want one package declaration, got %d:\n%s", n, s)
+	}
+	for _, p := range []string{"FirebaseAnalytics", "FirebaseCore", "FirebaseMessaging"} {
+		if n := strings.Count(s, `.product(name: "`+p+`"`); n != 1 {
+			t.Errorf("want product %s once, got %d:\n%s", p, n, s)
+		}
+	}
+}

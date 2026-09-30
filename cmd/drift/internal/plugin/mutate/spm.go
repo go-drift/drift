@@ -2,8 +2,9 @@ package mutate
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
@@ -63,11 +64,28 @@ func ApplyPluginPackage(packageRoot string, ops []*protocol.OpIOSAddPackageDepen
 }
 
 // renderPluginPackage returns the Drift/Plugins/Package.swift bytes for the
-// given ops. Op validation guarantees every string is safe to quote
-// verbatim as a Swift literal.
+// given ops. Several plugins may depend on one package (same URL and
+// requirement, which conflict validation guarantees); it is declared once
+// with the union of their products. Op validation guarantees every string
+// is safe to quote verbatim as a Swift literal.
 func renderPluginPackage(ops []*protocol.OpIOSAddPackageDependency) (string, error) {
-	sorted := append([]*protocol.OpIOSAddPackageDependency(nil), ops...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].URL < sorted[j].URL })
+	type pkg struct {
+		url      string
+		req      protocol.SPMRequirement
+		products map[string]bool
+	}
+	byURL := map[string]*pkg{}
+	for _, op := range ops {
+		p := byURL[op.URL]
+		if p == nil {
+			p = &pkg{url: op.URL, req: op.Requirement, products: map[string]bool{}}
+			byURL[op.URL] = p
+		}
+		for _, product := range op.Products {
+			p.products[product] = true
+		}
+	}
+	urls := slices.Sorted(maps.Keys(byURL))
 
 	var b strings.Builder
 	b.WriteString(pluginPackageHeader)
@@ -78,19 +96,17 @@ func renderPluginPackage(ops []*protocol.OpIOSAddPackageDependency) (string, err
 	b.WriteString("        .library(name: \"DriftPlugins\", targets: [\"DriftPlugins\"])\n")
 	b.WriteString("    ],\n")
 	b.WriteString("    dependencies: [\n")
-	for _, op := range sorted {
-		fmt.Fprintf(&b, "        .package(url: %s, %s),\n", swiftString(op.URL), formatSPMRequirement(op.Requirement))
+	for _, url := range urls {
+		fmt.Fprintf(&b, "        .package(url: %s, %s),\n", swiftString(url), formatSPMRequirement(byURL[url].req))
 	}
 	b.WriteString("    ],\n")
 	b.WriteString("    targets: [\n")
 	b.WriteString("        .target(\n")
 	b.WriteString("            name: \"DriftPlugins\",\n")
 	b.WriteString("            dependencies: [\n")
-	for _, op := range sorted {
-		identity := protocol.SPMPackageIdentity(op.URL)
-		products := append([]string(nil), op.Products...)
-		sort.Strings(products)
-		for _, product := range products {
+	for _, url := range urls {
+		identity := protocol.SPMPackageIdentity(url)
+		for _, product := range slices.Sorted(maps.Keys(byURL[url].products)) {
 			fmt.Fprintf(&b, "                .product(name: %s, package: %s),\n", swiftString(product), swiftString(identity))
 		}
 	}

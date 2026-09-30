@@ -67,7 +67,7 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 1. **Resolve.** `CheckPluginDeps` runs `go list` for each configured package.
 2. **Bridge.** `EnsureBridge` (`cmd/drift/internal/plugin/bridge.go`) writes `tools/drift-plugins/main.go` (build tag `drift_tool`, committed with the app so `go mod tidy` keeps plugin deps) and builds it. Binaries are cached by a key over CLI version, Go version, `go.sum`, module pins and source; locally replaced plugins bypass the cache.
 3. **Run.** `RunBridge` sends a JSON envelope on stdin (`APIVersion`, platform, config per plugin) and reads a JSON response file of ops.
-4. **Decode and validate.** `DecodeOps`, then `Validate` (`conflict.go`) merges ops by merge class and reports conflicts between plugins.
+4. **Decode and validate.** `DecodeOps` parses and validates each op, then `Validate` (`conflict.go`) checks ops against each other by target and drops exact duplicates.
 5. **Apply.** `Apply` (`apply.go`) files ops by platform and runs mutators (`mutate/`): plist, AndroidManifest XML, resource XML, Gradle, sources, assets, SwiftPM sidecar, `xtool.yml`.
 6. **Registrant.** `EnsureRunnerSupport` writes host support files; `WriteRegistrant` generates `DriftPluginRegistrant.swift` / `.kt`.
 
@@ -89,12 +89,12 @@ Ops are typed structs in `pkg/plugin/protocol/ops.go`, recorded through scopes o
 | Android build | `android.gradle.add_dependency`, `android.gradle.apply_plugin`, `android.source.add` |
 | Android registrants | `android.registrant`, `android.pre_activity_registrant` |
 
-Each op declares a merge class:
-- **Idempotent**: same identity and payload collapse; different payload conflicts.
-- **Additive**: deduplicated set (identity covers the full payload).
-- **Exclusive**: at most one payload per identity.
+Each op declares the **targets** it writes (`Targets()`): a key naming a location (`plist:<key>`, `android-res:<type>/<name>`, `ios-bundle:<file>`, `spm:<package>`, ...), optionally a member of a set at that key (a permission, a registrant, a SwiftPM product), and a hash of what it writes there. Conflicts are keyed on targets, not op types, so two different op types writing one plist key or resource are caught:
+- Ops owning the same key must write the same content (they then collapse).
+- Ops adding the same member to a set must agree; different members merge (plugins sharing `firebase-ios-sdk` may each ask for their own products).
+- A key cannot be both owned by one op and added to by another (`set_string_array` vs `append_array_item`).
 
-Adding an op means touching: the struct and its 5 methods plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), the bag and switch in `apply.go`, and a mutator. `TestOpsCoverAllConstructors` and `TestApplyKnowsEveryOpType` catch omissions.
+Adding an op means touching: the struct and its methods (`Type`, `Targets`, `Validate`, `Platform`) plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), the bag and switch in `apply.go`, and a mutator. `TestOpsCoverAllConstructors` and `TestApplyKnowsEveryOpType` catch omissions.
 
 ## iOS specifics
 
