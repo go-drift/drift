@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
@@ -73,7 +72,6 @@ func androidRegistrantBody(ops []protocol.Op) string {
 	if len(calls) == 0 {
 		return ""
 	}
-	sort.Strings(calls)
 	return strings.Join(calls, "\n") + "\n"
 }
 
@@ -87,7 +85,6 @@ func androidPreActivityBody(ops []protocol.Op) string {
 	if len(calls) == 0 {
 		return ""
 	}
-	sort.Strings(calls)
 	return strings.Join(calls, "\n") + "\n"
 }
 
@@ -115,7 +112,6 @@ func iosRegistrantBody(ops []protocol.Op) string {
 	if len(calls) == 0 {
 		return ""
 	}
-	sort.Strings(calls)
 	return strings.Join(calls, "\n") + "\n"
 }
 
@@ -143,10 +139,6 @@ func groupAppDelegateOpsByCallback(ops []protocol.Op) map[protocol.IOSAppDelegat
 			continue
 		}
 		out[reg.Callback] = append(out[reg.Callback], reg.Symbol)
-	}
-	for k, syms := range out {
-		sort.Strings(syms)
-		out[k] = syms
 	}
 	return out
 }
@@ -185,7 +177,7 @@ func emitDidFinishLaunching(symbols []string) string {
 
 // emitOpenURL emits the URL dispatcher the scene call sites (SceneDelegate
 // on xcodeproj builds, SwiftUI .onOpenURL on xtool) invoke. Plugins run in
-// lex-sorted symbol order; the first to return true claims the URL and ends
+// drift.yaml order; the first to return true claims the URL and ends
 // dispatch, so e.g. an OAuth callback claimed by a sign-in SDK never reaches
 // Drift's deep-link channel. Unclaimed URLs go to DeepLinkHandler.
 func emitOpenURL(symbols []string) string {

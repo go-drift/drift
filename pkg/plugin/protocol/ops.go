@@ -406,8 +406,8 @@ const (
 	IOSCallbackDidFinishLaunching IOSAppDelegateCallback = "didFinishLaunching"
 	// func(url: URL) -> Bool
 	//
-	// Return true to claim the URL. The first claiming plugin (lex-sorted
-	// symbol order) stops dispatch, and Drift's own deep-link channel does
+	// Return true to claim the URL. The first claiming plugin (in drift.yaml
+	// order) stops dispatch, and Drift's own deep-link channel does
 	// not see the URL. Unclaimed URLs reach the Drift deep-link channel.
 	IOSCallbackOpenURL IOSAppDelegateCallback = "openURL"
 	// func(userActivity: NSUserActivity) -> Bool

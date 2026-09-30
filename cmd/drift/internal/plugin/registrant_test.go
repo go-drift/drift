@@ -69,9 +69,9 @@ func TestWriteRegistrantWithPreActivityEntries(t *testing.T) {
 	if !strings.Contains(s, "com.bar.other.OtherController.init(activity)") {
 		t.Errorf("preActivityCreate missing other call:\n%s", s)
 	}
-	// Sorted order: bar < foo alphabetically.
-	if strings.Index(s, "com.bar.other") > strings.Index(s, "com.foo.splash") {
-		t.Errorf("preActivityCreate calls not in sorted order:\n%s", s)
+	// drift.yaml (op) order, not alphabetical: splash was recorded first.
+	if strings.Index(s, "com.foo.splash") > strings.Index(s, "com.bar.other") {
+		t.Errorf("preActivityCreate calls not in source order:\n%s", s)
 	}
 }
 
@@ -99,9 +99,9 @@ func TestWriteRegistrantWithIOSEntries(t *testing.T) {
 	if !strings.Contains(s, "FooPlugin.register(host: host)") {
 		t.Errorf("registrant missing FooPlugin call")
 	}
-	// Calls should be sorted for deterministic output.
-	if strings.Index(s, "BarPlugin") > strings.Index(s, "FooPlugin") {
-		t.Errorf("registrant calls not in sorted order: %s", s)
+	// Calls follow drift.yaml (op) order, not alphabetical order.
+	if strings.Index(s, "FooPlugin") > strings.Index(s, "BarPlugin") {
+		t.Errorf("registrant calls not in source order: %s", s)
 	}
 }
 
@@ -175,7 +175,7 @@ func TestWriteRegistrantIOSAppDelegateMethodsAlwaysEmitted(t *testing.T) {
 	}
 }
 
-// One plugin per callback produces the call inside each method, sorted lex,
+// One plugin per callback produces the call inside each method,
 // with the right argument shape.
 func TestWriteRegistrantIOSAppDelegateOneCallbackEach(t *testing.T) {
 	dir := t.TempDir()
@@ -207,8 +207,8 @@ func TestWriteRegistrantIOSAppDelegateOneCallbackEach(t *testing.T) {
 	}
 }
 
-// Two plugins on the same callback both appear, in lex order.
-func TestWriteRegistrantIOSAppDelegateLexSorted(t *testing.T) {
+// Two plugins on the same callback both appear, in drift.yaml order.
+func TestWriteRegistrantIOSAppDelegateSourceOrder(t *testing.T) {
 	dir := t.TempDir()
 	ops := []protocol.Op{
 		&protocol.OpIOSAppDelegateRegistrant{
@@ -235,8 +235,8 @@ func TestWriteRegistrantIOSAppDelegateLexSorted(t *testing.T) {
 	if alpha < 0 || zeta < 0 {
 		t.Fatalf("both plugin calls must appear:\n%s", s)
 	}
-	if alpha > zeta {
-		t.Errorf("plugin calls not lex-sorted (Alpha should precede Zeta):\n%s", s)
+	if zeta > alpha {
+		t.Errorf("plugin calls not in source order (Zeta was recorded first):\n%s", s)
 	}
 }
 
@@ -288,7 +288,7 @@ func TestWriteRegistrantIOSAppDelegateCoordinatorDelegates(t *testing.T) {
 }
 
 // Two plugins on didReceiveRemoteNotification both appear as closures in
-// the handlers array, in lex-sorted symbol order.
+// the handlers array, in drift.yaml order.
 func TestWriteRegistrantIOSAppDelegateMultiplePluginsHandlers(t *testing.T) {
 	dir := t.TempDir()
 	ops := []protocol.Op{
@@ -316,8 +316,8 @@ func TestWriteRegistrantIOSAppDelegateMultiplePluginsHandlers(t *testing.T) {
 	if alpha < 0 || zeta < 0 {
 		t.Fatalf("both plugin closures must appear in handlers array:\n%s", s)
 	}
-	if alpha > zeta {
-		t.Errorf("plugin closures not lex-sorted (Alpha should precede Zeta):\n%s", s)
+	if zeta > alpha {
+		t.Errorf("plugin closures not in source order (Zeta was recorded first):\n%s", s)
 	}
 }
 
@@ -516,7 +516,7 @@ func TestEnsureRunnerSupportIOSWritesCoordinator(t *testing.T) {
 	}
 }
 
-// Plugins get first refusal on a URL, in lex order; Drift's deep-link
+// Plugins get first refusal on a URL, in drift.yaml order; Drift's deep-link
 // channel only sees it when no plugin claims it.
 func TestWriteRegistrantIOSOpenURLClaimOrder(t *testing.T) {
 	dir := t.TempDir()
@@ -534,8 +534,8 @@ func TestWriteRegistrantIOSOpenURLClaimOrder(t *testing.T) {
 	}
 	s := string(body)
 	wantOpenURL := "    static func openURL(_ url: URL, source: String) {\n" +
-		"        if AlphaPlugin.openURL(url: url) { return }\n" +
 		"        if ZetaPlugin.openURL(url: url) { return }\n" +
+		"        if AlphaPlugin.openURL(url: url) { return }\n" +
 		"        DeepLinkHandler.handle(url: url, source: source)\n" +
 		"    }\n"
 	if !strings.Contains(s, wantOpenURL) {
