@@ -16,7 +16,7 @@ func fixtureOps() []Op {
 		&OpInfoPlistAppendArrayItem{Base: base, Key: "Arr2", Value: "x"},
 		&OpInfoPlistSetDict{Base: base, Key: "Dict", Value: map[string]any{"k": "v"}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: "AA=="},
-		&OpIOSReplaceLaunchScreen{Base: base, Content: "<storyboard/>"},
+		&OpIOSReplaceLaunchScreen{Base: base, Content: "<document/>"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
 		&OpRegistrantIOS{Base: base, Symbol: "Foo.register"},
 		&OpIOSAppDelegateRegistrant{Base: base, Callback: IOSCallbackDidFinishLaunching, Symbol: "FooPlugin.didFinishLaunching"},
@@ -155,7 +155,7 @@ func TestValidateSPMRequirement(t *testing.T) {
 		{Kind: "range", Value: "10.0.0", Upper: "11.0.0"},
 	}
 	for _, r := range good {
-		if err := ValidateSPMRequirement(r); err != nil {
+		if err := validateSPMRequirement(r); err != nil {
 			t.Errorf("expected %+v valid: %v", r, err)
 		}
 	}
@@ -168,7 +168,7 @@ func TestValidateSPMRequirement(t *testing.T) {
 		{Kind: "branch", Value: `main"; evil`},         // breaks the Swift literal
 	}
 	for _, r := range bad {
-		if err := ValidateSPMRequirement(r); err == nil {
+		if err := validateSPMRequirement(r); err == nil {
 			t.Errorf("expected %+v invalid", r)
 		}
 	}
@@ -207,7 +207,7 @@ func TestValidateSPMDependency(t *testing.T) {
 		{"git@github.com:getsentry/sentry-cocoa.git", []string{"Sentry"}},
 	}
 	for _, c := range good {
-		if err := ValidateSPMDependency(c.url, req, c.products); err != nil {
+		if err := validateSPMDependency(c.url, req, c.products); err != nil {
 			t.Errorf("expected %q valid: %v", c.url, err)
 		}
 	}
@@ -226,7 +226,7 @@ func TestValidateSPMDependency(t *testing.T) {
 		{"no identity", "https://", []string{"X"}},
 	}
 	for _, c := range bad {
-		if err := ValidateSPMDependency(c.url, req, c.products); err == nil {
+		if err := validateSPMDependency(c.url, req, c.products); err == nil {
 			t.Errorf("%s: expected %q invalid", c.name, c.url)
 		}
 	}
@@ -257,7 +257,7 @@ func TestValidateBundleFileName(t *testing.T) {
 		"Font.ttf",
 	}
 	for _, p := range good {
-		if err := ValidateBundleFileName(p); err != nil {
+		if err := validateBundleFileName(p); err != nil {
 			t.Errorf("expected %q valid: %v", p, err)
 		}
 	}
@@ -278,13 +278,13 @@ func TestValidateBundleFileName(t *testing.T) {
 		"en.lproj",
 	}
 	for _, p := range bad {
-		if err := ValidateBundleFileName(p); err == nil {
+		if err := validateBundleFileName(p); err == nil {
 			t.Errorf("expected %q invalid", p)
 		}
 	}
 }
 
-func TestValidateAssetRelPath(t *testing.T) {
+func TestCheckRelPath(t *testing.T) {
 	good := []string{
 		"foo.json",
 		"deep/nested/path/file.bin",
@@ -292,7 +292,7 @@ func TestValidateAssetRelPath(t *testing.T) {
 		"foo..bar.txt",
 	}
 	for _, p := range good {
-		if err := ValidateAssetRelPath(p); err != nil {
+		if err := checkRelPath("path", p); err != nil {
 			t.Errorf("expected %q valid: %v", p, err)
 		}
 	}
@@ -304,9 +304,14 @@ func TestValidateAssetRelPath(t *testing.T) {
 		"../escape",
 		"a/../b",
 		`a\..\b`,
+		"a//b",
+		"a/./b",
+		"a/",
+		".",
+		`a\b`,
 	}
 	for _, p := range bad {
-		if err := ValidateAssetRelPath(p); err == nil {
+		if err := checkRelPath("path", p); err == nil {
 			t.Errorf("expected %q invalid", p)
 		}
 	}
@@ -314,12 +319,12 @@ func TestValidateAssetRelPath(t *testing.T) {
 
 func TestValidateAppModuleFileName(t *testing.T) {
 	for _, p := range []string{"google-services.json", "agconnect-services.json"} {
-		if err := ValidateAppModuleFileName(p); err != nil {
+		if err := validateAppModuleFileName(p); err != nil {
 			t.Errorf("expected %q valid: %v", p, err)
 		}
 	}
 	for _, p := range []string{"", ".", "..", "src", "libs", "build", "build.gradle", "build.gradle.kts", "proguard-rules.pro", "sub/file.json"} {
-		if err := ValidateAppModuleFileName(p); err == nil {
+		if err := validateAppModuleFileName(p); err == nil {
 			t.Errorf("expected %q invalid", p)
 		}
 	}
@@ -327,14 +332,14 @@ func TestValidateAppModuleFileName(t *testing.T) {
 
 func TestValidateIOSAppDelegateCallback(t *testing.T) {
 	for _, c := range IOSAppDelegateCallbacks {
-		if err := ValidateIOSAppDelegateCallback(c); err != nil {
+		if err := validateIOSAppDelegateCallback(c); err != nil {
 			t.Errorf("known callback %q rejected: %v", c, err)
 		}
 	}
-	if err := ValidateIOSAppDelegateCallback("didFinishLaunchin"); err == nil {
+	if err := validateIOSAppDelegateCallback("didFinishLaunchin"); err == nil {
 		t.Error("expected error for typo'd callback")
 	}
-	if err := ValidateIOSAppDelegateCallback(""); err == nil {
+	if err := validateIOSAppDelegateCallback(""); err == nil {
 		t.Error("expected error for empty callback")
 	}
 }
@@ -421,5 +426,78 @@ func TestDecodeOpsRejectsUnknown(t *testing.T) {
 	raws := []json.RawMessage{[]byte(`{"type":"not.a.real.op"}`)}
 	if _, err := DecodeOps(raws); err == nil || !strings.Contains(err.Error(), "not.a.real.op") {
 		t.Errorf("expected unknown-op error, got %v", err)
+	}
+}
+
+func TestFixtureOpsAreValid(t *testing.T) {
+	for _, op := range fixtureOps() {
+		if err := op.Validate(); err != nil {
+			t.Errorf("%s: fixture should be valid: %v", op.Type(), err)
+		}
+	}
+}
+
+// invalidOps returns, per op type, at least one op that Validate rejects.
+// TestOpValidateRejects checks the table covers every constructor.
+func invalidOps() []Op {
+	base := Base{Pkg: "github.com/test/plugin", Ident: "test"}
+	return []Op{
+		&OpInfoPlistSetString{Base: base, Key: ""},
+		&OpInfoPlistSetBool{Base: base, Key: ""},
+		&OpInfoPlistSetStringArray{Base: base, Key: ""},
+		&OpInfoPlistAppendArrayItem{Base: base, Key: ""},
+		&OpInfoPlistSetDict{Base: base, Key: "Dict", Value: map[string]any{"k": nil}},
+		&OpIOSAssetsAddImageSet{Base: base, Name: "../Logo", Image: "AA=="},
+		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: ""},
+		&OpIOSReplaceLaunchScreen{Base: base, Content: "<storyboard/>"},
+		&OpAddIOSSource{Base: base, Group: "a b", RelPath: "Foo.swift"},
+		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "../Foo.swift"},
+		&OpRegistrantIOS{Base: base, Symbol: ""},
+		&OpIOSAppDelegateRegistrant{Base: base, Callback: "nope", Symbol: "Foo.bar"},
+		&OpIOSAddBundleResource{Base: base, Path: "a/b.plist"},
+		&OpAndroidAddAsset{Base: base, Path: "models/../x.bin"},
+		&OpAndroidAddAppModuleFile{Base: base, Name: "build.gradle"},
+		&OpAndroidGradleApplyPlugin{Base: base, ID: ""},
+		&OpIOSAddPackageDependency{Base: base, URL: "http://x/y", Requirement: spmFrom("1.0.0"), Products: []string{"P"}},
+		&OpAndroidManifestAddPermission{Base: base, Name: "not a permission"},
+		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<activity/>"},
+		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android theme", Value: "x"},
+		&OpAndroidManifestAddMetaData{Base: base, Parent: "service", Name: "foo"},
+		&OpAndroidColorSet{Base: base, Name: "splash-bg", Value: "#fff"},
+		&OpAndroidStringSet{Base: base, Name: "1hello"},
+		&OpAndroidStyleSet{Base: base, Name: "X", Items: []StyleItem{{Name: "a", Value: "1"}, {Name: "a", Value: "2"}}},
+		&OpAndroidWriteDrawable{Base: base, Name: "Icon", Content: "AA=="},
+		&OpAndroidWriteResourceXML{Base: base, RelPath: "../raw/foo.xml", Content: "<x/>"},
+		&OpAndroidWriteResourceXML{Base: base, RelPath: AndroidPluginColorsFile, Content: "<resources/>"},
+		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "/abs/Foo.kt"},
+		&OpRegistrantAndroid{Base: base, Symbol: "com.foo.Foo.register(host)"},
+		&OpAndroidPreActivityRegistrant{Base: base, Symbol: ""},
+		&OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "a:b:1.0'); evil('"},
+	}
+}
+
+func TestOpValidateRejects(t *testing.T) {
+	covered := map[string]bool{}
+	for _, op := range invalidOps() {
+		covered[op.Type()] = true
+		if err := op.Validate(); err == nil {
+			t.Errorf("%s %+v: expected a validation error", op.Type(), op)
+		}
+	}
+	for _, typ := range OpTypes() {
+		if !covered[typ] {
+			t.Errorf("invalidOps has no case for %s", typ)
+		}
+	}
+}
+
+func TestDecodeOpsRejectsInvalid(t *testing.T) {
+	raw, err := MarshalOp(&OpAndroidAddAsset{Base: Base{Pkg: "p"}, Path: "../escape"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = DecodeOps([]json.RawMessage{raw})
+	if err == nil || !strings.Contains(err.Error(), "android.assets.add") {
+		t.Fatalf("expected validation error naming the op, got %v", err)
 	}
 }

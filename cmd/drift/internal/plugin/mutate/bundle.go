@@ -23,7 +23,7 @@ const bundleResourceWarnBytes = 5 * 1024 * 1024 // 5 MB
 var warnSink io.Writer = os.Stderr
 
 // BundleFile is one decoded file destined for the root of the iOS app
-// bundle. Name is a plain file name (protocol.ValidateBundleFileName).
+// bundle. Name is a plain file name (validated by the op).
 type BundleFile struct {
 	Name    string
 	Content []byte
@@ -65,11 +65,6 @@ func ImageSetBundleFiles(ops []*protocol.OpIOSAssetsAddImageSet) ([]BundleFile, 
 }
 
 func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
-	// ValidateBundleFileName in the recorder is the boundary check; re-run
-	// it for ops decoded from JSON without going through the recorder.
-	if err := protocol.ValidateBundleFileName(name); err != nil {
-		return BundleFile{}, err
-	}
 	decoded, err := protocol.DecodeContent(content)
 	if err != nil {
 		return BundleFile{}, fmt.Errorf("decode content: %w", err)
@@ -157,9 +152,6 @@ func pruneDir(dir string, keep map[string]BundleFile) ([]string, error) {
 func WriteAndroidAssets(assetsRoot string, ops []*protocol.OpAndroidAddAsset) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
-		if err := protocol.ValidateAssetRelPath(op.Path); err != nil {
-			return changed, fmt.Errorf("Android asset: %w", err)
-		}
 		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("Android asset %s: decode content: %w", op.Path, err)
@@ -183,9 +175,6 @@ func WriteAndroidAssets(assetsRoot string, ops []*protocol.OpAndroidAddAsset) ([
 func WriteAndroidAppModuleFiles(appDir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
-		if err := protocol.ValidateAppModuleFileName(op.Name); err != nil {
-			return changed, fmt.Errorf("Android app module file: %w", err)
-		}
 		content, err := protocol.DecodeContent(op.Content)
 		if err != nil {
 			return changed, fmt.Errorf("Android app module file %s: decode content: %w", op.Name, err)

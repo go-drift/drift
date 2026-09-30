@@ -50,6 +50,7 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 
 - Config decodes with unknown keys rejected, so `drift.yaml` typos fail the build.
 - `Build` must not touch disk; it only records ops on `ctx`.
+- Every op validates its input when recorded. Invalid input is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI validates again when decoding the bridge response, so mutators only see valid ops.
 - `driftplugin.NewTestCtx()` plus `ctx.Ops()` lets plugin authors unit test `Build`.
 - Reference plugins: `examples/plugins/demo` (minimal), `plugins/splash` (full, with native code and runtime API).
 

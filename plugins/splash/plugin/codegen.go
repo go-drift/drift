@@ -20,7 +20,7 @@ var (
 	tmplStoryboard = mustParseTemplate("templates/LaunchScreen.storyboard.tmpl")
 	tmplLayerList  = mustParseTemplate("templates/launch_background.xml.tmpl")
 	tmplV31Styles  = mustParseTemplate("templates/values-v31-styles.xml.tmpl")
-	tmplColors     = mustParseTemplate("templates/plugin_colors.xml.tmpl")
+	tmplColors     = mustParseTemplate("templates/splash_colors.xml.tmpl")
 	tmplSwiftCfg   = mustParseTemplate("templates/SplashConfig.swift.tmpl")
 	tmplKotlinCfg  = mustParseTemplate("templates/SplashConfig.kt.tmpl")
 )
@@ -90,9 +90,9 @@ func generateV31Styles(cfg resolvedConfig) string {
 	})
 }
 
-// generateValuesColors returns res/values/plugin_colors.xml declaring the
-// drift_splash_background colour. Lives in a plugin-owned values file (not
-// the scaffold's colors.xml) to avoid resource-merge collisions.
+// generateValuesColors returns res/values/drift_splash_colors.xml declaring the
+// drift_splash_background colour. Lives in a splash-owned values file (not
+// the scaffold's colors.xml or Drift's plugin_colors.xml) to avoid clashes.
 func generateValuesColors(backgroundColor string) string {
 	return renderTemplate(tmplColors, struct {
 		BackgroundColor string
@@ -102,7 +102,7 @@ func generateValuesColors(backgroundColor string) string {
 }
 
 // generateValuesNightColors mirrors generateValuesColors for the dark
-// resource bucket (res/values-night/plugin_colors.xml). When the user
+// resource bucket (res/values-night/drift_splash_colors.xml). When the user
 // configures a `dark:` variant, the dark background colour wins on devices
 // with the night uiMode.
 func generateValuesNightColors(darkBackgroundColor string) string {

@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -27,10 +28,10 @@ type BuildCtx struct {
 
 	ops []protocol.Op
 
-	// deferredErr captures the first error from a recorder that cannot
-	// return an error to its caller (e.g. Sources.AddFS walking an
-	// embed.FS). Surfaced via Err() after Build returns.
-	deferredErr error
+	// errs collects recorder failures: invalid op input and embed.FS walk
+	// errors. Recorders are fluent (no error return), so failures surface
+	// via Err() after Build returns and abort the build.
+	errs []error
 
 	// IOS records ops for the iOS build target. Methods are no-ops on
 	// non-iOS builds; plugins may unconditionally call them and the CLI
@@ -42,10 +43,11 @@ type BuildCtx struct {
 	Xtool *IOSScope
 }
 
-// Err returns the first deferred error captured by void recorders during
-// Build. The bridge runtime consults this after Plugin.Build returns so
-// silent failures (e.g. a malformed embed.FS) still abort the build.
-func (b *BuildCtx) Err() error { return b.deferredErr }
+// Err returns every error recorders captured during Build (invalid input,
+// unreadable embed.FS), joined, or nil. The bridge runtime consults it
+// after Plugin.Build returns; plugin unit tests should check it too.
+// Invalid ops are reported here and never recorded.
+func (b *BuildCtx) Err() error { return errors.Join(b.errs...) }
 
 // NewTestCtx returns a BuildCtx suitable for plugin author unit tests. Ops
 // recorded via the returned ctx can be inspected with Ops().
@@ -113,10 +115,14 @@ func newBuildCtx(pluginPackage, pluginName, projectRoot, buildDir, platform stri
 	b.Android = &AndroidScope{b: b}
 	b.Android.Manifest = &AndroidManifestScope{b: b}
 	b.Android.Resources = &AndroidResourcesScope{
-		b:       b,
-		Colors:  &AndroidValuesScope{b: b, kind: "color"},
-		Strings: &AndroidValuesScope{b: b, kind: "string"},
-		Styles:  &AndroidStylesScope{b: b},
+		b: b,
+		Colors: &AndroidValuesScope{b: b, newOp: func(base protocol.Base, name, value string) protocol.Op {
+			return &protocol.OpAndroidColorSet{Base: base, Name: name, Value: value}
+		}},
+		Strings: &AndroidValuesScope{b: b, newOp: func(base protocol.Base, name, value string) protocol.Op {
+			return &protocol.OpAndroidStringSet{Base: base, Name: name, Value: value}
+		}},
+		Styles: &AndroidStylesScope{b: b},
 	}
 	b.Android.Drawables = &AndroidDrawablesScope{b: b}
 	b.Android.Sources = &AndroidSourcesScope{b: b}
@@ -125,7 +131,12 @@ func newBuildCtx(pluginPackage, pluginName, projectRoot, buildDir, platform stri
 	return b
 }
 
+// push records op if it is valid; otherwise the error joins Err().
 func (b *BuildCtx) push(op protocol.Op) {
+	if err := op.Validate(); err != nil {
+		b.errs = append(b.errs, fmt.Errorf("%s: %w", op.Type(), err))
+		return
+	}
 	b.ops = append(b.ops, op)
 }
 
@@ -154,13 +165,7 @@ func (s *IOSScope) Registrant(symbol string) {
 // declaration plus one `.product(name:package:)` per entry in products.
 // Products are referenced against the package identity derived from the
 // URL (e.g. "firebase-ios-sdk"), matching SwiftPM's own resolution rule.
-//
-// Panics on an invalid dependency (see ValidateSPMDependency) so mistakes
-// surface at the plugin's call site.
 func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products []string) {
-	if err := protocol.ValidateSPMDependency(url, req, products); err != nil {
-		panic(err)
-	}
 	s.b.push(&protocol.OpIOSAddPackageDependency{
 		Base:        newBase(s.b),
 		URL:         url,
@@ -174,15 +179,8 @@ func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products
 // names a fixed app-level hook (see IOSAppDelegateCallbacks); the plugin's
 // symbol must implement the signature documented on that constant.
 // Multiple plugins may register on the same callback; the codegen fans out
-// in lex-sorted symbol order. Panics on an unknown callback or empty symbol
-// so typos in plugin Build code surface immediately.
+// in lex-sorted symbol order.
 func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol string) {
-	if err := protocol.ValidateIOSAppDelegateCallback(callback); err != nil {
-		panic(err)
-	}
-	if symbol == "" {
-		panic("AppDelegateRegistrant: empty symbol")
-	}
 	s.b.push(&protocol.OpIOSAppDelegateRegistrant{
 		Base:     newBase(s.b),
 		Callback: callback,
@@ -194,12 +192,8 @@ func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol
 // bundle, where Bundle.main and UIImage(named:) find it. Use for files that
 // SDKs look up in the main bundle (Firebase's GoogleService-Info.plist),
 // images, fonts, JSON data, or ML models. name is a plain file name: both
-// iOS build paths flatten resources into the bundle root. Panics on an
-// invalid name (see ValidateBundleFileName).
+// iOS build paths flatten resources into the bundle root.
 func (s *IOSScope) AddBundleResource(name string, content []byte) {
-	if err := protocol.ValidateBundleFileName(name); err != nil {
-		panic(err)
-	}
 	s.b.push(&protocol.OpIOSAddBundleResource{
 		Base:    newBase(s.b),
 		Path:    name,
@@ -355,12 +349,8 @@ func (s *AndroidScope) AddGradleDependency(configuration, coord string) {
 // Firebase's com.google.gms.google-services need the android block
 // configured first). A non-empty version also declares the plugin in the
 // project-level build.gradle plugins { } block so Gradle can resolve it;
-// pass "" when the plugin is already on the build classpath. Panics on an
-// empty id.
+// pass "" when the plugin is already on the build classpath.
 func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
-	if id == "" {
-		panic("ApplyGradlePlugin: empty plugin id")
-	}
 	s.b.push(&protocol.OpAndroidGradleApplyPlugin{
 		Base:    newBase(s.b),
 		ID:      id,
@@ -372,11 +362,8 @@ func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
 // at the assets-relative path. Gradle auto-bundles app/src/main/assets/, so
 // no manifest edits are needed. Use for fonts, ML models, or other static
 // content the app reads via AssetManager. Build-time config files belong in
-// AddAppModuleFile. Panics on an invalid path (see ValidateAssetRelPath).
+// AddAppModuleFile. path is a canonical slash-separated relative path.
 func (s *AndroidScope) AddAsset(path string, content []byte) {
-	if err := protocol.ValidateAssetRelPath(path); err != nil {
-		panic(err)
-	}
 	s.b.push(&protocol.OpAndroidAddAsset{
 		Base:    newBase(s.b),
 		Path:    path,
@@ -388,11 +375,8 @@ func (s *AndroidScope) AddAsset(path string, content []byte) {
 // directory, next to app/build.gradle. Use for build-time config that Gradle
 // plugins read from there, such as Firebase's google-services.json. name is
 // a plain file name; scaffold-owned names (build.gradle, src, ...) are
-// rejected. Panics on an invalid name (see ValidateAppModuleFileName).
+// rejected.
 func (s *AndroidScope) AddAppModuleFile(name string, content []byte) {
-	if err := protocol.ValidateAppModuleFileName(name); err != nil {
-		panic(err)
-	}
 	s.b.push(&protocol.OpAndroidAddAppModuleFile{
 		Base:    newBase(s.b),
 		Name:    name,
@@ -459,29 +443,16 @@ func (s *AndroidResourcesScope) WriteXML(relPath, content string) {
 	})
 }
 
-// AndroidValuesScope handles res/values/{colors,strings}.xml.
+// AndroidValuesScope records one kind of res/values entry (colors or
+// strings) into Drift's plugin-owned values file for that kind.
 type AndroidValuesScope struct {
-	b    *BuildCtx
-	kind string // "color" or "string"
+	b     *BuildCtx
+	newOp func(base protocol.Base, name, value string) protocol.Op
 }
 
+// Set records the value resource name = value.
 func (s *AndroidValuesScope) Set(name, value string) {
-	switch s.kind {
-	case "color":
-		s.b.push(&protocol.OpAndroidColorSet{
-			Base:  newBase(s.b),
-			Name:  name,
-			Value: value,
-		})
-	case "string":
-		s.b.push(&protocol.OpAndroidStringSet{
-			Base:  newBase(s.b),
-			Name:  name,
-			Value: value,
-		})
-	default:
-		panic(fmt.Sprintf("android values scope: unknown kind %q", s.kind))
-	}
+	s.b.push(s.newOp(newBase(s.b), name, value))
 }
 
 // AndroidStylesScope handles res/values/styles.xml entries.
@@ -546,10 +517,10 @@ func (s *AndroidSourcesScope) AddFile(pkg, rel string, content []byte) {
 }
 
 // walkEmbedFS walks `sources` rooted at `root` and invokes emit for each
-// file. The first walk error is stashed on the BuildCtx so the bridge
-// runtime can fail the build instead of silently producing an incomplete op
-// list. Recorders cannot propagate errors directly because Build's API is
-// fluent (no `if err :=` at every call site).
+// file. A walk error joins Err() so the bridge runtime can fail the build
+// instead of silently producing an incomplete op list. Recorders cannot
+// propagate errors directly because Build's API is fluent (no `if err :=`
+// at every call site).
 func (b *BuildCtx) walkEmbedFS(sources embed.FS, root string, emit func(rel string, content []byte)) {
 	if root == "" {
 		root = "."
@@ -569,8 +540,8 @@ func (b *BuildCtx) walkEmbedFS(sources embed.FS, root string, emit func(rel stri
 		emit(rel, data)
 		return nil
 	})
-	if walkErr != nil && b.deferredErr == nil {
-		b.deferredErr = fmt.Errorf("walk embed.FS at %q: %w", root, walkErr)
+	if walkErr != nil {
+		b.errs = append(b.errs, fmt.Errorf("walk embed.FS at %q: %w", root, walkErr))
 	}
 }
 

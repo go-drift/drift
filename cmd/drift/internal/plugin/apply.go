@@ -294,9 +294,9 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 		}
 	}
 
-	resValuesDir := filepath.Join(buildDir, "app", "src", "main", "res", "values")
+	resDir := filepath.Join(buildDir, "app", "src", "main", "res")
 	if len(bag.colors) > 0 {
-		path, ch, err := mutate.ApplyAndroidColors(filepath.Join(resValuesDir, "plugin_colors.xml"), bag.colors)
+		path, ch, err := mutate.ApplyAndroidColors(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginColorsFile)), bag.colors)
 		if err != nil {
 			return changed, err
 		}
@@ -305,7 +305,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 		}
 	}
 	if len(bag.strings) > 0 {
-		path, ch, err := mutate.ApplyAndroidStrings(filepath.Join(resValuesDir, "plugin_strings.xml"), bag.strings)
+		path, ch, err := mutate.ApplyAndroidStrings(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStringsFile)), bag.strings)
 		if err != nil {
 			return changed, err
 		}
@@ -314,7 +314,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 		}
 	}
 	if len(bag.styles) > 0 {
-		path, ch, err := mutate.ApplyAndroidStyles(filepath.Join(resValuesDir, "plugin_styles.xml"), bag.styles)
+		path, ch, err := mutate.ApplyAndroidStyles(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStylesFile)), bag.styles)
 		if err != nil {
 			return changed, err
 		}

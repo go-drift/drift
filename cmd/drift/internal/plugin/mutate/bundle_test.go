@@ -92,16 +92,6 @@ func TestWriteIOSBundleResourceOverwriteOnDiff(t *testing.T) {
 	}
 }
 
-// Both iOS build paths flatten resources into the bundle root, so nested
-// names are rejected rather than silently flattened.
-func TestWriteIOSBundleResourceRejectsNestedPath(t *testing.T) {
-	dir := t.TempDir()
-	op := iosBundleOp("p", "Fonts/regular.otf", []byte("font-bytes"))
-	if _, err := writeBundleOps(t, dir, op); err == nil {
-		t.Fatalf("expected error for nested bundle resource name")
-	}
-}
-
 // A plugin dropped from the project must take its resources with it,
 // including files nobody asked for that ended up in the Drift-owned dir.
 func TestWriteIOSBundleResourcePrunesStale(t *testing.T) {
@@ -190,10 +180,6 @@ func TestWriteAndroidAppModuleFiles(t *testing.T) {
 	if err != nil || len(changed) != 0 {
 		t.Errorf("expected idempotent rerun, got %v, %v", changed, err)
 	}
-	bad := &protocol.OpAndroidAddAppModuleFile{Base: op.Base, Name: "build.gradle", Content: op.Content}
-	if _, err := WriteAndroidAppModuleFiles(dir, []*protocol.OpAndroidAddAppModuleFile{bad}); err == nil {
-		t.Errorf("expected reserved-name error")
-	}
 }
 
 // Binary content (zero bytes, all-ASCII, random) must survive the base64
@@ -222,17 +208,6 @@ func TestWriteIOSBundleResourceBinaryRoundTrip(t *testing.T) {
 		if !bytes.Equal(got, want) {
 			t.Errorf("%s: base64 round-trip changed bytes\ngot:  %v\nwant: %v", name, got, want)
 		}
-	}
-}
-
-func TestWriteIOSBundleResourceRejectsBadPath(t *testing.T) {
-	dir := t.TempDir()
-	// Plugin code validates paths in the recorder, but a malformed op
-	// arriving over the wire must still error rather than escape the
-	// destination root.
-	op := iosBundleOp("p", "../etc/passwd", []byte("oops"))
-	if _, err := writeBundleOps(t, dir, op); err == nil {
-		t.Errorf("expected error for `..` path")
 	}
 }
 
