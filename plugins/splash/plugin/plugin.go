@@ -96,7 +96,7 @@ func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
 	ctx.Android.Drawables.AddBitmap("drift_splash", img)
 	ctx.Android.Resources.WriteXML("drawable/launch_background.xml",
 		generateLayerList("drift_splash_background", "drift_splash"))
-	ctx.Android.Resources.WriteXML("values/plugin_colors.xml",
+	ctx.Android.Resources.WriteXML("values/drift_splash_colors.xml",
 		generateValuesColors(r.BackgroundColor))
 
 	if r.HasDark {
@@ -107,7 +107,7 @@ func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
 		ctx.Android.Drawables.AddBitmap("drift_splash_dark", darkImg)
 		ctx.Android.Resources.WriteXML("drawable-night/launch_background.xml",
 			generateLayerList("drift_splash_background", "drift_splash_dark"))
-		ctx.Android.Resources.WriteXML("values-night/plugin_colors.xml",
+		ctx.Android.Resources.WriteXML("values-night/drift_splash_colors.xml",
 			generateValuesNightColors(r.Dark.BackgroundColor))
 	}
 

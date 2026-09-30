@@ -63,15 +63,9 @@ func ApplyPluginPackage(packageRoot string, ops []*protocol.OpIOSAddPackageDepen
 }
 
 // renderPluginPackage returns the Drift/Plugins/Package.swift bytes for the
-// given ops. Ops are re-validated because they may arrive over the JSON
-// bridge without passing through the recorder; validation also guarantees
-// every string is safe to quote verbatim as a Swift literal.
+// given ops. Op validation guarantees every string is safe to quote
+// verbatim as a Swift literal.
 func renderPluginPackage(ops []*protocol.OpIOSAddPackageDependency) (string, error) {
-	for _, op := range ops {
-		if err := protocol.ValidateSPMDependency(op.URL, op.Requirement, op.Products); err != nil {
-			return "", fmt.Errorf("plugin %s: %w", pluginLabel(op.PluginPackage()), err)
-		}
-	}
 	sorted := append([]*protocol.OpIOSAddPackageDependency(nil), ops...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].URL < sorted[j].URL })
 
@@ -134,7 +128,7 @@ func formatSPMRequirement(req protocol.SPMRequirement) string {
 }
 
 // swiftString quotes s as a Swift string literal. Callers only pass values
-// that protocol.ValidateSPMDependency has checked contain no quote,
+// that op validation has checked contain no quote,
 // backslash, or newline, so no escaping is needed. (Go's %q is not a
 // substitute: its escapes, e.g. \x00, are not valid Swift.)
 func swiftString(s string) string { return `"` + s + `"` }

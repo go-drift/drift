@@ -56,6 +56,10 @@ type Op interface {
 	// PluginID returns the friendly identifier of the plugin that emitted
 	// this op (the value of Plugin.Name()).
 	PluginID() string
+	// Validate reports the first invalid field. Recorders run it before
+	// recording an op and DecodeOps runs it on every op from the bridge,
+	// so the CLI never applies an invalid op.
+	Validate() error
 	// Platform returns the platform target ("ios" or "android"). Empty means
 	// "applies to whatever platform is being built", but in practice the
 	// platform target is derived from the op type itself.
@@ -96,6 +100,9 @@ func (o *OpInfoPlistSetString) MergeClass() MergeClass { return ClassIdempotent 
 func (o *OpInfoPlistSetString) Identity() string       { return o.Type() + "|" + o.Key }
 func (o *OpInfoPlistSetString) ContentHash() string    { return hashBytes(o.Key, o.Value) }
 func (o *OpInfoPlistSetString) Platform() string       { return "ios" }
+func (o *OpInfoPlistSetString) Validate() error {
+	return checkNonEmpty("plist key", o.Key)
+}
 
 type OpInfoPlistSetBool struct {
 	Base
@@ -110,6 +117,9 @@ func (o *OpInfoPlistSetBool) ContentHash() string {
 	return hashBytes(o.Key, fmt.Sprintf("%t", o.Value))
 }
 func (o *OpInfoPlistSetBool) Platform() string { return "ios" }
+func (o *OpInfoPlistSetBool) Validate() error {
+	return checkNonEmpty("plist key", o.Key)
+}
 
 type OpInfoPlistSetStringArray struct {
 	Base
@@ -124,6 +134,9 @@ func (o *OpInfoPlistSetStringArray) ContentHash() string {
 	return hashBytes(append([]string{o.Key}, o.Values...)...)
 }
 func (o *OpInfoPlistSetStringArray) Platform() string { return "ios" }
+func (o *OpInfoPlistSetStringArray) Validate() error {
+	return checkNonEmpty("plist key", o.Key)
+}
 
 type OpInfoPlistAppendArrayItem struct {
 	Base
@@ -138,6 +151,9 @@ func (o *OpInfoPlistAppendArrayItem) Identity() string {
 }
 func (o *OpInfoPlistAppendArrayItem) ContentHash() string { return hashBytes(o.Key, o.Value) }
 func (o *OpInfoPlistAppendArrayItem) Platform() string    { return "ios" }
+func (o *OpInfoPlistAppendArrayItem) Validate() error {
+	return checkNonEmpty("plist key", o.Key)
+}
 
 type OpInfoPlistSetDict struct {
 	Base
@@ -152,6 +168,12 @@ func (o *OpInfoPlistSetDict) ContentHash() string {
 	return hashBytes(o.Key, canonicalJSON(o.Value))
 }
 func (o *OpInfoPlistSetDict) Platform() string { return "ios" }
+func (o *OpInfoPlistSetDict) Validate() error {
+	if err := checkNonEmpty("plist key", o.Key); err != nil {
+		return err
+	}
+	return checkPlistValue(o.Key, map[string]any(o.Value))
+}
 
 // ---- iOS assets / storyboards / sources ---------------------------------
 
@@ -166,6 +188,14 @@ func (o *OpIOSAssetsAddImageSet) MergeClass() MergeClass { return ClassExclusive
 func (o *OpIOSAssetsAddImageSet) Identity() string       { return o.Type() + "|" + o.Name }
 func (o *OpIOSAssetsAddImageSet) ContentHash() string    { return hashBytes(o.Name, o.Image) }
 func (o *OpIOSAssetsAddImageSet) Platform() string       { return "ios" }
+func (o *OpIOSAssetsAddImageSet) Validate() error {
+	// xtool builds emit image sets as loose <Name>.png bundle files, so the
+	// name must also be a valid bundle file name on every iOS path.
+	if err := validateBundleFileName(o.Name + ".png"); err != nil {
+		return fmt.Errorf("image set name: %w", err)
+	}
+	return checkContent("image set image", o.Image, true)
+}
 
 type OpIOSReplaceLaunchScreen struct {
 	Base
@@ -177,6 +207,9 @@ func (o *OpIOSReplaceLaunchScreen) MergeClass() MergeClass { return ClassExclusi
 func (o *OpIOSReplaceLaunchScreen) Identity() string       { return o.Type() }
 func (o *OpIOSReplaceLaunchScreen) ContentHash() string    { return hashBytes(o.Content) }
 func (o *OpIOSReplaceLaunchScreen) Platform() string       { return "ios" }
+func (o *OpIOSReplaceLaunchScreen) Validate() error {
+	return checkXMLRoot("launch screen storyboard", o.Content, "document")
+}
 
 type OpAddIOSSource struct {
 	Base
@@ -192,6 +225,15 @@ func (o *OpAddIOSSource) Identity() string {
 }
 func (o *OpAddIOSSource) ContentHash() string { return hashBytes(o.Group, o.RelPath, o.Content) }
 func (o *OpAddIOSSource) Platform() string    { return "ios" }
+func (o *OpAddIOSSource) Validate() error {
+	if err := checkMatch(sourceGroupRe, "source group", o.Group); err != nil {
+		return err
+	}
+	if err := checkRelPath("source path", o.RelPath); err != nil {
+		return err
+	}
+	return checkContent("source content", o.Content, false)
+}
 
 type OpRegistrantIOS struct {
 	Base
@@ -203,6 +245,9 @@ func (o *OpRegistrantIOS) MergeClass() MergeClass { return ClassAdditive }
 func (o *OpRegistrantIOS) Identity() string       { return o.Type() + "|" + o.Symbol }
 func (o *OpRegistrantIOS) ContentHash() string    { return hashBytes(o.Symbol) }
 func (o *OpRegistrantIOS) Platform() string       { return "ios" }
+func (o *OpRegistrantIOS) Validate() error {
+	return checkMatch(dottedIdentRe, "registrant symbol", o.Symbol)
+}
 
 // SPMRequirementKind names one of SwiftPM's `.package(url:...)` version
 // requirement forms.
@@ -231,10 +276,10 @@ type SPMRequirement struct {
 	Upper string             `json:"upper,omitempty"`
 }
 
-// ValidateSPMRequirement errors on unknown Kind, missing Value, a range
+// validateSPMRequirement errors on unknown Kind, missing Value, a range
 // without an Upper bound, or characters that cannot be emitted inside a
 // Swift string literal verbatim.
-func ValidateSPMRequirement(req SPMRequirement) error {
+func validateSPMRequirement(req SPMRequirement) error {
 	switch req.Kind {
 	case SPMFrom, SPMExact, SPMBranch, SPMRevision, SPMUpToNextMajor, SPMUpToNextMinor, SPMRange:
 	default:
@@ -255,10 +300,10 @@ func ValidateSPMRequirement(req SPMRequirement) error {
 	return validateSwiftLiteral("SPM requirement upper bound", req.Upper)
 }
 
-// ValidateSPMDependency checks a whole package dependency: a remote git URL
+// validateSPMDependency checks a whole package dependency: a remote git URL
 // (https:// or git@ form), a valid requirement, and at least one product.
 // Every string must be safe to emit inside a Swift string literal verbatim.
-func ValidateSPMDependency(url string, req SPMRequirement, products []string) error {
+func validateSPMDependency(url string, req SPMRequirement, products []string) error {
 	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "git@") {
 		return fmt.Errorf("SPM package URL %q must start with https:// or git@", url)
 	}
@@ -268,7 +313,7 @@ func ValidateSPMDependency(url string, req SPMRequirement, products []string) er
 	if SPMPackageIdentity(url) == "" {
 		return fmt.Errorf("SPM package URL %q has no package name segment", url)
 	}
-	if err := ValidateSPMRequirement(req); err != nil {
+	if err := validateSPMRequirement(req); err != nil {
 		return err
 	}
 	if len(products) == 0 {
@@ -342,6 +387,9 @@ func (o *OpIOSAddPackageDependency) ContentHash() string {
 	return hashBytes(parts...)
 }
 func (o *OpIOSAddPackageDependency) Platform() string { return "ios" }
+func (o *OpIOSAddPackageDependency) Validate() error {
+	return validateSPMDependency(o.URL, o.Requirement, o.Products)
+}
 
 // IOSAppDelegateCallback identifies an app-level iOS event that plugins can
 // hook. Each variant has a fixed plugin-side Swift signature, listed on the
@@ -399,18 +447,18 @@ var validIOSCallbacks = func() map[IOSAppDelegateCallback]struct{} {
 	return m
 }()
 
-// ValidateIOSAppDelegateCallback errors when c is not a known callback. Used
+// validateIOSAppDelegateCallback errors when c is not a known callback. Used
 // by recorders to parse-at-boundary (per the project's no-documented-footguns
 // convention) so typos in plugin Build code surface immediately instead of
 // silently producing no codegen.
-func ValidateIOSAppDelegateCallback(c IOSAppDelegateCallback) error {
+func validateIOSAppDelegateCallback(c IOSAppDelegateCallback) error {
 	if _, ok := validIOSCallbacks[c]; !ok {
 		return fmt.Errorf("unknown iOS AppDelegate callback %q", string(c))
 	}
 	return nil
 }
 
-// ValidateBundleFileName checks an iOS bundle-resource name. Both iOS build
+// validateBundleFileName checks an iOS bundle-resource name. Both iOS build
 // paths copy resources flat into the app bundle root (Xcode's resources
 // phase and xtool's `resources:` list both flatten), so the name must be a
 // single file name. Rejected:
@@ -420,7 +468,7 @@ func ValidateIOSAppDelegateCallback(c IOSAppDelegateCallback) error {
 //   - types that need Xcode's compilers (storyboards, xibs, asset catalogs,
 //     Core Data models, localisation folders): xtool copies them raw, so they
 //     would only work on xcodeproj builds
-func ValidateBundleFileName(name string) error {
+func validateBundleFileName(name string) error {
 	if name == "" {
 		return fmt.Errorf("bundle resource name is empty")
 	}
@@ -440,30 +488,6 @@ func ValidateBundleFileName(name string) error {
 	return nil
 }
 
-// ValidateAssetRelPath checks an Android assets/-relative path. Nested
-// directories are allowed (AssetManager preserves the hierarchy). Rejected:
-// empty, absolute (Unix, Windows, or drive-rooted), or any `..` segment.
-func ValidateAssetRelPath(p string) error {
-	if p == "" {
-		return fmt.Errorf("asset path is empty")
-	}
-	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") {
-		return fmt.Errorf("asset path %q must be relative, not absolute", p)
-	}
-	if len(p) >= 2 && p[1] == ':' {
-		return fmt.Errorf("asset path %q must be relative, not a drive-rooted path", p)
-	}
-	// Walk segments rather than relying on path.Clean: Clean normalises
-	// `foo/../bar` to `bar`, silently stripping the `..` instead of flagging
-	// it.
-	for seg := range strings.SplitSeq(strings.ReplaceAll(p, "\\", "/"), "/") {
-		if seg == ".." {
-			return fmt.Errorf("asset path %q contains a `..` segment", p)
-		}
-	}
-	return nil
-}
-
 // appModuleReservedNames are files and directories in the Android app
 // module that the scaffold owns. A plugin file with one of these names
 // would clobber the build.
@@ -476,10 +500,10 @@ var appModuleReservedNames = map[string]bool{
 	"build":              true,
 }
 
-// ValidateAppModuleFileName checks a file name for OpAndroidAddAppModuleFile:
+// validateAppModuleFileName checks a file name for OpAndroidAddAppModuleFile:
 // a single file name (no separators) that does not collide with files the
 // scaffold owns in the app module.
-func ValidateAppModuleFileName(name string) error {
+func validateAppModuleFileName(name string) error {
 	if name == "" {
 		return fmt.Errorf("app module file name is empty")
 	}
@@ -512,10 +536,16 @@ func (o *OpIOSAppDelegateRegistrant) ContentHash() string {
 	return hashBytes(string(o.Callback), o.Symbol)
 }
 func (o *OpIOSAppDelegateRegistrant) Platform() string { return "ios" }
+func (o *OpIOSAppDelegateRegistrant) Validate() error {
+	if err := validateIOSAppDelegateCallback(o.Callback); err != nil {
+		return err
+	}
+	return checkMatch(dottedIdentRe, "app delegate registrant symbol", o.Symbol)
+}
 
 // OpIOSAddBundleResource records a file to copy into the root of the iOS
 // app bundle, where Bundle.main and UIImage(named:) find it. Path is a plain
-// file name (see ValidateBundleFileName).
+// file name (see validateBundleFileName).
 //
 // Exclusive merge: two plugins writing divergent content to the same bundle
 // name are a hard conflict, mirroring OpAndroidWriteResourceXML's policy.
@@ -530,6 +560,12 @@ func (o *OpIOSAddBundleResource) MergeClass() MergeClass { return ClassExclusive
 func (o *OpIOSAddBundleResource) Identity() string       { return o.Type() + "|" + o.Path }
 func (o *OpIOSAddBundleResource) ContentHash() string    { return hashBytes(o.Path, o.Content) }
 func (o *OpIOSAddBundleResource) Platform() string       { return "ios" }
+func (o *OpIOSAddBundleResource) Validate() error {
+	if err := validateBundleFileName(o.Path); err != nil {
+		return err
+	}
+	return checkContent("bundle resource content", o.Content, false)
+}
 
 // ---- Android manifest ---------------------------------------------------
 
@@ -543,6 +579,9 @@ func (o *OpAndroidManifestAddPermission) MergeClass() MergeClass { return ClassA
 func (o *OpAndroidManifestAddPermission) Identity() string       { return o.Type() + "|" + o.Name }
 func (o *OpAndroidManifestAddPermission) ContentHash() string    { return hashBytes(o.Name) }
 func (o *OpAndroidManifestAddPermission) Platform() string       { return "android" }
+func (o *OpAndroidManifestAddPermission) Validate() error {
+	return checkMatch(dottedIdentRe, "permission name", o.Name)
+}
 
 type OpAndroidManifestAddIntentFilter struct {
 	Base
@@ -557,6 +596,12 @@ func (o *OpAndroidManifestAddIntentFilter) Identity() string {
 }
 func (o *OpAndroidManifestAddIntentFilter) ContentHash() string { return hashBytes(o.Activity, o.XML) }
 func (o *OpAndroidManifestAddIntentFilter) Platform() string    { return "android" }
+func (o *OpAndroidManifestAddIntentFilter) Validate() error {
+	if err := checkMatch(activityNameRe, "activity", o.Activity); err != nil {
+		return err
+	}
+	return checkXMLRoot("intent filter", o.XML, "intent-filter")
+}
 
 type OpAndroidManifestSetActivityAttr struct {
 	Base
@@ -574,6 +619,15 @@ func (o *OpAndroidManifestSetActivityAttr) ContentHash() string {
 	return hashBytes(o.Activity, o.Attr, o.Value)
 }
 func (o *OpAndroidManifestSetActivityAttr) Platform() string { return "android" }
+func (o *OpAndroidManifestSetActivityAttr) Validate() error {
+	if err := checkMatch(activityNameRe, "activity", o.Activity); err != nil {
+		return err
+	}
+	if err := checkMatch(attrNameRe, "activity attribute", o.Attr); err != nil {
+		return err
+	}
+	return checkNonEmpty("activity attribute value", o.Value)
+}
 
 type OpAndroidManifestAddMetaData struct {
 	Base
@@ -591,6 +645,12 @@ func (o *OpAndroidManifestAddMetaData) ContentHash() string {
 	return hashBytes(o.Parent, o.Name, o.Value)
 }
 func (o *OpAndroidManifestAddMetaData) Platform() string { return "android" }
+func (o *OpAndroidManifestAddMetaData) Validate() error {
+	if err := checkMatch(metaParentRe, "meta-data parent", o.Parent); err != nil {
+		return err
+	}
+	return checkNonEmpty("meta-data name", o.Name)
+}
 
 // ---- Android resources --------------------------------------------------
 
@@ -605,6 +665,12 @@ func (o *OpAndroidColorSet) MergeClass() MergeClass { return ClassIdempotent }
 func (o *OpAndroidColorSet) Identity() string       { return o.Type() + "|" + o.Name }
 func (o *OpAndroidColorSet) ContentHash() string    { return hashBytes(o.Name, o.Value) }
 func (o *OpAndroidColorSet) Platform() string       { return "android" }
+func (o *OpAndroidColorSet) Validate() error {
+	if err := checkMatch(valueResNameRe, "color name", o.Name); err != nil {
+		return err
+	}
+	return checkNonEmpty("color value", o.Value)
+}
 
 type OpAndroidStringSet struct {
 	Base
@@ -617,6 +683,9 @@ func (o *OpAndroidStringSet) MergeClass() MergeClass { return ClassIdempotent }
 func (o *OpAndroidStringSet) Identity() string       { return o.Type() + "|" + o.Name }
 func (o *OpAndroidStringSet) ContentHash() string    { return hashBytes(o.Name, o.Value) }
 func (o *OpAndroidStringSet) Platform() string       { return "android" }
+func (o *OpAndroidStringSet) Validate() error {
+	return checkMatch(valueResNameRe, "string name", o.Name)
+}
 
 type OpAndroidStyleSet struct {
 	Base
@@ -636,6 +705,22 @@ func (o *OpAndroidStyleSet) ContentHash() string {
 	return hashBytes(parts...)
 }
 func (o *OpAndroidStyleSet) Platform() string { return "android" }
+func (o *OpAndroidStyleSet) Validate() error {
+	if err := checkMatch(valueResNameRe, "style name", o.Name); err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(o.Items))
+	for _, it := range o.Items {
+		if err := checkMatch(attrNameRe, "style item name", it.Name); err != nil {
+			return err
+		}
+		if seen[it.Name] {
+			return fmt.Errorf("style %q sets item %q twice", o.Name, it.Name)
+		}
+		seen[it.Name] = true
+	}
+	return nil
+}
 
 type OpAndroidWriteDrawable struct {
 	Base
@@ -648,6 +733,12 @@ func (o *OpAndroidWriteDrawable) MergeClass() MergeClass { return ClassExclusive
 func (o *OpAndroidWriteDrawable) Identity() string       { return o.Type() + "|" + o.Name }
 func (o *OpAndroidWriteDrawable) ContentHash() string    { return hashBytes(o.Name, o.Content) }
 func (o *OpAndroidWriteDrawable) Platform() string       { return "android" }
+func (o *OpAndroidWriteDrawable) Validate() error {
+	if err := checkMatch(drawableNameRe, "drawable name", o.Name); err != nil {
+		return err
+	}
+	return checkContent("drawable content", o.Content, true)
+}
 
 type OpAndroidWriteResourceXML struct {
 	Base
@@ -660,6 +751,26 @@ func (o *OpAndroidWriteResourceXML) MergeClass() MergeClass { return ClassExclus
 func (o *OpAndroidWriteResourceXML) Identity() string       { return o.Type() + "|" + o.RelPath }
 func (o *OpAndroidWriteResourceXML) ContentHash() string    { return hashBytes(o.RelPath, o.Content) }
 func (o *OpAndroidWriteResourceXML) Platform() string       { return "android" }
+func (o *OpAndroidWriteResourceXML) Validate() error {
+	if err := checkRelPath("resource path", o.RelPath); err != nil {
+		return err
+	}
+	dir, file, ok := strings.Cut(o.RelPath, "/")
+	if !ok || strings.Contains(file, "/") {
+		return fmt.Errorf("resource path %q must be <dir>/<file>.xml", o.RelPath)
+	}
+	if err := checkMatch(resDirRe, "resource directory", dir); err != nil {
+		return err
+	}
+	if err := checkMatch(resFileRe, "resource file", file); err != nil {
+		return err
+	}
+	switch o.RelPath {
+	case AndroidPluginColorsFile, AndroidPluginStringsFile, AndroidPluginStylesFile:
+		return fmt.Errorf("resource path %q is owned by Drift; use Resources.Colors, Strings or Styles", o.RelPath)
+	}
+	return checkNonEmpty("resource content", o.Content)
+}
 
 // OpAndroidAddAsset records a file to drop into the Android app's
 // `assets/` directory. Gradle's app/src/main/assets convention auto-bundles
@@ -680,12 +791,18 @@ func (o *OpAndroidAddAsset) MergeClass() MergeClass { return ClassExclusive }
 func (o *OpAndroidAddAsset) Identity() string       { return o.Type() + "|" + o.Path }
 func (o *OpAndroidAddAsset) ContentHash() string    { return hashBytes(o.Path, o.Content) }
 func (o *OpAndroidAddAsset) Platform() string       { return "android" }
+func (o *OpAndroidAddAsset) Validate() error {
+	if err := checkRelPath("asset path", o.Path); err != nil {
+		return err
+	}
+	return checkContent("asset content", o.Content, false)
+}
 
 // OpAndroidAddAppModuleFile records a file to drop into the Android app
 // module directory (app/<name>), next to app/build.gradle. This is where
 // Gradle plugins look for build-time config, e.g. the google-services
 // plugin reads app/google-services.json. Name is a plain file name (see
-// ValidateAppModuleFileName).
+// validateAppModuleFileName).
 //
 // Exclusive merge: two plugins writing divergent content to the same name
 // conflict.
@@ -700,6 +817,12 @@ func (o *OpAndroidAddAppModuleFile) MergeClass() MergeClass { return ClassExclus
 func (o *OpAndroidAddAppModuleFile) Identity() string       { return o.Type() + "|" + o.Name }
 func (o *OpAndroidAddAppModuleFile) ContentHash() string    { return hashBytes(o.Name, o.Content) }
 func (o *OpAndroidAddAppModuleFile) Platform() string       { return "android" }
+func (o *OpAndroidAddAppModuleFile) Validate() error {
+	if err := validateAppModuleFileName(o.Name); err != nil {
+		return err
+	}
+	return checkContent("app module file content", o.Content, false)
+}
 
 // ---- Android sources / registrant ---------------------------------------
 
@@ -717,6 +840,15 @@ func (o *OpAddKotlinSource) Identity() string {
 }
 func (o *OpAddKotlinSource) ContentHash() string { return hashBytes(o.Package, o.RelPath, o.Content) }
 func (o *OpAddKotlinSource) Platform() string    { return "android" }
+func (o *OpAddKotlinSource) Validate() error {
+	if err := checkMatch(dottedIdentRe, "Kotlin package", o.Package); err != nil {
+		return err
+	}
+	if err := checkRelPath("source path", o.RelPath); err != nil {
+		return err
+	}
+	return checkContent("source content", o.Content, false)
+}
 
 type OpRegistrantAndroid struct {
 	Base
@@ -728,6 +860,9 @@ func (o *OpRegistrantAndroid) MergeClass() MergeClass { return ClassAdditive }
 func (o *OpRegistrantAndroid) Identity() string       { return o.Type() + "|" + o.Symbol }
 func (o *OpRegistrantAndroid) ContentHash() string    { return hashBytes(o.Symbol) }
 func (o *OpRegistrantAndroid) Platform() string       { return "android" }
+func (o *OpRegistrantAndroid) Validate() error {
+	return checkMatch(dottedIdentRe, "registrant symbol", o.Symbol)
+}
 
 // OpAndroidPreActivityRegistrant records a Kotlin symbol to be called from
 // the generated DriftPluginRegistrant.preActivityCreate(activity) body. The
@@ -747,6 +882,9 @@ func (o *OpAndroidPreActivityRegistrant) MergeClass() MergeClass { return ClassA
 func (o *OpAndroidPreActivityRegistrant) Identity() string       { return o.Type() + "|" + o.Symbol }
 func (o *OpAndroidPreActivityRegistrant) ContentHash() string    { return hashBytes(o.Symbol) }
 func (o *OpAndroidPreActivityRegistrant) Platform() string       { return "android" }
+func (o *OpAndroidPreActivityRegistrant) Validate() error {
+	return checkMatch(dottedIdentRe, "pre-activity registrant symbol", o.Symbol)
+}
 
 // OpAndroidGradleAddDependency records a single dependency to be inserted
 // into the app's Gradle dependencies block. Configuration is the Gradle
@@ -774,6 +912,12 @@ func (o *OpAndroidGradleAddDependency) ContentHash() string {
 	return hashBytes(o.Configuration, o.Coord)
 }
 func (o *OpAndroidGradleAddDependency) Platform() string { return "android" }
+func (o *OpAndroidGradleAddDependency) Validate() error {
+	if err := checkMatch(identRe, "gradle configuration", o.Configuration); err != nil {
+		return err
+	}
+	return checkGradleCoord(o.Coord)
+}
 
 // OpAndroidGradleApplyPlugin records a Gradle plugin id to apply in
 // app/build.gradle, inserted after the android { } block (plugins such as
@@ -798,6 +942,15 @@ func (o *OpAndroidGradleApplyPlugin) MergeClass() MergeClass { return ClassIdemp
 func (o *OpAndroidGradleApplyPlugin) Identity() string       { return o.Type() + "|" + o.ID }
 func (o *OpAndroidGradleApplyPlugin) ContentHash() string    { return hashBytes(o.ID, o.Version) }
 func (o *OpAndroidGradleApplyPlugin) Platform() string       { return "android" }
+func (o *OpAndroidGradleApplyPlugin) Validate() error {
+	if err := checkMatch(gradleIDRe, "gradle plugin id", o.ID); err != nil {
+		return err
+	}
+	if o.Version == "" {
+		return nil
+	}
+	return checkMatch(gradleTokRe, "gradle plugin version", o.Version)
+}
 
 // ---- Dispatch tables ----------------------------------------------------
 
@@ -891,14 +1044,18 @@ func UnmarshalOp(data []byte) (Op, error) {
 	return op, nil
 }
 
-// DecodeOps converts a slice of raw JSON ops into typed Ops, the boundary parser
-// for a bridge Response.Ops list.
+// DecodeOps converts a slice of raw JSON ops into typed, validated Ops: the
+// boundary parser for a bridge Response.Ops list. Every op it returns has
+// passed Validate, so mutators need not re-check their input.
 func DecodeOps(raws []json.RawMessage) ([]Op, error) {
 	out := make([]Op, 0, len(raws))
 	for i, raw := range raws {
 		op, err := UnmarshalOp(raw)
 		if err != nil {
 			return nil, fmt.Errorf("op %d: %w", i, err)
+		}
+		if err := op.Validate(); err != nil {
+			return nil, fmt.Errorf("op %d (%s from %s): %w", i, op.Type(), op.PluginPackage(), err)
 		}
 		out = append(out, op)
 	}

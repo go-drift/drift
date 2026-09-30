@@ -216,23 +216,3 @@ let package = Package(
 		t.Errorf("snapshot drift; if intentional, update the golden literal in this test.\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
-
-// Ops decoded from the wire skip the recorder, so the renderer re-validates
-// and refuses to emit a manifest that would not parse.
-func TestApplyPluginPackageRejectsInvalidOp(t *testing.T) {
-	dir := t.TempDir()
-	_, err := ApplyPluginPackage(dir, []*protocol.OpIOSAddPackageDependency{
-		{
-			Base:        protocol.Base{Pkg: "p"},
-			URL:         "https://github.com/a/b",
-			Requirement: driftplugin.SPMRequirementFrom(`1.0"`),
-			Products:    []string{"B"},
-		},
-	})
-	if err == nil {
-		t.Fatalf("expected validation error")
-	}
-	if _, statErr := os.Stat(dir + "/Package.swift"); !os.IsNotExist(statErr) {
-		t.Errorf("nothing should be written on validation failure")
-	}
-}

@@ -103,7 +103,7 @@ func ReplaceLaunchScreen(path string, op *protocol.OpIOSReplaceLaunchScreen) (st
 func WriteIOSSources(pluginsRoot string, ops []*protocol.OpAddIOSSource) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
-		dest := filepath.Join(pluginsRoot, sanitizePath(op.Group), filepath.FromSlash(op.RelPath))
+		dest := filepath.Join(pluginsRoot, op.Group, filepath.FromSlash(op.RelPath))
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			return changed, fmt.Errorf("mkdir iOS source: %w", err)
 		}
@@ -147,22 +147,4 @@ func WriteKotlinSources(javaRoot string, ops []*protocol.OpAddKotlinSource) ([]s
 		}
 	}
 	return changed, nil
-}
-
-func sanitizePath(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "default"
-	}
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
-			r == '_', r == '-', r == '.':
-			b.WriteRune(r)
-		default:
-			b.WriteByte('_')
-		}
-	}
-	return b.String()
 }
