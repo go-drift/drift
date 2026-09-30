@@ -263,3 +263,39 @@ type pluginFn[T any] struct {
 func (p pluginFn[T]) Name() string                     { return p.name }
 func (p pluginFn[T]) Build(ctx *BuildCtx, cfg T) error { return p.build(ctx, cfg) }
 func (p pluginFn[T]) String() string                   { return fmt.Sprintf("plugin %s", p.name) }
+
+type orderPlugin struct{ name string }
+
+func (p orderPlugin) Name() string { return p.name }
+func (p orderPlugin) Build(ctx *BuildCtx, _ struct{}) error {
+	ctx.Android.Registrant("com.example." + p.name + ".Plugin.register")
+	return nil
+}
+
+// Ops come back in drift.yaml (envelope) order, not binding or alphabetical
+// order, which is what registrant claim priority depends on.
+func TestDoBuildFollowsEnvelopeOrder(t *testing.T) {
+	bindings := []Binding{
+		Bind[struct{}]("github.com/a/plugin", orderPlugin{name: "a"}),
+		Bind[struct{}]("github.com/z/plugin", orderPlugin{name: "z"}),
+	}
+	resp := doBuild(protocol.Envelope{
+		APIVersion: protocol.APIVersion,
+		Cmd:        "build",
+		Plugins:    []protocol.EnvelopePlugin{{Package: "github.com/z/plugin"}, {Package: "github.com/a/plugin"}},
+	}, bindings)
+	if resp.Error != "" {
+		t.Fatal(resp.Error)
+	}
+	ops, err := protocol.DecodeOps(resp.Ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, op := range ops {
+		got = append(got, op.PluginPackage())
+	}
+	if want := []string{"github.com/z/plugin", "github.com/a/plugin"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("op order %v, want %v", got, want)
+	}
+}

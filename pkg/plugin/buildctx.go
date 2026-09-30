@@ -179,7 +179,7 @@ func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products
 // names a fixed app-level hook (see IOSAppDelegateCallbacks); the plugin's
 // symbol must implement the signature documented on that constant.
 // Multiple plugins may register on the same callback; the codegen fans out
-// in lex-sorted symbol order.
+// in drift.yaml order.
 func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol string) {
 	s.b.push(&protocol.OpIOSAppDelegateRegistrant{
 		Base:     newBase(s.b),
