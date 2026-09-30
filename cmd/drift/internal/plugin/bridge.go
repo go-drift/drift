@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go/token"
+	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -264,14 +266,14 @@ func GenerateBridgeSource(plugins []ConfiguredPlugin) ([]byte, error) {
 }
 
 func assignAliases(plugins []ConfiguredPlugin) map[string]string {
-	used := make(map[string]bool, len(plugins))
+	// The generated file already imports driftplugin.
+	used := map[string]bool{"driftplugin": true}
 	out := make(map[string]string, len(plugins))
 	for _, p := range plugins {
-		base := lastSegment(p.Package)
-		if base == "" {
-			base = "plugin"
+		base := sanitizeAlias(lastSegment(p.Package))
+		if reservedAlias(base) {
+			base += "_plugin"
 		}
-		base = sanitizeAlias(base)
 		candidate := base
 		for i := 2; used[candidate]; i++ {
 			candidate = fmt.Sprintf("%s_%d", base, i)
@@ -280,6 +282,17 @@ func assignAliases(plugins []ConfiguredPlugin) map[string]string {
 		out[p.Package] = candidate
 	}
 	return out
+}
+
+// reservedAlias reports whether s cannot (keywords, "_", "init", "main")
+// or should not (predeclared identifiers such as "string" or "len") name
+// an import in the generated main package.
+func reservedAlias(s string) bool {
+	switch s {
+	case "_", "init", "main":
+		return true
+	}
+	return token.IsKeyword(s) || types.Universe.Lookup(s) != nil
 }
 
 func lastSegment(pkg string) string {

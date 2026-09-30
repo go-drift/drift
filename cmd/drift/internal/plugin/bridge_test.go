@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"strings"
 	"testing"
@@ -166,4 +168,40 @@ func mustWrite(t *testing.T, path, content string) {
 
 func writeFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+func TestAliasesAvoidReservedNames(t *testing.T) {
+	cases := map[string]string{
+		"github.com/x/drift-go/plugin":     "go_plugin",
+		"github.com/x/map/plugin":          "map_plugin",
+		"github.com/x/chan/plugin":         "chan_plugin",
+		"github.com/x/init/plugin":         "init_plugin",
+		"github.com/x/main/plugin":         "main_plugin",
+		"github.com/x/string/plugin":       "string_plugin",
+		"github.com/x/driftplugin/plugin":  "driftplugin_2",
+		"github.com/x/drift-camera/plugin": "camera",
+	}
+	for pkg, want := range cases {
+		got := assignAliases([]ConfiguredPlugin{{Package: pkg}})[pkg]
+		if got != want {
+			t.Errorf("alias for %s = %q, want %q", pkg, got, want)
+		}
+	}
+}
+
+// The generated bridge must be valid Go whatever the plugin paths are.
+func TestGeneratedBridgeParses(t *testing.T) {
+	plugins := []ConfiguredPlugin{
+		{Package: "github.com/x/drift-go/plugin"},
+		{Package: "github.com/y/go/plugin"},
+		{Package: "github.com/x/_/plugin"},
+		{Package: "github.com/x/9lives/plugin"},
+	}
+	src, err := GenerateBridgeSource(plugins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "main.go", src, 0); err != nil {
+		t.Fatalf("generated bridge does not parse: %v\n%s", err, src)
+	}
 }
