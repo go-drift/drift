@@ -24,17 +24,25 @@ func stubAsset(t *testing.T, projectRoot, rel string) {
 	}
 }
 
-// runBuild constructs a NewTestCtx, points its projectRoot at a temp dir
-// seeded with the requested assets, and invokes splash{}.Build. Returns
-// the recorded ops for assertion.
-func runBuild(t *testing.T, cfg Config, assets ...string) []protocol.Op {
+// buildYAML runs the plugin the way the bridge does: drift.yaml config
+// text is checked against the schema, defaulted, decoded and handed to
+// Build, in a ctx rooted at a temp dir seeded with the requested assets.
+func buildYAML(t *testing.T, config string, assets ...string) (*driftplugin.BuildCtx, error) {
 	t.Helper()
 	root := t.TempDir()
 	for _, a := range assets {
 		stubAsset(t, root, a)
 	}
 	ctx := driftplugin.NewTestCtxAt(root)
-	if err := (splash{}).Build(ctx, cfg); err != nil {
+	return ctx, driftplugin.Bind("github.com/go-drift/drift/plugins/splash/plugin", Plugin).Build(ctx, []byte(config))
+}
+
+// runBuild is buildYAML for configs that must succeed. Returns the recorded
+// ops for assertion.
+func runBuild(t *testing.T, config string, assets ...string) []protocol.Op {
+	t.Helper()
+	ctx, err := buildYAML(t, config, assets...)
+	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -55,10 +63,10 @@ func hasOpType(ops []protocol.Op, typ string) bool {
 }
 
 func TestBuild_LightOnly(t *testing.T) {
-	ops := runBuild(t, Config{
-		Image:           "assets/splash.png",
-		BackgroundColor: "#1A2238",
-	}, "assets/splash.png")
+	ops := runBuild(t, `
+image: assets/splash.png
+background_color: "#1A2238"
+`, "assets/splash.png")
 
 	wantSome := []string{
 		"ios.assets.add_image_set",
@@ -89,14 +97,13 @@ func TestBuild_LightOnly(t *testing.T) {
 }
 
 func TestBuild_Android12_EmitsGradleAndPreActivity(t *testing.T) {
-	ops := runBuild(t, Config{
-		Image:           "assets/splash.png",
-		BackgroundColor: "#1A2238",
-		Android12: &Android12{
-			Icon:                "assets/splash_icon.png",
-			IconBackgroundColor: "#FFFFFF",
-		},
-	}, "assets/splash.png", "assets/splash_icon.png")
+	ops := runBuild(t, `
+image: assets/splash.png
+background_color: "#1A2238"
+android_12:
+  icon: assets/splash_icon.png
+  icon_background_color: "#FFFFFF"
+`, "assets/splash.png", "assets/splash_icon.png")
 
 	if !hasOpType(ops, "android.gradle.add_dependency") {
 		t.Errorf("android_12 config should emit gradle dependency op")
@@ -119,14 +126,11 @@ func TestBuild_Android12_EmitsGradleAndPreActivity(t *testing.T) {
 }
 
 func TestBuild_DarkVariant_AddsNightBucketResources(t *testing.T) {
-	ops := runBuild(t, Config{
-		Image:           "assets/splash.png",
-		BackgroundColor: "#FFFFFF",
-		Dark: &DarkVariant{
-			Image:           "assets/splash_dark.png",
-			BackgroundColor: "#000000",
-		},
-	}, "assets/splash.png", "assets/splash_dark.png")
+	ops := runBuild(t, `
+image: assets/splash.png
+dark:
+  image: assets/splash_dark.png
+`, "assets/splash.png", "assets/splash_dark.png")
 
 	var sawNightDrawable, sawNightColors bool
 	for _, op := range ops {
@@ -148,13 +152,10 @@ func TestBuild_DarkVariant_AddsNightBucketResources(t *testing.T) {
 }
 
 func TestBuild_RejectsBadHexColor(t *testing.T) {
-	root := t.TempDir()
-	stubAsset(t, root, "assets/splash.png")
-	ctx := driftplugin.NewTestCtxAt(root)
-	err := (splash{}).Build(ctx, Config{
-		Image:           "assets/splash.png",
-		BackgroundColor: "not-a-color",
-	})
+	_, err := buildYAML(t, `
+image: assets/splash.png
+background_color: not-a-color
+`, "assets/splash.png")
 	if err == nil {
 		t.Fatal("expected error for invalid background_color")
 	}
@@ -164,9 +165,7 @@ func TestBuild_RejectsBadHexColor(t *testing.T) {
 }
 
 func TestBuild_RegistrantSymbol(t *testing.T) {
-	ops := runBuild(t, Config{
-		Image: "assets/splash.png",
-	}, "assets/splash.png")
+	ops := runBuild(t, "image: assets/splash.png\n", "assets/splash.png")
 
 	var sawIOS, sawAndroid bool
 	for _, op := range ops {
@@ -186,5 +185,16 @@ func TestBuild_RegistrantSymbol(t *testing.T) {
 	}
 	if !sawAndroid {
 		t.Errorf("missing Android DriftSplashPlugin.register registrant")
+	}
+}
+
+func TestBuild_Android12RequiresIcon(t *testing.T) {
+	_, err := buildYAML(t, `
+image: assets/splash.png
+android_12:
+  icon_background_color: "#FFFFFF"
+`, "assets/splash.png")
+	if err == nil || !strings.Contains(err.Error(), "android_12.icon: required field missing") {
+		t.Fatalf("err = %v, want missing android_12.icon", err)
 	}
 }

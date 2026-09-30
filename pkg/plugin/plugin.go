@@ -53,24 +53,17 @@ func Bind[T any](pkgPath string, p Plugin[T]) Binding {
 	}
 	var zero T
 	schema := schemaFor(pkgPath, name, reflect.TypeOf(zero))
+	if err := schema.Check(); err != nil {
+		panic(fmt.Sprintf("drift plugin: Bind(%q): config schema: %v", pkgPath, err))
+	}
 
 	return Binding{
 		Package: pkgPath,
 		Name:    name,
 		buildAny: func(ctx *BuildCtx, configYAML []byte) error {
-			var cfg T
-			if len(configYAML) > 0 {
-				// KnownFields rejects unknown keys so a typo in drift.yaml
-				// surfaces as a build-time error instead of silently being
-				// dropped. Required-field validation runs after decode.
-				dec := yaml.NewDecoder(bytes.NewReader(configYAML))
-				dec.KnownFields(true)
-				if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
-					return fmt.Errorf("plugin %s: decode config: %w", pkgPath, err)
-				}
-			}
-			if err := validateRequired(pkgPath, schema, cfg); err != nil {
-				return err
+			cfg, err := decodeConfig[T](schema, configYAML, ctx.ProjectRoot())
+			if err != nil {
+				return fmt.Errorf("plugin %s: %w", pkgPath, err)
 			}
 			return p.Build(ctx, cfg)
 		},
@@ -78,28 +71,34 @@ func Bind[T any](pkgPath string, p Plugin[T]) Binding {
 	}
 }
 
-// validateRequired returns an error naming the first required field that is
-// zero-valued after decode. The drift CLI's `drift plugin sync` runs the
-// same check; running it inline here means `drift build`/`run` (the main
-// user path) also rejects missing required config.
-func validateRequired[T any](pkgPath string, schema protocol.PluginSchema, cfg T) error {
-	v := reflect.ValueOf(cfg)
-	if v.Kind() != reflect.Struct {
-		return nil
+// decodeConfig turns a plugin's raw drift.yaml config into T: the generic
+// mapping is checked against the schema (the same ValidateConfig that
+// `drift plugin sync` runs), defaults fill absent keys, and the result is
+// decoded strictly into T.
+func decodeConfig[T any](schema protocol.PluginSchema, configYAML []byte, projectRoot string) (T, error) {
+	var cfg T
+	raw := map[string]any{}
+	if err := yaml.Unmarshal(configYAML, &raw); err != nil {
+		return cfg, fmt.Errorf("decode config: %w", err)
 	}
-	for _, f := range schema.Fields {
-		if !f.Required {
-			continue
-		}
-		fv := v.FieldByName(f.GoField)
-		if !fv.IsValid() {
-			continue
-		}
-		if fv.IsZero() {
-			return fmt.Errorf("plugin %s: required config field %q is missing", pkgPath, f.Name)
-		}
+	if raw == nil {
+		raw = map[string]any{}
 	}
-	return nil
+	if err := protocol.DiagnosticsError(schema.ValidateConfig(raw, projectRoot)); err != nil {
+		return cfg, fmt.Errorf("invalid config: %w", err)
+	}
+	resolved, err := yaml.Marshal(schema.ApplyDefaults(raw))
+	if err != nil {
+		return cfg, fmt.Errorf("encode config: %w", err)
+	}
+	// KnownFields keeps typed decoding strict for anything the schema walk
+	// cannot see (e.g. map values).
+	dec := yaml.NewDecoder(bytes.NewReader(resolved))
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
+		return cfg, fmt.Errorf("decode config: %w", err)
+	}
+	return cfg, nil
 }
 
 // Build dispatches a single plugin's Build with the raw YAML config bytes.

@@ -23,21 +23,35 @@ func schemaFor(pkgPath, name string, t reflect.Type) protocol.PluginSchema {
 	return protocol.PluginSchema{Package: pkgPath, Name: name, Fields: fields}
 }
 
+// walkStruct describes t's yaml-visible fields, descending into nested
+// structs (by value or pointer) and slices of structs, and flattening
+// `yaml:",inline"` structs into the parent level as yaml.v3 does.
 func walkStruct(t reflect.Type) []protocol.SchemaField {
 	var out []protocol.SchemaField
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		if !f.IsExported() {
+		yamlName, inline := parseYAMLTag(f)
+		// yaml.v3 skips unexported fields, except an embedded struct marked
+		// inline, whose exported fields it still promotes.
+		if yamlName == "-" || (!f.IsExported() && !(f.Anonymous && inline)) {
 			continue
 		}
-		yamlName := parseYAMLName(f)
-		if yamlName == "-" {
-			continue
+		if inline {
+			if st := structType(f.Type); st != nil {
+				out = append(out, walkStruct(st)...)
+				continue
+			}
 		}
 		field := protocol.SchemaField{
-			Name:    yamlName,
-			GoField: f.Name,
-			Type:    friendlyType(f.Type),
+			Name: yamlName,
+			Type: friendlyType(f.Type),
+		}
+		if st := structType(f.Type); st != nil {
+			field.Fields = walkStruct(st)
+		} else if f.Type.Kind() == reflect.Slice || f.Type.Kind() == reflect.Array {
+			if st := structType(f.Type.Elem()); st != nil {
+				field.Fields = walkStruct(st)
+			}
 		}
 		applyDriftTag(&field, f.Tag.Get("drift"))
 		out = append(out, field)
@@ -45,16 +59,30 @@ func walkStruct(t reflect.Type) []protocol.SchemaField {
 	return out
 }
 
-func parseYAMLName(f reflect.StructField) string {
+// structType returns the struct type t names directly or through
+// pointers, or nil.
+func structType(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() == reflect.Struct {
+		return t
+	}
+	return nil
+}
+
+func parseYAMLTag(f reflect.StructField) (name string, inline bool) {
 	tag := f.Tag.Get("yaml")
-	if tag == "" {
-		return strings.ToLower(f.Name)
-	}
 	parts := strings.Split(tag, ",")
-	if parts[0] == "" {
-		return strings.ToLower(f.Name)
+	for _, opt := range parts[1:] {
+		if opt == "inline" {
+			inline = true
+		}
 	}
-	return parts[0]
+	if parts[0] == "" {
+		return strings.ToLower(f.Name), inline
+	}
+	return parts[0], inline
 }
 
 func friendlyType(t reflect.Type) string {
