@@ -1,7 +1,10 @@
 package plugin
 
 import (
+	"reflect"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestParseManifestSourceOrder(t *testing.T) {
@@ -81,5 +84,50 @@ func TestConfigYAMLRoundTrips(t *testing.T) {
 	}
 	if got == "" {
 		t.Errorf("ConfigYAML returned empty")
+	}
+}
+
+func TestParseManifestNullPlugins(t *testing.T) {
+	plugins, err := ParseManifest([]byte("app:\n  name: x\nplugins:\n"))
+	if err != nil || len(plugins) != 0 {
+		t.Errorf("a bare plugins: key should mean no plugins, got %v %v", plugins, err)
+	}
+}
+
+// Anchors defined outside a plugin's config block must survive the trip
+// to the bridge, which receives the config block on its own.
+func TestConfigYAMLResolvesAnchorsAndMergeKeys(t *testing.T) {
+	doc := `shared: &shared
+  color: "#FFFFFF"
+base: &base
+  image: a.png
+plugins:
+  - package: github.com/a/b/plugin
+    config: *shared
+  - package: github.com/a/c/plugin
+    config:
+      <<: *base
+      fade: 200
+`
+	plugins, err := ParseManifest([]byte(doc))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	want := []map[string]any{
+		{"color": "#FFFFFF"},
+		{"image": "a.png", "fade": 200},
+	}
+	for i, p := range plugins {
+		text, err := p.ConfigYAML()
+		if err != nil {
+			t.Fatalf("ConfigYAML: %v", err)
+		}
+		var got map[string]any
+		if err := yaml.Unmarshal([]byte(text), &got); err != nil {
+			t.Fatalf("plugin %d config does not decode standalone: %v\n%s", i, err, text)
+		}
+		if !reflect.DeepEqual(got, want[i]) {
+			t.Errorf("plugin %d config = %v, want %v", i, got, want[i])
+		}
 	}
 }

@@ -56,6 +56,10 @@ func ParseManifest(data []byte) ([]ConfiguredPlugin, error) {
 	if pluginsNode == nil {
 		return nil, nil
 	}
+	if pluginsNode.Kind == yaml.ScalarNode && pluginsNode.Tag == "!!null" {
+		// A bare `plugins:` key is an empty list.
+		return nil, nil
+	}
 	if pluginsNode.Kind != yaml.SequenceNode {
 		return nil, fmt.Errorf("drift.yaml: plugins must be a sequence at line %d", pluginsNode.Line)
 	}
@@ -81,13 +85,19 @@ func ParseManifest(data []byte) ([]ConfiguredPlugin, error) {
 	return out, nil
 }
 
-// ConfigYAML returns the plugin's raw config as canonical YAML text. Empty
-// config decodes to an empty string.
+// ConfigYAML returns the plugin's config as canonical YAML text for the
+// bridge. Anchors and merge keys (`<<: *base`) are resolved first, since
+// the config block is sent on its own and an alias to an anchor defined
+// elsewhere in drift.yaml would dangle. Empty config encodes as "".
 func (p ConfiguredPlugin) ConfigYAML() (string, error) {
 	if p.Config.Kind == 0 {
 		return "", nil
 	}
-	data, err := yaml.Marshal(&p.Config)
+	var resolved any
+	if err := p.Config.Decode(&resolved); err != nil {
+		return "", fmt.Errorf("decode config for %s: %w", p.Package, err)
+	}
+	data, err := yaml.Marshal(resolved)
 	if err != nil {
 		return "", fmt.Errorf("marshal config for %s: %w", p.Package, err)
 	}

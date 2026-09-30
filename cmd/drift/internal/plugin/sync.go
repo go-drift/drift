@@ -167,17 +167,22 @@ func List(projectRoot, cliVersion string, resolve bool) (*ListResult, error) {
 	}
 
 	var schemas map[string]protocol.PluginSchema
-	if resolve {
+	// A bridge importing missing packages cannot build, so resolving only
+	// happens once every plugin is installed; the rows below mark the
+	// missing ones either way.
+	if resolve && depErr == nil {
 		bridge, err := EnsureBridge(projectRoot, cliVersion, plugins, infos)
-		if err == nil {
-			resp, err := RunBridge(bridge, protocol.Envelope{
-				APIVersion: protocol.APIVersion,
-				Cmd:        "schema",
-			}, "")
-			if err == nil {
-				schemas = resp.Schemas
-			}
+		if err != nil {
+			return nil, err
 		}
+		resp, err := RunBridge(bridge, protocol.Envelope{
+			APIVersion: protocol.APIVersion,
+			Cmd:        "schema",
+		}, "")
+		if err != nil {
+			return nil, err
+		}
+		schemas = resp.Schemas
 	}
 
 	for i, p := range plugins {
