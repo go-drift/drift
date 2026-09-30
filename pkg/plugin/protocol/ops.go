@@ -7,50 +7,19 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 )
-
-// MergeClass declares how two ops with the same identity merge.
-type MergeClass int
-
-const (
-	// ClassIdempotent: same identity + same payload collapses; same identity +
-	// different payload is a hard conflict.
-	ClassIdempotent MergeClass = iota
-	// ClassAdditive: ops merge into a deduped set; identity covers the full
-	// payload so a payload difference manifests as two distinct entries.
-	ClassAdditive
-	// ClassExclusive: at most one op may target the identity. Identical
-	// content hashes collapse; divergent content hashes conflict.
-	ClassExclusive
-)
-
-func (c MergeClass) String() string {
-	switch c {
-	case ClassIdempotent:
-		return "idempotent"
-	case ClassAdditive:
-		return "additive"
-	case ClassExclusive:
-		return "exclusive"
-	default:
-		return "unknown"
-	}
-}
 
 // Op is the closed interface for all plugin-emitted build ops.
 type Op interface {
 	// Type returns the JSON discriminator (e.g. "info_plist.set_string").
 	Type() string
-	// MergeClass returns the merge class for this op type.
-	MergeClass() MergeClass
-	// Identity returns the merge identity. Two ops with equal identity
-	// collide; the MergeClass dictates whether the collision is fatal or
-	// collapses.
-	Identity() string
-	// ContentHash returns a stable hash of the full payload, used for
-	// exclusive-op overlap detection.
-	ContentHash() string
+	// Targets names every location the op writes. Two ops touching the
+	// same target must agree (see Target); the CLI's conflict check keys
+	// on targets, not op types, so different op types writing one file or
+	// plist key are caught.
+	Targets() []Target
 	// PluginPackage returns the package path of the plugin that emitted this op.
 	PluginPackage() string
 	// PluginID returns the friendly identifier of the plugin that emitted
@@ -67,8 +36,6 @@ type Op interface {
 }
 
 // Base carries the common fields all ops share. Embedded in every concrete op.
-// MergeClass is fixed by the op type itself (each concrete *OpFoo overrides
-// MergeClass) so it doesn't appear here.
 //
 // The internal field is named Pkg/Ident rather than Plugin/PluginID because
 // Go forbids a method and a field on the same receiver from sharing a name,
@@ -80,6 +47,37 @@ type Base struct {
 
 func (b Base) PluginPackage() string { return b.Pkg }
 func (b Base) PluginID() string      { return b.Ident }
+
+// Target is one location an op writes, such as a plist key, a resource
+// name or a file. Key names the location. Member, when set, names one
+// element of a set stored at Key (a permission, a registrant, a Gradle
+// dependency); an op that owns the whole location leaves it empty. Content
+// is a hash of what the op writes there.
+//
+// Conflict rule, per Key: owners must agree on Content; members with the
+// same Member must agree on Content; and a Key cannot have both an owner
+// and members. Agreeing ops collapse.
+type Target struct {
+	Key     string
+	Member  string
+	Content string
+}
+
+// String renders the target for diagnostics.
+func (t Target) String() string {
+	if t.Member == "" {
+		return t.Key
+	}
+	return t.Key + " [" + t.Member + "]"
+}
+
+func owner(key string, content ...string) Target {
+	return Target{Key: key, Content: hashBytes(content...)}
+}
+
+func member(key, m string, content ...string) Target {
+	return Target{Key: key, Member: m, Content: hashBytes(content...)}
+}
 
 // StyleItem is one <item name="..."> entry in a style.
 type StyleItem struct {
@@ -95,11 +93,11 @@ type OpInfoPlistSetString struct {
 	Value string `json:"value"`
 }
 
-func (o *OpInfoPlistSetString) Type() string           { return "info_plist.set_string" }
-func (o *OpInfoPlistSetString) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpInfoPlistSetString) Identity() string       { return o.Type() + "|" + o.Key }
-func (o *OpInfoPlistSetString) ContentHash() string    { return hashBytes(o.Key, o.Value) }
-func (o *OpInfoPlistSetString) Platform() string       { return "ios" }
+func (o *OpInfoPlistSetString) Type() string     { return "info_plist.set_string" }
+func (o *OpInfoPlistSetString) Platform() string { return "ios" }
+func (o *OpInfoPlistSetString) Targets() []Target {
+	return []Target{owner("plist:"+o.Key, o.Type(), o.Value)}
+}
 func (o *OpInfoPlistSetString) Validate() error {
 	return checkNonEmpty("plist key", o.Key)
 }
@@ -110,13 +108,11 @@ type OpInfoPlistSetBool struct {
 	Value bool   `json:"value"`
 }
 
-func (o *OpInfoPlistSetBool) Type() string           { return "info_plist.set_bool" }
-func (o *OpInfoPlistSetBool) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpInfoPlistSetBool) Identity() string       { return o.Type() + "|" + o.Key }
-func (o *OpInfoPlistSetBool) ContentHash() string {
-	return hashBytes(o.Key, fmt.Sprintf("%t", o.Value))
-}
+func (o *OpInfoPlistSetBool) Type() string     { return "info_plist.set_bool" }
 func (o *OpInfoPlistSetBool) Platform() string { return "ios" }
+func (o *OpInfoPlistSetBool) Targets() []Target {
+	return []Target{owner("plist:"+o.Key, o.Type(), strconv.FormatBool(o.Value))}
+}
 func (o *OpInfoPlistSetBool) Validate() error {
 	return checkNonEmpty("plist key", o.Key)
 }
@@ -127,13 +123,11 @@ type OpInfoPlistSetStringArray struct {
 	Values []string `json:"values"`
 }
 
-func (o *OpInfoPlistSetStringArray) Type() string           { return "info_plist.set_string_array" }
-func (o *OpInfoPlistSetStringArray) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpInfoPlistSetStringArray) Identity() string       { return o.Type() + "|" + o.Key }
-func (o *OpInfoPlistSetStringArray) ContentHash() string {
-	return hashBytes(append([]string{o.Key}, o.Values...)...)
-}
+func (o *OpInfoPlistSetStringArray) Type() string     { return "info_plist.set_string_array" }
 func (o *OpInfoPlistSetStringArray) Platform() string { return "ios" }
+func (o *OpInfoPlistSetStringArray) Targets() []Target {
+	return []Target{owner("plist:"+o.Key, append([]string{o.Type()}, o.Values...)...)}
+}
 func (o *OpInfoPlistSetStringArray) Validate() error {
 	return checkNonEmpty("plist key", o.Key)
 }
@@ -144,13 +138,11 @@ type OpInfoPlistAppendArrayItem struct {
 	Value string `json:"value"`
 }
 
-func (o *OpInfoPlistAppendArrayItem) Type() string           { return "info_plist.append_array_item" }
-func (o *OpInfoPlistAppendArrayItem) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpInfoPlistAppendArrayItem) Identity() string {
-	return o.Type() + "|" + o.Key + "|" + o.Value
+func (o *OpInfoPlistAppendArrayItem) Type() string     { return "info_plist.append_array_item" }
+func (o *OpInfoPlistAppendArrayItem) Platform() string { return "ios" }
+func (o *OpInfoPlistAppendArrayItem) Targets() []Target {
+	return []Target{member("plist:"+o.Key, o.Value)}
 }
-func (o *OpInfoPlistAppendArrayItem) ContentHash() string { return hashBytes(o.Key, o.Value) }
-func (o *OpInfoPlistAppendArrayItem) Platform() string    { return "ios" }
 func (o *OpInfoPlistAppendArrayItem) Validate() error {
 	return checkNonEmpty("plist key", o.Key)
 }
@@ -161,13 +153,11 @@ type OpInfoPlistSetDict struct {
 	Value map[string]any `json:"value"`
 }
 
-func (o *OpInfoPlistSetDict) Type() string           { return "info_plist.set_dict" }
-func (o *OpInfoPlistSetDict) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpInfoPlistSetDict) Identity() string       { return o.Type() + "|" + o.Key }
-func (o *OpInfoPlistSetDict) ContentHash() string {
-	return hashBytes(o.Key, canonicalJSON(o.Value))
-}
+func (o *OpInfoPlistSetDict) Type() string     { return "info_plist.set_dict" }
 func (o *OpInfoPlistSetDict) Platform() string { return "ios" }
+func (o *OpInfoPlistSetDict) Targets() []Target {
+	return []Target{owner("plist:"+o.Key, o.Type(), canonicalJSON(o.Value))}
+}
 func (o *OpInfoPlistSetDict) Validate() error {
 	if err := checkNonEmpty("plist key", o.Key); err != nil {
 		return err
@@ -183,11 +173,16 @@ type OpIOSAssetsAddImageSet struct {
 	Image string `json:"image"` // base64
 }
 
-func (o *OpIOSAssetsAddImageSet) Type() string           { return "ios.assets.add_image_set" }
-func (o *OpIOSAssetsAddImageSet) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpIOSAssetsAddImageSet) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpIOSAssetsAddImageSet) ContentHash() string    { return hashBytes(o.Name, o.Image) }
-func (o *OpIOSAssetsAddImageSet) Platform() string       { return "ios" }
+func (o *OpIOSAssetsAddImageSet) Type() string     { return "ios.assets.add_image_set" }
+func (o *OpIOSAssetsAddImageSet) Platform() string { return "ios" }
+func (o *OpIOSAssetsAddImageSet) Targets() []Target {
+	// xtool builds emit the set as a loose <Name>.png in the bundle root,
+	// so it also claims that bundle name on every iOS path.
+	return []Target{
+		owner("ios-asset:"+o.Name, o.Image),
+		owner("ios-bundle:"+o.Name+".png", o.Type(), o.Image),
+	}
+}
 func (o *OpIOSAssetsAddImageSet) Validate() error {
 	// xtool builds emit image sets as loose <Name>.png bundle files, so the
 	// name must also be a valid bundle file name on every iOS path.
@@ -202,11 +197,11 @@ type OpIOSReplaceLaunchScreen struct {
 	Content string `json:"content"`
 }
 
-func (o *OpIOSReplaceLaunchScreen) Type() string           { return "ios.storyboards.replace_launch_screen" }
-func (o *OpIOSReplaceLaunchScreen) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpIOSReplaceLaunchScreen) Identity() string       { return o.Type() }
-func (o *OpIOSReplaceLaunchScreen) ContentHash() string    { return hashBytes(o.Content) }
-func (o *OpIOSReplaceLaunchScreen) Platform() string       { return "ios" }
+func (o *OpIOSReplaceLaunchScreen) Type() string     { return "ios.storyboards.replace_launch_screen" }
+func (o *OpIOSReplaceLaunchScreen) Platform() string { return "ios" }
+func (o *OpIOSReplaceLaunchScreen) Targets() []Target {
+	return []Target{owner("ios:launch-screen", o.Content)}
+}
 func (o *OpIOSReplaceLaunchScreen) Validate() error {
 	return checkXMLRoot("launch screen storyboard", o.Content, "document")
 }
@@ -218,13 +213,17 @@ type OpAddIOSSource struct {
 	Content string `json:"content"` // base64
 }
 
-func (o *OpAddIOSSource) Type() string           { return "ios.source.add" }
-func (o *OpAddIOSSource) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpAddIOSSource) Identity() string {
-	return o.Type() + "|" + o.Group + "/" + o.RelPath
+func (o *OpAddIOSSource) Type() string     { return "ios.source.add" }
+func (o *OpAddIOSSource) Platform() string { return "ios" }
+func (o *OpAddIOSSource) Targets() []Target {
+	file := o.Group + "/" + o.RelPath
+	// Every plugin Swift file compiles into one module, where swiftc
+	// requires unique file basenames.
+	return []Target{
+		owner("ios-src:"+file, o.Content),
+		owner("ios-swift-basename:"+path.Base(o.RelPath), file, o.Content),
+	}
 }
-func (o *OpAddIOSSource) ContentHash() string { return hashBytes(o.Group, o.RelPath, o.Content) }
-func (o *OpAddIOSSource) Platform() string    { return "ios" }
 func (o *OpAddIOSSource) Validate() error {
 	if err := checkMatch(sourceGroupRe, "source group", o.Group); err != nil {
 		return err
@@ -240,11 +239,11 @@ type OpRegistrantIOS struct {
 	Symbol string `json:"symbol"`
 }
 
-func (o *OpRegistrantIOS) Type() string           { return "ios.registrant" }
-func (o *OpRegistrantIOS) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpRegistrantIOS) Identity() string       { return o.Type() + "|" + o.Symbol }
-func (o *OpRegistrantIOS) ContentHash() string    { return hashBytes(o.Symbol) }
-func (o *OpRegistrantIOS) Platform() string       { return "ios" }
+func (o *OpRegistrantIOS) Type() string     { return "ios.registrant" }
+func (o *OpRegistrantIOS) Platform() string { return "ios" }
+func (o *OpRegistrantIOS) Targets() []Target {
+	return []Target{member("ios:plugins", o.Symbol)}
+}
 func (o *OpRegistrantIOS) Validate() error {
 	return checkMatch(dottedIdentRe, "registrant symbol", o.Symbol)
 }
@@ -363,12 +362,11 @@ func (r SPMRequirement) canonicalString() string {
 // sidecar Drift/Plugins/Package.swift; this op contributes one
 // `.package(url:...)` declaration plus product references in that sidecar.
 //
-// Idempotent merge: two plugins requesting the same URL with matching
-// Requirement and Products collapse silently. Any divergence (different
-// version, different product list) surfaces as a Validate-time
-// ConflictError. SwiftPM cannot reconcile multiple version requirements
-// for one URL inside a single package graph, so the conflict must reach
-// the user rather than silently pick one op's payload.
+// Plugins may share a package and each ask for their own products; the
+// sidecar declares the package once with the union of products. The URL
+// and Requirement must match across plugins: SwiftPM cannot reconcile two
+// requirements for one package identity, so a mismatch is a conflict that
+// reaches the user rather than silently picking one.
 type OpIOSAddPackageDependency struct {
 	Base
 	URL         string         `json:"url"`
@@ -376,17 +374,18 @@ type OpIOSAddPackageDependency struct {
 	Products    []string       `json:"products"`
 }
 
-func (o *OpIOSAddPackageDependency) Type() string           { return "ios.spm.add_package" }
-func (o *OpIOSAddPackageDependency) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpIOSAddPackageDependency) Identity() string       { return o.Type() + "|" + o.URL }
-func (o *OpIOSAddPackageDependency) ContentHash() string {
-	products := append([]string(nil), o.Products...)
-	sort.Strings(products)
-	parts := []string{o.URL, o.Requirement.canonicalString()}
-	parts = append(parts, products...)
-	return hashBytes(parts...)
-}
+func (o *OpIOSAddPackageDependency) Type() string     { return "ios.spm.add_package" }
 func (o *OpIOSAddPackageDependency) Platform() string { return "ios" }
+func (o *OpIOSAddPackageDependency) Targets() []Target {
+	id := SPMPackageIdentity(o.URL)
+	// One requirement per package identity (SwiftPM cannot reconcile two),
+	// while each plugin may ask for its own products from it.
+	ts := []Target{owner("spm:"+id, o.URL, o.Requirement.canonicalString())}
+	for _, p := range o.Products {
+		ts = append(ts, member("spm-products:"+id, p))
+	}
+	return ts
+}
 func (o *OpIOSAddPackageDependency) Validate() error {
 	return validateSPMDependency(o.URL, o.Requirement, o.Products)
 }
@@ -520,22 +519,18 @@ func validateAppModuleFileName(name string) error {
 // called from the generated DriftPluginRegistrant.<callback>(...) method.
 // Each callback has a fixed signature (documented on the
 // IOSAppDelegateCallback constants); plugin authors implement against it and
-// the codegen renders the call. Additive merge: multiple plugins can hook the same callback.
+// the codegen renders the call. Multiple plugins can hook the same callback.
 type OpIOSAppDelegateRegistrant struct {
 	Base
 	Callback IOSAppDelegateCallback `json:"callback"`
 	Symbol   string                 `json:"symbol"`
 }
 
-func (o *OpIOSAppDelegateRegistrant) Type() string           { return "ios.app_delegate_registrant" }
-func (o *OpIOSAppDelegateRegistrant) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpIOSAppDelegateRegistrant) Identity() string {
-	return o.Type() + "|" + string(o.Callback) + "|" + o.Symbol
-}
-func (o *OpIOSAppDelegateRegistrant) ContentHash() string {
-	return hashBytes(string(o.Callback), o.Symbol)
-}
+func (o *OpIOSAppDelegateRegistrant) Type() string     { return "ios.app_delegate_registrant" }
 func (o *OpIOSAppDelegateRegistrant) Platform() string { return "ios" }
+func (o *OpIOSAppDelegateRegistrant) Targets() []Target {
+	return []Target{member("ios:app-delegate:"+string(o.Callback), o.Symbol)}
+}
 func (o *OpIOSAppDelegateRegistrant) Validate() error {
 	if err := validateIOSAppDelegateCallback(o.Callback); err != nil {
 		return err
@@ -547,19 +542,18 @@ func (o *OpIOSAppDelegateRegistrant) Validate() error {
 // app bundle, where Bundle.main and UIImage(named:) find it. Path is a plain
 // file name (see validateBundleFileName).
 //
-// Exclusive merge: two plugins writing divergent content to the same bundle
-// name are a hard conflict, mirroring OpAndroidWriteResourceXML's policy.
+// Two plugins writing divergent content to the same bundle name conflict.
 type OpIOSAddBundleResource struct {
 	Base
 	Path    string `json:"path"`              // bundle-root file name
 	Content string `json:"content,omitempty"` // base64
 }
 
-func (o *OpIOSAddBundleResource) Type() string           { return "ios.bundle.add_resource" }
-func (o *OpIOSAddBundleResource) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpIOSAddBundleResource) Identity() string       { return o.Type() + "|" + o.Path }
-func (o *OpIOSAddBundleResource) ContentHash() string    { return hashBytes(o.Path, o.Content) }
-func (o *OpIOSAddBundleResource) Platform() string       { return "ios" }
+func (o *OpIOSAddBundleResource) Type() string     { return "ios.bundle.add_resource" }
+func (o *OpIOSAddBundleResource) Platform() string { return "ios" }
+func (o *OpIOSAddBundleResource) Targets() []Target {
+	return []Target{owner("ios-bundle:"+o.Path, o.Type(), o.Content)}
+}
 func (o *OpIOSAddBundleResource) Validate() error {
 	if err := validateBundleFileName(o.Path); err != nil {
 		return err
@@ -574,11 +568,11 @@ type OpAndroidManifestAddPermission struct {
 	Name string `json:"name"`
 }
 
-func (o *OpAndroidManifestAddPermission) Type() string           { return "android.manifest.add_permission" }
-func (o *OpAndroidManifestAddPermission) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpAndroidManifestAddPermission) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpAndroidManifestAddPermission) ContentHash() string    { return hashBytes(o.Name) }
-func (o *OpAndroidManifestAddPermission) Platform() string       { return "android" }
+func (o *OpAndroidManifestAddPermission) Type() string     { return "android.manifest.add_permission" }
+func (o *OpAndroidManifestAddPermission) Platform() string { return "android" }
+func (o *OpAndroidManifestAddPermission) Targets() []Target {
+	return []Target{member("manifest:uses-permission", o.Name)}
+}
 func (o *OpAndroidManifestAddPermission) Validate() error {
 	return checkMatch(dottedIdentRe, "permission name", o.Name)
 }
@@ -589,13 +583,11 @@ type OpAndroidManifestAddIntentFilter struct {
 	XML      string `json:"xml"`
 }
 
-func (o *OpAndroidManifestAddIntentFilter) Type() string           { return "android.manifest.add_intent_filter" }
-func (o *OpAndroidManifestAddIntentFilter) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpAndroidManifestAddIntentFilter) Identity() string {
-	return o.Type() + "|" + o.Activity + "|" + hashBytes(o.XML)
+func (o *OpAndroidManifestAddIntentFilter) Type() string     { return "android.manifest.add_intent_filter" }
+func (o *OpAndroidManifestAddIntentFilter) Platform() string { return "android" }
+func (o *OpAndroidManifestAddIntentFilter) Targets() []Target {
+	return []Target{member("manifest:activity:"+o.Activity+":intent-filter", hashBytes(o.XML))}
 }
-func (o *OpAndroidManifestAddIntentFilter) ContentHash() string { return hashBytes(o.Activity, o.XML) }
-func (o *OpAndroidManifestAddIntentFilter) Platform() string    { return "android" }
 func (o *OpAndroidManifestAddIntentFilter) Validate() error {
 	if err := checkMatch(activityNameRe, "activity", o.Activity); err != nil {
 		return err
@@ -610,15 +602,11 @@ type OpAndroidManifestSetActivityAttr struct {
 	Value    string `json:"value"`
 }
 
-func (o *OpAndroidManifestSetActivityAttr) Type() string           { return "android.manifest.set_activity_attr" }
-func (o *OpAndroidManifestSetActivityAttr) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpAndroidManifestSetActivityAttr) Identity() string {
-	return o.Type() + "|" + o.Activity + "|" + o.Attr
-}
-func (o *OpAndroidManifestSetActivityAttr) ContentHash() string {
-	return hashBytes(o.Activity, o.Attr, o.Value)
-}
+func (o *OpAndroidManifestSetActivityAttr) Type() string     { return "android.manifest.set_activity_attr" }
 func (o *OpAndroidManifestSetActivityAttr) Platform() string { return "android" }
+func (o *OpAndroidManifestSetActivityAttr) Targets() []Target {
+	return []Target{owner("manifest:activity:"+o.Activity+"@"+o.Attr, o.Value)}
+}
 func (o *OpAndroidManifestSetActivityAttr) Validate() error {
 	if err := checkMatch(activityNameRe, "activity", o.Activity); err != nil {
 		return err
@@ -636,15 +624,11 @@ type OpAndroidManifestAddMetaData struct {
 	Value  string `json:"value"`
 }
 
-func (o *OpAndroidManifestAddMetaData) Type() string           { return "android.manifest.add_meta_data" }
-func (o *OpAndroidManifestAddMetaData) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpAndroidManifestAddMetaData) Identity() string {
-	return o.Type() + "|" + o.Parent + "|" + o.Name
-}
-func (o *OpAndroidManifestAddMetaData) ContentHash() string {
-	return hashBytes(o.Parent, o.Name, o.Value)
-}
+func (o *OpAndroidManifestAddMetaData) Type() string     { return "android.manifest.add_meta_data" }
 func (o *OpAndroidManifestAddMetaData) Platform() string { return "android" }
+func (o *OpAndroidManifestAddMetaData) Targets() []Target {
+	return []Target{owner("manifest:"+o.Parent+":meta-data:"+o.Name, o.Value)}
+}
 func (o *OpAndroidManifestAddMetaData) Validate() error {
 	if err := checkMatch(metaParentRe, "meta-data parent", o.Parent); err != nil {
 		return err
@@ -660,11 +644,11 @@ type OpAndroidColorSet struct {
 	Value string `json:"value"`
 }
 
-func (o *OpAndroidColorSet) Type() string           { return "android.color.set" }
-func (o *OpAndroidColorSet) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpAndroidColorSet) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpAndroidColorSet) ContentHash() string    { return hashBytes(o.Name, o.Value) }
-func (o *OpAndroidColorSet) Platform() string       { return "android" }
+func (o *OpAndroidColorSet) Type() string     { return "android.color.set" }
+func (o *OpAndroidColorSet) Platform() string { return "android" }
+func (o *OpAndroidColorSet) Targets() []Target {
+	return []Target{owner("android-res:color/"+o.Name, o.Type(), o.Value)}
+}
 func (o *OpAndroidColorSet) Validate() error {
 	if err := checkMatch(valueResNameRe, "color name", o.Name); err != nil {
 		return err
@@ -678,11 +662,11 @@ type OpAndroidStringSet struct {
 	Value string `json:"value"`
 }
 
-func (o *OpAndroidStringSet) Type() string           { return "android.string.set" }
-func (o *OpAndroidStringSet) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpAndroidStringSet) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpAndroidStringSet) ContentHash() string    { return hashBytes(o.Name, o.Value) }
-func (o *OpAndroidStringSet) Platform() string       { return "android" }
+func (o *OpAndroidStringSet) Type() string     { return "android.string.set" }
+func (o *OpAndroidStringSet) Platform() string { return "android" }
+func (o *OpAndroidStringSet) Targets() []Target {
+	return []Target{owner("android-res:string/"+o.Name, o.Value)}
+}
 func (o *OpAndroidStringSet) Validate() error {
 	return checkMatch(valueResNameRe, "string name", o.Name)
 }
@@ -694,17 +678,15 @@ type OpAndroidStyleSet struct {
 	Items  []StyleItem `json:"items"`
 }
 
-func (o *OpAndroidStyleSet) Type() string           { return "android.style.set" }
-func (o *OpAndroidStyleSet) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpAndroidStyleSet) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpAndroidStyleSet) ContentHash() string {
-	parts := []string{o.Name, o.Parent}
+func (o *OpAndroidStyleSet) Type() string     { return "android.style.set" }
+func (o *OpAndroidStyleSet) Platform() string { return "android" }
+func (o *OpAndroidStyleSet) Targets() []Target {
+	parts := []string{o.Parent}
 	for _, it := range o.Items {
 		parts = append(parts, it.Name, it.Value)
 	}
-	return hashBytes(parts...)
+	return []Target{owner("android-res:style/"+o.Name, parts...)}
 }
-func (o *OpAndroidStyleSet) Platform() string { return "android" }
 func (o *OpAndroidStyleSet) Validate() error {
 	if err := checkMatch(valueResNameRe, "style name", o.Name); err != nil {
 		return err
@@ -728,11 +710,14 @@ type OpAndroidWriteDrawable struct {
 	Content string `json:"content"` // base64
 }
 
-func (o *OpAndroidWriteDrawable) Type() string           { return "android.drawable.write" }
-func (o *OpAndroidWriteDrawable) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpAndroidWriteDrawable) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpAndroidWriteDrawable) ContentHash() string    { return hashBytes(o.Name, o.Content) }
-func (o *OpAndroidWriteDrawable) Platform() string       { return "android" }
+func (o *OpAndroidWriteDrawable) Type() string     { return "android.drawable.write" }
+func (o *OpAndroidWriteDrawable) Platform() string { return "android" }
+func (o *OpAndroidWriteDrawable) Targets() []Target {
+	// Resource names ignore the file extension: icon.png and icon.webp are
+	// both R.drawable.icon.
+	name, _, _ := strings.Cut(o.Name, ".")
+	return []Target{owner("android-res:drawable/"+name, o.Type(), o.Name, o.Content)}
+}
 func (o *OpAndroidWriteDrawable) Validate() error {
 	if err := checkMatch(drawableNameRe, "drawable name", o.Name); err != nil {
 		return err
@@ -746,11 +731,19 @@ type OpAndroidWriteResourceXML struct {
 	Content string `json:"content"`
 }
 
-func (o *OpAndroidWriteResourceXML) Type() string           { return "android.resource.write_xml" }
-func (o *OpAndroidWriteResourceXML) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpAndroidWriteResourceXML) Identity() string       { return o.Type() + "|" + o.RelPath }
-func (o *OpAndroidWriteResourceXML) ContentHash() string    { return hashBytes(o.RelPath, o.Content) }
-func (o *OpAndroidWriteResourceXML) Platform() string       { return "android" }
+func (o *OpAndroidWriteResourceXML) Type() string     { return "android.resource.write_xml" }
+func (o *OpAndroidWriteResourceXML) Platform() string { return "android" }
+func (o *OpAndroidWriteResourceXML) Targets() []Target {
+	ts := []Target{owner("android-res-file:"+o.RelPath, o.Content)}
+	// Outside values*/ the file itself is a resource named by its stem
+	// (drawable/splash.xml is R.drawable.splash), so it also claims that
+	// resource in its configuration directory.
+	dir, file, _ := strings.Cut(o.RelPath, "/")
+	if dir != "values" && !strings.HasPrefix(dir, "values-") {
+		ts = append(ts, owner("android-res:"+dir+"/"+strings.TrimSuffix(file, ".xml"), o.Type(), o.Content))
+	}
+	return ts
+}
 func (o *OpAndroidWriteResourceXML) Validate() error {
 	if err := checkRelPath("resource path", o.RelPath); err != nil {
 		return err
@@ -778,19 +771,18 @@ func (o *OpAndroidWriteResourceXML) Validate() error {
 // via AssetManager (fonts, ML models, JSON data). Build-time config such as
 // google-services.json belongs in OpAndroidAddAppModuleFile instead.
 //
-// Exclusive merge: two plugins writing divergent content to the same asset
-// path conflict, mirroring OpAndroidWriteResourceXML.
+// Two plugins writing divergent content to the same asset path conflict.
 type OpAndroidAddAsset struct {
 	Base
 	Path    string `json:"path"`              // assets/-relative
 	Content string `json:"content,omitempty"` // base64
 }
 
-func (o *OpAndroidAddAsset) Type() string           { return "android.assets.add" }
-func (o *OpAndroidAddAsset) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpAndroidAddAsset) Identity() string       { return o.Type() + "|" + o.Path }
-func (o *OpAndroidAddAsset) ContentHash() string    { return hashBytes(o.Path, o.Content) }
-func (o *OpAndroidAddAsset) Platform() string       { return "android" }
+func (o *OpAndroidAddAsset) Type() string     { return "android.assets.add" }
+func (o *OpAndroidAddAsset) Platform() string { return "android" }
+func (o *OpAndroidAddAsset) Targets() []Target {
+	return []Target{owner("android-asset:"+o.Path, o.Content)}
+}
 func (o *OpAndroidAddAsset) Validate() error {
 	if err := checkRelPath("asset path", o.Path); err != nil {
 		return err
@@ -804,19 +796,18 @@ func (o *OpAndroidAddAsset) Validate() error {
 // plugin reads app/google-services.json. Name is a plain file name (see
 // validateAppModuleFileName).
 //
-// Exclusive merge: two plugins writing divergent content to the same name
-// conflict.
+// Two plugins writing divergent content to the same name conflict.
 type OpAndroidAddAppModuleFile struct {
 	Base
 	Name    string `json:"name"`
 	Content string `json:"content,omitempty"` // base64
 }
 
-func (o *OpAndroidAddAppModuleFile) Type() string           { return "android.app_module.add_file" }
-func (o *OpAndroidAddAppModuleFile) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpAndroidAddAppModuleFile) Identity() string       { return o.Type() + "|" + o.Name }
-func (o *OpAndroidAddAppModuleFile) ContentHash() string    { return hashBytes(o.Name, o.Content) }
-func (o *OpAndroidAddAppModuleFile) Platform() string       { return "android" }
+func (o *OpAndroidAddAppModuleFile) Type() string     { return "android.app_module.add_file" }
+func (o *OpAndroidAddAppModuleFile) Platform() string { return "android" }
+func (o *OpAndroidAddAppModuleFile) Targets() []Target {
+	return []Target{owner("android-app-file:"+o.Name, o.Content)}
+}
 func (o *OpAndroidAddAppModuleFile) Validate() error {
 	if err := validateAppModuleFileName(o.Name); err != nil {
 		return err
@@ -833,13 +824,11 @@ type OpAddKotlinSource struct {
 	Content string `json:"content"` // base64
 }
 
-func (o *OpAddKotlinSource) Type() string           { return "android.source.add" }
-func (o *OpAddKotlinSource) MergeClass() MergeClass { return ClassExclusive }
-func (o *OpAddKotlinSource) Identity() string {
-	return o.Type() + "|" + o.Package + "/" + o.RelPath
+func (o *OpAddKotlinSource) Type() string     { return "android.source.add" }
+func (o *OpAddKotlinSource) Platform() string { return "android" }
+func (o *OpAddKotlinSource) Targets() []Target {
+	return []Target{owner("android-src:"+strings.ReplaceAll(o.Package, ".", "/")+"/"+o.RelPath, o.Content)}
 }
-func (o *OpAddKotlinSource) ContentHash() string { return hashBytes(o.Package, o.RelPath, o.Content) }
-func (o *OpAddKotlinSource) Platform() string    { return "android" }
 func (o *OpAddKotlinSource) Validate() error {
 	if err := checkMatch(dottedIdentRe, "Kotlin package", o.Package); err != nil {
 		return err
@@ -855,11 +844,11 @@ type OpRegistrantAndroid struct {
 	Symbol string `json:"symbol"`
 }
 
-func (o *OpRegistrantAndroid) Type() string           { return "android.registrant" }
-func (o *OpRegistrantAndroid) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpRegistrantAndroid) Identity() string       { return o.Type() + "|" + o.Symbol }
-func (o *OpRegistrantAndroid) ContentHash() string    { return hashBytes(o.Symbol) }
-func (o *OpRegistrantAndroid) Platform() string       { return "android" }
+func (o *OpRegistrantAndroid) Type() string     { return "android.registrant" }
+func (o *OpRegistrantAndroid) Platform() string { return "android" }
+func (o *OpRegistrantAndroid) Targets() []Target {
+	return []Target{member("android:plugins", o.Symbol)}
+}
 func (o *OpRegistrantAndroid) Validate() error {
 	return checkMatch(dottedIdentRe, "registrant symbol", o.Symbol)
 }
@@ -870,18 +859,17 @@ func (o *OpRegistrantAndroid) Validate() error {
 // Android 12+ controller) a place to call APIs like installSplashScreen()
 // that require the Activity but must run pre-super.onCreate.
 //
-// Shape mirrors OpRegistrantAndroid: additive merge, identity keyed on the
-// symbol, content hash of the symbol.
+// Shape mirrors OpRegistrantAndroid: a set of symbols.
 type OpAndroidPreActivityRegistrant struct {
 	Base
 	Symbol string `json:"symbol"`
 }
 
-func (o *OpAndroidPreActivityRegistrant) Type() string           { return "android.pre_activity_registrant" }
-func (o *OpAndroidPreActivityRegistrant) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpAndroidPreActivityRegistrant) Identity() string       { return o.Type() + "|" + o.Symbol }
-func (o *OpAndroidPreActivityRegistrant) ContentHash() string    { return hashBytes(o.Symbol) }
-func (o *OpAndroidPreActivityRegistrant) Platform() string       { return "android" }
+func (o *OpAndroidPreActivityRegistrant) Type() string     { return "android.pre_activity_registrant" }
+func (o *OpAndroidPreActivityRegistrant) Platform() string { return "android" }
+func (o *OpAndroidPreActivityRegistrant) Targets() []Target {
+	return []Target{member("android:pre-activity", o.Symbol)}
+}
 func (o *OpAndroidPreActivityRegistrant) Validate() error {
 	return checkMatch(dottedIdentRe, "pre-activity registrant symbol", o.Symbol)
 }
@@ -892,10 +880,10 @@ func (o *OpAndroidPreActivityRegistrant) Validate() error {
 // etc.); Coord is the full Gradle coordinate including the version
 // ("group:artifact:version").
 //
-// Additive merge with identity keyed on (configuration, coord). Two plugins
-// requesting the exact same coord+config collapse to a single dependency
-// line; two plugins requesting the same artifact at different versions land
-// as distinct entries, which Gradle then reconciles via standard conflict
+// A set per configuration keyed on the full coord. Two plugins requesting
+// the exact same coord+config collapse to a single dependency line; two
+// plugins requesting the same artifact at different versions land as
+// distinct entries, which Gradle then reconciles via standard conflict
 // resolution.
 type OpAndroidGradleAddDependency struct {
 	Base
@@ -903,15 +891,11 @@ type OpAndroidGradleAddDependency struct {
 	Coord         string `json:"coord"`
 }
 
-func (o *OpAndroidGradleAddDependency) Type() string           { return "android.gradle.add_dependency" }
-func (o *OpAndroidGradleAddDependency) MergeClass() MergeClass { return ClassAdditive }
-func (o *OpAndroidGradleAddDependency) Identity() string {
-	return o.Type() + "|" + o.Configuration + "|" + o.Coord
-}
-func (o *OpAndroidGradleAddDependency) ContentHash() string {
-	return hashBytes(o.Configuration, o.Coord)
-}
+func (o *OpAndroidGradleAddDependency) Type() string     { return "android.gradle.add_dependency" }
 func (o *OpAndroidGradleAddDependency) Platform() string { return "android" }
+func (o *OpAndroidGradleAddDependency) Targets() []Target {
+	return []Target{member("gradle-dep:"+o.Configuration, o.Coord)}
+}
 func (o *OpAndroidGradleAddDependency) Validate() error {
 	if err := checkMatch(identRe, "gradle configuration", o.Configuration); err != nil {
 		return err
@@ -928,20 +912,20 @@ func (o *OpAndroidGradleAddDependency) Validate() error {
 // which puts the plugin on the build classpath. Leave Version empty for
 // plugins that are already on the classpath.
 //
-// Idempotent merge: same id + same Version collapse; same id + different
-// Version is a Validate-time ConflictError. Gradle cannot load one plugin id
-// at two versions, so version skew must reach the user.
+// Same id + same Version collapse; same id + different Version conflict.
+// Gradle cannot load one plugin id at two versions, so version skew must
+// reach the user.
 type OpAndroidGradleApplyPlugin struct {
 	Base
 	ID      string `json:"id"`
 	Version string `json:"version,omitempty"`
 }
 
-func (o *OpAndroidGradleApplyPlugin) Type() string           { return "android.gradle.apply_plugin" }
-func (o *OpAndroidGradleApplyPlugin) MergeClass() MergeClass { return ClassIdempotent }
-func (o *OpAndroidGradleApplyPlugin) Identity() string       { return o.Type() + "|" + o.ID }
-func (o *OpAndroidGradleApplyPlugin) ContentHash() string    { return hashBytes(o.ID, o.Version) }
-func (o *OpAndroidGradleApplyPlugin) Platform() string       { return "android" }
+func (o *OpAndroidGradleApplyPlugin) Type() string     { return "android.gradle.apply_plugin" }
+func (o *OpAndroidGradleApplyPlugin) Platform() string { return "android" }
+func (o *OpAndroidGradleApplyPlugin) Targets() []Target {
+	return []Target{owner("gradle-plugin:"+o.ID, o.Version)}
+}
 func (o *OpAndroidGradleApplyPlugin) Validate() error {
 	if err := checkMatch(gradleIDRe, "gradle plugin id", o.ID); err != nil {
 		return err
