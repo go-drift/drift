@@ -12,7 +12,7 @@ import (
 
 	"howett.net/plist"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // ApplyInfoPlist applies Info.plist ops in-place. The file must exist already
@@ -20,11 +20,11 @@ import (
 // changed=true iff the file was rewritten.
 func ApplyInfoPlist(
 	path string,
-	setStrings []*driftplugin.OpInfoPlistSetString,
-	setBools []*driftplugin.OpInfoPlistSetBool,
-	setArrays []*driftplugin.OpInfoPlistSetStringArray,
-	appendItems []*driftplugin.OpInfoPlistAppendArrayItem,
-	setDicts []*driftplugin.OpInfoPlistSetDict,
+	setStrings []*protocol.OpInfoPlistSetString,
+	setBools []*protocol.OpInfoPlistSetBool,
+	setArrays []*protocol.OpInfoPlistSetStringArray,
+	appendItems []*protocol.OpInfoPlistAppendArrayItem,
+	setDicts []*protocol.OpInfoPlistSetDict,
 ) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

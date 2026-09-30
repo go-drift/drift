@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	pkgerrors "github.com/go-drift/drift/pkg/errors"
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // Apply mutates the rendered project at buildDir according to the validated
@@ -15,7 +15,7 @@ import (
 //
 // Apply skips ops that do not match the target platform; plugins may
 // unconditionally emit ops for every platform.
-func Apply(ops []driftplugin.Op, buildDir, platform string) ([]string, error) {
+func Apply(ops []protocol.Op, buildDir, platform string) ([]string, error) {
 	bag := bundleByPlatform(ops, platform)
 
 	changed := make(map[string]bool)
@@ -47,33 +47,33 @@ func Apply(ops []driftplugin.Op, buildDir, platform string) ([]string, error) {
 }
 
 type opBag struct {
-	infoString    []*driftplugin.OpInfoPlistSetString
-	infoBool      []*driftplugin.OpInfoPlistSetBool
-	infoArray     []*driftplugin.OpInfoPlistSetStringArray
-	infoAppend    []*driftplugin.OpInfoPlistAppendArrayItem
-	infoDict      []*driftplugin.OpInfoPlistSetDict
-	iosAssets     []*driftplugin.OpIOSAssetsAddImageSet
-	iosLaunch     []*driftplugin.OpIOSReplaceLaunchScreen
-	iosSources    []*driftplugin.OpAddIOSSource
-	iosBundle     []*driftplugin.OpIOSAddBundleResource
-	iosSPM        []*driftplugin.OpIOSAddPackageDependency
-	addPerm       []*driftplugin.OpAndroidManifestAddPermission
-	addIntent     []*driftplugin.OpAndroidManifestAddIntentFilter
-	setActAttr    []*driftplugin.OpAndroidManifestSetActivityAttr
-	addMeta       []*driftplugin.OpAndroidManifestAddMetaData
-	colors        []*driftplugin.OpAndroidColorSet
-	strings       []*driftplugin.OpAndroidStringSet
-	styles        []*driftplugin.OpAndroidStyleSet
-	drawables     []*driftplugin.OpAndroidWriteDrawable
-	resXML        []*driftplugin.OpAndroidWriteResourceXML
-	kotlinSources []*driftplugin.OpAddKotlinSource
-	gradleDeps    []*driftplugin.OpAndroidGradleAddDependency
-	androidAssets []*driftplugin.OpAndroidAddAsset
-	appModule     []*driftplugin.OpAndroidAddAppModuleFile
-	gradlePlugins []*driftplugin.OpAndroidGradleApplyPlugin
+	infoString    []*protocol.OpInfoPlistSetString
+	infoBool      []*protocol.OpInfoPlistSetBool
+	infoArray     []*protocol.OpInfoPlistSetStringArray
+	infoAppend    []*protocol.OpInfoPlistAppendArrayItem
+	infoDict      []*protocol.OpInfoPlistSetDict
+	iosAssets     []*protocol.OpIOSAssetsAddImageSet
+	iosLaunch     []*protocol.OpIOSReplaceLaunchScreen
+	iosSources    []*protocol.OpAddIOSSource
+	iosBundle     []*protocol.OpIOSAddBundleResource
+	iosSPM        []*protocol.OpIOSAddPackageDependency
+	addPerm       []*protocol.OpAndroidManifestAddPermission
+	addIntent     []*protocol.OpAndroidManifestAddIntentFilter
+	setActAttr    []*protocol.OpAndroidManifestSetActivityAttr
+	addMeta       []*protocol.OpAndroidManifestAddMetaData
+	colors        []*protocol.OpAndroidColorSet
+	strings       []*protocol.OpAndroidStringSet
+	styles        []*protocol.OpAndroidStyleSet
+	drawables     []*protocol.OpAndroidWriteDrawable
+	resXML        []*protocol.OpAndroidWriteResourceXML
+	kotlinSources []*protocol.OpAddKotlinSource
+	gradleDeps    []*protocol.OpAndroidGradleAddDependency
+	androidAssets []*protocol.OpAndroidAddAsset
+	appModule     []*protocol.OpAndroidAddAppModuleFile
+	gradlePlugins []*protocol.OpAndroidGradleApplyPlugin
 }
 
-func bundleByPlatform(ops []driftplugin.Op, platform string) *opBag {
+func bundleByPlatform(ops []protocol.Op, platform string) *opBag {
 	bag := &opBag{}
 	for _, op := range ops {
 		if !opAppliesTo(op, platform) {
@@ -89,7 +89,7 @@ func bundleByPlatform(ops []driftplugin.Op, platform string) *opBag {
 // bundleOp files op into the bag. Returns false for an op type Apply does
 // not know, which means a new op was added to pkg/plugin without teaching
 // Apply about it (TestApplyKnowsEveryOpType guards this).
-func bundleOp(bag *opBag, op driftplugin.Op) bool {
+func bundleOp(bag *opBag, op protocol.Op) bool {
 	switch op.Platform() {
 	case "ios":
 		return bundleIOSOp(bag, op)
@@ -100,7 +100,7 @@ func bundleOp(bag *opBag, op driftplugin.Op) bool {
 	}
 }
 
-func opAppliesTo(op driftplugin.Op, platform string) bool {
+func opAppliesTo(op protocol.Op, platform string) bool {
 	switch op.Platform() {
 	case "ios":
 		return platform == "ios" || platform == "xtool"
@@ -111,29 +111,29 @@ func opAppliesTo(op driftplugin.Op, platform string) bool {
 	}
 }
 
-func bundleIOSOp(bag *opBag, op driftplugin.Op) bool {
+func bundleIOSOp(bag *opBag, op protocol.Op) bool {
 	switch v := op.(type) {
-	case *driftplugin.OpInfoPlistSetString:
+	case *protocol.OpInfoPlistSetString:
 		bag.infoString = append(bag.infoString, v)
-	case *driftplugin.OpInfoPlistSetBool:
+	case *protocol.OpInfoPlistSetBool:
 		bag.infoBool = append(bag.infoBool, v)
-	case *driftplugin.OpInfoPlistSetStringArray:
+	case *protocol.OpInfoPlistSetStringArray:
 		bag.infoArray = append(bag.infoArray, v)
-	case *driftplugin.OpInfoPlistAppendArrayItem:
+	case *protocol.OpInfoPlistAppendArrayItem:
 		bag.infoAppend = append(bag.infoAppend, v)
-	case *driftplugin.OpInfoPlistSetDict:
+	case *protocol.OpInfoPlistSetDict:
 		bag.infoDict = append(bag.infoDict, v)
-	case *driftplugin.OpIOSAssetsAddImageSet:
+	case *protocol.OpIOSAssetsAddImageSet:
 		bag.iosAssets = append(bag.iosAssets, v)
-	case *driftplugin.OpIOSReplaceLaunchScreen:
+	case *protocol.OpIOSReplaceLaunchScreen:
 		bag.iosLaunch = append(bag.iosLaunch, v)
-	case *driftplugin.OpAddIOSSource:
+	case *protocol.OpAddIOSSource:
 		bag.iosSources = append(bag.iosSources, v)
-	case *driftplugin.OpIOSAddBundleResource:
+	case *protocol.OpIOSAddBundleResource:
 		bag.iosBundle = append(bag.iosBundle, v)
-	case *driftplugin.OpIOSAddPackageDependency:
+	case *protocol.OpIOSAddPackageDependency:
 		bag.iosSPM = append(bag.iosSPM, v)
-	case *driftplugin.OpRegistrantIOS, *driftplugin.OpIOSAppDelegateRegistrant:
+	case *protocol.OpRegistrantIOS, *protocol.OpIOSAppDelegateRegistrant:
 		// Consumed by WriteRegistrant, not Apply.
 	default:
 		return false
@@ -141,37 +141,37 @@ func bundleIOSOp(bag *opBag, op driftplugin.Op) bool {
 	return true
 }
 
-func bundleAndroidOp(bag *opBag, op driftplugin.Op) bool {
+func bundleAndroidOp(bag *opBag, op protocol.Op) bool {
 	switch v := op.(type) {
-	case *driftplugin.OpAndroidManifestAddPermission:
+	case *protocol.OpAndroidManifestAddPermission:
 		bag.addPerm = append(bag.addPerm, v)
-	case *driftplugin.OpAndroidManifestAddIntentFilter:
+	case *protocol.OpAndroidManifestAddIntentFilter:
 		bag.addIntent = append(bag.addIntent, v)
-	case *driftplugin.OpAndroidManifestSetActivityAttr:
+	case *protocol.OpAndroidManifestSetActivityAttr:
 		bag.setActAttr = append(bag.setActAttr, v)
-	case *driftplugin.OpAndroidManifestAddMetaData:
+	case *protocol.OpAndroidManifestAddMetaData:
 		bag.addMeta = append(bag.addMeta, v)
-	case *driftplugin.OpAndroidColorSet:
+	case *protocol.OpAndroidColorSet:
 		bag.colors = append(bag.colors, v)
-	case *driftplugin.OpAndroidStringSet:
+	case *protocol.OpAndroidStringSet:
 		bag.strings = append(bag.strings, v)
-	case *driftplugin.OpAndroidStyleSet:
+	case *protocol.OpAndroidStyleSet:
 		bag.styles = append(bag.styles, v)
-	case *driftplugin.OpAndroidWriteDrawable:
+	case *protocol.OpAndroidWriteDrawable:
 		bag.drawables = append(bag.drawables, v)
-	case *driftplugin.OpAndroidWriteResourceXML:
+	case *protocol.OpAndroidWriteResourceXML:
 		bag.resXML = append(bag.resXML, v)
-	case *driftplugin.OpAddKotlinSource:
+	case *protocol.OpAddKotlinSource:
 		bag.kotlinSources = append(bag.kotlinSources, v)
-	case *driftplugin.OpAndroidGradleAddDependency:
+	case *protocol.OpAndroidGradleAddDependency:
 		bag.gradleDeps = append(bag.gradleDeps, v)
-	case *driftplugin.OpAndroidAddAsset:
+	case *protocol.OpAndroidAddAsset:
 		bag.androidAssets = append(bag.androidAssets, v)
-	case *driftplugin.OpAndroidAddAppModuleFile:
+	case *protocol.OpAndroidAddAppModuleFile:
 		bag.appModule = append(bag.appModule, v)
-	case *driftplugin.OpAndroidGradleApplyPlugin:
+	case *protocol.OpAndroidGradleApplyPlugin:
 		bag.gradlePlugins = append(bag.gradlePlugins, v)
-	case *driftplugin.OpRegistrantAndroid, *driftplugin.OpAndroidPreActivityRegistrant:
+	case *protocol.OpRegistrantAndroid, *protocol.OpAndroidPreActivityRegistrant:
 		// Consumed by WriteRegistrant, not Apply.
 	default:
 		return false
@@ -181,7 +181,7 @@ func bundleAndroidOp(bag *opBag, op driftplugin.Op) bool {
 
 // reportUnknownOp surfaces unrecognised op types via the drift error reporter,
 // mirroring the boundary-parser convention in pkg/platform/stream.go.
-func reportUnknownOp(op driftplugin.Op) {
+func reportUnknownOp(op protocol.Op) {
 	pkgerrors.Report(&pkgerrors.DriftError{
 		Op:   "plugin.Apply",
 		Kind: pkgerrors.KindParsing,

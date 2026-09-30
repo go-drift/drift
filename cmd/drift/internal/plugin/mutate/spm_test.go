@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 func TestApplyPluginPackageEmptyOpsProducesValidWrapper(t *testing.T) {
@@ -48,9 +49,9 @@ func TestApplyPluginPackageEmptyOpsProducesValidWrapper(t *testing.T) {
 func TestApplyPluginPackagePopulated(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "Drift", "Plugins")
-	ops := []*driftplugin.OpIOSAddPackageDependency{
+	ops := []*protocol.OpIOSAddPackageDependency{
 		{
-			Base:        driftplugin.Base{Pkg: "github.com/foo/firebase"},
+			Base:        protocol.Base{Pkg: "github.com/foo/firebase"},
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
 			Requirement: driftplugin.SPMRequirementFrom("10.0.0"),
 			Products:    []string{"FirebaseAnalytics", "FirebaseAuth"},
@@ -76,9 +77,9 @@ func TestApplyPluginPackagePopulated(t *testing.T) {
 func TestApplyPluginPackageIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "Drift", "Plugins")
-	ops := []*driftplugin.OpIOSAddPackageDependency{
+	ops := []*protocol.OpIOSAddPackageDependency{
 		{
-			Base:        driftplugin.Base{Pkg: "p"},
+			Base:        protocol.Base{Pkg: "p"},
 			URL:         "https://github.com/foo/bar",
 			Requirement: driftplugin.SPMRequirementFrom("1.0.0"),
 			Products:    []string{"Bar"},
@@ -101,24 +102,24 @@ func TestApplyPluginPackageIdempotent(t *testing.T) {
 func TestApplyPluginPackageDeterministicOrder(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "Drift", "Plugins")
-	a := &driftplugin.OpIOSAddPackageDependency{
-		Base:        driftplugin.Base{Pkg: "p"},
+	a := &protocol.OpIOSAddPackageDependency{
+		Base:        protocol.Base{Pkg: "p"},
 		URL:         "https://github.com/aaa/aaa",
 		Requirement: driftplugin.SPMRequirementFrom("1.0.0"),
 		Products:    []string{"AAA"},
 	}
-	b := &driftplugin.OpIOSAddPackageDependency{
-		Base:        driftplugin.Base{Pkg: "p"},
+	b := &protocol.OpIOSAddPackageDependency{
+		Base:        protocol.Base{Pkg: "p"},
 		URL:         "https://github.com/zzz/zzz",
 		Requirement: driftplugin.SPMRequirementFrom("1.0.0"),
 		Products:    []string{"ZZZ"},
 	}
-	if _, err := ApplyPluginPackage(root, []*driftplugin.OpIOSAddPackageDependency{b, a}); err != nil {
+	if _, err := ApplyPluginPackage(root, []*protocol.OpIOSAddPackageDependency{b, a}); err != nil {
 		t.Fatalf("first: %v", err)
 	}
 	first, _ := os.ReadFile(filepath.Join(root, "Package.swift"))
 
-	if _, err := ApplyPluginPackage(root, []*driftplugin.OpIOSAddPackageDependency{a, b}); err != nil {
+	if _, err := ApplyPluginPackage(root, []*protocol.OpIOSAddPackageDependency{a, b}); err != nil {
 		t.Fatalf("second: %v", err)
 	}
 	second, _ := os.ReadFile(filepath.Join(root, "Package.swift"))
@@ -137,16 +138,16 @@ func TestApplyPluginPackageDeterministicOrder(t *testing.T) {
 func TestApplyPluginPackageRequirementKinds(t *testing.T) {
 	cases := []struct {
 		name string
-		req  driftplugin.SPMRequirement
+		req  protocol.SPMRequirement
 		want string
 	}{
-		{"from", driftplugin.SPMRequirement{Kind: "from", Value: "1.0.0"}, `from: "1.0.0"`},
-		{"exact", driftplugin.SPMRequirement{Kind: "exact", Value: "1.0.0"}, `exact: "1.0.0"`},
-		{"branch", driftplugin.SPMRequirement{Kind: "branch", Value: "main"}, `branch: "main"`},
-		{"revision", driftplugin.SPMRequirement{Kind: "revision", Value: "abc123"}, `revision: "abc123"`},
-		{"upToNextMajor", driftplugin.SPMRequirement{Kind: "upToNextMajor", Value: "1.0.0"}, `.upToNextMajor(from: "1.0.0")`},
-		{"upToNextMinor", driftplugin.SPMRequirement{Kind: "upToNextMinor", Value: "1.5.0"}, `.upToNextMinor(from: "1.5.0")`},
-		{"range", driftplugin.SPMRequirement{Kind: "range", Value: "1.0.0", Upper: "2.0.0"}, `"1.0.0"..<"2.0.0"`},
+		{"from", protocol.SPMRequirement{Kind: "from", Value: "1.0.0"}, `from: "1.0.0"`},
+		{"exact", protocol.SPMRequirement{Kind: "exact", Value: "1.0.0"}, `exact: "1.0.0"`},
+		{"branch", protocol.SPMRequirement{Kind: "branch", Value: "main"}, `branch: "main"`},
+		{"revision", protocol.SPMRequirement{Kind: "revision", Value: "abc123"}, `revision: "abc123"`},
+		{"upToNextMajor", protocol.SPMRequirement{Kind: "upToNextMajor", Value: "1.0.0"}, `.upToNextMajor(from: "1.0.0")`},
+		{"upToNextMinor", protocol.SPMRequirement{Kind: "upToNextMinor", Value: "1.5.0"}, `.upToNextMinor(from: "1.5.0")`},
+		{"range", protocol.SPMRequirement{Kind: "range", Value: "1.0.0", Upper: "2.0.0"}, `"1.0.0"..<"2.0.0"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -161,17 +162,17 @@ func TestApplyPluginPackageRequirementKinds(t *testing.T) {
 func TestApplyPluginPackageFirebaseSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	root := filepath.Join(dir, "Drift", "Plugins")
-	ops := []*driftplugin.OpIOSAddPackageDependency{
+	ops := []*protocol.OpIOSAddPackageDependency{
 		{
-			Base:        driftplugin.Base{Pkg: "github.com/foo/firebase"},
+			Base:        protocol.Base{Pkg: "github.com/foo/firebase"},
 			URL:         "https://github.com/firebase/firebase-ios-sdk",
 			Requirement: driftplugin.SPMRequirementFrom("10.0.0"),
 			Products:    []string{"FirebaseAnalytics", "FirebaseAuth", "FirebaseFirestore"},
 		},
 		{
-			Base:        driftplugin.Base{Pkg: "github.com/foo/sentry"},
+			Base:        protocol.Base{Pkg: "github.com/foo/sentry"},
 			URL:         "https://github.com/getsentry/sentry-cocoa",
-			Requirement: driftplugin.SPMRequirement{Kind: "exact", Value: "8.20.0"},
+			Requirement: protocol.SPMRequirement{Kind: "exact", Value: "8.20.0"},
 			Products:    []string{"Sentry"},
 		},
 	}
@@ -220,9 +221,9 @@ let package = Package(
 // and refuses to emit a manifest that would not parse.
 func TestApplyPluginPackageRejectsInvalidOp(t *testing.T) {
 	dir := t.TempDir()
-	_, err := ApplyPluginPackage(dir, []*driftplugin.OpIOSAddPackageDependency{
+	_, err := ApplyPluginPackage(dir, []*protocol.OpIOSAddPackageDependency{
 		{
-			Base:        driftplugin.Base{Pkg: "p"},
+			Base:        protocol.Base{Pkg: "p"},
 			URL:         "https://github.com/a/b",
 			Requirement: driftplugin.SPMRequirementFrom(`1.0"`),
 			Products:    []string{"B"},

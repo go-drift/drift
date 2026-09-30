@@ -70,7 +70,7 @@ Ejected projects (`platform/ios`, `platform/android`) run the same pipeline agai
 
 ## Ops
 
-Ops are typed structs in `pkg/plugin/ops.go`, recorded through scopes on `BuildCtx` (`pkg/plugin/buildctx.go`), and serialized as JSON with a `type` discriminator.
+Ops are typed structs in `pkg/plugin/protocol/ops.go`, recorded through scopes on `BuildCtx` (`pkg/plugin/buildctx.go`), and serialized as JSON with a `type` discriminator. Package `protocol` holds the whole CLI-to-bridge wire contract (envelope, response, ops, config schema); plugin authors import only `pkg/plugin`, plus `protocol` in tests that inspect `ctx.Ops()`.
 
 | Area | Op types |
 |------|----------|
@@ -87,7 +87,7 @@ Each op declares a merge class:
 - **Additive**: deduplicated set (identity covers the full payload).
 - **Exclusive**: at most one payload per identity.
 
-Adding an op means touching: the struct and its 5 methods plus the constructor table (`ops.go`), a recorder (`buildctx.go`), the fixture (`ops_test.go`), the bag and switch in `apply.go`, and a mutator. `TestOpsCoverAllConstructors` and `TestApplyKnowsEveryOpType` catch omissions.
+Adding an op means touching: the struct and its 5 methods plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), the bag and switch in `apply.go`, and a mutator. `TestOpsCoverAllConstructors` and `TestApplyKnowsEveryOpType` catch omissions.
 
 ## iOS specifics
 

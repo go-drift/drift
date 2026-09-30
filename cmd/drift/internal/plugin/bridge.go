@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // BridgeSource is the canonical content of tools/drift-plugins/main.go for
@@ -157,7 +157,7 @@ func BridgeCacheKey(projectRoot, cliVersion string, plugins []ConfiguredPlugin, 
 		GoSumHash        string      `json:"go_sum_hash"`
 	}{
 		CLIVersion:       cliVersion,
-		APIVersion:       driftplugin.APIVersion,
+		APIVersion:       protocol.APIVersion,
 		GoVersion:        runtime.Version(),
 		GOOS:             runtime.GOOS,
 		GOARCH:           runtime.GOARCH,
@@ -318,7 +318,7 @@ func decorateBuildError(stderr string, err error) error {
 
 // RunBridge executes the bridge binary with a build envelope and returns the
 // decoded response.
-func RunBridge(b *Bridge, env driftplugin.Envelope, logDir string) (*driftplugin.Response, error) {
+func RunBridge(b *Bridge, env protocol.Envelope, logDir string) (*protocol.Response, error) {
 	if b == nil || b.BinaryPath == "" {
 		return nil, fmt.Errorf("RunBridge: bridge binary missing")
 	}
@@ -365,12 +365,12 @@ func RunBridge(b *Bridge, env driftplugin.Envelope, logDir string) (*driftplugin
 		return nil, fmt.Errorf("read response: %w", readErr)
 	}
 
-	var resp driftplugin.Response
+	var resp protocol.Response
 	if err := json.Unmarshal(respData, &resp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
-	if resp.APIVersion != driftplugin.APIVersion {
-		return nil, fmt.Errorf("bridge API version %d does not match CLI %d", resp.APIVersion, driftplugin.APIVersion)
+	if resp.APIVersion != protocol.APIVersion {
+		return nil, fmt.Errorf("bridge API version %d does not match CLI %d", resp.APIVersion, protocol.APIVersion)
 	}
 	if resp.Error != "" {
 		return nil, fmt.Errorf("plugin bridge: %s", resp.Error)

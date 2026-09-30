@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 const baseAppGradle = `plugins {
@@ -40,9 +40,9 @@ func writeAppGradle(t *testing.T, content string) string {
 	return p
 }
 
-func op(id, version string) *driftplugin.OpAndroidGradleApplyPlugin {
-	return &driftplugin.OpAndroidGradleApplyPlugin{
-		Base:    driftplugin.Base{Pkg: "p"},
+func op(id, version string) *protocol.OpAndroidGradleApplyPlugin {
+	return &protocol.OpAndroidGradleApplyPlugin{
+		Base:    protocol.Base{Pkg: "p"},
 		ID:      id,
 		Version: version,
 	}
@@ -50,7 +50,7 @@ func op(id, version string) *driftplugin.OpAndroidGradleApplyPlugin {
 
 func TestApplyGradleApplyPluginsInsertsAfterAndroidBlock(t *testing.T) {
 	path := writeAppGradle(t, baseAppGradle)
-	_, changed, err := ApplyGradleApplyPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleApplyPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
 	})
 	if err != nil {
@@ -74,7 +74,7 @@ func TestApplyGradleApplyPluginsInsertsAfterAndroidBlock(t *testing.T) {
 
 func TestApplyGradleApplyPluginsIdempotent(t *testing.T) {
 	path := writeAppGradle(t, baseAppGradle)
-	ops := []*driftplugin.OpAndroidGradleApplyPlugin{op("foo.plugin", "1.0")}
+	ops := []*protocol.OpAndroidGradleApplyPlugin{op("foo.plugin", "1.0")}
 	if _, _, err := ApplyGradleApplyPlugins(path, ops); err != nil {
 		t.Fatalf("first: %v", err)
 	}
@@ -97,7 +97,7 @@ if (file("google-services.json").exists()) {
 }
 `
 	path := writeAppGradle(t, conditional)
-	_, changed, err := ApplyGradleApplyPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleApplyPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ if (file("google-services.json").exists()) {
 func TestApplyGradleApplyPluginsIgnoresTrailingComment(t *testing.T) {
 	commented := strings.Replace(baseAppGradle, "compileSdk 34", `compileSdk 34 // apply plugin: "foo.plugin"`, 1)
 	path := writeAppGradle(t, commented)
-	_, changed, err := ApplyGradleApplyPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{op("foo.plugin", "")})
+	_, changed, err := ApplyGradleApplyPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{op("foo.plugin", "")})
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestApplyGradleApplyPluginsIgnoresCommentedLines(t *testing.T) {
 	commented := strings.Replace(baseAppGradle, "android {", `// apply plugin: "com.google.gms.google-services"
 android {`, 1)
 	path := writeAppGradle(t, commented)
-	_, changed, err := ApplyGradleApplyPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleApplyPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
 	})
 	if err != nil {
@@ -141,7 +141,7 @@ android {`, 1)
 
 func TestApplyGradleProjectPluginsInsertsIntoExistingBlock(t *testing.T) {
 	path := writeAppGradle(t, baseProjectGradle)
-	_, changed, err := ApplyGradleProjectPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
 	})
 	if err != nil {
@@ -163,7 +163,7 @@ func TestApplyGradleProjectPluginsIdempotent(t *testing.T) {
 }
 `
 	path := writeAppGradle(t, preDeclared)
-	_, changed, err := ApplyGradleProjectPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func TestApplyGradleProjectPluginsIdempotent(t *testing.T) {
 
 func TestApplyGradleProjectPluginsSkipsEmptyVersion(t *testing.T) {
 	path := writeAppGradle(t, baseProjectGradle)
-	_, changed, err := ApplyGradleProjectPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("on.gradle.portal", ""),
 	})
 	if err != nil {
@@ -195,7 +195,7 @@ func TestApplyGradleProjectPluginsRejectsVersionMismatch(t *testing.T) {
 }
 `
 	path := writeAppGradle(t, preDeclared)
-	_, _, err := ApplyGradleProjectPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, _, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.2"),
 	})
 	if err == nil || !strings.Contains(err.Error(), "4.4.2") {
@@ -208,7 +208,7 @@ func TestApplyGradleProjectPluginsIgnoresTrailingComment(t *testing.T) {
 	commented := strings.Replace(baseProjectGradle, `"1.9.22" apply false`,
 		`"1.9.22" apply false // id "foo.plugin" version "9.9"`, 1)
 	path := writeAppGradle(t, commented)
-	_, changed, err := ApplyGradleProjectPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("foo.plugin", "1.0"),
 	})
 	if err != nil {
@@ -227,14 +227,14 @@ func TestFirebaseShapedIntegration(t *testing.T) {
 	app := writeAppGradle(t, baseAppGradle)
 	project := writeAppGradle(t, baseProjectGradle)
 
-	depOps := []*driftplugin.OpAndroidGradleAddDependency{
-		{Base: driftplugin.Base{Pkg: "fb"}, Configuration: "implementation", Coord: "com.google.firebase:firebase-bom:33.0.0"},
-		{Base: driftplugin.Base{Pkg: "fb"}, Configuration: "implementation", Coord: "com.google.firebase:firebase-analytics-ktx"},
+	depOps := []*protocol.OpAndroidGradleAddDependency{
+		{Base: protocol.Base{Pkg: "fb"}, Configuration: "implementation", Coord: "com.google.firebase:firebase-bom:33.0.0"},
+		{Base: protocol.Base{Pkg: "fb"}, Configuration: "implementation", Coord: "com.google.firebase:firebase-analytics-ktx"},
 	}
 	if _, _, err := ApplyGradleAddDependencies(app, depOps); err != nil {
 		t.Fatalf("add deps: %v", err)
 	}
-	pluginOps := []*driftplugin.OpAndroidGradleApplyPlugin{
+	pluginOps := []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
 	}
 	if _, _, err := ApplyGradleApplyPlugins(app, pluginOps); err != nil {
@@ -275,7 +275,7 @@ android {
     namespace "com.example.app"
 }`
 	path := writeAppGradle(t, noTrailing)
-	_, changed, err := ApplyGradleApplyPlugins(path, []*driftplugin.OpAndroidGradleApplyPlugin{
+	_, changed, err := ApplyGradleApplyPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("foo.plugin", "1.0"),
 	})
 	if err != nil {

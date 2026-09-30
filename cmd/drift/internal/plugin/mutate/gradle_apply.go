@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // ApplyGradleApplyPlugins inserts an `apply plugin: "<id>"` line for each
@@ -19,7 +19,7 @@ import (
 // scaffold's conditional google-services guard: the guarded line counts as
 // present, and it activates once app/google-services.json exists (see
 // OpAndroidAddAppModuleFile).
-func ApplyGradleApplyPlugins(appGradlePath string, ops []*driftplugin.OpAndroidGradleApplyPlugin) (string, bool, error) {
+func ApplyGradleApplyPlugins(appGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin) (string, bool, error) {
 	if len(ops) == 0 {
 		return appGradlePath, false, nil
 	}
@@ -51,7 +51,7 @@ func ApplyGradleApplyPlugins(appGradlePath string, ops []*driftplugin.OpAndroidG
 // declared at a different version is an error: Gradle loads one version
 // per plugin id, and silently keeping the scaffold's version would hand the
 // plugin a version it did not ask for.
-func ApplyGradleProjectPlugins(projectGradlePath string, ops []*driftplugin.OpAndroidGradleApplyPlugin) (string, bool, error) {
+func ApplyGradleProjectPlugins(projectGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin) (string, bool, error) {
 	if len(ops) == 0 {
 		return projectGradlePath, false, nil
 	}

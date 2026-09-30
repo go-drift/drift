@@ -2,21 +2,20 @@ package plugin
 
 import (
 	b64 "encoding/base64"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 func TestApplyWritesKotlinSources(t *testing.T) {
 	dir := t.TempDir()
 	body := "package com.foo.camera\nclass Stub {}\n"
-	ops := []driftplugin.Op{
-		&driftplugin.OpAddKotlinSource{
-			Base:    driftplugin.Base{Pkg: "p"},
+	ops := []protocol.Op{
+		&protocol.OpAddKotlinSource{
+			Base:    protocol.Base{Pkg: "p"},
 			Package: "com.foo.camera",
 			RelPath: "Stub.kt",
 			Content: base64(body),
@@ -41,40 +40,12 @@ func TestApplyWritesKotlinSources(t *testing.T) {
 
 func TestApplySkipsOtherPlatformOps(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidManifestAddPermission{Base: driftplugin.Base{Pkg: "p"}, Name: "android.permission.CAMERA"},
+	ops := []protocol.Op{
+		&protocol.OpAndroidManifestAddPermission{Base: protocol.Base{Pkg: "p"}, Name: "android.permission.CAMERA"},
 	}
 	// Targeting iOS but op is android: should be skipped without error.
 	if _, err := Apply(ops, dir, "ios"); err != nil {
 		t.Fatalf("Apply: %v", err)
-	}
-}
-
-func TestDecodeOpsParsesJSONList(t *testing.T) {
-	ops := []driftplugin.Op{
-		&driftplugin.OpInfoPlistSetString{Base: driftplugin.Base{Pkg: "p"}, Key: "K", Value: "V"},
-	}
-	raw, err := driftplugin.MarshalOpList(ops)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	var raws []json.RawMessage
-	if err := json.Unmarshal(raw, &raws); err != nil {
-		t.Fatalf("unmarshal list: %v", err)
-	}
-	decoded, err := DecodeOps(raws)
-	if err != nil {
-		t.Fatalf("DecodeOps: %v", err)
-	}
-	if len(decoded) != 1 {
-		t.Errorf("expected 1 op, got %d", len(decoded))
-	}
-}
-
-func TestDecodeOpsRejectsUnknown(t *testing.T) {
-	raws := []json.RawMessage{[]byte(`{"type":"not.a.real.op"}`)}
-	if _, err := DecodeOps(raws); err == nil || !strings.Contains(err.Error(), "not.a.real.op") {
-		t.Errorf("expected unknown-op error, got %v", err)
 	}
 }
 
@@ -85,8 +56,8 @@ func base64(s string) string {
 // Every op type pkg/plugin can decode must be known to Apply; otherwise a
 // plugin's op is silently dropped with only a runtime error report.
 func TestApplyKnowsEveryOpType(t *testing.T) {
-	for _, typ := range driftplugin.OpTypes() {
-		op, err := driftplugin.NewOp(typ)
+	for _, typ := range protocol.OpTypes() {
+		op, err := protocol.NewOp(typ)
 		if err != nil {
 			t.Fatalf("NewOp(%q): %v", typ, err)
 		}
@@ -98,8 +69,8 @@ func TestApplyKnowsEveryOpType(t *testing.T) {
 
 func TestApplyIOSBundleResourcesLandInPluginResources(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAddBundleResource{Base: driftplugin.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
+	ops := []protocol.Op{
+		&protocol.OpIOSAddBundleResource{Base: protocol.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
 	}
 	if _, err := Apply(ops, dir, "ios"); err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -119,9 +90,9 @@ func TestApplyXtoolBundleResourcesAndImageSets(t *testing.T) {
 	if err := os.WriteFile(yml, []byte("bundleID: com.example.app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ops := []driftplugin.Op{
-		&driftplugin.OpIOSAddBundleResource{Base: driftplugin.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
-		&driftplugin.OpIOSAssetsAddImageSet{Base: driftplugin.Base{Pkg: "splash"}, Name: "DriftSplash", Image: base64("png")},
+	ops := []protocol.Op{
+		&protocol.OpIOSAddBundleResource{Base: protocol.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
+		&protocol.OpIOSAssetsAddImageSet{Base: protocol.Base{Pkg: "splash"}, Name: "DriftSplash", Image: base64("png")},
 	}
 	if _, err := Apply(ops, dir, "xtool"); err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -157,8 +128,8 @@ func TestApplyXtoolBundleResourcesAndImageSets(t *testing.T) {
 
 func TestApplyAndroidAppModuleFile(t *testing.T) {
 	dir := t.TempDir()
-	ops := []driftplugin.Op{
-		&driftplugin.OpAndroidAddAppModuleFile{Base: driftplugin.Base{Pkg: "fb"}, Name: "google-services.json", Content: base64("{}")},
+	ops := []protocol.Op{
+		&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "fb"}, Name: "google-services.json", Content: base64("{}")},
 	}
 	if _, err := Apply(ops, dir, "android"); err != nil {
 		t.Fatalf("Apply: %v", err)

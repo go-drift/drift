@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // This test invokes Main via an external-test pattern: it builds a tiny
@@ -31,7 +33,7 @@ func TestMainBuildRoundTrip(t *testing.T) {
 	cmd := exec.Command("go", "run", bridgeFile, "--response-file="+respFile)
 	cmd.Env = append(os.Environ(), "GOFLAGS=")
 	env := map[string]any{
-		"api_version":  APIVersion,
+		"api_version":  protocol.APIVersion,
 		"cmd":          "build",
 		"platform":     "ios",
 		"project_root": tmp,
@@ -66,12 +68,12 @@ func TestMainBuildRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
-	var resp Response
+	var resp protocol.Response
 	if err := json.Unmarshal(data, &resp); err != nil {
 		t.Fatalf("decode response: %v\nbody: %s", err, data)
 	}
-	if resp.APIVersion != APIVersion {
-		t.Errorf("api version %d, want %d", resp.APIVersion, APIVersion)
+	if resp.APIVersion != protocol.APIVersion {
+		t.Errorf("api version %d, want %d", resp.APIVersion, protocol.APIVersion)
 	}
 	if resp.Error != "" {
 		t.Errorf("unexpected error: %s", resp.Error)
@@ -150,10 +152,10 @@ func TestMainPanicsOnDuplicateName(t *testing.T) {
 }
 
 func TestUnknownEnvelopePackageSurfaces(t *testing.T) {
-	resp := doBuild(Envelope{
-		APIVersion: APIVersion,
+	resp := doBuild(protocol.Envelope{
+		APIVersion: protocol.APIVersion,
 		Cmd:        "build",
-		Plugins: []EnvelopePlugin{
+		Plugins: []protocol.EnvelopePlugin{
 			{Package: "github.com/unknown/p", ConfigYAML: ""},
 		},
 	}, nil)

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // emptySwiftSource is the trivial source the wrapper target ships. SPM
@@ -40,7 +40,7 @@ import PackageDescription
 //
 // Idempotent: byte-identical input produces no writes. Ops are sorted by
 // URL internally for deterministic output.
-func ApplyPluginPackage(packageRoot string, ops []*driftplugin.OpIOSAddPackageDependency) ([]string, error) {
+func ApplyPluginPackage(packageRoot string, ops []*protocol.OpIOSAddPackageDependency) ([]string, error) {
 	pkgContent, err := renderPluginPackage(ops)
 	if err != nil {
 		return nil, err
@@ -66,13 +66,13 @@ func ApplyPluginPackage(packageRoot string, ops []*driftplugin.OpIOSAddPackageDe
 // given ops. Ops are re-validated because they may arrive over the JSON
 // bridge without passing through the recorder; validation also guarantees
 // every string is safe to quote verbatim as a Swift literal.
-func renderPluginPackage(ops []*driftplugin.OpIOSAddPackageDependency) (string, error) {
+func renderPluginPackage(ops []*protocol.OpIOSAddPackageDependency) (string, error) {
 	for _, op := range ops {
-		if err := driftplugin.ValidateSPMDependency(op.URL, op.Requirement, op.Products); err != nil {
+		if err := protocol.ValidateSPMDependency(op.URL, op.Requirement, op.Products); err != nil {
 			return "", fmt.Errorf("plugin %s: %w", pluginLabel(op.PluginPackage()), err)
 		}
 	}
-	sorted := append([]*driftplugin.OpIOSAddPackageDependency(nil), ops...)
+	sorted := append([]*protocol.OpIOSAddPackageDependency(nil), ops...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].URL < sorted[j].URL })
 
 	var b strings.Builder
@@ -93,7 +93,7 @@ func renderPluginPackage(ops []*driftplugin.OpIOSAddPackageDependency) (string, 
 	b.WriteString("            name: \"DriftPlugins\",\n")
 	b.WriteString("            dependencies: [\n")
 	for _, op := range sorted {
-		identity := driftplugin.SPMPackageIdentity(op.URL)
+		identity := protocol.SPMPackageIdentity(op.URL)
 		products := append([]string(nil), op.Products...)
 		sort.Strings(products)
 		for _, product := range products {
@@ -112,29 +112,29 @@ func renderPluginPackage(ops []*driftplugin.OpIOSAddPackageDependency) (string, 
 // formatSPMRequirement returns the clause that follows `url: "..."` inside
 // `.package(url:..., ...)`. The requirement is already validated, so every
 // kind is known.
-func formatSPMRequirement(req driftplugin.SPMRequirement) string {
+func formatSPMRequirement(req protocol.SPMRequirement) string {
 	v := swiftString(req.Value)
 	switch req.Kind {
-	case driftplugin.SPMFrom:
+	case protocol.SPMFrom:
 		return "from: " + v
-	case driftplugin.SPMExact:
+	case protocol.SPMExact:
 		return "exact: " + v
-	case driftplugin.SPMBranch:
+	case protocol.SPMBranch:
 		return "branch: " + v
-	case driftplugin.SPMRevision:
+	case protocol.SPMRevision:
 		return "revision: " + v
-	case driftplugin.SPMUpToNextMajor:
+	case protocol.SPMUpToNextMajor:
 		return ".upToNextMajor(from: " + v + ")"
-	case driftplugin.SPMUpToNextMinor:
+	case protocol.SPMUpToNextMinor:
 		return ".upToNextMinor(from: " + v + ")"
-	case driftplugin.SPMRange:
+	case protocol.SPMRange:
 		return v + "..<" + swiftString(req.Upper)
 	}
 	panic(fmt.Sprintf("formatSPMRequirement: unvalidated kind %q", req.Kind))
 }
 
 // swiftString quotes s as a Swift string literal. Callers only pass values
-// that driftplugin.ValidateSPMDependency has checked contain no quote,
+// that protocol.ValidateSPMDependency has checked contain no quote,
 // backslash, or newline, so no escaping is needed. (Go's %q is not a
 // substitute: its escapes, e.g. \x00, are not valid Swift.)
 func swiftString(s string) string { return `"` + s + `"` }

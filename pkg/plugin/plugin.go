@@ -7,6 +7,8 @@ import (
 	"io"
 	"reflect"
 
+	"github.com/go-drift/drift/pkg/plugin/protocol"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,7 +32,7 @@ type Binding struct {
 	buildAny func(ctx *BuildCtx, configYAML []byte) error
 	// schema is captured at Bind time so the schema subcommand can describe
 	// the plugin's Config without re-running Build.
-	schema PluginSchema
+	schema protocol.PluginSchema
 }
 
 // Bind wraps a typed Plugin[T] into a non-generic Binding suitable for Main.
@@ -80,7 +82,7 @@ func Bind[T any](pkgPath string, p Plugin[T]) Binding {
 // zero-valued after decode. The drift CLI's `drift plugin sync` runs the
 // same check; running it inline here means `drift build`/`run` (the main
 // user path) also rejects missing required config.
-func validateRequired[T any](pkgPath string, schema PluginSchema, cfg T) error {
+func validateRequired[T any](pkgPath string, schema protocol.PluginSchema, cfg T) error {
 	v := reflect.ValueOf(cfg)
 	if v.Kind() != reflect.Struct {
 		return nil
@@ -110,4 +112,4 @@ func (b Binding) Build(ctx *BuildCtx, configYAML []byte) error {
 }
 
 // Schema returns the captured PluginSchema for the binding.
-func (b Binding) Schema() PluginSchema { return b.schema }
+func (b Binding) Schema() protocol.PluginSchema { return b.schema }

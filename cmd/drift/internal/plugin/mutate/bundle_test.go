@@ -9,19 +9,19 @@ import (
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-func iosBundleOp(pkg, path string, content []byte) *driftplugin.OpIOSAddBundleResource {
-	return &driftplugin.OpIOSAddBundleResource{
-		Base:    driftplugin.Base{Pkg: pkg},
+func iosBundleOp(pkg, path string, content []byte) *protocol.OpIOSAddBundleResource {
+	return &protocol.OpIOSAddBundleResource{
+		Base:    protocol.Base{Pkg: pkg},
 		Path:    path,
 		Content: base64.StdEncoding.EncodeToString(content),
 	}
 }
 
 // writeBundleOps decodes ops the way apply.go does and syncs dir to them.
-func writeBundleOps(t *testing.T, dir string, ops ...*driftplugin.OpIOSAddBundleResource) ([]string, error) {
+func writeBundleOps(t *testing.T, dir string, ops ...*protocol.OpIOSAddBundleResource) ([]string, error) {
 	t.Helper()
 	files, err := IOSBundleFiles(ops)
 	if err != nil {
@@ -30,9 +30,9 @@ func writeBundleOps(t *testing.T, dir string, ops ...*driftplugin.OpIOSAddBundle
 	return WriteIOSBundleResources(dir, files)
 }
 
-func androidAssetOp(pkg, path string, content []byte) *driftplugin.OpAndroidAddAsset {
-	return &driftplugin.OpAndroidAddAsset{
-		Base:    driftplugin.Base{Pkg: pkg},
+func androidAssetOp(pkg, path string, content []byte) *protocol.OpAndroidAddAsset {
+	return &protocol.OpAndroidAddAsset{
+		Base:    protocol.Base{Pkg: pkg},
 		Path:    path,
 		Content: base64.StdEncoding.EncodeToString(content),
 	}
@@ -147,13 +147,13 @@ func TestWriteIOSBundleResourceEmptyRemovesDir(t *testing.T) {
 
 func TestWriteIOSBundleResourceDuplicateNameFails(t *testing.T) {
 	dir := t.TempDir()
-	images, err := ImageSetBundleFiles([]*driftplugin.OpIOSAssetsAddImageSet{
-		{Base: driftplugin.Base{Pkg: "splash"}, Name: "Logo", Image: base64.StdEncoding.EncodeToString([]byte("png"))},
+	images, err := ImageSetBundleFiles([]*protocol.OpIOSAssetsAddImageSet{
+		{Base: protocol.Base{Pkg: "splash"}, Name: "Logo", Image: base64.StdEncoding.EncodeToString([]byte("png"))},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := IOSBundleFiles([]*driftplugin.OpIOSAddBundleResource{iosBundleOp("other", "Logo.png", []byte("other"))})
+	files, err := IOSBundleFiles([]*protocol.OpIOSAddBundleResource{iosBundleOp("other", "Logo.png", []byte("other"))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +164,8 @@ func TestWriteIOSBundleResourceDuplicateNameFails(t *testing.T) {
 }
 
 func TestImageSetBundleFilesLoosePNG(t *testing.T) {
-	files, err := ImageSetBundleFiles([]*driftplugin.OpIOSAssetsAddImageSet{
-		{Base: driftplugin.Base{Pkg: "splash"}, Name: "DriftSplash", Image: base64.StdEncoding.EncodeToString([]byte("png-bytes"))},
+	files, err := ImageSetBundleFiles([]*protocol.OpIOSAssetsAddImageSet{
+		{Base: protocol.Base{Pkg: "splash"}, Name: "DriftSplash", Image: base64.StdEncoding.EncodeToString([]byte("png-bytes"))},
 	})
 	if err != nil {
 		t.Fatalf("convert: %v", err)
@@ -177,21 +177,21 @@ func TestImageSetBundleFilesLoosePNG(t *testing.T) {
 
 func TestWriteAndroidAppModuleFiles(t *testing.T) {
 	dir := t.TempDir()
-	op := &driftplugin.OpAndroidAddAppModuleFile{
-		Base:    driftplugin.Base{Pkg: "fb"},
+	op := &protocol.OpAndroidAddAppModuleFile{
+		Base:    protocol.Base{Pkg: "fb"},
 		Name:    "google-services.json",
 		Content: base64.StdEncoding.EncodeToString([]byte(`{"project_info":{}}`)),
 	}
-	changed, err := WriteAndroidAppModuleFiles(dir, []*driftplugin.OpAndroidAddAppModuleFile{op})
+	changed, err := WriteAndroidAppModuleFiles(dir, []*protocol.OpAndroidAddAppModuleFile{op})
 	if err != nil || len(changed) != 1 {
 		t.Fatalf("write: %v, %v", changed, err)
 	}
-	changed, err = WriteAndroidAppModuleFiles(dir, []*driftplugin.OpAndroidAddAppModuleFile{op})
+	changed, err = WriteAndroidAppModuleFiles(dir, []*protocol.OpAndroidAddAppModuleFile{op})
 	if err != nil || len(changed) != 0 {
 		t.Errorf("expected idempotent rerun, got %v, %v", changed, err)
 	}
-	bad := &driftplugin.OpAndroidAddAppModuleFile{Base: op.Base, Name: "build.gradle", Content: op.Content}
-	if _, err := WriteAndroidAppModuleFiles(dir, []*driftplugin.OpAndroidAddAppModuleFile{bad}); err == nil {
+	bad := &protocol.OpAndroidAddAppModuleFile{Base: op.Base, Name: "build.gradle", Content: op.Content}
+	if _, err := WriteAndroidAppModuleFiles(dir, []*protocol.OpAndroidAddAppModuleFile{bad}); err == nil {
 		t.Errorf("expected reserved-name error")
 	}
 }
@@ -206,7 +206,7 @@ func TestWriteIOSBundleResourceBinaryRoundTrip(t *testing.T) {
 		"random.bin": randomBytes(t, 1024),
 		"nulls.bin":  {0x00, 0x01, 0x00, 0x02, 0xFF, 0xFE},
 	}
-	var ops []*driftplugin.OpIOSAddBundleResource
+	var ops []*protocol.OpIOSAddBundleResource
 	for name, content := range cases {
 		ops = append(ops, iosBundleOp("p", name, content))
 	}
@@ -239,7 +239,7 @@ func TestWriteIOSBundleResourceRejectsBadPath(t *testing.T) {
 func TestWriteAndroidAssetVerbatim(t *testing.T) {
 	dir := t.TempDir()
 	content := []byte(`{"project_info":{"project_id":"test"}}`)
-	changed, err := WriteAndroidAssets(dir, []*driftplugin.OpAndroidAddAsset{
+	changed, err := WriteAndroidAssets(dir, []*protocol.OpAndroidAddAsset{
 		androidAssetOp("github.com/foo/data", "data/config.json", content),
 	})
 	if err != nil {
@@ -257,10 +257,10 @@ func TestWriteAndroidAssetVerbatim(t *testing.T) {
 func TestWriteAndroidAssetIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	op := androidAssetOp("p", "fonts/roboto.ttf", []byte("font"))
-	if _, err := WriteAndroidAssets(dir, []*driftplugin.OpAndroidAddAsset{op}); err != nil {
+	if _, err := WriteAndroidAssets(dir, []*protocol.OpAndroidAddAsset{op}); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	changed, err := WriteAndroidAssets(dir, []*driftplugin.OpAndroidAddAsset{op})
+	changed, err := WriteAndroidAssets(dir, []*protocol.OpAndroidAddAsset{op})
 	if err != nil {
 		t.Fatalf("second: %v", err)
 	}

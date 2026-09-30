@@ -1,12 +1,11 @@
 package plugin
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // ConflictError is returned when two ops with the same identity can't be
@@ -22,25 +21,11 @@ func (e *ConflictError) Error() string {
 	return fmt.Sprintf("plugin conflict: %s (op %s, key %s)", pluginList, e.OpType, e.Identity)
 }
 
-// DecodeOps converts a slice of raw JSON ops into typed Ops, mirroring the
-// boundary-parser convention from pkg/platform/stream.go.
-func DecodeOps(raws []json.RawMessage) ([]driftplugin.Op, error) {
-	out := make([]driftplugin.Op, 0, len(raws))
-	for i, raw := range raws {
-		op, err := driftplugin.UnmarshalOp(raw)
-		if err != nil {
-			return nil, fmt.Errorf("op %d: %w", i, err)
-		}
-		out = append(out, op)
-	}
-	return out, nil
-}
-
 // Validate normalises an op list per the conflict policy and returns the
 // deduped, merged result. Errors are *ConflictError on collision.
-func Validate(ops []driftplugin.Op) ([]driftplugin.Op, error) {
+func Validate(ops []protocol.Op) ([]protocol.Op, error) {
 	type bucket struct {
-		op        driftplugin.Op
+		op        protocol.Op
 		hash      string
 		plugins   []string // ordered
 		pluginSet map[string]bool
@@ -63,7 +48,7 @@ func Validate(ops []driftplugin.Op) ([]driftplugin.Op, error) {
 		}
 
 		switch op.MergeClass() {
-		case driftplugin.ClassIdempotent:
+		case protocol.ClassIdempotent:
 			if b.hash != hash {
 				return nil, &ConflictError{
 					Identity: id,
@@ -76,13 +61,13 @@ func Validate(ops []driftplugin.Op) ([]driftplugin.Op, error) {
 				b.plugins = append(b.plugins, pkg)
 				b.pluginSet[pkg] = true
 			}
-		case driftplugin.ClassAdditive:
+		case protocol.ClassAdditive:
 			// Same identity covers full payload; collapse silently.
 			if !b.pluginSet[pkg] {
 				b.plugins = append(b.plugins, pkg)
 				b.pluginSet[pkg] = true
 			}
-		case driftplugin.ClassExclusive:
+		case protocol.ClassExclusive:
 			if b.hash != hash {
 				return nil, &ConflictError{
 					Identity: id,
@@ -97,7 +82,7 @@ func Validate(ops []driftplugin.Op) ([]driftplugin.Op, error) {
 		}
 	}
 
-	out := make([]driftplugin.Op, 0, len(order))
+	out := make([]protocol.Op, 0, len(order))
 	for _, id := range order {
 		out = append(out, buckets[id].op)
 	}

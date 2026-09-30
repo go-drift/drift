@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // SyncOptions controls drift plugin sync.
@@ -24,8 +24,8 @@ type SyncResult struct {
 	Plugins           []ConfiguredPlugin
 	BridgeRegenerated bool
 	Missing           []string
-	Diagnostics       []driftplugin.ValidationDiagnostic
-	Schemas           map[string]driftplugin.PluginSchema
+	Diagnostics       []protocol.ValidationDiagnostic
+	Schemas           map[string]protocol.PluginSchema
 }
 
 // Sync implements the drift plugin sync command. It regenerates
@@ -78,8 +78,8 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 	// best-effort and report true if the file exists.
 	res.BridgeRegenerated = true
 
-	schemaResp, err := RunBridge(bridge, driftplugin.Envelope{
-		APIVersion: driftplugin.APIVersion,
+	schemaResp, err := RunBridge(bridge, protocol.Envelope{
+		APIVersion: protocol.APIVersion,
 		Cmd:        "schema",
 	}, "")
 	if err != nil {
@@ -90,7 +90,7 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 	for _, p := range plugins {
 		schema, ok := schemaResp.Schemas[p.Package]
 		if !ok {
-			res.Diagnostics = append(res.Diagnostics, driftplugin.ValidationDiagnostic{
+			res.Diagnostics = append(res.Diagnostics, protocol.ValidationDiagnostic{
 				Plugin:  p.Package,
 				Message: "bridge returned no schema for plugin",
 			})
@@ -98,7 +98,7 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		}
 		cfg, err := p.ConfigMap()
 		if err != nil {
-			res.Diagnostics = append(res.Diagnostics, driftplugin.ValidationDiagnostic{
+			res.Diagnostics = append(res.Diagnostics, protocol.ValidationDiagnostic{
 				Plugin:  p.Package,
 				Message: err.Error(),
 			})
@@ -159,12 +159,12 @@ func List(projectRoot, cliVersion string, resolve bool) (*ListResult, error) {
 		}
 	}
 
-	var schemas map[string]driftplugin.PluginSchema
+	var schemas map[string]protocol.PluginSchema
 	if resolve {
 		bridge, err := EnsureBridge(projectRoot, cliVersion, plugins, infos)
 		if err == nil {
-			resp, err := RunBridge(bridge, driftplugin.Envelope{
-				APIVersion: driftplugin.APIVersion,
+			resp, err := RunBridge(bridge, protocol.Envelope{
+				APIVersion: protocol.APIVersion,
 				Cmd:        "schema",
 			}, "")
 			if err == nil {

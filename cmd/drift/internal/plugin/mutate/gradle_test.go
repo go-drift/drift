@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 const baseGradle = `plugins {
@@ -35,9 +35,9 @@ func writeGradle(t *testing.T, content string) string {
 
 func TestApplyGradleAddDependencies_InsertsIntoExistingBlock(t *testing.T) {
 	path := writeGradle(t, baseGradle)
-	ops := []*driftplugin.OpAndroidGradleAddDependency{
+	ops := []*protocol.OpAndroidGradleAddDependency{
 		{
-			Base:          driftplugin.Base{Pkg: "github.com/foo/splash"},
+			Base:          protocol.Base{Pkg: "github.com/foo/splash"},
 			Configuration: "implementation",
 			Coord:         "androidx.core:core-splashscreen:1.0.1",
 		},
@@ -61,9 +61,9 @@ func TestApplyGradleAddDependencies_InsertsIntoExistingBlock(t *testing.T) {
 
 func TestApplyGradleAddDependencies_IdempotentReapply(t *testing.T) {
 	path := writeGradle(t, baseGradle)
-	ops := []*driftplugin.OpAndroidGradleAddDependency{
+	ops := []*protocol.OpAndroidGradleAddDependency{
 		{
-			Base:          driftplugin.Base{Pkg: "github.com/foo/splash"},
+			Base:          protocol.Base{Pkg: "github.com/foo/splash"},
 			Configuration: "implementation",
 			Coord:         "androidx.core:core-splashscreen:1.0.1",
 		},
@@ -82,9 +82,9 @@ func TestApplyGradleAddDependencies_IdempotentReapply(t *testing.T) {
 
 func TestApplyGradleAddDependencies_DedupesIdenticalInOpList(t *testing.T) {
 	path := writeGradle(t, baseGradle)
-	ops := []*driftplugin.OpAndroidGradleAddDependency{
-		{Base: driftplugin.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
-		{Base: driftplugin.Base{Pkg: "b"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
+	ops := []*protocol.OpAndroidGradleAddDependency{
+		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
+		{Base: protocol.Base{Pkg: "b"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
 	if _, _, err := ApplyGradleAddDependencies(path, ops); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -97,8 +97,8 @@ func TestApplyGradleAddDependencies_DedupesIdenticalInOpList(t *testing.T) {
 
 func TestApplyGradleAddDependencies_PreservesExistingFormat(t *testing.T) {
 	path := writeGradle(t, baseGradle)
-	ops := []*driftplugin.OpAndroidGradleAddDependency{
-		{Base: driftplugin.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
+	ops := []*protocol.OpAndroidGradleAddDependency{
+		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
 	if _, _, err := ApplyGradleAddDependencies(path, ops); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -123,8 +123,8 @@ func TestApplyGradleAddDependencies_RejectsKotlinDSL(t *testing.T) {
 	if err := os.WriteFile(ktsPath, []byte("// kotlin DSL\n"), 0o644); err != nil {
 		t.Fatalf("seed kts: %v", err)
 	}
-	ops := []*driftplugin.OpAndroidGradleAddDependency{
-		{Base: driftplugin.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
+	ops := []*protocol.OpAndroidGradleAddDependency{
+		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
 	_, _, err := ApplyGradleAddDependencies(gradlePath, ops)
 	if !errors.Is(err, errKotlinDSL) {
@@ -159,8 +159,8 @@ android {
 }
 `
 	path := writeGradle(t, noBlock)
-	ops := []*driftplugin.OpAndroidGradleAddDependency{
-		{Base: driftplugin.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
+	ops := []*protocol.OpAndroidGradleAddDependency{
+		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
 	_, _, err := ApplyGradleAddDependencies(path, ops)
 	if err == nil {

@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // errKotlinDSL is returned when the project ships a Kotlin DSL build file
@@ -26,7 +26,7 @@ var errKotlinDSL = fmt.Errorf(
 // Idempotent: re-runs of `drift build` against an unchanged project produce
 // no Gradle file modifications. This is what makes the plugin pipeline cheap
 // to re-run in watch mode without invalidating Gradle's incremental cache.
-func ApplyGradleAddDependencies(gradlePath string, ops []*driftplugin.OpAndroidGradleAddDependency) (string, bool, error) {
+func ApplyGradleAddDependencies(gradlePath string, ops []*protocol.OpAndroidGradleAddDependency) (string, bool, error) {
 	if len(ops) == 0 {
 		return gradlePath, false, nil
 	}
