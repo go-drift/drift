@@ -3,8 +3,11 @@ package platform
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
+
+	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
 
 // MethodHandler handles incoming method calls on a channel.
@@ -80,33 +83,49 @@ func (s *Subscription) IsCanceled() bool {
 
 // EventChannel provides stream-based event communication from native to Go.
 //
-// When constructed via [NewStickyEventChannel], the channel remembers the most
-// recently dispatched event payload (a single slot, overwritten on each
-// dispatch). New subscribers receive that remembered payload exactly once on
-// [Listen], before any subsequent live event. This solves the late-subscriber
-// problem for one-shot events such as "first frame rendered."
+// How an event dispatched with no subscriber, or before a subscriber joined,
+// reaches later subscribers depends on the constructor:
+//   - [NewEventChannel]: it does not; events go to current subscribers only.
+//   - [NewStickyEventChannel]: the most recent event is replayed to every
+//     new subscriber, for one-shot signals such as "first frame rendered".
+//   - [NewQueuedEventChannel]: events dispatched while nobody listens are
+//     queued and delivered, in order, when a subscriber joins, for events
+//     that must each be handled once, such as a notification tap that
+//     launched the app before the app subscribed.
 type EventChannel struct {
 	name          string
 	codec         MessageCodec
+	delivery      eventDelivery
 	subscriptions []*Subscription
 	started       bool // whether native event stream is active
 	mu            sync.Mutex
 
-	// sticky and replay form the per-channel single-slot buffer for
-	// late-subscriber replay. Both are protected by mu.
-	sticky      bool
+	// Sticky channels: the single replay slot. Protected by mu.
 	replayValid bool
 	replayData  any
+
+	// Queued channels: events awaiting a subscriber, oldest first, at most
+	// queueCap of them. draining is set while Listen delivers the queue;
+	// events dispatched meanwhile join the queue so order is kept.
+	// Protected by mu.
+	queue    []any
+	queueCap int
+	draining bool
 }
+
+// eventDelivery is how an [EventChannel] treats subscribers that join after
+// an event was dispatched.
+type eventDelivery int
+
+const (
+	deliverLive eventDelivery = iota
+	deliverSticky
+	deliverQueued
+)
 
 // NewEventChannel creates a new event channel with the given name.
 func NewEventChannel(name string) *EventChannel {
-	ch := &EventChannel{
-		name:  name,
-		codec: DefaultCodec,
-	}
-	registry.registerEvent(name, ch)
-	return ch
+	return newEventChannel(name, deliverLive, 0)
 }
 
 // NewStickyEventChannel creates an event channel that remembers the most
@@ -118,10 +137,30 @@ func NewEventChannel(name string) *EventChannel {
 // Sticky storage holds a single slot, overwritten on every subsequent
 // dispatch. Errors and Done do not populate the slot.
 func NewStickyEventChannel(name string) *EventChannel {
+	return newEventChannel(name, deliverSticky, 0)
+}
+
+// NewQueuedEventChannel creates an event channel that keeps events
+// dispatched while it has no subscribers, up to capacity (the oldest is
+// dropped and reported beyond that), and delivers them in order to the next
+// subscriber from [Listen], before any later event. Each queued event is
+// delivered once: subscribers joining after the queue drained see only
+// live events. Errors and Done are never queued.
+//
+// Panics if capacity is not positive.
+func NewQueuedEventChannel(name string, capacity int) *EventChannel {
+	if capacity <= 0 {
+		panic(fmt.Sprintf("platform: queued event channel %q needs a positive capacity, got %d", name, capacity))
+	}
+	return newEventChannel(name, deliverQueued, capacity)
+}
+
+func newEventChannel(name string, delivery eventDelivery, queueCap int) *EventChannel {
 	ch := &EventChannel{
-		name:   name,
-		codec:  DefaultCodec,
-		sticky: true,
+		name:     name,
+		codec:    DefaultCodec,
+		delivery: delivery,
+		queueCap: queueCap,
 	}
 	registry.registerEvent(name, ch)
 	return ch
@@ -138,7 +177,7 @@ func (c *EventChannel) Name() string {
 // Callers can use this to assert framework-level expectations (e.g. that
 // a lifecycle channel is sticky in tests).
 func (c *EventChannel) IsSticky() bool {
-	return c.sticky
+	return c.delivery == deliverSticky
 }
 
 // Listen subscribes to events on this channel.
@@ -159,9 +198,13 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 		c.started = true
 	}
 	var replay any
-	hasReplay := c.sticky && c.replayValid
+	hasReplay := c.delivery == deliverSticky && c.replayValid
 	if hasReplay {
 		replay = c.replayData
+	}
+	drain := c.delivery == deliverQueued && len(c.queue) > 0 && !c.draining
+	if drain {
+		c.draining = true
 	}
 	c.mu.Unlock()
 
@@ -170,6 +213,12 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 	// caller can observe the replay before returning.
 	if hasReplay && handler.OnEvent != nil && !sub.IsCanceled() {
 		handler.OnEvent(replay)
+	}
+
+	// Deliver what was queued while nobody listened, synchronously like a
+	// sticky replay, so the caller has seen it when Listen returns.
+	if drain {
+		c.drainQueue()
 	}
 
 	// Notify native that we're listening. Skip if:
@@ -217,17 +266,73 @@ func (c *EventChannel) removeSubscription(sub *Subscription) {
 //
 // On sticky channels, the event payload is stored in the channel's single
 // replay slot before being broadcast, so subscribers that join afterwards
-// will receive it via [Listen]. Errors and Done do not populate the slot.
+// will receive it via [Listen]. On queued channels, an event with no
+// subscriber to take it, or arriving while [Listen] drains the queue, joins
+// the queue. Errors and Done are neither stored nor queued.
 func (c *EventChannel) dispatchEvent(data any) {
 	c.mu.Lock()
-	if c.sticky {
+	switch c.delivery {
+	case deliverSticky:
 		c.replayValid = true
 		c.replayData = data
+	case deliverQueued:
+		if c.draining || len(c.subscriptions) == 0 {
+			c.enqueueLocked(data)
+			c.mu.Unlock()
+			return
+		}
 	}
-	subs := make([]*Subscription, len(c.subscriptions))
-	copy(subs, c.subscriptions)
+	subs := c.snapshotLocked()
 	c.mu.Unlock()
 
+	deliverEvent(subs, data)
+}
+
+// enqueueLocked appends data to the queue, dropping and reporting the
+// oldest event when full. Caller holds mu.
+func (c *EventChannel) enqueueLocked(data any) {
+	if len(c.queue) == c.queueCap {
+		c.queue = c.queue[1:]
+		drifterrors.Report(&drifterrors.DriftError{
+			Op:      "platform.queueEvent",
+			Kind:    drifterrors.KindPlatform,
+			Channel: c.name,
+			Err:     fmt.Errorf("no subscriber and %d events queued; dropped the oldest", c.queueCap),
+		})
+	}
+	c.queue = append(c.queue, data)
+}
+
+// drainQueue delivers queued events in order to the subscribers present at
+// each delivery, without holding mu, so a handler may Listen or Cancel. It
+// stops when the queue is empty, or keeps the rest queued if every
+// subscriber left. Called by the Listen that set draining.
+func (c *EventChannel) drainQueue() {
+	for {
+		c.mu.Lock()
+		if len(c.queue) == 0 || len(c.subscriptions) == 0 {
+			c.draining = false
+			c.mu.Unlock()
+			return
+		}
+		data := c.queue[0]
+		c.queue[0] = nil
+		c.queue = c.queue[1:]
+		subs := c.snapshotLocked()
+		c.mu.Unlock()
+
+		deliverEvent(subs, data)
+	}
+}
+
+// snapshotLocked copies the subscriber list. Caller holds mu.
+func (c *EventChannel) snapshotLocked() []*Subscription {
+	subs := make([]*Subscription, len(c.subscriptions))
+	copy(subs, c.subscriptions)
+	return subs
+}
+
+func deliverEvent(subs []*Subscription, data any) {
 	for _, sub := range subs {
 		if !sub.IsCanceled() && sub.handler.OnEvent != nil {
 			sub.handler.OnEvent(data)
@@ -238,8 +343,7 @@ func (c *EventChannel) dispatchEvent(data any) {
 // dispatchError sends an error to all subscribers.
 func (c *EventChannel) dispatchError(err error) {
 	c.mu.Lock()
-	subs := make([]*Subscription, len(c.subscriptions))
-	copy(subs, c.subscriptions)
+	subs := c.snapshotLocked()
 	c.mu.Unlock()
 
 	for _, sub := range subs {
@@ -252,8 +356,7 @@ func (c *EventChannel) dispatchError(err error) {
 // dispatchDone notifies all subscribers that the stream has ended.
 func (c *EventChannel) dispatchDone() {
 	c.mu.Lock()
-	subs := make([]*Subscription, len(c.subscriptions))
-	copy(subs, c.subscriptions)
+	subs := c.snapshotLocked()
 	c.subscriptions = nil
 	c.started = false
 	c.mu.Unlock()
