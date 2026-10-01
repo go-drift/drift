@@ -22,7 +22,8 @@ let package = Package(
         .systemLibrary(name: "CSkia", path: "Libraries/CSkia"),
         .target(
             name: "{{.AppName}}",
-            dependencies: ["CDrift", "CSkia", "DriftPlugins"],
+            // A local package's identity is its directory name, "Plugins".
+            dependencies: ["CDrift", "CSkia", .product(name: "DriftPlugins", package: "Plugins")],
             path: "Sources/Runner",
             // Info.plist and AppIcon.png are referenced explicitly via
             // xtool.yml. Plugin bundle resources do not go through SwiftPM:
