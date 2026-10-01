@@ -367,19 +367,6 @@ func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
 	})
 }
 
-// AddAsset records a file to drop into the Android app's assets/ directory
-// at the assets-relative path. Gradle auto-bundles app/src/main/assets/, so
-// no manifest edits are needed. Use for fonts, ML models, or other static
-// content the app reads via AssetManager. Build-time config files belong in
-// AddAppModuleFile. path is a canonical slash-separated relative path.
-func (s *AndroidScope) AddAsset(path string, content []byte) {
-	s.b.push(&protocol.OpAndroidAddAsset{
-		Base:    newBase(s.b),
-		Path:    path,
-		Content: protocol.EncodeContent(content),
-	})
-}
-
 // AddAppModuleFile records a file to drop into the Android app module
 // directory, next to app/build.gradle. Use for build-time config that Gradle
 // plugins read from there, such as Firebase's google-services.json. name is

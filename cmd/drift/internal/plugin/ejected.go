@@ -33,9 +33,6 @@ var iosWiring = []wiringCall{
 	{"Runner/AppDelegate.swift", "DriftPlugins.shared.didRegisterForRemoteNotifications(", "plugins receive the APNs token"},
 	{"Runner/AppDelegate.swift", "DriftPlugins.shared.didFailToRegisterForRemoteNotifications(", "plugins see APNs registration failures"},
 	{"Runner/AppDelegate.swift", "DriftPlugins.shared.didReceiveRemoteNotification(", "plugins receive remote notifications"},
-	{"Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "plugins can claim opened URLs"},
-	{"Runner/SceneDelegate.swift", "DeepLinkHandler.route(userActivity:", "plugins can claim universal links"},
-	{"Runner/PlatformChannel.swift", "static func route(url:", "DeepLinkHandler.route exists"},
 	{"Runner/DriftViewController.swift", "DriftPlugins.shared.attach(self, overlayView:", "plugins attach to the Drift view"},
 	{"Runner/DriftViewController.swift", "DriftPlugins.shared.detach(", "plugins detach from the Drift view"},
 	{"Runner.xcodeproj/project.pbxproj", "PBXFileSystemSynchronizedRootGroup", "Xcode compiles the plugin sources Drift writes under Runner/ (project format 77, Xcode 16+)"},
@@ -43,12 +40,9 @@ var iosWiring = []wiringCall{
 
 var androidWiring = []wiringCall{
 	{"MainActivity.kt", "DriftPlugins.register(", "plugins are created and registered once per process"},
-	{"MainActivity.kt", "DriftPlugins.preActivityCreate(", "plugins can run before super.onCreate"},
 	{"MainActivity.kt", "DriftPlugins.attach(", "plugins attach to the Activity"},
 	{"MainActivity.kt", "DriftPlugins.detach(", "plugins detach when the Activity is destroyed"},
 	{"MainActivity.kt", "DriftPlugins.onNewIntent(", "plugins receive new intents"},
-	{"MainActivity.kt", "DriftPlugins.onActivityResult(", "plugins receive activity results"},
-	{"MainActivity.kt", "DriftPlugins.onRequestPermissionsResult(", "plugins receive permission results"},
 }
 
 // CheckEjectedIOS verifies that an ejected xcodeproj project is wired for

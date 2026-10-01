@@ -123,7 +123,6 @@ func EnsureRunnerSupport(buildDir, platform string) ([]string, error) {
 // which Apply regenerates.)
 var IOSRunnerSupportFiles = []string{
 	"DriftPlugins.swift",
-	"DriftPluginCoordinator.swift",
 }
 
 func ensureIOSRunnerSupport(buildDir, platform string) ([]string, error) {

@@ -23,11 +23,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Channels and plugins register once per process (later calls are
-        // no-ops), before super.onCreate so plugins' pre-activity hooks
-        // (e.g. installSplashScreen on Android 12+) can run here.
+        // no-ops).
         PlatformChannelManager.init(applicationContext)
         DriftPlugins.register(PlatformChannelManager)
-        DriftPlugins.preActivityCreate(this)
 
         setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
@@ -96,7 +94,6 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         PermissionHandler.onRequestPermissionsResult(this, requestCode, permissions, grantResults)
-        DriftPlugins.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     @Deprecated("Deprecated in Java")
@@ -104,7 +101,6 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         CameraHandler.onActivityResult(requestCode, resultCode, data, this)
         StorageHandler.onActivityResult(requestCode, resultCode, data, this)
-        DriftPlugins.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onResume() {

@@ -63,14 +63,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This guard handles the case where scene is not a UIWindowScene.
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        // URLs and activities that launched the app. Plugins registered in
-        // the app delegate, before any scene connected, so they get first
-        // refusal before Drift's deep-link channel.
+        // URLs and activities that launched the app.
         for context in connectionOptions.urlContexts {
-            DeepLinkHandler.route(url: context.url, source: "launch")
+            DeepLinkHandler.handle(url: context.url, source: "launch")
         }
         for activity in connectionOptions.userActivities {
-            DeepLinkHandler.route(userActivity: activity, source: "launch")
+            if let url = activity.webpageURL {
+                DeepLinkHandler.handle(url: url, source: "launch")
+            }
         }
 
         // Create a new window attached to this window scene.
@@ -93,14 +93,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// arrive here, not at UIApplicationDelegate.application(_:open:options:).
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {
-            DeepLinkHandler.route(url: context.url, source: "open_url")
+            DeepLinkHandler.handle(url: context.url, source: "open_url")
         }
     }
 
     /// User activities (universal links, Handoff) continued while the app is
     /// running. Scene-based apps receive these here, not at the app delegate.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        DeepLinkHandler.route(userActivity: userActivity, source: "user_activity")
+        if let url = userActivity.webpageURL {
+            DeepLinkHandler.handle(url: url, source: "user_activity")
+        }
     }
 
     /// Called when the scene has moved to the foreground and is active.

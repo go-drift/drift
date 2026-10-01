@@ -1238,24 +1238,3 @@ private func encodeErrorPayload(_ error: Error) -> String {
     let data = codec.encode(payload)
     return String(data: data, encoding: .utf8) ?? nsError.localizedDescription
 }
-
-// MARK: - App link routing
-
-extension DeepLinkHandler {
-    /// Routes a URL the app was opened with: plugins get first refusal (in
-    /// drift.yaml order), and an unclaimed URL reaches Drift's deep-link
-    /// channel.
-    static func route(url: URL, source: String) {
-        if DriftPlugins.shared.open(url) { return }
-        handle(url: url, source: source)
-    }
-
-    /// Routes a continued user activity (universal link, Handoff) the same
-    /// way as route(url:source:).
-    static func route(userActivity: NSUserActivity, source: String) {
-        if DriftPlugins.shared.continueUserActivity(userActivity) { return }
-        if let url = userActivity.webpageURL {
-            handle(url: url, source: source)
-        }
-    }
-}
