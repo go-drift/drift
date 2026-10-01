@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
+	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	pkgerrors "github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
@@ -57,6 +58,7 @@ type opBag struct {
 	iosSources    []*protocol.OpAddIOSSource
 	iosBundle     []*protocol.OpIOSAddBundleResource
 	iosSPM        []*protocol.OpIOSAddPackageDependency
+	iosPlugins    []*protocol.OpIOSPlugin
 	addPerm       []*protocol.OpAndroidManifestAddPermission
 	addIntent     []*protocol.OpAndroidManifestAddIntentFilter
 	setActAttr    []*protocol.OpAndroidManifestSetActivityAttr
@@ -134,7 +136,8 @@ func bundleIOSOp(bag *opBag, op protocol.Op) bool {
 	case *protocol.OpIOSAddPackageDependency:
 		bag.iosSPM = append(bag.iosSPM, v)
 	case *protocol.OpIOSPlugin:
-		// Consumed by WriteRegistrant, not Apply.
+		// Rendered by WriteRegistrant; Apply only checks it has a module.
+		bag.iosPlugins = append(bag.iosPlugins, v)
 	default:
 		return false
 	}
@@ -237,14 +240,6 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 		}
 	}
 
-	if len(bag.iosSources) > 0 {
-		paths, err := mutate.WriteIOSSources(iosPluginsDir(buildDir, platform), bag.iosSources)
-		if err != nil {
-			return changed, err
-		}
-		changed = append(changed, paths...)
-	}
-
 	// Always synced, even with zero files, so resources from a removed
 	// plugin are pruned.
 	paths, err := mutate.WriteIOSBundleResources(iosBundleResourcesDir(buildDir, platform), bundleFiles)
@@ -268,11 +263,14 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 		}
 	}
 
-	// SwiftPM sidecar always regenerates, even with zero ops. The xtool
-	// template's .package(path: "Drift/Plugins") and the xcodeproj's
-	// local-package reference assume the sidecar exists; an empty op set
-	// produces a valid zero-deps wrapper.
-	spmPaths, err := mutate.ApplyPluginPackage(iosSPMPackageRoot(buildDir), bag.iosSPM)
+	// The Drift/Plugins package always regenerates, even with zero ops: it
+	// holds the plugin API module the app imports, and the xtool
+	// Package.swift and xcodeproj local-package reference expect it.
+	pkg, err := pluginPackage(bag)
+	if err != nil {
+		return changed, err
+	}
+	spmPaths, err := mutate.WritePluginPackage(iosSPMPackageRoot(buildDir), pkg)
 	if err != nil {
 		return changed, err
 	}
@@ -280,6 +278,40 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 
 	return changed, nil
 }
+
+// pluginPackage assembles the Drift/Plugins package for bag, and checks
+// that every plugin naming an iOS plugin class ships the Swift sources its
+// module needs.
+func pluginPackage(bag *opBag) (mutate.PluginPackage, error) {
+	api := map[string][]byte{}
+	entries, err := templates.FS.ReadDir(pluginAPITemplates)
+	if err != nil {
+		return mutate.PluginPackage{}, fmt.Errorf("read plugin API templates: %w", err)
+	}
+	for _, e := range entries {
+		content, err := templates.ReadFile(pluginAPITemplates + "/" + e.Name())
+		if err != nil {
+			return mutate.PluginPackage{}, err
+		}
+		api[e.Name()] = content
+	}
+
+	withSources := map[string]bool{}
+	for _, op := range bag.iosSources {
+		withSources[op.PluginID()] = true
+	}
+	for _, op := range bag.iosPlugins {
+		if !withSources[op.PluginID()] {
+			return mutate.PluginPackage{}, fmt.Errorf("plugin %s names iOS plugin class %s but ships no Swift sources (IOS.Sources) to define it",
+				op.PluginPackage(), op.Class)
+		}
+	}
+	return mutate.PluginPackage{API: api, Deps: bag.iosSPM, Sources: bag.iosSources}, nil
+}
+
+// pluginAPITemplates is the template dir holding the DriftPluginAPI
+// module's sources.
+const pluginAPITemplates = "plugin-api/ios"
 
 func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	var changed []string
@@ -393,8 +425,8 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 // OwnedFiles returns the whole files op writes into the project at buildDir
 // (see mutate.OwnedFile), computed exactly as Apply writes them. Ops that
 // only edit shared files, or whose output Drift regenerates wholesale every
-// build (registrants, values files, bundle resources, the SwiftPM sidecar),
-// own none.
+// build (registrants, values files, bundle resources, the Drift/Plugins
+// package with plugins' Swift sources), own none.
 func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, error) {
 	one := func(f mutate.OwnedFile, err error) ([]mutate.OwnedFile, error) {
 		if err != nil {
@@ -403,8 +435,6 @@ func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, 
 		return []mutate.OwnedFile{f}, nil
 	}
 	switch v := op.(type) {
-	case *protocol.OpAddIOSSource:
-		return one(mutate.IOSSourceFile(iosPluginsDir(buildDir, platform), v))
 	case *protocol.OpIOSAssetsAddImageSet:
 		if platform == "xtool" {
 			return nil, nil // a loose bundle PNG, pruned with the bundle resources
@@ -454,13 +484,6 @@ func iosLaunchScreenPath(buildDir, platform string) string {
 		return filepath.Join(buildDir, "Sources", "Runner", "Resources", "LaunchScreen.storyboard")
 	}
 	return filepath.Join(buildDir, "Runner", "LaunchScreen.storyboard")
-}
-
-func iosPluginsDir(buildDir, platform string) string {
-	if platform == "xtool" {
-		return filepath.Join(buildDir, "Sources", "Runner", "Plugins")
-	}
-	return filepath.Join(buildDir, "Runner", "Plugins")
 }
 
 // xtoolPluginResourcesDir is the Drift-owned directory, relative to the

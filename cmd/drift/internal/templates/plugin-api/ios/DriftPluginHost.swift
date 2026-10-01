@@ -3,8 +3,10 @@
 /// Stable host API consumed by Drift plugin Swift sources. Plugin sources
 /// reference this protocol; the templated PlatformChannelManager adopts it.
 ///
-/// Everything in PluginAPI/ is public and depends only on Foundation and
-/// UIKit: it is the whole surface plugin sources compile against.
+/// The DriftPluginAPI module (this file and DriftPlugin.swift, in the
+/// generated Drift/Plugins package) is the whole surface plugin sources
+/// compile against; it depends only on Foundation and UIKit. The app's
+/// host side constructs the types below through the DriftHost SPI.
 ///
 /// Threading: every plugin callback (method handlers, event observers and
 /// the DriftPlugin lifecycle) runs on the main thread.
@@ -26,7 +28,7 @@ public final class DriftResult {
     private let call: String
     private let deliver: (Result<Any?, Error>) -> Void
 
-    init(call: String, deliver: @escaping (Result<Any?, Error>) -> Void) {
+    @_spi(DriftHost) public init(call: String, deliver: @escaping (Result<Any?, Error>) -> Void) {
         self.call = call
         self.deliver = deliver
     }
@@ -63,7 +65,7 @@ public final class DriftSubscription {
     private let lock = NSLock()
     private var canceled = false
 
-    init(cancel: @escaping () -> Void) {
+    @_spi(DriftHost) public init(cancel: @escaping () -> Void) {
         self.cancelClosure = cancel
     }
 

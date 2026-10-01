@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
-	driftplugin "github.com/go-drift/drift/pkg/plugin"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
@@ -50,8 +49,8 @@ func TestWriteRegistrantAndroidListsPluginsInSourceOrder(t *testing.T) {
 
 func TestWriteRegistrantIOSListsPluginsInSourceOrder(t *testing.T) {
 	ops := []protocol.Op{
-		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "z"}, Class: "ZetaPlugin"},
-		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "a"}, Class: "AlphaPlugin"},
+		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "z", Ident: "zeta"}, Class: "ZetaPlugin"},
+		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "a", Ident: "alpha"}, Class: "AlphaPlugin"},
 	}
 	for _, platform := range []string{"ios", "xtool"} {
 		dir := t.TempDir()
@@ -59,14 +58,20 @@ func TestWriteRegistrantIOSListsPluginsInSourceOrder(t *testing.T) {
 			t.Fatalf("%s: WriteRegistrant: %v", platform, err)
 		}
 		s := readRegistrant(t, dir, platform)
-		want := "    static func makePlugins() -> [DriftPlugin] {\n" +
+		want := "import DriftPluginAPI\n" +
+			"import DriftPlugin_zeta\n" +
+			"import DriftPlugin_alpha\n" +
+			"\n" +
+			"enum DriftPluginRegistrant {\n" +
+			"    /// Creates one instance of every configured plugin, in drift.yaml order.\n" +
+			"    static func makePlugins() -> [DriftPlugin] {\n" +
 			"        return [\n" +
-			"            ZetaPlugin(),\n" +
-			"            AlphaPlugin(),\n" +
+			"            DriftPlugin_zeta.ZetaPlugin(),\n" +
+			"            DriftPlugin_alpha.AlphaPlugin(),\n" +
 			"        ]\n" +
 			"    }\n"
 		if !strings.Contains(s, want) {
-			t.Errorf("%s: registrant body wrong, want:\n%s\ngot:\n%s", platform, want, s)
+			t.Errorf("%s: registrant wrong, want:\n%s\ngot:\n%s", platform, want, s)
 		}
 	}
 }
@@ -223,10 +228,7 @@ func TestCheckEjectedIOS(t *testing.T) {
 		"Runner/DriftViewController.swift": "",
 		"Runner.xcodeproj/project.pbxproj": "// no package refs\n",
 	})
-	ops := []protocol.Op{
-		&protocol.OpIOSAddPackageDependency{Base: protocol.Base{Pkg: "p"}, URL: "https://github.com/google/GoogleSignIn-iOS", Requirement: driftplugin.SPMRequirementFrom("7.0.0"), Products: []string{"GoogleSignIn"}},
-	}
-	err := CheckEjectedIOS(dir, ops)
+	err := CheckEjectedIOS(dir)
 	if err == nil {
 		t.Fatal("expected wiring error")
 	}
@@ -244,7 +246,7 @@ func TestCheckEjectedIOS(t *testing.T) {
 		"Runner/DriftViewController.swift": templateText(t, "ios/DriftViewController.swift"),
 		"Runner.xcodeproj/project.pbxproj": templateText(t, "xcodeproj/project.pbxproj.tmpl"),
 	})
-	if err := CheckEjectedIOS(dir, ops); err != nil {
+	if err := CheckEjectedIOS(dir); err != nil {
 		t.Errorf("template-wired project should pass: %v", err)
 	}
 }

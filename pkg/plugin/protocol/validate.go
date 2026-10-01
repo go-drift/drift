@@ -50,6 +50,15 @@ var (
 	metaParentRe = regexp.MustCompile(`^(application|activity:\.?[A-Za-z_][A-Za-z0-9_.]*)$`)
 )
 
+var pluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// ValidatePluginName checks a plugin's Name(): a lowercase identifier
+// ("splash", "firebase"), since it names the plugin's native modules
+// (DriftPlugin_<name> on iOS) and appears in diagnostics.
+func ValidatePluginName(name string) error {
+	return checkMatch(pluginNameRe, "plugin name", name)
+}
+
 func checkMatch(re *regexp.Regexp, what, v string) error {
 	if !re.MatchString(v) {
 		return fmt.Errorf("%s %q is invalid (want %s)", what, v, re.String())

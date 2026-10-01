@@ -283,7 +283,7 @@ func spmFrom(v string) SPMRequirement { return SPMRequirement{Kind: SPMFrom, Val
 
 func TestDecodeOpsParsesJSONList(t *testing.T) {
 	ops := []Op{
-		&OpInfoPlistSetString{Base: Base{Pkg: "p"}, Key: "K", Value: "V"},
+		&OpInfoPlistSetString{Base: Base{Pkg: "p", Ident: "p"}, Key: "K", Value: "V"},
 	}
 	raw, err := MarshalOpList(ops)
 	if err != nil {
@@ -370,7 +370,7 @@ func TestOpValidateRejects(t *testing.T) {
 }
 
 func TestDecodeOpsRejectsInvalid(t *testing.T) {
-	raw, err := MarshalOp(&OpAndroidAddAsset{Base: Base{Pkg: "p"}, Path: "../escape"})
+	raw, err := MarshalOp(&OpAndroidAddAsset{Base: Base{Pkg: "p", Ident: "p"}, Path: "../escape"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,5 +402,15 @@ func TestSetDictTargetStableAcrossNestedConcreteTypes(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(generic.Targets(), typed.Targets()) {
 		t.Errorf("targets differ: %v vs %v", generic.Targets(), typed.Targets())
+	}
+}
+
+func TestDecodeOpsRejectsInvalidPluginName(t *testing.T) {
+	raw, err := MarshalOp(&OpInfoPlistSetString{Base: Base{Pkg: "p", Ident: "Bad-Name"}, Key: "K", Value: "V"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeOps([]json.RawMessage{raw}); err == nil || !strings.Contains(err.Error(), "plugin name") {
+		t.Fatalf("expected plugin name error, got %v", err)
 	}
 }

@@ -10,18 +10,23 @@
 ///      over from the launch storyboard without a flash.
 ///   3. detach: drop the overlay with the view.
 
+import DriftPluginAPI
 import OSLog
 import UIKit
 
 private let splashLog = OSLog(subsystem: "drift.splash", category: "plugin")
 
-final class DriftSplashPlugin: DriftPlugin {
+/// Public, with a public initializer: the app's generated registrant
+/// creates it from outside this module (DriftPlugin_splash).
+public final class DriftSplashPlugin: DriftPlugin {
     private var overlay: DriftSplashOverlayView?
     /// Set once the overlay has faded out; a later attach (a new Drift view)
     /// does not bring the splash back.
     private var dismissed = false
 
-    func register(host: DriftPluginHost) {
+    public init() {}
+
+    public func register(host: DriftPluginHost) {
         host.registerChannel("drift/splash") { [self] method, _, result in
             switch method {
             case "preserve":
@@ -47,7 +52,7 @@ final class DriftSplashPlugin: DriftPlugin {
         }
     }
 
-    func attach(_ binding: DriftViewBinding) {
+    public func attach(_ binding: DriftViewBinding) {
         guard !dismissed else { return }
         let view = DriftSplashOverlayView()
         view.frame = binding.rootView.bounds
@@ -57,7 +62,7 @@ final class DriftSplashPlugin: DriftPlugin {
         os_log("splash overlay attached", log: splashLog, type: .debug)
     }
 
-    func detach() {
+    public func detach() {
         overlay?.removeFromSuperview()
         overlay = nil
     }

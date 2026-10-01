@@ -366,11 +366,11 @@ func newPluginOps(ops []protocol.Op) (pluginOps, error) {
 func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	platformDir := platformProjectDir(ws, ws.Platform)
 	platform := ws.Platform
-	if ws.Ejected && len(ops.ops) > 0 {
+	if ws.Ejected {
 		var err error
 		switch platform {
 		case "ios":
-			err = driftpluginCLI.CheckEjectedIOS(platformDir, ops.ops)
+			err = driftpluginCLI.CheckEjectedIOS(platformDir)
 		case "android":
 			err = driftpluginCLI.CheckEjectedAndroid(platformDir, ops.ops)
 		}

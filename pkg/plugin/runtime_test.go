@@ -223,19 +223,20 @@ func TestBindBuildRejectsUnknownKeys(t *testing.T) {
 	}
 }
 
-func TestBindPanicsOnEmptyName(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic when Plugin.Name() returns empty")
-		}
-		if msg, ok := r.(string); !ok || !strings.Contains(msg, "empty string") {
-			t.Errorf("panic message should mention empty string; got %v", r)
-		}
-	}()
-	type cfg struct{}
-	p := pluginFn[cfg]{name: "", build: func(*BuildCtx, cfg) error { return nil }}
-	_ = Bind[cfg]("github.com/test/p", p)
+func TestBindPanicsOnInvalidName(t *testing.T) {
+	for _, name := range []string{"", "Splash", "drift-splash", "9lives"} {
+		func() {
+			defer func() {
+				r := recover()
+				if msg, ok := r.(string); !ok || !strings.Contains(msg, "Plugin.Name()") {
+					t.Errorf("name %q: panic should explain the Plugin.Name() rule; got %v", name, r)
+				}
+			}()
+			type cfg struct{}
+			p := pluginFn[cfg]{name: name, build: func(*BuildCtx, cfg) error { return nil }}
+			_ = Bind[cfg]("github.com/test/p", p)
+		}()
+	}
 }
 
 func TestBindBuildEnforcesRequiredFields(t *testing.T) {
