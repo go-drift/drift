@@ -268,7 +268,7 @@ type orderPlugin struct{ name string }
 
 func (p orderPlugin) Name() string { return p.name }
 func (p orderPlugin) Build(ctx *BuildCtx, _ struct{}) error {
-	ctx.Android.Registrant("com.example." + p.name + ".Plugin.register")
+	ctx.Android.Plugin("com.example." + p.name + ".Plugin")
 	return nil
 }
 

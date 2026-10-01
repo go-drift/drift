@@ -73,11 +73,11 @@ background_color: "#1A2238"
 		"ios.storyboards.replace_launch_screen",
 		"info_plist.set_string",
 		"ios.source.add",
-		"ios.registrant",
+		"ios.plugin",
 		"android.drawable.write",
 		"android.resource.write_xml",
 		"android.source.add",
-		"android.registrant",
+		"android.plugin",
 	}
 	for _, typ := range wantSome {
 		if !hasOpType(ops, typ) {
@@ -85,18 +85,35 @@ background_color: "#1A2238"
 		}
 	}
 
-	wantNone := []string{
-		"android.gradle.add_dependency",
-		"android.pre_activity_registrant",
+	if hasOpType(ops, "android.gradle.add_dependency") {
+		t.Errorf("light-only build should not add Gradle dependencies")
 	}
-	for _, typ := range wantNone {
-		if hasOpType(ops, typ) {
-			t.Errorf("light-only build should not emit %q", typ)
-		}
+	// The Android 12 controller needs core-splashscreen, so it must not
+	// ship without it.
+	if kotlinSource(ops, "Android12SplashController.kt") != "" {
+		t.Errorf("light-only build should not ship Android12SplashController.kt")
+	}
+	if strings.Contains(kotlinSource(ops, "SplashConfig.kt"), "Android12SplashController") {
+		t.Errorf("light-only SplashConfig.kt must not reference the Android 12 controller")
 	}
 }
 
-func TestBuild_Android12_EmitsGradleAndPreActivity(t *testing.T) {
+// kotlinSource returns the decoded content of the Kotlin source op whose
+// path is rel, or "".
+func kotlinSource(ops []protocol.Op, rel string) string {
+	for _, op := range ops {
+		if src, ok := op.(*protocol.OpAddKotlinSource); ok && src.RelPath == rel {
+			b, err := protocol.DecodeContent(src.Content)
+			if err != nil {
+				return ""
+			}
+			return string(b)
+		}
+	}
+	return ""
+}
+
+func TestBuild_Android12_EmitsGradleAndController(t *testing.T) {
 	ops := runBuild(t, `
 image: assets/splash.png
 background_color: "#1A2238"
@@ -108,8 +125,11 @@ android_12:
 	if !hasOpType(ops, "android.gradle.add_dependency") {
 		t.Errorf("android_12 config should emit gradle dependency op")
 	}
-	if !hasOpType(ops, "android.pre_activity_registrant") {
-		t.Errorf("android_12 config should emit pre-activity registrant op")
+	if kotlinSource(ops, "Android12SplashController.kt") == "" {
+		t.Errorf("android_12 config should ship Android12SplashController.kt")
+	}
+	if !strings.Contains(kotlinSource(ops, "SplashConfig.kt"), "Android12SplashController.install(activity)") {
+		t.Errorf("android_12 SplashConfig.kt should install the controller:\n%s", kotlinSource(ops, "SplashConfig.kt"))
 	}
 
 	// Verify the gradle dep coord pins core-splashscreen 1.0.1 (no floating).
@@ -164,27 +184,27 @@ background_color: not-a-color
 	}
 }
 
-func TestBuild_RegistrantSymbol(t *testing.T) {
+func TestBuild_PluginClasses(t *testing.T) {
 	ops := runBuild(t, "image: assets/splash.png\n", "assets/splash.png")
 
 	var sawIOS, sawAndroid bool
 	for _, op := range ops {
 		switch v := op.(type) {
-		case *protocol.OpRegistrantIOS:
-			if v.Symbol == "DriftSplashPlugin.register" {
+		case *protocol.OpIOSPlugin:
+			if v.Class == "DriftSplashPlugin" {
 				sawIOS = true
 			}
-		case *protocol.OpRegistrantAndroid:
-			if v.Symbol == "com.drift.plugin.splash.DriftSplashPlugin.register" {
+		case *protocol.OpAndroidPlugin:
+			if v.Class == "com.drift.plugin.splash.DriftSplashPlugin" {
 				sawAndroid = true
 			}
 		}
 	}
 	if !sawIOS {
-		t.Errorf("missing iOS DriftSplashPlugin.register registrant")
+		t.Errorf("missing iOS DriftSplashPlugin plugin class")
 	}
 	if !sawAndroid {
-		t.Errorf("missing Android DriftSplashPlugin.register registrant")
+		t.Errorf("missing Android DriftSplashPlugin plugin class")
 	}
 }
 

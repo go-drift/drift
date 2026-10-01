@@ -114,6 +114,7 @@ type nativeConfigView struct {
 	DarkBackgroundColor string
 	FadeDurationMs      int
 	BrandingPosition    string
+	Android12           bool
 }
 
 func nativeConfigData(cfg resolvedConfig) nativeConfigView {
@@ -126,6 +127,7 @@ func nativeConfigData(cfg resolvedConfig) nativeConfigView {
 		DarkBackgroundColor: dark,
 		FadeDurationMs:      cfg.FadeDurationMs,
 		BrandingPosition:    cfg.BrandingPos.String(),
+		Android12:           cfg.HasAndroid12,
 	}
 }
 

@@ -29,12 +29,11 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.drift.runner.DriftOverlayHost
 import com.drift.runner.DriftPluginHost
-import com.drift.runner.DriftPluginRegistrant
 import com.drift.runner.DriftSubscription
 import com.drift.runner.MethodHandler
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -44,46 +43,38 @@ import org.json.JSONTokener
  *
  * Adopts com.drift.runner.DriftPluginHost so third-party plugins can register
  * channels and send events without depending on the user's app package.
- *
- * Also adopts com.drift.runner.DriftOverlayHost so plugins that need to install
- * full-screen overlay views (e.g. native splash) can grab the active root view
- * via a down-cast. Kept as a separate interface so DriftPluginHost stays narrow.
+ * Plugins register through com.drift.runner.DriftPlugins, once per process.
  */
-object PlatformChannelManager : DriftPluginHost, DriftOverlayHost {
+object PlatformChannelManager : DriftPluginHost {
     override lateinit var context: Context
     private var view: View? = null
     private var currentActivity: Activity? = null
-    private val handlers = mutableMapOf<String, MethodHandler>()
+    // Written on the main thread during registration, read from Go threads.
+    private val handlers = ConcurrentHashMap<String, MethodHandler>()
     private val codec = JsonCodec
     private var lastError: String? = null
     @Volatile
     private var onFrameNeeded: (() -> Unit)? = null
+
     @Volatile
-    private var lifecycleObserverInstalled = false
+    private var initialized = false
 
     /**
-     * Initializes the platform channel manager with the application context.
+     * Initializes the platform channel manager with the application context
+     * and registers Drift's built-in channels, once per process.
      *
-     * Idempotent: MainActivity.onCreate() calls init() on every activity
-     * creation (process death restoration, configChanges not declared in the
-     * manifest, etc.). The object singleton survives across recreations, so
-     * we clear the handler map before re-registering built-ins and plugins.
-     * Without this, register()'s duplicate-detection panic would crash the
-     * app on any recreation.
-     *
-     * The Application-scoped lifecycle observer registers exactly once:
-     * Android does not allow safe removal of activity lifecycle callbacks
-     * during recreation, so a second registration would leak a duplicate.
+     * MainActivity.onCreate calls this on every Activity creation
+     * (configuration changes, process-death restoration); the object
+     * outlives Activities, so later calls are no-ops. Registration never
+     * repeats, and the Application-scoped lifecycle observer is installed
+     * exactly once.
      */
     fun init(context: Context) {
+        if (initialized) return
         this.context = context.applicationContext
-        handlers.clear()
         registerBuiltInChannels()
-        if (!lifecycleObserverInstalled) {
-            setupLifecycleObserver()
-            lifecycleObserverInstalled = true
-        }
-        DriftPluginRegistrant.registerAll(this)
+        setupLifecycleObserver()
+        initialized = true
     }
 
     /**
@@ -110,27 +101,16 @@ object PlatformChannelManager : DriftPluginHost, DriftOverlayHost {
     }
 
     /**
-     * DriftOverlayHost: returns the active activity's decorView so plugins
-     * can install full-screen overlays. Returns null if no activity is
-     * currently attached (e.g. before MainActivity.onCreate). Mirrors the
-     * activity.window.decorView access pattern used elsewhere in this file.
-     */
-    override fun driftRootView(): View? {
-        return currentActivity?.window?.decorView
-    }
-
-    /**
      * Registers a handler for a platform channel.
      */
     fun register(channel: String, handler: MethodHandler) {
-        if (handlers.containsKey(channel)) {
+        if (handlers.putIfAbsent(channel, handler) != null) {
             throw IllegalStateException(
                 "drift: platform channel \"$channel\" is already registered. " +
                     "Built-in channels run first; plugins must choose a unique " +
                     "<vendor>/<feature> namespace."
             )
         }
-        handlers[channel] = handler
     }
 
     /** DriftPluginHost: register a channel handler from a plugin source. */

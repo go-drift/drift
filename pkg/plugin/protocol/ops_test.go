@@ -19,8 +19,7 @@ func fixtureOps() []Op {
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: "AA=="},
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<document/>"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
-		&OpRegistrantIOS{Base: base, Symbol: "Foo.register"},
-		&OpIOSAppDelegateRegistrant{Base: base, Callback: IOSCallbackDidFinishLaunching, Symbol: "FooPlugin.didFinishLaunching"},
+		&OpIOSPlugin{Base: base, Class: "FooPlugin"},
 		&OpIOSAddBundleResource{Base: base, Path: "GoogleService-Info.plist", Content: "AA=="},
 		&OpAndroidAddAsset{Base: base, Path: "models/model.tflite", Content: "AA=="},
 		&OpAndroidAddAppModuleFile{Base: base, Name: "google-services.json", Content: "AA=="},
@@ -41,8 +40,7 @@ func fixtureOps() []Op {
 		&OpAndroidWriteDrawable{Base: base, Name: "icon", Content: "AA=="},
 		&OpAndroidWriteResourceXML{Base: base, RelPath: "raw/foo.xml", Content: "<x/>"},
 		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "Foo.kt", Content: "AA=="},
-		&OpRegistrantAndroid{Base: base, Symbol: "com.foo.Foo.register"},
-		&OpAndroidPreActivityRegistrant{Base: base, Symbol: "com.foo.Foo.preCreate"},
+		&OpAndroidPlugin{Base: base, Class: "com.foo.FooPlugin"},
 		&OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "androidx.core:core-splashscreen:1.0.1"},
 	}
 }
@@ -281,20 +279,6 @@ func TestValidateAppModuleFileName(t *testing.T) {
 	}
 }
 
-func TestValidateIOSAppDelegateCallback(t *testing.T) {
-	for _, c := range IOSAppDelegateCallbacks {
-		if err := validateIOSAppDelegateCallback(c); err != nil {
-			t.Errorf("known callback %q rejected: %v", c, err)
-		}
-	}
-	if err := validateIOSAppDelegateCallback("didFinishLaunchin"); err == nil {
-		t.Error("expected error for typo'd callback")
-	}
-	if err := validateIOSAppDelegateCallback(""); err == nil {
-		t.Error("expected error for empty callback")
-	}
-}
-
 func spmFrom(v string) SPMRequirement { return SPMRequirement{Kind: SPMFrom, Value: v} }
 
 func TestDecodeOpsParsesJSONList(t *testing.T) {
@@ -348,8 +332,7 @@ func invalidOps() []Op {
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<storyboard/>"},
 		&OpAddIOSSource{Base: base, Group: "a b", RelPath: "Foo.swift"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "../Foo.swift"},
-		&OpRegistrantIOS{Base: base, Symbol: ""},
-		&OpIOSAppDelegateRegistrant{Base: base, Callback: "nope", Symbol: "Foo.bar"},
+		&OpIOSPlugin{Base: base, Class: "Foo.register"},
 		&OpIOSAddBundleResource{Base: base, Path: "a/b.plist"},
 		&OpAndroidAddAsset{Base: base, Path: "models/../x.bin"},
 		&OpAndroidAddAppModuleFile{Base: base, Name: "build.gradle"},
@@ -366,8 +349,7 @@ func invalidOps() []Op {
 		&OpAndroidWriteResourceXML{Base: base, RelPath: "../raw/foo.xml", Content: "<x/>"},
 		&OpAndroidWriteResourceXML{Base: base, RelPath: AndroidPluginColorsFile, Content: "<resources/>"},
 		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "/abs/Foo.kt"},
-		&OpRegistrantAndroid{Base: base, Symbol: "com.foo.Foo.register(host)"},
-		&OpAndroidPreActivityRegistrant{Base: base, Symbol: ""},
+		&OpAndroidPlugin{Base: base, Class: "FooPlugin"},
 		&OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "a:b:1.0'); evil('"},
 	}
 }

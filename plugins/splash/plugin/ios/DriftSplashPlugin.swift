@@ -1,60 +1,28 @@
 /// DriftSplashPlugin.swift
 ///
-/// Entry point invoked from the generated `DriftPluginRegistrant.registerAll`.
-/// Responsibilities:
-///   1. Install the overlay UIView synchronously on the active window before
-///      the system launch screen tears down. (Eager
-///      `PlatformChannelManager.shared` access in SceneDelegate guarantees
-///      this register call runs in time.)
-///   2. Register the `drift/splash` channel handler. The Go runtime calls
-///      `preserve` / `remove`; both forward to `SplashState.apply(±1)`.
-///   3. Subscribe to `drift/rendering/frame_events`. On `first_frame`, mark
-///      state and dismiss if there are no outstanding preserves.
+/// The splash plugin's native half, driven by DriftPlugins:
+///   1. register: the `drift/splash` channel (the Go runtime calls
+///      `preserve` / `remove`, both forwarding to SplashState.apply(±1)) and
+///      the `drift/rendering/frame_events` observer (on `first_frame`, mark
+///      state and dismiss if nothing preserves the splash). Once per process.
+///   2. attach: install the overlay on the Drift view. DriftViewController
+///      attaches before its window becomes visible, so the overlay takes
+///      over from the launch storyboard without a flash.
+///   3. detach: drop the overlay with the view.
 
 import OSLog
 import UIKit
 
 private let splashLog = OSLog(subsystem: "drift.splash", category: "plugin")
 
-enum DriftSplashPlugin {
+final class DriftSplashPlugin: DriftPlugin {
+    private var overlay: DriftSplashOverlayView?
+    /// Set once the overlay has faded out; a later attach (a new Drift view)
+    /// does not bring the splash back.
+    private var dismissed = false
 
-    private static var overlay: DriftSplashOverlayView?
-    private static var frameSubscription: DriftSubscription?
-
-    static func register(host: DriftPluginHost) {
-        installOverlay(host: host)
-        registerChannelHandler(host: host)
-        observeFirstFrame(host: host)
-    }
-
-    /// 1. Install the overlay synchronously. DriftOverlayHost is an optional
-    ///    capability protocol; bail with a logged warning if the host
-    ///    doesn't adopt it or has no active root view. Channel + observer
-    ///    still install in those cases so Preserve/Remove + state tracking
-    ///    keep working; only the visible overlay is missing.
-    private static func installOverlay(host: DriftPluginHost) {
-        guard let overlayHost = host as? DriftOverlayHost else {
-            os_log("host does not implement DriftOverlayHost; runtime overlay disabled (likely framework/plugin version mismatch)",
-                   log: splashLog, type: .info)
-            return
-        }
-        guard let rootView = overlayHost.driftRootView() else {
-            os_log("DriftOverlayHost.driftRootView() returned nil; runtime overlay disabled (no active scene?)",
-                   log: splashLog, type: .info)
-            return
-        }
-        let view = DriftSplashOverlayView()
-        view.frame = rootView.bounds
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        rootView.addSubview(view)
-        overlay = view
-    }
-
-    /// 2. Channel handler: named methods matching the Go API.
-    ///    SplashState.apply(±1) is the single saturation site; clamps a
-    ///    Remove without a matching Preserve to zero.
-    private static func registerChannelHandler(host: DriftPluginHost) {
-        host.registerChannel("drift/splash") { method, _ in
+    func register(host: DriftPluginHost) {
+        host.registerChannel("drift/splash") { [self] method, _ in
             switch method {
             case "preserve":
                 DriftSplashState.shared.apply(1)
@@ -70,13 +38,7 @@ enum DriftSplashPlugin {
                 ]))
             }
         }
-    }
-
-    /// 3. Subscribe to frame events via the host. The subscription token is
-    ///    retained on the plugin so cleanup after iOS scene-recreate
-    ///    scenarios in v2 stays straightforward.
-    private static func observeFirstFrame(host: DriftPluginHost) {
-        frameSubscription = host.observeEvent("drift/rendering/frame_events") { data in
+        _ = host.observeEvent("drift/rendering/frame_events") { [self] data in
             guard let payload = data as? [String: Any],
                   let type = payload["type"] as? String,
                   type == "first_frame" else { return }
@@ -85,12 +47,30 @@ enum DriftSplashPlugin {
         }
     }
 
-    private static func maybeDismiss() {
+    func attach(_ binding: DriftViewBinding) {
+        guard !dismissed else { return }
+        let view = DriftSplashOverlayView()
+        view.frame = binding.rootView.bounds
+        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        binding.rootView.addSubview(view)
+        overlay = view
+        os_log("splash overlay attached", log: splashLog, type: .debug)
+    }
+
+    func detach() {
+        overlay?.removeFromSuperview()
+        overlay = nil
+    }
+
+    private func maybeDismiss() {
         guard DriftSplashState.shared.canDismiss() else { return }
-        DispatchQueue.main.async {
-            guard UIApplication.shared.applicationState == .active else { return }
-            overlay?.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) {
-                overlay = nil
+        DispatchQueue.main.async { [self] in
+            guard UIApplication.shared.applicationState == .active, let current = overlay else { return }
+            dismissed = true
+            current.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) { [self] in
+                if overlay === current {
+                    overlay = nil
+                }
             }
         }
     }

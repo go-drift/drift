@@ -100,6 +100,13 @@ final class DriftViewController: UIViewController {
                 PlatformViewHandler.warmUp()
             }
         }
+        // Plugins attach while the launch screen is still up (the window is
+        // not visible yet), so an overlay shows from the first frame.
+        DriftPlugins.shared.attach(self)
+    }
+
+    deinit {
+        DriftPlugins.shared.detach(from: ObjectIdentifier(self))
     }
 
     /// Tracks whether the initial safe area insets have been sent to the Go side.

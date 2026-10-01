@@ -1,40 +1,35 @@
 /**
  * DriftSplashPlugin.kt
  *
- * Entry point invoked from the generated DriftPluginRegistrant.registerAll.
- * Responsibilities (mirrors the iOS implementation):
- *   1. Install the overlay View on `host.driftRootView()` (the activity's
- *      decorView) synchronously so the visual hand-off from the legacy
- *      LaunchTheme drawable is seamless.
- *   2. Register the `drift/splash` channel handler. The Go runtime calls
- *      `preserve` / `remove`; both forward to `DriftSplashState.apply(±1)`.
- *   3. Subscribe natively to `drift/rendering/frame_events`. On `first_frame`,
- *      mark state and dismiss if there are no outstanding preserves.
+ * The splash plugin's native half, driven by com.drift.runner.DriftPlugins
+ * (mirrors the iOS implementation):
+ *   1. onRegister: the `drift/splash` channel (the Go runtime calls
+ *      `preserve` / `remove`, both forwarding to DriftSplashState.apply(±1))
+ *      and the `drift/rendering/frame_events` observer (on `first_frame`,
+ *      mark state and dismiss if nothing preserves the splash). Once per
+ *      process.
+ *   2. onPreActivityCreate: the Android 12+ SplashScreen, when configured.
+ *   3. onAttach: install the overlay on the window's root view, taking over
+ *      from the launch theme drawable. onDetach drops it with the Activity.
  */
 package com.drift.plugin.splash
 
+import android.app.Activity
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.ViewGroup
-import com.drift.runner.DriftOverlayHost
+import com.drift.runner.DriftActivityBinding
+import com.drift.runner.DriftPlugin
 import com.drift.runner.DriftPluginHost
-import com.drift.runner.DriftSubscription
 
-object DriftSplashPlugin {
-
-    private const val TAG = "DriftSplash"
-
+class DriftSplashPlugin : DriftPlugin {
     private var overlay: DriftSplashOverlayView? = null
-    private var frameSubscription: DriftSubscription? = null
+    // Set once the overlay has faded out; a recreated Activity does not
+    // bring the splash back.
+    private var dismissed = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    @JvmStatic
-    fun register(host: DriftPluginHost) {
-        installOverlay(host)
-        // Channel handler: named methods matching the Go API.
-        // DriftSplashState.apply(±1) is the single saturation site;
-        // a Remove without a matching Preserve clamps to zero.
+    override fun onRegister(host: DriftPluginHost) {
         host.registerChannel("drift/splash") { method, _ ->
             when (method) {
                 "preserve" -> {
@@ -50,10 +45,7 @@ object DriftSplashPlugin {
                 else -> Pair(null, IllegalArgumentException("unknown splash method $method"))
             }
         }
-        // SkiaHostView fires first_frame after the next frame commit; the
-        // host's event router delivers it here. The subscription token is
-        // retained so v2 cleanup (Activity-recreate teardown) has a handle.
-        frameSubscription = host.observeEvent("drift/rendering/frame_events") { data ->
+        host.observeEvent("drift/rendering/frame_events") { data ->
             val payload = data as? Map<*, *> ?: return@observeEvent
             if (payload["type"] != "first_frame") return@observeEvent
             DriftSplashState.markFirstFrame()
@@ -61,29 +53,30 @@ object DriftSplashPlugin {
         }
     }
 
-    private fun installOverlay(host: DriftPluginHost) {
-        val overlayHost = host as? DriftOverlayHost
-        if (overlayHost == null) {
-            Log.w(TAG, "host does not implement DriftOverlayHost; runtime overlay disabled " +
-                "(likely framework/plugin version mismatch)")
-            return
-        }
-        val rootView = overlayHost.driftRootView() as? ViewGroup
-        if (rootView == null) {
-            Log.w(TAG, "DriftOverlayHost.driftRootView() returned null or non-ViewGroup; " +
-                "runtime overlay disabled (no active activity?)")
-            return
-        }
-        val view = DriftSplashOverlayView(rootView.context)
-        rootView.addView(view)
+    override fun onPreActivityCreate(activity: Activity) {
+        DriftSplashConfig.preActivityCreate(activity)
+    }
+
+    override fun onAttach(binding: DriftActivityBinding) {
+        if (dismissed) return
+        val view = DriftSplashOverlayView(binding.activity)
+        binding.rootView.addView(view)
         overlay = view
+    }
+
+    override fun onDetach() {
+        overlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        overlay = null
     }
 
     private fun maybeDismiss() {
         if (!DriftSplashState.canDismiss()) return
         mainHandler.post {
             val current = overlay ?: return@post
-            current.fadeOut(DriftSplashConfig.FADE_DURATION_MS) { overlay = null }
+            dismissed = true
+            current.fadeOut(DriftSplashConfig.FADE_DURATION_MS) {
+                if (overlay === current) overlay = null
+            }
         }
     }
 }

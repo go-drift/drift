@@ -11,22 +11,14 @@ import UserNotifications
 /// The application delegate that manages application-level lifecycle events.
 class AppDelegate: NSObject, UIApplicationDelegate {
 
+    /// Creates Drift's platform channels and the app's plugins before
+    /// SwiftUI creates the window, so plugins are registered before the
+    /// Drift view exists and before any launch URL is routed.
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        // Force eager init of PlatformChannelManager.shared. The singleton is
-        // lazy; without this touch, plugin registration only runs the first
-        // time Go invokes a method via the channel, which can land after the
-        // system launch screen has torn down. Plugins that install UI
-        // overlays during register (e.g. the native splash plugin) need to
-        // attach synchronously while the launch screen is still visible to
-        // avoid a one-frame flash. (The iOS template does this in
-        // SceneDelegate; xtool uses SwiftUI's @main App pattern with no
-        // SceneDelegate, so the touch lives here.)
-        _ = PlatformChannelManager.shared
-
-        DriftPluginRegistrant.didFinishLaunching(application: application, launchOptions: launchOptions)
+        DriftPlugins.shared.launch(application, options: launchOptions, host: PlatformChannelManager.shared)
         return true
     }
 
@@ -34,14 +26,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        DriftPluginRegistrant.didRegisterForRemoteNotifications(application: application, deviceToken: deviceToken)
+        NotificationHandler.handleDeviceToken(deviceToken)
+        DriftPlugins.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        DriftPluginRegistrant.didFailToRegisterForRemoteNotifications(application: application, error: error)
+        NotificationHandler.handleRemoteNotificationError(error)
+        DriftPlugins.shared.didFailToRegisterForRemoteNotifications(error: error)
     }
 
     func application(
@@ -49,10 +43,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        DriftPluginRegistrant.didReceiveRemoteNotification(
-            application: application,
-            userInfo: userInfo,
-            completionHandler: completionHandler
-        )
+        NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)
+        DriftPlugins.shared.didReceiveRemoteNotification(userInfo, completion: completionHandler)
     }
 }

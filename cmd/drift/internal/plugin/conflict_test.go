@@ -223,9 +223,9 @@ func TestValidate(t *testing.T) {
 
 func TestValidateKeepsSourceOrder(t *testing.T) {
 	ops := []protocol.Op{
-		&protocol.OpRegistrantAndroid{Base: mkBase("z"), Symbol: "z.Z"},
-		&protocol.OpRegistrantAndroid{Base: mkBase("a"), Symbol: "a.A"},
-		&protocol.OpRegistrantAndroid{Base: mkBase("a"), Symbol: "z.Z"},
+		&protocol.OpAndroidPlugin{Base: mkBase("z"), Class: "z.Z"},
+		&protocol.OpAndroidPlugin{Base: mkBase("a"), Class: "a.A"},
+		&protocol.OpAndroidPlugin{Base: mkBase("a"), Class: "z.Z"},
 	}
 	out, err := Validate(ops)
 	if err != nil {

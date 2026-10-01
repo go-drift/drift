@@ -40,17 +40,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     /// Called when the application finishes launching.
     ///
-    /// All built-in dispatchers (NotificationHandler.start, etc.) and plugin
-    /// registrant fan-out happen inside DriftPluginRegistrant. AppDelegate
-    /// methods are thin pass-throughs; the registrant is the single dispatch
-    /// path. UIKit's launch Bool is "did I handle the launch URL," not
-    /// "abort launch," so the registrant is Void and AppDelegate returns
-    /// `true` unconditionally.
+    /// Creates Drift's platform channels and the app's plugins before any
+    /// scene connects, so plugins are registered before the Drift view
+    /// exists and before any launch URL is routed. UIKit's launch Bool is
+    /// "did I handle the launch URL", not "abort launch", so this returns
+    /// true unconditionally.
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        DriftPluginRegistrant.didFinishLaunching(application: application, launchOptions: launchOptions)
+        DriftPlugins.shared.launch(application, options: launchOptions, host: PlatformChannelManager.shared)
         return true
     }
 
@@ -58,14 +57,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        DriftPluginRegistrant.didRegisterForRemoteNotifications(application: application, deviceToken: deviceToken)
+        NotificationHandler.handleDeviceToken(deviceToken)
+        DriftPlugins.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
     }
 
     func application(
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        DriftPluginRegistrant.didFailToRegisterForRemoteNotifications(application: application, error: error)
+        NotificationHandler.handleRemoteNotificationError(error)
+        DriftPlugins.shared.didFailToRegisterForRemoteNotifications(error: error)
     }
 
     func application(
@@ -73,11 +74,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        DriftPluginRegistrant.didReceiveRemoteNotification(
-            application: application,
-            userInfo: userInfo,
-            completionHandler: completionHandler
-        )
+        NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)
+        DriftPlugins.shared.didReceiveRemoteNotification(userInfo, completion: completionHandler)
     }
 
     /// Provides the configuration for a new scene session.

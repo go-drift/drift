@@ -28,6 +28,8 @@ const (
 var (
 	identRe       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	dottedIdentRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)
+	// A package-qualified class name: at least one dot.
+	qualifiedIdentRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$`)
 	// An Android activity name: fully qualified, or relative to the app
 	// package with a leading dot (".MainActivity").
 	activityNameRe = regexp.MustCompile(`^\.?[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`)

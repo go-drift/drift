@@ -27,17 +27,3 @@ const (
 func SPMRequirementFrom(version string) SPMRequirement {
 	return SPMRequirement{Kind: SPMFrom, Value: version}
 }
-
-// IOSAppDelegateCallback names a UIApplicationDelegate event a plugin can
-// hook via IOSScope.AppDelegateRegistrant.
-type IOSAppDelegateCallback = protocol.IOSAppDelegateCallback
-
-// App delegate callbacks, re-exported from protocol for plugin authors.
-const (
-	IOSCallbackDidFinishLaunching                = protocol.IOSCallbackDidFinishLaunching
-	IOSCallbackOpenURL                           = protocol.IOSCallbackOpenURL
-	IOSCallbackContinueUserActivity              = protocol.IOSCallbackContinueUserActivity
-	IOSCallbackDidRegisterForRemoteNotifications = protocol.IOSCallbackDidRegisterForRemoteNotifications
-	IOSCallbackDidFailToRegisterForRemoteNotifs  = protocol.IOSCallbackDidFailToRegisterForRemoteNotifs
-	IOSCallbackDidReceiveRemoteNotification      = protocol.IOSCallbackDidReceiveRemoteNotification
-)

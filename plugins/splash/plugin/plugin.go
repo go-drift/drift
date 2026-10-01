@@ -21,11 +21,11 @@
 //     resource-merge collisions on pre-API-31 devices.
 //   - On `android_12:` configurations, writes a values-v31/styles.xml
 //     LaunchTheme variant that opts into AndroidX SplashScreen, adds the
-//     core-splashscreen Gradle dependency, and registers a pre-Activity
-//     hook to call installSplashScreen() before super.onCreate.
-//   - Ships native Swift / Kotlin runtime sources via embedded filesystems.
-//   - Registers iOS and Android registrants so the runtime calls into the
-//     plugin during `PlatformChannelManager` init.
+//     core-splashscreen Gradle dependency, and ships the controller that
+//     calls installSplashScreen() from the plugin's pre-Activity hook.
+//   - Ships native Swift / Kotlin runtime sources via embedded filesystems
+//     and names the DriftSplashPlugin class on each platform, which the app
+//     registers at launch and attaches to the Drift view.
 //
 // # Platform support
 //
@@ -54,6 +54,15 @@ var iosSources embed.FS
 
 //go:embed android
 var androidSources embed.FS
+
+// android12Sources ship only when android_12 is configured: they need the
+// core-splashscreen dependency added alongside them.
+//
+//go:embed android12
+var android12Sources embed.FS
+
+// androidPackage is the Kotlin package of the plugin's Android sources.
+const androidPackage = "com.drift.plugin.splash"
 
 type splash struct{}
 
@@ -84,7 +93,7 @@ func emitIOS(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
 	ctx.IOS.Info.SetString("UILaunchStoryboardName", "LaunchScreen")
 	ctx.IOS.Sources.AddFS("Splash", iosSources, "ios")
 	ctx.IOS.Sources.AddFile("Splash", "SplashConfig.swift", []byte(generateSplashConfigSwift(r)))
-	ctx.IOS.Registrant("DriftSplashPlugin.register")
+	ctx.IOS.Plugin("DriftSplashPlugin")
 	return nil
 }
 
@@ -120,13 +129,13 @@ func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
 		ctx.Android.Resources.WriteXML("values-v31/styles.xml", generateV31Styles(r))
 		ctx.Android.AddGradleDependency("implementation",
 			"androidx.core:core-splashscreen:1.0.1")
-		ctx.Android.PreActivityRegistrant("com.drift.plugin.splash.Android12SplashController.install")
+		ctx.Android.Sources.AddFS(androidPackage, android12Sources, "android12")
 	}
 
-	ctx.Android.Sources.AddFS("com.drift.plugin.splash", androidSources, "android")
-	ctx.Android.Sources.AddFile("com.drift.plugin.splash", "SplashConfig.kt",
+	ctx.Android.Sources.AddFS(androidPackage, androidSources, "android")
+	ctx.Android.Sources.AddFile(androidPackage, "SplashConfig.kt",
 		[]byte(generateSplashConfigKotlin(r)))
-	ctx.Android.Registrant("com.drift.plugin.splash.DriftSplashPlugin.register")
+	ctx.Android.Plugin(androidPackage + ".DriftSplashPlugin")
 	return nil
 }
 

@@ -1,8 +1,9 @@
 /**
  * Android12SplashController.kt
  *
- * Invoked from `DriftPluginRegistrant.preActivityCreate(activity)` before
- * MainActivity calls `super.onCreate(...)`. Only meaningful on API 31+; on
+ * Invoked from DriftSplashConfig.preActivityCreate(activity) (via the
+ * plugin's onPreActivityCreate) before MainActivity calls
+ * `super.onCreate(...)`. Only meaningful on API 31+; on
  * older devices the legacy LaunchTheme drawable handles the splash.
  *
  * installSplashScreen() must run before super.onCreate. Once installed, the

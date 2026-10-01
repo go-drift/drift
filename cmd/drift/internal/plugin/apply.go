@@ -133,7 +133,7 @@ func bundleIOSOp(bag *opBag, op protocol.Op) bool {
 		bag.iosBundle = append(bag.iosBundle, v)
 	case *protocol.OpIOSAddPackageDependency:
 		bag.iosSPM = append(bag.iosSPM, v)
-	case *protocol.OpRegistrantIOS, *protocol.OpIOSAppDelegateRegistrant:
+	case *protocol.OpIOSPlugin:
 		// Consumed by WriteRegistrant, not Apply.
 	default:
 		return false
@@ -171,7 +171,7 @@ func bundleAndroidOp(bag *opBag, op protocol.Op) bool {
 		bag.appModule = append(bag.appModule, v)
 	case *protocol.OpAndroidGradleApplyPlugin:
 		bag.gradlePlugins = append(bag.gradlePlugins, v)
-	case *protocol.OpRegistrantAndroid, *protocol.OpAndroidPreActivityRegistrant:
+	case *protocol.OpAndroidPlugin:
 		// Consumed by WriteRegistrant, not Apply.
 	default:
 		return false

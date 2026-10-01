@@ -4,17 +4,20 @@
 /// reference this protocol; the templated PlatformChannelManager adopts it.
 /// MethodHandler is declared here so both the protocol and concrete plugins
 /// can refer to it without depending on PlatformChannel.swift internals.
+///
+/// Everything in PluginAPI/ is public and depends only on Foundation and
+/// UIKit: it is the whole surface plugin sources compile against.
 
 import Foundation
 
-typealias MethodHandler = (String, Any?) -> (Any?, Error?)
+public typealias MethodHandler = (String, Any?) -> (Any?, Error?)
 
 /// Token returned from `DriftPluginHost.observeEvent`. Call `cancel()` to
 /// stop receiving callbacks. Idempotent; subsequent calls are no-ops.
 ///
 /// Hold the token in the plugin's state if the subscription needs to outlive
 /// the call site; drop it if "subscribe until process death" is acceptable.
-final class DriftSubscription {
+public final class DriftSubscription {
     private let cancelClosure: () -> Void
     private let lock = NSLock()
     private var canceled = false
@@ -23,7 +26,7 @@ final class DriftSubscription {
         self.cancelClosure = cancel
     }
 
-    func cancel() {
+    public func cancel() {
         lock.lock()
         defer { lock.unlock() }
         if canceled { return }
@@ -32,7 +35,7 @@ final class DriftSubscription {
     }
 }
 
-protocol DriftPluginHost: AnyObject {
+public protocol DriftPluginHost: AnyObject {
     func registerChannel(_ name: String, handler: @escaping MethodHandler)
     func sendEvent(_ channel: String, data: Any?)
     func sendEventError(_ channel: String, code: String, message: String)

@@ -10,10 +10,11 @@ package {{.PackageName}}
 
 import android.os.Bundle
 import android.util.Log
+import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
-import com.drift.runner.DriftPluginRegistrant
+import com.drift.runner.DriftPlugins
 
 class MainActivity : AppCompatActivity() {
 
@@ -21,17 +22,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var orchestrator: UnifiedFrameOrchestrator
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Pre-Activity plugin hook. Plugins that need access to the Activity
-        // before super.onCreate (e.g. the splash plugin's installSplashScreen
-        // call on Android 12+) register a symbol here at build time and the
-        // generated DriftPluginRegistrant.preActivityCreate body invokes it.
-        // With no contributing plugins, the body is empty.
-        DriftPluginRegistrant.preActivityCreate(this)
+        // Channels and plugins register once per process (later calls are
+        // no-ops), before super.onCreate so plugins' pre-activity hooks
+        // (e.g. installSplashScreen on Android 12+) can run here.
+        PlatformChannelManager.init(applicationContext)
+        DriftPlugins.register(PlatformChannelManager)
+        DriftPlugins.preActivityCreate(this)
 
         setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
 
-        PlatformChannelManager.init(applicationContext)
         Log.i("DriftDeepLink", "onCreate intent action=${intent?.action} data=${intent?.dataString}")
         NotificationHandler.handleNotificationOpen(intent)
         DeepLinkHandler.handleIntent(intent, "launch")
@@ -74,6 +74,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+
+        // Plugins attach once the views exist; the window's root view hosts
+        // their overlays above Drift's content.
+        DriftPlugins.attach(this, window.decorView as ViewGroup)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -81,7 +85,9 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         Log.i("DriftDeepLink", "onNewIntent action=${intent.action} data=${intent.dataString}")
         NotificationHandler.handleNotificationOpen(intent)
-        DeepLinkHandler.handleIntent(intent, "open")
+        if (!DriftPlugins.onNewIntent(intent)) {
+            DeepLinkHandler.handleIntent(intent, "open")
+        }
         if (::orchestrator.isInitialized) {
             orchestrator.start()
         }
@@ -90,6 +96,7 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         PermissionHandler.onRequestPermissionsResult(this, requestCode, permissions, grantResults)
+        DriftPlugins.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     @Deprecated("Deprecated in Java")
@@ -97,6 +104,7 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         CameraHandler.onActivityResult(requestCode, resultCode, data, this)
         StorageHandler.onActivityResult(requestCode, resultCode, data, this)
+        DriftPlugins.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onResume() {
@@ -108,5 +116,10 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         orchestrator.stop()
+    }
+
+    override fun onDestroy() {
+        DriftPlugins.detach(this)
+        super.onDestroy()
     }
 }

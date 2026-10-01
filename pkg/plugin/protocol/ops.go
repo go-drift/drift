@@ -234,18 +234,24 @@ func (o *OpAddIOSSource) Validate() error {
 	return checkContent("source content", o.Content, false)
 }
 
-type OpRegistrantIOS struct {
+// OpIOSPlugin names a Swift class, conforming to DriftPlugin, that the
+// generated DriftPluginRegistrant instantiates (with its no-argument
+// initializer) at launch. The host then drives it through the DriftPlugin
+// lifecycle: register once per process, attach/detach with the Drift view,
+// and the app-level hooks. Plugins are created in drift.yaml order, which is
+// also the order in which they get to claim URLs.
+type OpIOSPlugin struct {
 	Base
-	Symbol string `json:"symbol"`
+	Class string `json:"class"`
 }
 
-func (o *OpRegistrantIOS) Type() string     { return "ios.registrant" }
-func (o *OpRegistrantIOS) Platform() string { return "ios" }
-func (o *OpRegistrantIOS) Targets() []Target {
-	return []Target{member("ios:plugins", o.Symbol)}
+func (o *OpIOSPlugin) Type() string     { return "ios.plugin" }
+func (o *OpIOSPlugin) Platform() string { return "ios" }
+func (o *OpIOSPlugin) Targets() []Target {
+	return []Target{member("ios:plugins", o.Class)}
 }
-func (o *OpRegistrantIOS) Validate() error {
-	return checkMatch(dottedIdentRe, "registrant symbol", o.Symbol)
+func (o *OpIOSPlugin) Validate() error {
+	return checkMatch(identRe, "iOS plugin class", o.Class)
 }
 
 // SPMRequirementKind names one of SwiftPM's `.package(url:...)` version
@@ -390,73 +396,6 @@ func (o *OpIOSAddPackageDependency) Validate() error {
 	return validateSPMDependency(o.URL, o.Requirement, o.Products)
 }
 
-// IOSAppDelegateCallback identifies an app-level iOS event that plugins can
-// hook. Each variant has a fixed plugin-side Swift signature, listed on the
-// constant; the plugin's static function must match it exactly. See
-// cmd/drift/internal/plugin/registrant.go for the per-callback emission rules.
-//
-// The app is scene-based, so URL and user-activity events are delivered to
-// the scene (SceneDelegate on xcodeproj builds, SwiftUI modifiers on xtool),
-// not to UIApplicationDelegate. Both call sites route through the generated
-// DriftPluginRegistrant, so plugins see one event regardless of build path.
-type IOSAppDelegateCallback string
-
-const (
-	// func(application: UIApplication, launchOptions: [UIApplication.LaunchOptionsKey: Any]?)
-	IOSCallbackDidFinishLaunching IOSAppDelegateCallback = "didFinishLaunching"
-	// func(url: URL) -> Bool
-	//
-	// Return true to claim the URL. The first claiming plugin (in drift.yaml
-	// order) stops dispatch, and Drift's own deep-link channel does
-	// not see the URL. Unclaimed URLs reach the Drift deep-link channel.
-	IOSCallbackOpenURL IOSAppDelegateCallback = "openURL"
-	// func(userActivity: NSUserActivity) -> Bool
-	//
-	// Same claim semantics as IOSCallbackOpenURL. Unclaimed activities with a
-	// webpageURL (universal links) reach the Drift deep-link channel.
-	IOSCallbackContinueUserActivity IOSAppDelegateCallback = "continueUserActivity"
-	// func(application: UIApplication, deviceToken: Data)
-	IOSCallbackDidRegisterForRemoteNotifications IOSAppDelegateCallback = "didRegisterForRemoteNotifications"
-	// func(application: UIApplication, error: Error)
-	IOSCallbackDidFailToRegisterForRemoteNotifs IOSAppDelegateCallback = "didFailToRegisterForRemoteNotifications"
-	// func(userInfo: [AnyHashable: Any], completion: @escaping (UIBackgroundFetchResult) -> Void)
-	//
-	// The plugin must call completion exactly once. Results from all plugins
-	// are merged (.newData beats .noData beats .failed); a plugin that never
-	// calls completion is cut off by a 25-second safety timeout.
-	IOSCallbackDidReceiveRemoteNotification IOSAppDelegateCallback = "didReceiveRemoteNotification"
-)
-
-// IOSAppDelegateCallbacks lists every callback in struct-tag order. Codegen
-// iterates this slice so generated methods always appear in the same order.
-var IOSAppDelegateCallbacks = []IOSAppDelegateCallback{
-	IOSCallbackDidFinishLaunching,
-	IOSCallbackOpenURL,
-	IOSCallbackContinueUserActivity,
-	IOSCallbackDidRegisterForRemoteNotifications,
-	IOSCallbackDidFailToRegisterForRemoteNotifs,
-	IOSCallbackDidReceiveRemoteNotification,
-}
-
-var validIOSCallbacks = func() map[IOSAppDelegateCallback]struct{} {
-	m := make(map[IOSAppDelegateCallback]struct{}, len(IOSAppDelegateCallbacks))
-	for _, c := range IOSAppDelegateCallbacks {
-		m[c] = struct{}{}
-	}
-	return m
-}()
-
-// validateIOSAppDelegateCallback errors when c is not a known callback. Used
-// by recorders to parse-at-boundary (per the project's no-documented-footguns
-// convention) so typos in plugin Build code surface immediately instead of
-// silently producing no codegen.
-func validateIOSAppDelegateCallback(c IOSAppDelegateCallback) error {
-	if _, ok := validIOSCallbacks[c]; !ok {
-		return fmt.Errorf("unknown iOS AppDelegate callback %q", string(c))
-	}
-	return nil
-}
-
 // validateBundleFileName checks an iOS bundle-resource name. Both iOS build
 // paths copy resources flat into the app bundle root (Xcode's resources
 // phase and xtool's `resources:` list both flatten), so the name must be a
@@ -513,29 +452,6 @@ func validateAppModuleFileName(name string) error {
 		return fmt.Errorf("app module file %q is reserved by the Drift scaffold", name)
 	}
 	return nil
-}
-
-// OpIOSAppDelegateRegistrant records a Swift static-function symbol to be
-// called from the generated DriftPluginRegistrant.<callback>(...) method.
-// Each callback has a fixed signature (documented on the
-// IOSAppDelegateCallback constants); plugin authors implement against it and
-// the codegen renders the call. Multiple plugins can hook the same callback.
-type OpIOSAppDelegateRegistrant struct {
-	Base
-	Callback IOSAppDelegateCallback `json:"callback"`
-	Symbol   string                 `json:"symbol"`
-}
-
-func (o *OpIOSAppDelegateRegistrant) Type() string     { return "ios.app_delegate_registrant" }
-func (o *OpIOSAppDelegateRegistrant) Platform() string { return "ios" }
-func (o *OpIOSAppDelegateRegistrant) Targets() []Target {
-	return []Target{member("ios:app-delegate:"+string(o.Callback), o.Symbol)}
-}
-func (o *OpIOSAppDelegateRegistrant) Validate() error {
-	if err := validateIOSAppDelegateCallback(o.Callback); err != nil {
-		return err
-	}
-	return checkMatch(dottedIdentRe, "app delegate registrant symbol", o.Symbol)
 }
 
 // OpIOSAddBundleResource records a file to copy into the root of the iOS
@@ -839,39 +755,26 @@ func (o *OpAddKotlinSource) Validate() error {
 	return checkContent("source content", o.Content, false)
 }
 
-type OpRegistrantAndroid struct {
+// OpAndroidPlugin names a Kotlin class, implementing
+// com.drift.runner.DriftPlugin, that the generated DriftPluginRegistrant
+// instantiates (with its no-argument constructor) once per process. The
+// host drives it through the DriftPlugin lifecycle: register once, the
+// pre-activity hook and attach/detach per Activity. Plugins are created in
+// drift.yaml order.
+type OpAndroidPlugin struct {
 	Base
-	Symbol string `json:"symbol"`
+	Class string `json:"class"`
 }
 
-func (o *OpRegistrantAndroid) Type() string     { return "android.registrant" }
-func (o *OpRegistrantAndroid) Platform() string { return "android" }
-func (o *OpRegistrantAndroid) Targets() []Target {
-	return []Target{member("android:plugins", o.Symbol)}
+func (o *OpAndroidPlugin) Type() string     { return "android.plugin" }
+func (o *OpAndroidPlugin) Platform() string { return "android" }
+func (o *OpAndroidPlugin) Targets() []Target {
+	return []Target{member("android:plugins", o.Class)}
 }
-func (o *OpRegistrantAndroid) Validate() error {
-	return checkMatch(dottedIdentRe, "registrant symbol", o.Symbol)
-}
-
-// OpAndroidPreActivityRegistrant records a Kotlin symbol to be called from
-// the generated DriftPluginRegistrant.preActivityCreate(activity) body. The
-// hook runs before super.onCreate, giving plugins (e.g. the splash plugin's
-// Android 12+ controller) a place to call APIs like installSplashScreen()
-// that require the Activity but must run pre-super.onCreate.
-//
-// Shape mirrors OpRegistrantAndroid: a set of symbols.
-type OpAndroidPreActivityRegistrant struct {
-	Base
-	Symbol string `json:"symbol"`
-}
-
-func (o *OpAndroidPreActivityRegistrant) Type() string     { return "android.pre_activity_registrant" }
-func (o *OpAndroidPreActivityRegistrant) Platform() string { return "android" }
-func (o *OpAndroidPreActivityRegistrant) Targets() []Target {
-	return []Target{member("android:pre-activity", o.Symbol)}
-}
-func (o *OpAndroidPreActivityRegistrant) Validate() error {
-	return checkMatch(dottedIdentRe, "pre-activity registrant symbol", o.Symbol)
+func (o *OpAndroidPlugin) Validate() error {
+	// The registrant lives in com.drift.runner, so the class must be fully
+	// qualified.
+	return checkMatch(qualifiedIdentRe, "Android plugin class", o.Class)
 }
 
 // OpAndroidGradleAddDependency records a single dependency to be inserted
@@ -949,8 +852,7 @@ var opConstructors = map[string]func() Op{
 	"ios.assets.add_image_set":              func() Op { return &OpIOSAssetsAddImageSet{} },
 	"ios.storyboards.replace_launch_screen": func() Op { return &OpIOSReplaceLaunchScreen{} },
 	"ios.source.add":                        func() Op { return &OpAddIOSSource{} },
-	"ios.registrant":                        func() Op { return &OpRegistrantIOS{} },
-	"ios.app_delegate_registrant":           func() Op { return &OpIOSAppDelegateRegistrant{} },
+	"ios.plugin":                            func() Op { return &OpIOSPlugin{} },
 	"ios.bundle.add_resource":               func() Op { return &OpIOSAddBundleResource{} },
 	"ios.spm.add_package":                   func() Op { return &OpIOSAddPackageDependency{} },
 	"android.assets.add":                    func() Op { return &OpAndroidAddAsset{} },
@@ -966,9 +868,8 @@ var opConstructors = map[string]func() Op{
 	"android.drawable.write":                func() Op { return &OpAndroidWriteDrawable{} },
 	"android.resource.write_xml":            func() Op { return &OpAndroidWriteResourceXML{} },
 	"android.source.add":                    func() Op { return &OpAddKotlinSource{} },
-	"android.pre_activity_registrant":       func() Op { return &OpAndroidPreActivityRegistrant{} },
 	"android.gradle.add_dependency":         func() Op { return &OpAndroidGradleAddDependency{} },
-	"android.registrant":                    func() Op { return &OpRegistrantAndroid{} },
+	"android.plugin":                        func() Op { return &OpAndroidPlugin{} },
 }
 
 // OpTypes lists every known op discriminator in deterministic order. Used by
