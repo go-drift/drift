@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -131,6 +132,10 @@ type Workspace struct {
 	Platform string
 	// Ejected records whether the platform is ejected at Prepare time.
 	Ejected bool
+
+	// pluginOps is what the plugin pipeline last applied, so Refresh can
+	// tell whether the plugin output changed.
+	pluginOps pluginOps
 }
 
 // Prepare generates a workspace for the requested platform.
@@ -151,11 +156,8 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 		}
 
 		// Only clear and recreate for managed builds
-		if err := os.RemoveAll(buildDir); err != nil {
-			return nil, fmt.Errorf("failed to clear build directory: %w", err)
-		}
-		if err := os.MkdirAll(buildDir, 0o755); err != nil {
-			return nil, fmt.Errorf("failed to create build directory: %w", err)
+		if err := resetDir(buildDir); err != nil {
+			return nil, err
 		}
 	}
 
@@ -184,8 +186,40 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 		}
 	}
 
+	if platform == "ios" {
+		if err := driftpluginCLI.XcodeVersionPreflight(); err != nil {
+			return nil, err
+		}
+	}
+
+	ops, err := resolvePluginOps(ws)
+	if err != nil {
+		return nil, err
+	}
+	if err := ws.materialize(ops); err != nil {
+		return nil, err
+	}
+	return ws, nil
+}
+
+// resetDir empties dir, creating it if needed.
+func resetDir(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("failed to clear build directory: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create build directory: %w", err)
+	}
+	return nil
+}
+
+// materialize writes the native project for ws: the scaffold (skipped for
+// ejected platforms, whose sources the user owns), the plugin ops, the
+// bridge files and the overlay.
+func (ws *Workspace) materialize(ops pluginOps) error {
+	cfg := ws.Config
 	if err := os.MkdirAll(ws.BridgeDir, 0o755); err != nil {
-		return nil, fmt.Errorf("failed to create bridge directory: %w", err)
+		return fmt.Errorf("failed to create bridge directory: %w", err)
 	}
 
 	settings := scaffold.Settings{
@@ -194,49 +228,35 @@ func Prepare(root string, cfg *config.Resolved, platform string) (*Workspace, er
 		Bundle:         cfg.AppID,
 		Orientation:    cfg.Orientation,
 		AllowHTTP:      cfg.AllowHTTP,
-		Ejected:        ejected,
-		ProjectRoot:    root,
+		Ejected:        ws.Ejected,
+		ProjectRoot:    ws.Root,
 		Icon:           cfg.Icon,
 		IconBackground: cfg.IconBackground,
 	}
-
-	if platform == "ios" {
-		if err := driftpluginCLI.XcodeVersionPreflight(); err != nil {
-			return nil, err
-		}
-	}
-
-	switch platform {
+	switch ws.Platform {
 	case "android":
-		if err := scaffold.WriteAndroid(buildDir, settings); err != nil {
-			return nil, err
+		if err := scaffold.WriteAndroid(ws.BuildDir, settings); err != nil {
+			return err
 		}
 	case "ios":
-		if err := scaffold.WriteIOS(buildDir, settings); err != nil {
-			return nil, err
+		if err := scaffold.WriteIOS(ws.BuildDir, settings); err != nil {
+			return err
 		}
 	case "xtool":
-		if err := scaffold.WriteXtool(buildDir, settings); err != nil {
-			return nil, err
+		if err := scaffold.WriteXtool(ws.BuildDir, settings); err != nil {
+			return err
 		}
 	default:
-		return nil, fmt.Errorf("unknown platform %q", platform)
+		return fmt.Errorf("unknown platform %q", ws.Platform)
 	}
 
-	platformDir := platformProjectDir(ws, platform)
-	if err := runPluginPipeline(root, platformDir, platform, ejected); err != nil {
-		return nil, err
+	if err := applyPluginOps(ws, ops); err != nil {
+		return err
 	}
-
 	if err := WriteBridgeFiles(ws.BridgeDir, cfg); err != nil {
-		return nil, err
+		return err
 	}
-
-	if err := WriteOverlay(ws.Overlay, ws.BridgeDir, root); err != nil {
-		return nil, err
-	}
-
-	return ws, nil
+	return WriteOverlay(ws.Overlay, ws.BridgeDir, ws.Root)
 }
 
 // platformProjectDir returns the on-disk project root for the target
@@ -256,26 +276,25 @@ func platformProjectDir(ws *Workspace, platform string) string {
 	}
 }
 
-// runPluginPipeline executes the plugin build-time pipeline after scaffold
-// has rendered the project tree but before bridge files / overlay are
-// written. platformDir is the platform-specific project root (e.g.
-// buildDir/android/ on managed builds, platform/android/ on ejected): the
-// tree Gradle/Xcode actually compiles. It is content-aware: ops are applied
-// surgically and a summary of modified files is printed on ejected builds.
-// Zero-plugin projects still emit empty registrants so the runtime call
-// sites resolve.
-func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
+// pluginOps is the validated op list the plugins produced for a build,
+// plus a hash of it.
+type pluginOps struct {
+	ops  []protocol.Op
+	hash string
+}
+
+// resolvePluginOps runs the build half of every configured plugin (bridge
+// build, run, decode, conflict check) without touching the native project.
+// With no plugins it also deletes the generated bridge tool: its
+// `import "<plugin>"` lines would otherwise keep the dependency alive
+// through `go mod tidy`.
+func resolvePluginOps(ws *Workspace) (pluginOps, error) {
+	root := ws.Root
 	plugins, err := driftpluginCLI.LoadFromDriftYAML(root)
 	if err != nil {
-		return err
+		return pluginOps{}, err
 	}
-
-	var changed []string
 	if len(plugins) == 0 {
-		// Removing the last plugin from drift.yaml must also delete the
-		// generated bridge tool. Otherwise its `import "<plugin>"` lines
-		// keep the dep alive through `go mod tidy`, and a later
-		// drift build/run would still see the file in `tools/drift-plugins`.
 		bridgePath := filepath.Join(root, driftpluginCLI.BridgeFilePath)
 		if _, statErr := os.Stat(bridgePath); statErr == nil {
 			fmt.Fprintf(os.Stderr,
@@ -283,105 +302,103 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 				driftpluginCLI.BridgeFilePath)
 			_ = os.Remove(bridgePath)
 		}
-
-		// Zero-plugin fast path. Still emit support files, an empty
-		// registrant, and (for iOS) reset the SwiftPM sidecar to its
-		// empty state so the scaffolded local-package reference resolves.
-		c1, err := driftpluginCLI.EnsureRunnerSupport(platformDir, platform)
-		if err != nil {
-			return err
-		}
-		c2, err := driftpluginCLI.WriteRegistrant(platformDir, platform, nil)
-		if err != nil {
-			return err
-		}
-		changed = append(append(changed, c1...), c2...)
-		c3, err := driftpluginCLI.Apply(nil, platformDir, platform)
-		if err != nil {
-			return err
-		}
-		changed = append(changed, c3...)
-		if ejected {
-			reportChangedFiles(changed, root)
-		}
-		return nil
+		return newPluginOps(nil)
 	}
 
 	resolver := driftpluginCLI.NewGoListResolver(root)
 	infos, err := driftpluginCLI.CheckPluginDeps(plugins, resolver)
 	if err != nil {
-		return err
+		return pluginOps{}, err
 	}
-
 	bridge, err := driftpluginCLI.EnsureBridge(root, cliVersion, plugins, infos)
 	if err != nil {
-		return err
+		return pluginOps{}, err
 	}
 
 	configsYAML := make([]protocol.EnvelopePlugin, len(plugins))
 	for i, p := range plugins {
 		y, err := p.ConfigYAML()
 		if err != nil {
-			return err
+			return pluginOps{}, err
 		}
 		configsYAML[i] = protocol.EnvelopePlugin{Package: p.Package, ConfigYAML: y}
 	}
 
+	platformDir := platformProjectDir(ws, ws.Platform)
 	resp, err := driftpluginCLI.RunBridge(bridge, protocol.Envelope{
 		APIVersion:  protocol.APIVersion,
 		Cmd:         "build",
-		Platform:    platform,
+		Platform:    ws.Platform,
 		ProjectRoot: root,
 		BuildDir:    platformDir,
 		Plugins:     configsYAML,
 	}, filepath.Join(platformDir, "logs"))
 	if err != nil {
-		return err
+		return pluginOps{}, err
 	}
-
 	ops, err := protocol.DecodeOps(resp.Ops)
 	if err != nil {
-		return err
+		return pluginOps{}, err
 	}
-
 	normalized, err := driftpluginCLI.Validate(ops)
 	if err != nil {
-		return err
+		return pluginOps{}, err
 	}
+	return newPluginOps(normalized)
+}
 
-	if ejected {
+func newPluginOps(ops []protocol.Op) (pluginOps, error) {
+	enc, err := protocol.MarshalOpList(ops)
+	if err != nil {
+		return pluginOps{}, fmt.Errorf("encode plugin ops: %w", err)
+	}
+	sum := sha256.Sum256(enc)
+	return pluginOps{ops: ops, hash: hex.EncodeToString(sum[:])}, nil
+}
+
+// applyPluginOps writes ops into the platform project: mutations, the
+// Drift-owned plugin support files and the registrant. With no ops it
+// still writes those, with an empty registrant, and resets
+// plugin-generated output (bundle resources, the SwiftPM sidecar) so the
+// project compiles. Ejected projects are checked for plugin wiring first,
+// and get a summary of modified files.
+func applyPluginOps(ws *Workspace, ops pluginOps) error {
+	platformDir := platformProjectDir(ws, ws.Platform)
+	platform := ws.Platform
+	if ws.Ejected && len(ops.ops) > 0 {
+		var err error
 		switch platform {
 		case "ios":
-			err = driftpluginCLI.CheckEjectedIOS(platformDir, normalized)
+			err = driftpluginCLI.CheckEjectedIOS(platformDir, ops.ops)
 		case "android":
-			err = driftpluginCLI.CheckEjectedAndroid(platformDir, normalized)
+			err = driftpluginCLI.CheckEjectedAndroid(platformDir, ops.ops)
 		}
 		if err != nil {
 			return err
 		}
 	}
 
-	appliedPaths, err := driftpluginCLI.Apply(normalized, platformDir, platform)
+	var changed []string
+	applied, err := driftpluginCLI.Apply(ops.ops, platformDir, platform)
 	if err != nil {
 		return err
 	}
-	changed = append(changed, appliedPaths...)
-
-	supportPaths, err := driftpluginCLI.EnsureRunnerSupport(platformDir, platform)
+	changed = append(changed, applied...)
+	support, err := driftpluginCLI.EnsureRunnerSupport(platformDir, platform)
 	if err != nil {
 		return err
 	}
-	changed = append(changed, supportPaths...)
-
-	registrantPaths, err := driftpluginCLI.WriteRegistrant(platformDir, platform, normalized)
+	changed = append(changed, support...)
+	registrant, err := driftpluginCLI.WriteRegistrant(platformDir, platform, ops.ops)
 	if err != nil {
 		return err
 	}
-	changed = append(changed, registrantPaths...)
+	changed = append(changed, registrant...)
 
-	if ejected {
-		reportChangedFiles(changed, root)
+	if ws.Ejected {
+		reportChangedFiles(changed, ws.Root)
 	}
+	ws.pluginOps = ops
 	return nil
 }
 
@@ -405,10 +422,11 @@ func reportChangedFiles(changed []string, root string) {
 // preserves platform build caches (Gradle, DerivedData) for incremental
 // rebuilds during watch mode, while picking up drift.yaml changes.
 //
-// Refresh also reruns the plugin pipeline so a drift.yaml plugin edit during
-// `drift run --watch` reaches the native build (regenerates the bridge,
-// re-applies ops, rewrites registrants). Without this step watch mode would
-// silently use stale plugin state until a full restart.
+// Refresh also reruns the plugin pipeline so a plugin edit during
+// `drift run --watch` reaches the native build. On a managed build whose
+// plugin output changed, it regenerates the whole project instead, the way
+// Prepare does: re-applying ops only adds, so output from a removed plugin
+// or a changed op would otherwise linger until a restart.
 func (ws *Workspace) Refresh() error {
 	cfg, err := config.Resolve(ws.Root)
 	if err != nil {
@@ -416,14 +434,25 @@ func (ws *Workspace) Refresh() error {
 	}
 	ws.Config = cfg
 
+	ops, err := resolvePluginOps(ws)
+	if err != nil {
+		return err
+	}
+	if !ws.Ejected && ops.hash != ws.pluginOps.hash {
+		fmt.Fprintln(os.Stderr, "drift: plugin output changed; regenerating the native project")
+		if err := resetDir(ws.BuildDir); err != nil {
+			return err
+		}
+		return ws.materialize(ops)
+	}
+
+	if err := applyPluginOps(ws, ops); err != nil {
+		return err
+	}
 	if err := WriteBridgeFiles(ws.BridgeDir, ws.Config); err != nil {
 		return err
 	}
-	if err := WriteOverlay(ws.Overlay, ws.BridgeDir, ws.Root); err != nil {
-		return err
-	}
-	platformDir := platformProjectDir(ws, ws.Platform)
-	return runPluginPipeline(ws.Root, platformDir, ws.Platform, ws.Ejected)
+	return WriteOverlay(ws.Overlay, ws.BridgeDir, ws.Root)
 }
 
 // ManagedBuildDir returns the managed build directory for a given project root
