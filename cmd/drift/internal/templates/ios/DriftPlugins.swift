@@ -12,6 +12,7 @@
 
 @_spi(DriftHost) import DriftPluginAPI
 import UIKit
+import UserNotifications
 
 final class DriftPlugins {
     static let shared = DriftPlugins()
@@ -96,5 +97,24 @@ final class DriftPlugins {
             return
         }
         completion(.noData)
+    }
+
+    /// Offers a foreground notification to each plugin in drift.yaml order.
+    /// Returns the claiming plugin's presentation options, or nil.
+    func willPresentNotification(_ notification: UNNotification) -> UNNotificationPresentationOptions? {
+        dispatchPrecondition(condition: .onQueue(.main))
+        for plugin in plugins {
+            if let options = plugin.willPresentNotification(notification) {
+                return options
+            }
+        }
+        return nil
+    }
+
+    /// Offers a notification response to each plugin in drift.yaml order.
+    /// Returns true if one claimed it.
+    func didReceiveNotificationResponse(_ response: UNNotificationResponse) -> Bool {
+        dispatchPrecondition(condition: .onQueue(.main))
+        return plugins.contains { $0.didReceiveNotificationResponse(response) }
     }
 }

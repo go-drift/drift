@@ -33,6 +33,8 @@ var iosWiring = []wiringCall{
 	{"Runner/AppDelegate.swift", "DriftPlugins.shared.didRegisterForRemoteNotifications(", "plugins receive the APNs token"},
 	{"Runner/AppDelegate.swift", "DriftPlugins.shared.didFailToRegisterForRemoteNotifications(", "plugins see APNs registration failures"},
 	{"Runner/AppDelegate.swift", "DriftPlugins.shared.didReceiveRemoteNotification(", "plugins receive remote notifications"},
+	{"Runner/PlatformChannel.swift", "DriftPlugins.shared.willPresentNotification(", "plugins receive foreground notifications"},
+	{"Runner/PlatformChannel.swift", "DriftPlugins.shared.didReceiveNotificationResponse(", "plugins receive notification taps"},
 	{"Runner/DriftViewController.swift", "DriftPlugins.shared.attach(self, overlayView:", "plugins attach to the Drift view"},
 	{"Runner/DriftViewController.swift", "DriftPlugins.shared.detach(", "plugins detach from the Drift view"},
 	{"Runner.xcodeproj/project.pbxproj", "PBXFileSystemSynchronizedRootGroup", "Xcode compiles the plugin sources Drift writes under Runner/ (project format 77, Xcode 16+)"},
