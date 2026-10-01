@@ -37,9 +37,9 @@
 // shared. Whether the replaced launch storyboard renders on xtool builds is
 // unverified (xtool does not compile storyboards on Linux).
 //
-// FUTURE(xtool#219): with asset-catalog support in xtool, a dark splash
-// image set variant becomes possible on every iOS build path.
-// https://github.com/xtool-org/xtool/pull/219
+// FUTURE(xtool#219): with asset-catalog support in xtool, a dark-mode
+// variant (image set and colour set appearances) becomes possible on every
+// iOS build path. https://github.com/xtool-org/xtool/pull/219
 package plugin
 
 import (
@@ -107,18 +107,6 @@ func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
 		generateLayerList("drift_splash_background", "drift_splash"))
 	ctx.Android.Resources.WriteXML("values/drift_splash_colors.xml",
 		generateValuesColors(r.BackgroundColor))
-
-	if r.HasDark {
-		darkImg, err := ctx.ResolveAsset(r.Dark.Image)
-		if err != nil {
-			return fmt.Errorf("splash: read dark image %q: %w", r.Dark.Image, err)
-		}
-		ctx.Android.Drawables.AddBitmap("drift_splash_dark", darkImg)
-		ctx.Android.Resources.WriteXML("drawable-night/launch_background.xml",
-			generateLayerList("drift_splash_background", "drift_splash_dark"))
-		ctx.Android.Resources.WriteXML("values-night/drift_splash_colors.xml",
-			generateValuesNightColors(r.Dark.BackgroundColor))
-	}
 
 	if r.HasAndroid12 {
 		iconImg, err := ctx.ResolveAsset(r.Android12.Icon)

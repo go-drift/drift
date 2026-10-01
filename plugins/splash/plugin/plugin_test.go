@@ -145,29 +145,17 @@ android_12:
 	}
 }
 
-func TestBuild_DarkVariant_AddsNightBucketResources(t *testing.T) {
-	ops := runBuild(t, `
-image: assets/splash.png
-dark:
-  image: assets/splash_dark.png
-`, "assets/splash.png", "assets/splash_dark.png")
-
-	var sawNightDrawable, sawNightColors bool
-	for _, op := range ops {
-		if rx, ok := op.(*protocol.OpAndroidWriteResourceXML); ok {
-			if strings.Contains(rx.RelPath, "drawable-night/") {
-				sawNightDrawable = true
-			}
-			if strings.Contains(rx.RelPath, "values-night/") {
-				sawNightColors = true
-			}
+// Config the plugin cannot honour on every platform is not accepted:
+// unknown keys fail the build rather than doing nothing.
+func TestBuild_RejectsRemovedFields(t *testing.T) {
+	for _, field := range []string{
+		"branding: assets/b.png",
+		"branding_position: bottom",
+		"dark:\n  image: assets/splash.png",
+	} {
+		if _, err := buildYAML(t, "image: assets/splash.png\n"+field+"\n", "assets/splash.png"); err == nil {
+			t.Errorf("config with %q accepted", field)
 		}
-	}
-	if !sawNightDrawable {
-		t.Errorf("dark variant should emit drawable-night/ resource XML")
-	}
-	if !sawNightColors {
-		t.Errorf("dark variant should emit values-night/ resource XML")
 	}
 }
 

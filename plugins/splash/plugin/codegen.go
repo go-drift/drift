@@ -51,10 +51,6 @@ func renderTemplate(t *template.Template, data any) string {
 // storyboard mirroring the runtime overlay: a background-colour view filling
 // the scene, with a single centred image view referencing the `DriftSplash`
 // asset shipped in Assets.xcassets.
-//
-// iOS resolves the asset name to the appearance-matched variant
-// (light/dark) automatically, so a dark-mode override is handled by the
-// image-set, not by a separate storyboard.
 func generateLaunchStoryboard(cfg resolvedConfig) string {
 	return renderTemplate(tmplStoryboard, struct {
 		BackgroundColorAttrs string
@@ -101,33 +97,17 @@ func generateValuesColors(backgroundColor string) string {
 	})
 }
 
-// generateValuesNightColors mirrors generateValuesColors for the dark
-// resource bucket (res/values-night/drift_splash_colors.xml). When the user
-// configures a `dark:` variant, the dark background colour wins on devices
-// with the night uiMode.
-func generateValuesNightColors(darkBackgroundColor string) string {
-	return generateValuesColors(darkBackgroundColor)
-}
-
 type nativeConfigView struct {
-	BackgroundColor     string
-	DarkBackgroundColor string
-	FadeDurationMs      int
-	BrandingPosition    string
-	Android12           bool
+	BackgroundColor string
+	FadeDurationMs  int
+	Android12       bool
 }
 
 func nativeConfigData(cfg resolvedConfig) nativeConfigView {
-	var dark string
-	if cfg.HasDark {
-		dark = cfg.Dark.BackgroundColor
-	}
 	return nativeConfigView{
-		BackgroundColor:     cfg.BackgroundColor,
-		DarkBackgroundColor: dark,
-		FadeDurationMs:      cfg.FadeDurationMs,
-		BrandingPosition:    cfg.BrandingPos.String(),
-		Android12:           cfg.HasAndroid12,
+		BackgroundColor: cfg.BackgroundColor,
+		FadeDurationMs:  cfg.FadeDurationMs,
+		Android12:       cfg.HasAndroid12,
 	}
 }
 

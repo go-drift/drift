@@ -2,8 +2,8 @@
 ///
 /// Full-screen UIView that mirrors the LaunchScreen.storyboard layout so the
 /// runtime overlay can attach with no visual seam after the system splash
-/// tears down. Auto-layout constraints keep the image and optional branding
-/// pinned through rotation.
+/// tears down. Auto-layout constraints keep the image pinned through
+/// rotation.
 ///
 /// `fadeOut(durationMs:completion:)` runs on the main thread; callers must
 /// hop to main before invoking.
@@ -13,7 +13,6 @@ import UIKit
 final class DriftSplashOverlayView: UIView {
 
     private let imageView = UIImageView()
-    private var brandingView: UIImageView?
     private let backgroundLayerView = UIView()
 
     init() {
@@ -40,53 +39,9 @@ final class DriftSplashOverlayView: UIView {
             imageView.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.6),
             imageView.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.6),
         ])
-
-        installBrandingIfConfigured()
-
-        // Observe dark-mode changes so the image and background swap live
-        // while the splash is up.
-        applyTraitColours()
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
-
-    private func installBrandingIfConfigured() {
-        guard UIImage(named: "DriftSplashBranding") != nil else { return }
-        let view = UIImageView(image: UIImage(named: "DriftSplashBranding"))
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.contentMode = .scaleAspectFit
-        addSubview(view)
-        brandingView = view
-
-        let bottom = view.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -24)
-        let height = view.heightAnchor.constraint(lessThanOrEqualToConstant: 80)
-        NSLayoutConstraint.activate([bottom, height])
-
-        switch DriftSplashConfig.brandingPosition {
-        case "bottom_left":
-            view.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 24).isActive = true
-        case "bottom_right":
-            view.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -24).isActive = true
-        default:
-            view.centerXAnchor.constraint(equalTo: centerXAnchor).isActive = true
-        }
-    }
-
-    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
-        super.traitCollectionDidChange(previousTraitCollection)
-        applyTraitColours()
-    }
-
-    private func applyTraitColours() {
-        // Image assets named in the Assets.xcassets ship as a light/dark
-        // pair under the same name when the user supplies a `dark:` variant;
-        // UIImage(named:) handles the appearance match automatically.
-        // Background colour is the only thing the runtime resolves itself.
-        let bgHex = traitCollection.userInterfaceStyle == .dark && !DriftSplashConfig.darkBackgroundColor.isEmpty
-            ? DriftSplashConfig.darkBackgroundColor
-            : DriftSplashConfig.backgroundColor
-        backgroundLayerView.backgroundColor = parseHex(bgHex)
-    }
 
     func fadeOut(durationMs: Int, completion: @escaping () -> Void) {
         UIView.animate(
