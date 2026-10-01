@@ -43,12 +43,12 @@ object DriftPlugins {
 
     /**
      * Attaches every plugin to activity, detaching from a previous Activity
-     * first. rootView is the window's root view.
+     * first. overlayView hosts plugin overlays (DriftActivityBinding).
      */
-    fun attach(activity: Activity, rootView: ViewGroup) {
+    fun attach(activity: Activity, overlayView: ViewGroup) {
         val all = requirePlugins()
         binding?.let { detachAll(it) }
-        val b = DriftActivityBinding(activity, rootView)
+        val b = DriftActivityBinding(activity, overlayView)
         binding = b
         all.forEach { it.onAttach(b) }
     }

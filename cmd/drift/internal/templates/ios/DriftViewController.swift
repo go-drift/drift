@@ -56,6 +56,11 @@ final class DriftViewController: UIViewController {
     /// Created immediately as a constant since it's used throughout the controller's lifetime.
     private let metalView = DriftMetalView()
 
+    /// Hosts plugin overlays above Drift's content and platform views
+    /// (DriftViewBinding.overlayView); PlatformViewHandler inserts platform
+    /// views below it.
+    private let overlayView = DriftOverlayView()
+
     override var preferredStatusBarStyle: UIStatusBarStyle {
         SystemUIHandler.currentStyle.statusBarStyle
     }
@@ -81,8 +86,11 @@ final class DriftViewController: UIViewController {
     /// the view hierarchy is now set up.
     override func viewDidLoad() {
         super.viewDidLoad()
-        // Initialize platform view handler with this view as the host
-        PlatformViewHandler.setHostView(view)
+        overlayView.frame = view.bounds
+        overlayView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(overlayView)
+        // Platform views go into this view, below the plugin overlays
+        PlatformViewHandler.setHostView(view, below: overlayView)
         // Initialize accessibility support
         AccessibilityHandler.shared.initialize(hostView: view)
         applySystemUIStyle(SystemUIHandler.currentStyle)
@@ -102,7 +110,7 @@ final class DriftViewController: UIViewController {
         }
         // Plugins attach while the launch screen is still up (the window is
         // not visible yet), so an overlay shows from the first frame.
-        DriftPlugins.shared.attach(self)
+        DriftPlugins.shared.attach(self, overlayView: overlayView)
     }
 
     deinit {
@@ -227,5 +235,14 @@ final class DriftViewController: UIViewController {
         if DriftNeedsFrame() == 0 {
             displayLink?.isPaused = true
         }
+    }
+}
+
+/// Full-screen host for plugin overlays. Transparent to touches where it has
+/// no subviews, so it never blocks Drift's content or platform views.
+final class DriftOverlayView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
     }
 }

@@ -21,8 +21,12 @@ import android.view.ViewGroup
 
 class DriftActivityBinding(
     val activity: Activity,
-    /** The window's root view; overlays added here cover the whole window. */
-    val rootView: ViewGroup,
+    /**
+     * Host for plugin overlays (a splash, say): the window's root view, so
+     * overlays cover the whole window, above Drift's content and its
+     * platform views.
+     */
+    val overlayView: ViewGroup,
 ) {
     private val newIntentListeners = mutableListOf<(Intent) -> Boolean>()
     private val activityResultListeners = mutableListOf<(Int, Int, Intent?) -> Boolean>()
