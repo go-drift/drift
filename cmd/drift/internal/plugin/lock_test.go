@@ -47,7 +47,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	}
 
 	// The user edits the drawable, then removes the plugin.
-	drawablePath := filepath.Join(dir, "app/src/main/res/drawable/camera_icon.png")
+	drawablePath := filepath.Join(dir, "app/src/main/res/drawable-nodpi/camera_icon.png")
 	if err := os.WriteFile(drawablePath, []byte("edited"), 0o644); err != nil {
 		t.Fatal(err)
 	}
