@@ -13,24 +13,27 @@ import (
 type Config struct {
 	// Image is a PNG shown centred on the background.
 	Image string `yaml:"image" drift:"required,asset"`
-	// ImageWidth is the image's on-screen width in points (iOS) and dp
-	// (Android); the height follows the PNG's aspect ratio.
+	// ImageWidth is the image's on-screen width in points on iOS; the height
+	// follows the PNG's aspect ratio. Android sizes its splash icon itself.
 	ImageWidth      int    `yaml:"image_width"      drift:"default=200"`
 	BackgroundColor string `yaml:"background_color" drift:"default=#FFFFFF,hex"`
 	FadeDurationMs  int    `yaml:"fade_duration_ms" drift:"default=200"`
 	// MaxDurationMs is a safety net for a Preserve never matched by Remove:
 	// after this long from launch, Preserve no longer holds the splash. It
 	// still waits for the app's first frame, however long App.OnInit runs.
-	MaxDurationMs int        `yaml:"max_duration_ms" drift:"default=10000"`
-	Android12     *Android12 `yaml:"android_12,omitempty"`
+	MaxDurationMs int      `yaml:"max_duration_ms" drift:"default=10000"`
+	Android       *Android `yaml:"android,omitempty"`
 }
 
-// Android12 enables the Android 12+ SplashScreen API path. When the block
-// is present, the plugin emits a values-v31/styles.xml override and the
-// AndroidX core-splashscreen Gradle dependency.
-type Android12 struct {
-	Icon                string `yaml:"icon"                  drift:"required,asset"`
-	IconBackgroundColor string `yaml:"icon_background_color" drift:"default=#FFFFFF,hex"`
+// Android adjusts the Android splash, which is the platform's splash screen
+// (Android 12+): an icon centred on background_color, at a size the system
+// picks, masked to a circle. Keep the logo inside the centre two thirds of
+// the icon image.
+type Android struct {
+	// Icon replaces image on Android, e.g. a padded variant.
+	Icon string `yaml:"icon" drift:"asset"`
+	// IconBackgroundColor fills the circle behind the icon. Unset: none.
+	IconBackgroundColor string `yaml:"icon_background_color" drift:"hex"`
 }
 
 // resolvedConfig is Config parsed for the emitters: assets read, colours
@@ -41,12 +44,9 @@ type resolvedConfig struct {
 	BackgroundColor driftplugin.Color
 	FadeDurationMs  int
 	MaxDurationMs   int
-	Android12       *android12Resolved // nil when not configured
-}
-
-type android12Resolved struct {
-	Icon                []byte
-	IconBackgroundColor driftplugin.Color
+	AndroidIcon     []byte
+	// AndroidIconBackground is nil when no icon background is configured.
+	AndroidIconBackground *driftplugin.Color
 }
 
 type size struct{ Width, Height float64 }
@@ -86,16 +86,23 @@ func resolve(ctx *driftplugin.BuildCtx, cfg Config) (resolvedConfig, error) {
 		FadeDurationMs:  cfg.FadeDurationMs,
 		MaxDurationMs:   cfg.MaxDurationMs,
 	}
-	if a := cfg.Android12; a != nil {
-		icon, err := ctx.ResolveAsset(a.Icon)
-		if err != nil {
-			return resolvedConfig{}, fmt.Errorf("read android_12.icon %q: %w", a.Icon, err)
+	out.AndroidIcon = img
+	if a := cfg.Android; a != nil {
+		if a.Icon != "" {
+			if out.AndroidIcon, err = ctx.ResolveAsset(a.Icon); err != nil {
+				return resolvedConfig{}, fmt.Errorf("read android.icon %q: %w", a.Icon, err)
+			}
+			if _, err := png.DecodeConfig(bytes.NewReader(out.AndroidIcon)); err != nil {
+				return resolvedConfig{}, fmt.Errorf("android.icon %q must be a PNG: %w", a.Icon, err)
+			}
 		}
-		iconBg, err := driftplugin.ParseColor(a.IconBackgroundColor)
-		if err != nil {
-			return resolvedConfig{}, fmt.Errorf("android_12.icon_background_color: %w", err)
+		if a.IconBackgroundColor != "" {
+			c, err := driftplugin.ParseColor(a.IconBackgroundColor)
+			if err != nil {
+				return resolvedConfig{}, fmt.Errorf("android.icon_background_color: %w", err)
+			}
+			out.AndroidIconBackground = &c
 		}
-		out.Android12 = &android12Resolved{Icon: icon, IconBackgroundColor: iconBg}
 	}
 	return out, nil
 }

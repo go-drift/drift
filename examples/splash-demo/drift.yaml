@@ -11,6 +11,3 @@ plugins:
       image: assets/splash.png
       background_color: "#FFFFFF"
       fade_duration_ms: 200
-      android_12:
-        icon: assets/splash.png
-        icon_background_color: "#FFFFFF"

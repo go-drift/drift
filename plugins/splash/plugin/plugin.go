@@ -5,30 +5,28 @@
 //	plugins:
 //	  - package: github.com/go-drift/drift/plugins/splash/plugin
 //	    config:
-//	      image: assets/splash.png   # PNG
-//	      image_width: 200           # points / dp; height from the PNG's aspect
-//	      background_color: "#1A2238" # #RRGGBB or #RRGGBBAA (alpha last)
-//	      android_12:
-//	        icon: assets/splash_icon.png
-//	        icon_background_color: "#1A2238"
+//	      image: assets/splash.png      # PNG
+//	      image_width: 200              # iOS points; height from the PNG's aspect
+//	      background_color: "#1A2238"   # #RRGGBB or #RRGGBBAA (alpha last)
+//	      fade_duration_ms: 200
+//	      max_duration_ms: 10000        # after this, Preserve no longer holds it
+//	      android:                      # optional
+//	        icon: assets/splash_icon.png  # default: image
+//	        icon_background_color: "#FFFFFF"
 //
-// At build time the plugin:
-//   - Bundles the image as an iOS asset-catalogue image set and an Android
-//     drawable bitmap.
-//   - Replaces iOS LaunchScreen.storyboard with a generated layout matching
-//     the runtime overlay (same colour, image centred at image_width) so the
-//     launch-screen-to-overlay hand-off is seamless. On Android the overlay
-//     draws the launch drawable itself.
-//   - Replaces the Android `@drawable/launch_background` referenced by the
-//     scaffold's LaunchTheme; the theme itself is untouched, avoiding
-//     resource-merge collisions on pre-API-31 devices.
-//   - On `android_12:` configurations, writes a values-v31/styles.xml
-//     LaunchTheme variant that opts into AndroidX SplashScreen, adds the
-//     core-splashscreen Gradle dependency, and ships the controller that
-//     calls installSplashScreen() from the plugin's pre-Activity hook.
-//   - Ships native Swift / Kotlin runtime sources via embedded filesystems
-//     and names the DriftSplashPlugin class on each platform, which the app
-//     registers at launch and attaches to the Drift view.
+// The splash stays up until the app draws its first frame with content
+// (after App.OnInit), and longer while the runtime package's Preserve holds
+// it.
+//
+// iOS: the launch storyboard is replaced with the image centred at
+// image_width on background_color, and a native overlay laid out the same
+// way takes over from it until the app is ready.
+//
+// Android: the platform splash screen (Android 12+, Drift's minimum) shows
+// the icon centred on background_color, sized and masked to a circle by
+// the system, so keep the logo within the icon's centre two thirds. The
+// plugin styles it through MainActivity's launch theme and holds it until
+// the app is ready.
 //
 // # Platform support
 //
@@ -58,12 +56,6 @@ var iosSources embed.FS
 //go:embed android
 var androidSources embed.FS
 
-// android12Sources ship only when android_12 is configured: they need the
-// core-splashscreen dependency added alongside them.
-//
-//go:embed android12
-var android12Sources embed.FS
-
 // androidPackage is the Kotlin package of the plugin's Android sources.
 const androidPackage = "com.drift.plugin.splash"
 
@@ -89,19 +81,23 @@ func emitIOS(ctx *driftplugin.BuildCtx, r resolvedConfig) {
 	ctx.IOS.Plugin("DriftSplashPlugin")
 }
 
+// emitAndroid configures the platform splash screen (Android 12+, Drift's
+// minimum) through the launch theme: a Drift.Splash style over the
+// scaffold's LaunchTheme, set on MainActivity. The native plugin holds it
+// on screen until the app is ready.
 func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) {
-	ctx.Android.Drawables.AddBitmap("drift_splash", r.Image)
-	ctx.Android.Resources.WriteXML("drawable/launch_background.xml", generateLayerList(r))
-	ctx.Android.Resources.WriteXML("values/drift_splash_colors.xml",
-		generateValuesColors(r.BackgroundColor))
-
-	if r.Android12 != nil {
-		ctx.Android.Drawables.AddBitmap("drift_splash_icon", r.Android12.Icon)
-		ctx.Android.Resources.WriteXML("values-v31/styles.xml", generateV31Styles(*r.Android12))
-		ctx.Android.AddGradleDependency("implementation",
-			"androidx.core:core-splashscreen:1.0.1")
-		ctx.Android.Sources.AddFS(androidPackage, android12Sources, "android12")
+	ctx.Android.Drawables.AddBitmap("drift_splash_icon", r.AndroidIcon)
+	ctx.Android.Resources.Colors.Set("drift_splash_background", r.BackgroundColor.String())
+	items := map[string]string{
+		"android:windowSplashScreenBackground":   "@color/drift_splash_background",
+		"android:windowSplashScreenAnimatedIcon": "@drawable/drift_splash_icon",
 	}
+	if c := r.AndroidIconBackground; c != nil {
+		ctx.Android.Resources.Colors.Set("drift_splash_icon_background", c.String())
+		items["android:windowSplashScreenIconBackgroundColor"] = "@color/drift_splash_icon_background"
+	}
+	ctx.Android.Resources.Styles.Set("Drift.Splash", "LaunchTheme", items)
+	ctx.Android.Manifest.SetActivityTheme(".MainActivity", "@style/Drift.Splash")
 
 	ctx.Android.Sources.AddFS(androidPackage, androidSources, "android")
 	ctx.Android.Sources.AddFile(androidPackage, "SplashConfig.kt",

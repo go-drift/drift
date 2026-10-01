@@ -23,6 +23,9 @@ func TestParseColor(t *testing.T) {
 		if a := got.AndroidHex(); a != tc.android {
 			t.Errorf("ParseColor(%q).AndroidHex() = %q, want %q", tc.in, a, tc.android)
 		}
+		if back, err := ParseColor(got.String()); err != nil || back != got {
+			t.Errorf("ParseColor(%q).String() = %q does not round-trip", tc.in, got.String())
+		}
 	}
 }
 

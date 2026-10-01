@@ -73,42 +73,37 @@ func hasOpType(ops []protocol.Op, typ string) bool {
 	return false
 }
 
-func TestBuild_LightOnly(t *testing.T) {
+func TestBuild_EmitsBothPlatforms(t *testing.T) {
 	ops := runBuild(t, `
 image: assets/splash.png
 background_color: "#1A2238"
 `, "assets/splash.png")
 
-	wantSome := []string{
+	for _, typ := range []string{
 		"ios.assets.add_image_set",
 		"ios.storyboards.replace_launch_screen",
 		"ios.source.add",
 		"ios.plugin",
 		"android.drawable.write",
-		"android.resource.write_xml",
+		"android.color.set",
+		"android.style.set",
+		"android.manifest.set_activity_attr",
 		"android.source.add",
 		"android.plugin",
-	}
-	for _, typ := range wantSome {
+	} {
 		if !hasOpType(ops, typ) {
-			t.Errorf("missing required op type %q in light-only build", typ)
+			t.Errorf("missing op type %q", typ)
 		}
 	}
-
-	if hasOpType(ops, "android.gradle.add_dependency") {
-		t.Errorf("light-only build should not add Gradle dependencies")
+	// The platform splash needs no library and no resource files of its own.
+	for _, typ := range []string{"android.gradle.add_dependency", "android.resource.write_xml"} {
+		if hasOpType(ops, typ) {
+			t.Errorf("unexpected op type %q", typ)
+		}
 	}
 	// UILaunchStoryboardName=LaunchScreen is in both Info.plist templates.
 	if hasOpType(ops, "info_plist.set_string") {
 		t.Errorf("splash should not set Info.plist keys the templates already set")
-	}
-	// The Android 12 controller needs core-splashscreen, so it must not
-	// ship without it.
-	if kotlinSource(ops, "Android12SplashController.kt") != "" {
-		t.Errorf("light-only build should not ship Android12SplashController.kt")
-	}
-	if strings.Contains(kotlinSource(ops, "SplashConfig.kt"), "Android12SplashController") {
-		t.Errorf("light-only SplashConfig.kt must not reference the Android 12 controller")
 	}
 }
 
@@ -127,38 +122,6 @@ func kotlinSource(ops []protocol.Op, rel string) string {
 	return ""
 }
 
-func TestBuild_Android12_EmitsGradleAndController(t *testing.T) {
-	ops := runBuild(t, `
-image: assets/splash.png
-background_color: "#1A2238"
-android_12:
-  icon: assets/splash_icon.png
-  icon_background_color: "#FFFFFF"
-`, "assets/splash.png", "assets/splash_icon.png")
-
-	if !hasOpType(ops, "android.gradle.add_dependency") {
-		t.Errorf("android_12 config should emit gradle dependency op")
-	}
-	if kotlinSource(ops, "Android12SplashController.kt") == "" {
-		t.Errorf("android_12 config should ship Android12SplashController.kt")
-	}
-	if !strings.Contains(kotlinSource(ops, "SplashConfig.kt"), "Android12SplashController.install(activity)") {
-		t.Errorf("android_12 SplashConfig.kt should install the controller:\n%s", kotlinSource(ops, "SplashConfig.kt"))
-	}
-
-	// Verify the gradle dep coord pins core-splashscreen 1.0.1 (no floating).
-	for _, op := range ops {
-		if dep, ok := op.(*protocol.OpAndroidGradleAddDependency); ok {
-			if !strings.Contains(dep.Coord, "androidx.core:core-splashscreen:") {
-				t.Errorf("gradle dep coord wrong: %s", dep.Coord)
-			}
-			if !strings.HasSuffix(dep.Coord, ":1.0.1") {
-				t.Errorf("gradle dep version must be pinned to 1.0.1; got %s", dep.Coord)
-			}
-		}
-	}
-}
-
 // Config the plugin cannot honour on every platform is not accepted:
 // unknown keys fail the build rather than doing nothing.
 func TestBuild_RejectsRemovedFields(t *testing.T) {
@@ -166,6 +129,7 @@ func TestBuild_RejectsRemovedFields(t *testing.T) {
 		"branding: assets/b.png",
 		"branding_position: bottom",
 		"dark:\n  image: assets/splash.png",
+		"android_12:\n  icon: assets/splash.png",
 	} {
 		if _, err := buildYAML(t, "image: assets/splash.png\n"+field+"\n", "assets/splash.png"); err == nil {
 			t.Errorf("config with %q accepted", field)
@@ -210,30 +174,10 @@ func TestBuild_PluginClasses(t *testing.T) {
 	}
 }
 
-func TestBuild_Android12RequiresIcon(t *testing.T) {
-	_, err := buildYAML(t, `
-image: assets/splash.png
-android_12:
-  icon_background_color: "#FFFFFF"
-`, "assets/splash.png")
-	if err == nil || !strings.Contains(err.Error(), "android_12.icon: required field missing") {
-		t.Fatalf("err = %v, want missing android_12.icon", err)
-	}
-}
-
 func launchStoryboard(ops []protocol.Op) string {
 	for _, op := range ops {
 		if sb, ok := op.(*protocol.OpIOSReplaceLaunchScreen); ok {
 			return sb.Content
-		}
-	}
-	return ""
-}
-
-func resourceXML(ops []protocol.Op, relPath string) string {
-	for _, op := range ops {
-		if rx, ok := op.(*protocol.OpAndroidWriteResourceXML); ok && rx.RelPath == relPath {
-			return rx.Content
 		}
 	}
 	return ""
@@ -252,8 +196,8 @@ func iosSource(ops []protocol.Op, rel string) string {
 	return ""
 }
 
-// The launch screen, the iOS overlay and the Android launch drawable all
-// show the image at image_width with the PNG's aspect ratio (4x2 here).
+// The launch screen and the iOS overlay show the image at image_width with
+// the PNG's aspect ratio (4x2 here).
 func TestBuild_ImageSizedByWidthAndAspect(t *testing.T) {
 	ops := runBuild(t, "image: assets/splash.png\nimage_width: 150\n", "assets/splash.png")
 
@@ -269,10 +213,6 @@ func TestBuild_ImageSizedByWidthAndAspect(t *testing.T) {
 	if cfg := iosSource(ops, "SplashConfig.swift"); !strings.Contains(cfg, "CGSize(width: 150, height: 75)") {
 		t.Errorf("SplashConfig.swift size wrong:\n%s", cfg)
 	}
-	lb := resourceXML(ops, "drawable/launch_background.xml")
-	if !strings.Contains(lb, `android:width="150dp"`) || !strings.Contains(lb, `android:height="75dp"`) {
-		t.Errorf("launch_background.xml size wrong:\n%s", lb)
-	}
 }
 
 func TestBuild_ImageWidthDefault(t *testing.T) {
@@ -282,22 +222,19 @@ func TestBuild_ImageWidthDefault(t *testing.T) {
 	}
 }
 
-// Colours are alpha last in drift.yaml, alpha first in Android resources,
-// and fractional components on iOS.
+// Colours stay in Drift's format for android.color.set (Drift converts) and
+// become fractional components on iOS.
 func TestBuild_ColoursPerPlatform(t *testing.T) {
 	ops := runBuild(t, `
 image: assets/splash.png
 background_color: "#33669980"
-android_12:
-  icon: assets/splash.png
+android:
   icon_background_color: "#11223344"
 `, "assets/splash.png")
 
-	if c := resourceXML(ops, "values/drift_splash_colors.xml"); !strings.Contains(c, "#80336699") {
-		t.Errorf("drift_splash_colors.xml not ARGB:\n%s", c)
-	}
-	if c := resourceXML(ops, "values-v31/styles.xml"); !strings.Contains(c, "#44112233") {
-		t.Errorf("v31 icon background not ARGB:\n%s", c)
+	colors := androidColors(ops)
+	if colors["drift_splash_background"] != "#33669980" || colors["drift_splash_icon_background"] != "#11223344" {
+		t.Errorf("android colours = %v", colors)
 	}
 	want := `red="0.2000" green="0.4000" blue="0.6000" alpha="0.5020"`
 	if sb := launchStoryboard(ops); !strings.Contains(sb, want) {
@@ -305,6 +242,103 @@ android_12:
 	}
 	if cfg := iosSource(ops, "SplashConfig.swift"); !strings.Contains(cfg, "UIColor(red: 0.2000, green: 0.4000, blue: 0.6000, alpha: 0.5020)") {
 		t.Errorf("SplashConfig.swift colour wrong:\n%s", cfg)
+	}
+}
+
+func androidColors(ops []protocol.Op) map[string]string {
+	m := map[string]string{}
+	for _, op := range ops {
+		if c, ok := op.(*protocol.OpAndroidColorSet); ok {
+			m[c.Name] = c.Value
+		}
+	}
+	return m
+}
+
+func splashStyle(t *testing.T, ops []protocol.Op) map[string]string {
+	t.Helper()
+	for _, op := range ops {
+		if st, ok := op.(*protocol.OpAndroidStyleSet); ok && st.Name == "Drift.Splash" {
+			if st.Parent != "LaunchTheme" {
+				t.Errorf("Drift.Splash parent = %q, want LaunchTheme", st.Parent)
+			}
+			m := map[string]string{}
+			for _, it := range st.Items {
+				m[it.Name] = it.Value
+			}
+			return m
+		}
+	}
+	t.Fatal("no Drift.Splash style")
+	return nil
+}
+
+// Android's splash is the platform one, styled through MainActivity's
+// launch theme. The icon defaults to image; no icon background unless set.
+func TestBuild_AndroidPlatformSplash(t *testing.T) {
+	ops := runBuild(t, "image: assets/splash.png\n", "assets/splash.png")
+
+	style := splashStyle(t, ops)
+	if style["android:windowSplashScreenBackground"] != "@color/drift_splash_background" ||
+		style["android:windowSplashScreenAnimatedIcon"] != "@drawable/drift_splash_icon" {
+		t.Errorf("Drift.Splash items = %v", style)
+	}
+	if _, ok := style["android:windowSplashScreenIconBackgroundColor"]; ok {
+		t.Errorf("icon background set without android.icon_background_color")
+	}
+	var themed bool
+	for _, op := range ops {
+		if a, ok := op.(*protocol.OpAndroidManifestSetActivityAttr); ok &&
+			a.Activity == ".MainActivity" && a.Attr == "android:theme" && a.Value == "@style/Drift.Splash" {
+			themed = true
+		}
+	}
+	if !themed {
+		t.Error("MainActivity theme not set to @style/Drift.Splash")
+	}
+	var image4x2 bytes.Buffer
+	if err := png.Encode(&image4x2, image.NewRGBA(image.Rect(0, 0, 4, 2))); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(drawable(t, ops, "drift_splash_icon"), image4x2.Bytes()) {
+		t.Error("drift_splash_icon should default to image")
+	}
+}
+
+func drawable(t *testing.T, ops []protocol.Op, name string) []byte {
+	t.Helper()
+	for _, op := range ops {
+		if d, ok := op.(*protocol.OpAndroidWriteDrawable); ok && d.Name == name {
+			b, err := protocol.DecodeContent(d.Content)
+			if err != nil {
+				t.Fatalf("decode %s: %v", name, err)
+			}
+			return b
+		}
+	}
+	t.Fatalf("no drawable %s", name)
+	return nil
+}
+
+func TestBuild_AndroidIconOverride(t *testing.T) {
+	root := t.TempDir()
+	stubAsset(t, root, "assets/splash.png")
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 3, 3))); err != nil {
+		t.Fatal(err)
+	}
+	writeAsset(t, root, "assets/icon.png", buf.Bytes())
+	ctx := driftplugin.NewTestCtxAt(root)
+	err := driftplugin.Bind("github.com/go-drift/drift/plugins/splash/plugin", Plugin).Build(ctx,
+		[]byte("image: assets/splash.png\nandroid:\n  icon: assets/icon.png\n  icon_background_color: \"#FFFFFF\"\n"))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !bytes.Equal(drawable(t, ctx.Ops(), "drift_splash_icon"), buf.Bytes()) {
+		t.Error("android.icon not used for drift_splash_icon")
+	}
+	if splashStyle(t, ctx.Ops())["android:windowSplashScreenIconBackgroundColor"] != "@color/drift_splash_icon_background" {
+		t.Error("icon background not wired")
 	}
 }
 

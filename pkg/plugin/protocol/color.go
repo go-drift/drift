@@ -26,6 +26,15 @@ func ParseColor(s string) (Color, error) {
 	return Color{R: uint8(v >> 24), G: uint8(v >> 16), B: uint8(v >> 8), A: uint8(v)}, nil
 }
 
+// String returns the colour in Drift's format: "#RRGGBB" when opaque,
+// otherwise "#RRGGBBAA".
+func (c Color) String() string {
+	if c.A == 0xFF {
+		return fmt.Sprintf("#%02X%02X%02X", c.R, c.G, c.B)
+	}
+	return fmt.Sprintf("#%02X%02X%02X%02X", c.R, c.G, c.B, c.A)
+}
+
 // AndroidHex returns the colour as an Android resource value: "#RRGGBB"
 // when opaque, otherwise "#AARRGGBB".
 func (c Color) AndroidHex() string {

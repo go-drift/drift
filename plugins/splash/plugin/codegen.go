@@ -21,9 +21,6 @@ var templatesFS embed.FS
 
 var (
 	tmplStoryboard = mustParseTemplate("templates/LaunchScreen.storyboard.tmpl")
-	tmplLayerList  = mustParseTemplate("templates/launch_background.xml.tmpl")
-	tmplV31Styles  = mustParseTemplate("templates/values-v31-styles.xml.tmpl")
-	tmplColors     = mustParseTemplate("templates/splash_colors.xml.tmpl")
 	tmplSwiftCfg   = mustParseTemplate("templates/SplashConfig.swift.tmpl")
 	tmplKotlinCfg  = mustParseTemplate("templates/SplashConfig.kt.tmpl")
 )
@@ -65,42 +62,6 @@ func generateLaunchStoryboard(cfg resolvedConfig) string {
 	})
 }
 
-// generateLayerList returns res/drawable/launch_background.xml: the
-// background colour with the splash image centred on top at ImageSize. It is
-// the drawable the scaffold's LaunchTheme references, so replacing it owns
-// the pre-API-31 splash without touching the theme XML.
-func generateLayerList(cfg resolvedConfig) string {
-	return renderTemplate(tmplLayerList, struct {
-		Width, Height string
-	}{
-		Width:  formatLength(cfg.ImageSize.Width),
-		Height: formatLength(cfg.ImageSize.Height),
-	})
-}
-
-// generateV31Styles returns res/values-v31/styles.xml declaring a LaunchTheme
-// variant that opts into the Android 12+ SplashScreen API. Android resource
-// merging picks values-v31/ over values/ on API 31+, so the scaffold's
-// LaunchTheme is shadowed on those devices without resource-merge conflicts.
-func generateV31Styles(a android12Resolved) string {
-	return renderTemplate(tmplV31Styles, struct {
-		IconBackgroundColor string
-	}{
-		IconBackgroundColor: a.IconBackgroundColor.AndroidHex(),
-	})
-}
-
-// generateValuesColors returns res/values/drift_splash_colors.xml declaring the
-// drift_splash_background colour. Lives in a splash-owned values file (not
-// the scaffold's colors.xml or Drift's plugin_colors.xml) to avoid clashes.
-func generateValuesColors(c driftplugin.Color) string {
-	return renderTemplate(tmplColors, struct {
-		BackgroundColor string
-	}{
-		BackgroundColor: c.AndroidHex(),
-	})
-}
-
 // generateSplashConfigSwift returns SplashConfig.swift: the resolved
 // configuration as static constants. The native splash needs these values
 // before any Go code runs (the launch screen is the literal first surface),
@@ -125,11 +86,10 @@ func generateSplashConfigSwift(cfg resolvedConfig) string {
 // SplashConfig.swift.
 func generateSplashConfigKotlin(cfg resolvedConfig) string {
 	return renderTemplate(tmplKotlinCfg, struct {
-		FadeDurationMs int
-		Android12      bool
+		FadeDurationMs, MaxDurationMs int
 	}{
 		FadeDurationMs: cfg.FadeDurationMs,
-		Android12:      cfg.Android12 != nil,
+		MaxDurationMs:  cfg.MaxDurationMs,
 	})
 }
 
