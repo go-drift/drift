@@ -4,6 +4,7 @@
 /// This file implements the native side of platform channels, enabling Go code
 /// to call iOS APIs (clipboard, haptics, etc.) and receive events from iOS.
 
+@_spi(DriftHost) import DriftPluginAPI
 import UIKit
 import AudioToolbox
 import UserNotifications

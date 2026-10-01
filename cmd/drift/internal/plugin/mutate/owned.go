@@ -18,16 +18,6 @@ type OwnedFile struct {
 	Content []byte
 }
 
-// IOSSourceFile is the Swift source an OpAddIOSSource writes under
-// <pluginsRoot>/<group>/<rel>.
-func IOSSourceFile(pluginsRoot string, op *protocol.OpAddIOSSource) (OwnedFile, error) {
-	content, err := protocol.DecodeContent(op.Content)
-	if err != nil {
-		return OwnedFile{}, fmt.Errorf("decode iOS source %s: %w", op.RelPath, err)
-	}
-	return OwnedFile{Path: filepath.Join(pluginsRoot, op.Group, filepath.FromSlash(op.RelPath)), Content: content}, nil
-}
-
 // ImageSetFiles are the image and Contents.json an OpIOSAssetsAddImageSet
 // writes under <assetsRoot>/<Name>.imageset/.
 func ImageSetFiles(assetsRoot string, op *protocol.OpIOSAssetsAddImageSet) ([]OwnedFile, error) {

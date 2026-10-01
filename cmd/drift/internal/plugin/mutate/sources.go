@@ -78,13 +78,6 @@ func ReplaceLaunchScreen(path string, op *protocol.OpIOSReplaceLaunchScreen) (st
 	return path, ch, nil
 }
 
-// WriteIOSSources writes Swift sources under <pluginsRoot>/<group>/<rel>.
-func WriteIOSSources(pluginsRoot string, ops []*protocol.OpAddIOSSource) ([]string, error) {
-	return writeEach(ops, func(op *protocol.OpAddIOSSource) (OwnedFile, error) {
-		return IOSSourceFile(pluginsRoot, op)
-	})
-}
-
 // WriteKotlinSources writes Kotlin sources under
 // <javaRoot>/<packagePath>/<rel> where packagePath = pkg with dots to slashes.
 func WriteKotlinSources(javaRoot string, ops []*protocol.OpAddKotlinSource) ([]string, error) {

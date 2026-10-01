@@ -10,6 +10,7 @@
 /// iOS templates and EnsureRunnerSupport keeps ejected projects' copy
 /// current. Main thread only.
 
+@_spi(DriftHost) import DriftPluginAPI
 import UIKit
 
 final class DriftPlugins {

@@ -11,7 +11,7 @@ import (
 	"text/template"
 )
 
-//go:embed android ios bridge/* xcodeproj/* xtool/* init/* driftw driftw.bat
+//go:embed android ios plugin-api bridge/* xcodeproj/* xtool/* init/* driftw driftw.bat
 var FS embed.FS
 
 // TemplateInput holds the caller-provided values for template rendering.

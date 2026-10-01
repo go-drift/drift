@@ -52,23 +52,16 @@ var androidWiring = []wiringCall{
 }
 
 // CheckEjectedIOS verifies that an ejected xcodeproj project is wired for
-// plugins (see wiringCall), and for the local Drift/Plugins package when a
-// plugin needs SwiftPM dependencies.
-func CheckEjectedIOS(projectDir string, ops []protocol.Op) error {
+// plugins (see wiringCall) and links the local Drift/Plugins package.
+func CheckEjectedIOS(projectDir string) error {
 	problems := checkWiring(projectDir, iosWiring, func(name string) string {
 		return filepath.Join(projectDir, filepath.FromSlash(name))
 	})
-	usesSPM := slices.ContainsFunc(ops, func(op protocol.Op) bool {
-		_, ok := op.(*protocol.OpIOSAddPackageDependency)
-		return ok
-	})
-	if usesSPM {
-		data, _ := os.ReadFile(filepath.Join(projectDir, "Runner.xcodeproj", "project.pbxproj"))
-		if !strings.Contains(string(data), `relativePath = "Drift/Plugins"`) {
-			problems = append(problems,
-				`Runner.xcodeproj must reference the local Swift package at Drift/Plugins and link its "DriftPlugins" product `+
-					`(Xcode: File > Add Package Dependencies > Add Local..., select Drift/Plugins)`)
-		}
+	data, _ := os.ReadFile(filepath.Join(projectDir, "Runner.xcodeproj", "project.pbxproj"))
+	if !strings.Contains(string(data), `relativePath = "Drift/Plugins"`) {
+		problems = append(problems,
+			`Runner.xcodeproj must reference the local Swift package at Drift/Plugins and link its "DriftPlugins" product, `+
+				`which holds the plugin API the app imports (Xcode: File > Add Package Dependencies > Add Local..., select Drift/Plugins)`)
 	}
 	return wiringError("iOS", projectDir, problems)
 }

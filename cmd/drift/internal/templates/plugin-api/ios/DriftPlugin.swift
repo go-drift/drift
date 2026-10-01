@@ -69,4 +69,9 @@ public struct DriftViewBinding {
     public let rootView: UIView
     /// The view controller that owns rootView, for presenting UI.
     public let viewController: UIViewController
+
+    @_spi(DriftHost) public init(rootView: UIView, viewController: UIViewController) {
+        self.rootView = rootView
+        self.viewController = viewController
+    }
 }

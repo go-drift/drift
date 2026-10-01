@@ -216,12 +216,12 @@ type OpAddIOSSource struct {
 func (o *OpAddIOSSource) Type() string     { return "ios.source.add" }
 func (o *OpAddIOSSource) Platform() string { return "ios" }
 func (o *OpAddIOSSource) Targets() []Target {
-	file := o.Group + "/" + o.RelPath
-	// Every plugin Swift file compiles into one module, where swiftc
+	// Each plugin's Swift sources form its own module, in which swiftc
 	// requires unique file basenames.
+	file := o.Group + "/" + o.RelPath
 	return []Target{
-		owner("ios-src:"+file, o.Content),
-		owner("ios-swift-basename:"+path.Base(o.RelPath), file, o.Content),
+		owner("ios-src:"+o.Ident+"/"+file, o.Content),
+		owner("ios-swift-basename:"+o.Ident+"/"+path.Base(o.RelPath), file, o.Content),
 	}
 }
 func (o *OpAddIOSSource) Validate() error {
@@ -231,12 +231,16 @@ func (o *OpAddIOSSource) Validate() error {
 	if err := checkRelPath("source path", o.RelPath); err != nil {
 		return err
 	}
+	if path.Ext(o.RelPath) != ".swift" {
+		return fmt.Errorf("source path %q: plugin iOS sources must be Swift (.swift); each plugin is a Swift module", o.RelPath)
+	}
 	return checkContent("source content", o.Content, false)
 }
 
-// OpIOSPlugin names a Swift class, conforming to DriftPlugin, that the
-// generated DriftPluginRegistrant instantiates (with its no-argument
-// initializer) at launch. The host then drives it through the DriftPlugin
+// OpIOSPlugin names a public Swift class, conforming to DriftPlugin, in the
+// plugin's own module (its IOS.Sources), which the generated
+// DriftPluginRegistrant instantiates with its public no-argument
+// initializer at launch. The host then drives it through the DriftPlugin
 // lifecycle: register once per process, attach/detach with the Drift view,
 // and the app-level hooks. Plugins are created in drift.yaml order, which is
 // also the order in which they get to claim URLs.
@@ -248,7 +252,7 @@ type OpIOSPlugin struct {
 func (o *OpIOSPlugin) Type() string     { return "ios.plugin" }
 func (o *OpIOSPlugin) Platform() string { return "ios" }
 func (o *OpIOSPlugin) Targets() []Target {
-	return []Target{member("ios:plugins", o.Class)}
+	return []Target{member("ios:plugins", o.Ident+"."+o.Class)}
 }
 func (o *OpIOSPlugin) Validate() error {
 	return checkMatch(identRe, "iOS plugin class", o.Class)
@@ -938,6 +942,9 @@ func DecodeOps(raws []json.RawMessage) ([]Op, error) {
 		op, err := UnmarshalOp(raw)
 		if err != nil {
 			return nil, fmt.Errorf("op %d: %w", i, err)
+		}
+		if err := ValidatePluginName(op.PluginID()); err != nil {
+			return nil, fmt.Errorf("op %d (%s from %s): %w", i, op.Type(), op.PluginPackage(), err)
 		}
 		if err := op.Validate(); err != nil {
 			return nil, fmt.Errorf("op %d (%s from %s): %w", i, op.Type(), op.PluginPackage(), err)

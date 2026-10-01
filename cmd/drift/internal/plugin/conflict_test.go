@@ -33,6 +33,8 @@ func TestValidate(t *testing.T) {
 		// wantConflict, when set, is the contested target the error names.
 		wantConflict string
 		wantMixed    bool
+		// sameP marks a conflict between two ops of one plugin.
+		sameP bool
 	}{
 		{
 			name: "identical plist values collapse",
@@ -142,12 +144,21 @@ func TestValidate(t *testing.T) {
 			wantConflict: "android-src:com/foo/Foo.kt",
 		},
 		{
-			name: "Swift basename clash across groups",
+			name: "Swift basename clash within one plugin module",
 			ops: []protocol.Op{
 				&protocol.OpAddIOSSource{Base: mkBase("a"), Group: "A", RelPath: "Plugin.swift", Content: "AA=="},
-				&protocol.OpAddIOSSource{Base: mkBase("b"), Group: "B", RelPath: "sub/Plugin.swift", Content: "AA=="},
+				&protocol.OpAddIOSSource{Base: mkBase("a"), Group: "B", RelPath: "sub/Plugin.swift", Content: "AQ=="},
 			},
-			wantConflict: "ios-swift-basename:Plugin.swift",
+			wantConflict: "ios-swift-basename:a/Plugin.swift",
+			sameP:        true,
+		},
+		{
+			name: "same Swift file name in two plugins' modules",
+			ops: []protocol.Op{
+				&protocol.OpAddIOSSource{Base: mkBase("a"), Group: "Main", RelPath: "Plugin.swift", Content: "AA=="},
+				&protocol.OpAddIOSSource{Base: mkBase("b"), Group: "Main", RelPath: "Plugin.swift", Content: "AQ=="},
+			},
+			wantLen: 2,
 		},
 		{
 			name: "image set vs bundle PNG of the same name",
@@ -214,7 +225,7 @@ func TestValidate(t *testing.T) {
 			if ce.Mixed != c.wantMixed {
 				t.Errorf("Mixed = %v, want %v", ce.Mixed, c.wantMixed)
 			}
-			if ce.First.PluginPackage() == ce.Second.PluginPackage() {
+			if !c.sameP && ce.First.PluginPackage() == ce.Second.PluginPackage() {
 				t.Errorf("error should name both plugins: %v", ce)
 			}
 		})

@@ -68,7 +68,7 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 2. **Bridge.** `EnsureBridge` (`cmd/drift/internal/plugin/bridge.go`) writes `tools/drift-plugins/main.go` (build tag `drift_tool`, committed with the app so `go mod tidy` keeps plugin deps) and builds it. Binaries are cached by a key over CLI version, Go version, `go.sum`, module pins and source; locally replaced plugins bypass the cache.
 3. **Run.** `RunBridge` sends a JSON envelope on stdin (`APIVersion`, platform, config per plugin) and reads a JSON response file of ops.
 4. **Decode and validate.** `DecodeOps` parses and validates each op, then `Validate` (`conflict.go`) checks ops against each other by target and drops exact duplicates.
-5. **Apply.** `Apply` (`apply.go`) files ops by platform and runs mutators (`mutate/`): plist, AndroidManifest XML, resource XML, Gradle, sources, assets, SwiftPM sidecar, `xtool.yml`.
+5. **Apply.** `Apply` (`apply.go`) files ops by platform and runs mutators (`mutate/`): plist, AndroidManifest XML, resource XML, Gradle, sources, assets, the `Drift/Plugins` Swift package, `xtool.yml`.
 6. **Registrant.** `EnsureRunnerSupport` writes host support files; `WriteRegistrant` generates `DriftPluginRegistrant.swift` / `.kt`.
 
 With zero plugins, the bridge is skipped but the registrant, sidecar and resource directories are still reset so generated projects always compile.
@@ -101,7 +101,7 @@ Adding an op means touching: the struct and its methods (`Type`, `Targets`, `Val
 ## iOS specifics
 
 - **Two build paths.** `ios` is xcodeproj on macOS (the shipping path). `xtool` is SwiftPM plus the xtool packer on Linux (dev only).
-- **SwiftPM sidecar.** Both paths reference a generated local package at `Drift/Plugins` (`mutate/spm.go`). Its `DriftPlugins` target depends on every plugin-requested SwiftPM product.
+- **Plugin modules.** Both paths link the `DriftPlugins` product of a generated, Drift-owned local package at `Drift/Plugins` (`mutate/spm.go`). It holds a `DriftPluginAPI` target (the plugin API, from `templates/plugin-api/ios`) and one `DriftPlugin_<name>` target per plugin, named after `Plugin.Name()`, containing its `IOS.Sources` and depending on `DriftPluginAPI` plus the SwiftPM products it requested. Each plugin is therefore its own Swift module: plugins cannot clash on type or file names, and a plugin imports its SDKs (`import FirebaseCore`) as direct dependencies. Plugin sources must be Swift, and the class named with `IOS.Plugin` must be `public` with a `public init()`; the generated registrant imports each module and creates `DriftPlugin_<name>.<Class>()`. The app imports `DriftPluginAPI`, constructing host-only types through `@_spi(DriftHost)`.
 - **Bundle resources.** Files land flat in the app bundle root: `Runner/PluginResources/` on xcodeproj (synchronized folder) and `PluginResources/` listed under `xtool.yml` `resources:` on xtool. SwiftPM target resources are avoided because they land in `Runner_Runner.bundle`, which `Bundle.main` cannot see.
 - **Image sets on xtool.** xtool cannot compile asset catalogs, so image sets become loose `<Name>.png` files. `UIImage(named:)` resolves both forms. `FUTURE(xtool#219)` comments mark what changes if [xtool#219](https://github.com/xtool-org/xtool/pull/219) (asset catalog compiler, now in [AssetKit](https://github.com/xtool-org/AssetKit)) merges.
 - **App-level hooks.** Plugins receive launch, URL, user activity and remote notification events through `DriftPlugin` methods. The app is scene-based, so URL and activity events arrive at `SceneDelegate` (xcodeproj) or SwiftUI modifiers (xtool) and go through `DeepLinkHandler.route`: the first plugin returning `true` claims a URL before Drift's deep-link channel sees it. `DriftPluginCoordinator.swift` merges background-fetch results from the plugins that accept a remote notification; its XCTest harness is `cmd/drift/internal/plugin/coordinator_test` (macOS only).
@@ -110,7 +110,7 @@ Adding an op means touching: the struct and its methods (`Type`, `Targets`, `Val
 
 A plugin's native half is a class the build half names with `ctx.IOS.Plugin("MyPlugin")` / `ctx.Android.Plugin("com.example.MyPlugin")`. The generated `DriftPluginRegistrant` only lists these classes, in drift.yaml order; the hand-written `DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the instances and drives them on the main thread. Drift's own handling of the same events (deep links, notifications) stays in the app templates. Reference: Flutter's `FlutterPlugin` + `ActivityAware`.
 
-| | iOS (`templates/ios/PluginAPI`, public) | Android (`templates/android/runner`, package `com.drift.runner`) |
+| | iOS (`DriftPluginAPI` module, `templates/plugin-api/ios`) | Android (`templates/android/runner`, package `com.drift.runner`) |
 |---|---|---|
 | Plugin | `DriftPlugin` protocol | `DriftPlugin` interface |
 | Once per process | `register(host:)` then `didFinishLaunching`, from `AppDelegate` | `onRegister(host)`, from the first `MainActivity.onCreate` |
@@ -120,7 +120,7 @@ A plugin's native half is a class the build half names with `ctx.IOS.Plugin("MyP
 
 **Threading.** Every plugin callback runs on the main thread: lifecycle methods, method handlers and event observers (observers asynchronously, in event order). A handler replies exactly once through its `DriftResult`, before returning or later from any thread; the Go caller blocks until it does. When Go calls from the main thread (inside a frame or a widget callback) the handler must reply before returning, or the app traps rather than deadlocks, so Go APIs over slow native calls are called from goroutines. Built-in channels keep a synchronous handler on the calling thread.
 
-Plugin Swift sources compile into the app module; Kotlin sources compile into the app module under the plugin's own package. Ejected projects are checked for the template calls that feed `DriftPlugins` (`ejected.go`); the plugin API and `DriftPlugins` itself are Drift-owned and rewritten by `EnsureRunnerSupport`.
+Plugin Swift sources compile into the plugin's own module (see Plugin modules); Kotlin sources compile into the app module under the plugin's own package. Ejected projects are checked for the template calls that feed `DriftPlugins` and for the `Drift/Plugins` package reference (`ejected.go`); `DriftPlugins` is Drift-owned and rewritten by `EnsureRunnerSupport`, and the `Drift/Plugins` package is regenerated every build.
 
 ## Runtime side
 

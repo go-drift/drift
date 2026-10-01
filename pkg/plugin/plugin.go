@@ -46,10 +46,9 @@ func Bind[T any](pkgPath string, p Plugin[T]) Binding {
 		panic("drift plugin: Bind: package path is empty")
 	}
 	name := p.Name()
-	if name == "" {
-		panic(fmt.Sprintf("drift plugin: Bind(%q): Plugin.Name() returned empty string; "+
-			"return a short identifier (e.g. \"splash\") so duplicate detection and the "+
-			"plugin list NAME column have something to display", pkgPath))
+	if err := protocol.ValidatePluginName(name); err != nil {
+		panic(fmt.Sprintf("drift plugin: Bind(%q): Plugin.Name(): %v; return a short lowercase "+
+			"identifier such as \"splash\": it names the plugin's native modules", pkgPath, err))
 	}
 	var zero T
 	schema := schemaFor(pkgPath, name, reflect.TypeOf(zero))
