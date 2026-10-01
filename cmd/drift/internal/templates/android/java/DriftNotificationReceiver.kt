@@ -10,6 +10,6 @@ import android.content.Intent
 
 class DriftNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        NotificationHandler.handleBroadcast(context, intent, source = "local")
+        NotificationHandler.handleBroadcast(context, intent)
     }
 }

@@ -753,9 +753,6 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         center.delegate = shared
     }
 
-    private static var currentPushToken: String?
-    private static var subscribedTopics: Set<String> = []
-
     static func handle(method: String, args: Any?) -> (Any?, Error?) {
         switch method {
         case "getSettings":
@@ -768,16 +765,6 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
             return cancelAll()
         case "setBadge":
             return setBadge(args: args)
-        case "registerForPush":
-            return registerForPush()
-        case "getPushToken":
-            return getPushToken()
-        case "subscribeToTopic":
-            return subscribeToTopic(args: args)
-        case "unsubscribeFromTopic":
-            return unsubscribeFromTopic(args: args)
-        case "deletePushToken":
-            return deletePushToken()
         default:
             return (nil, NSError(domain: "Notifications", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
         }
@@ -883,69 +870,12 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         return (nil, nil)
     }
 
-    // MARK: - Push notification methods
-
-    private static func registerForPush() -> (Any?, Error?) {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            switch settings.authorizationStatus {
-            case .authorized, .provisional, .ephemeral:
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            case .notDetermined:
-                sendPushError("authorization_required", message: "Call Notifications.Permission.Request() before registering for push")
-            case .denied:
-                sendPushError("authorization_denied", message: "Notification permission denied")
-            @unknown default:
-                sendPushError("authorization_unknown", message: "Unknown authorization status")
-            }
-        }
-        return (nil, nil)
-    }
-
-    private static func getPushToken() -> (Any?, Error?) {
-        return (["token": currentPushToken], nil)
-    }
-
-    private static func subscribeToTopic(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let topic = dict["topic"] as? String else {
-            return (nil, NSError(domain: "Notifications", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing topic"]))
-        }
-        subscribedTopics.insert(topic)
-        return (nil, nil)
-    }
-
-    private static func unsubscribeFromTopic(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let topic = dict["topic"] as? String else {
-            return (nil, NSError(domain: "Notifications", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing topic"]))
-        }
-        subscribedTopics.remove(topic)
-        return (nil, nil)
-    }
-
-    private static func deletePushToken() -> (Any?, Error?) {
-        DispatchQueue.main.async {
-            UIApplication.shared.unregisterForRemoteNotifications()
-        }
-        currentPushToken = nil
-        return (nil, nil)
-    }
-
-    private static func sendPushError(_ code: String, message: String) {
-        PlatformChannelManager.shared.sendEvent(channel: "drift/notifications/error", data: [
-            "code": code,
-            "message": message,
-            "platform": "ios"
-        ])
-    }
-
     // MARK: - UNUserNotificationCenterDelegate
 
     // The app has one notification center delegate, this one. Plugins get
     // first refusal (drift.yaml order, on the main thread, as for every
-    // plugin callback); what none claims is Drift's.
+    // plugin callback); Drift handles its own local notifications and
+    // leaves any other unclaimed notification alone.
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -957,8 +887,11 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
                 completionHandler(options)
                 return
             }
-            let source = notification.request.trigger is UNPushNotificationTrigger ? "remote" : "local"
-            NotificationHandler.sendReceived(notification: notification, isForeground: true, source: source)
+            guard NotificationHandler.isLocal(notification) else {
+                completionHandler([])
+                return
+            }
+            NotificationHandler.sendReceived(notification: notification, isForeground: true)
             completionHandler([.banner, .list, .sound, .badge])
         }
     }
@@ -973,73 +906,33 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
             if DriftPlugins.shared.didReceiveNotificationResponse(response) {
                 return
             }
-            let notification = response.notification
-            let source = notification.request.trigger is UNPushNotificationTrigger ? "remote" : "local"
-            NotificationHandler.sendOpened(notification: notification, action: response.actionIdentifier, source: source)
+            guard NotificationHandler.isLocal(response.notification) else { return }
+            NotificationHandler.sendOpened(notification: response.notification, action: response.actionIdentifier)
         }
     }
 
-    static func handleRemoteNotification(_ userInfo: [AnyHashable: Any], isForeground: Bool) {
-        let payload = parsePayload(userInfo: userInfo)
-        sendReceived(id: payload.id, title: payload.title, body: payload.body, data: payload.data, isForeground: isForeground, source: "remote")
+    /// Whether notification is one Drift scheduled (not a push).
+    private static func isLocal(_ notification: UNNotification) -> Bool {
+        !(notification.request.trigger is UNPushNotificationTrigger)
     }
 
-    static func handleDeviceToken(_ deviceToken: Data) {
-        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        let isRefresh = currentPushToken != nil
-        currentPushToken = token
-        PlatformChannelManager.shared.sendEvent(channel: "drift/notifications/token", data: [
-            "platform": "ios",
-            "token": token,
-            "timestamp": currentTimestamp(),
-            "isRefresh": isRefresh
-        ])
-    }
-
-    static func handleRemoteNotificationError(_ error: Error) {
-        sendPushError("registration_failed", message: error.localizedDescription)
-    }
-
-    private static func sendReceived(notification: UNNotification, isForeground: Bool, source: String) {
+    private static func sendReceived(notification: UNNotification, isForeground: Bool) {
         let content = notification.request.content
-        sendReceived(
-            id: notification.request.identifier,
-            title: content.title,
-            body: content.body,
-            data: content.userInfo as? [String: Any] ?? [:],
-            isForeground: isForeground,
-            source: source
-        )
-    }
-
-    private static func sendReceived(id: String, title: String, body: String, data: [String: Any], isForeground: Bool, source: String) {
         PlatformChannelManager.shared.sendEvent(channel: "drift/notifications/received", data: [
-            "id": id,
-            "title": title,
-            "body": body,
-            "data": data,
+            "id": notification.request.identifier,
+            "title": content.title,
+            "body": content.body,
+            "data": content.userInfo as? [String: Any] ?? [:],
             "timestamp": currentTimestamp(),
-            "isForeground": isForeground,
-            "source": source
+            "isForeground": isForeground
         ])
     }
 
-    private static func sendOpened(notification: UNNotification, action: String, source: String) {
-        let content = notification.request.content
-        sendOpened(
-            id: notification.request.identifier,
-            data: content.userInfo as? [String: Any] ?? [:],
-            action: action,
-            source: source
-        )
-    }
-
-    private static func sendOpened(id: String, data: [String: Any], action: String, source: String) {
+    private static func sendOpened(notification: UNNotification, action: String) {
         PlatformChannelManager.shared.sendEvent(channel: "drift/notifications/opened", data: [
-            "id": id,
-            "data": data,
+            "id": notification.request.identifier,
+            "data": notification.request.content.userInfo as? [String: Any] ?? [:],
             "action": action,
-            "source": source,
             "timestamp": currentTimestamp()
         ])
     }
@@ -1063,49 +956,6 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         @unknown default:
             return "unknown"
         }
-    }
-
-    private static func authorizationStatusSync() -> String {
-        let semaphore = DispatchSemaphore(value: 0)
-        var status = "unknown"
-        center.getNotificationSettings { settings in
-            status = authorizationStatus(settings)
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return status
-    }
-
-    private static func notificationsEnabledSync() -> Bool {
-        let semaphore = DispatchSemaphore(value: 0)
-        var enabled = false
-        center.getNotificationSettings { settings in
-            enabled = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return enabled
-    }
-
-    private static func parsePayload(userInfo: [AnyHashable: Any]) -> (id: String, title: String, body: String, data: [String: Any]) {
-        var title = ""
-        var body = ""
-        if let aps = userInfo["aps"] as? [String: Any] {
-            if let alert = aps["alert"] as? [String: Any] {
-                title = alert["title"] as? String ?? ""
-                body = alert["body"] as? String ?? ""
-            } else if let alertString = aps["alert"] as? String {
-                body = alertString
-            }
-        }
-        var data: [String: Any] = [:]
-        for (key, value) in userInfo {
-            if let keyString = key as? String {
-                data[keyString] = value
-            }
-        }
-        let id = data["id"] as? String ?? UUID().uuidString
-        return (id: id, title: title, body: body, data: data)
     }
 }
 

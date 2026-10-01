@@ -49,7 +49,7 @@ func (s *notificationsState) InitState() {
 
 	// Listen for notification deliveries
 	deliveriesUnsub := platform.Notifications.Deliveries().Listen(func(event platform.NotificationEvent) {
-		message := fmt.Sprintf("Received (%s): %s", event.Source, event.Title)
+		message := "Received: " + event.Title
 		drift.Dispatch(func() {
 			s.receivedText.Set(message)
 		})
@@ -57,7 +57,7 @@ func (s *notificationsState) InitState() {
 
 	// Listen for notification opens
 	opensUnsub := platform.Notifications.Opens().Listen(func(event platform.NotificationOpen) {
-		message := fmt.Sprintf("Opened (%s): %s", event.Source, event.ID)
+		message := "Opened: " + event.ID
 		drift.Dispatch(func() {
 			s.openedText.Set(message)
 		})

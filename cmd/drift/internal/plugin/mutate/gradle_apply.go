@@ -15,10 +15,9 @@ import (
 // `com.google.gms.google-services` need the android block configured first.
 //
 // Idempotent: an op whose plugin id already appears in a live (uncommented)
-// `apply plugin:` line anywhere in the file is skipped. This covers the
-// scaffold's conditional google-services guard: the guarded line counts as
-// present, and it activates once app/google-services.json exists (see
-// OpAndroidAddAppModuleFile).
+// `apply plugin:` line anywhere in the file is skipped, so reruns on an
+// ejected project converge and a line the user wrote (even inside a
+// conditional) is respected.
 func ApplyGradleApplyPlugins(appGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin) (string, bool, error) {
 	if len(ops) == 0 {
 		return appGradlePath, false, nil

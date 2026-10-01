@@ -539,7 +539,7 @@ lastKnown, err := platform.Location.LastKnown()
 
 ## Notifications
 
-Manage local and push notifications using the Notifications service:
+Schedule and receive local notifications with the Notifications service. Push notifications come from the Firebase plugin (`plugins/firebase`); the permission below covers both.
 
 ```go
 ctx := context.Background()
@@ -589,14 +589,6 @@ opensUnsub := platform.Notifications.Opens().Listen(func(open platform.Notificat
     })
 })
 defer opensUnsub()
-
-// Listen for device token updates (push notifications)
-tokensUnsub := platform.Notifications.Tokens().Listen(func(token platform.DeviceToken) {
-    drift.Dispatch(func() {
-        sendTokenToServer(token.Token)
-    })
-})
-defer tokensUnsub()
 ```
 
 ## Share

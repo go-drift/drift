@@ -6,7 +6,6 @@
 /// Scene management is handled by SwiftUI's WindowGroup.
 
 import UIKit
-import UserNotifications
 
 /// The application delegate that manages application-level lifecycle events.
 class AppDelegate: NSObject, UIApplicationDelegate {
@@ -26,7 +25,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        NotificationHandler.handleDeviceToken(deviceToken)
         DriftPlugins.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
     }
 
@@ -34,7 +32,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        NotificationHandler.handleRemoteNotificationError(error)
         DriftPlugins.shared.didFailToRegisterForRemoteNotifications(error: error)
     }
 
@@ -43,7 +40,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)
         DriftPlugins.shared.didReceiveRemoteNotification(userInfo, completion: completionHandler)
     }
 }
