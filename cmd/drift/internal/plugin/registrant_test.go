@@ -237,7 +237,7 @@ func TestCheckEjectedIOS(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected wiring error")
 	}
-	for _, want := range []string{"Runner/AppDelegate.swift", "DriftPlugins.shared.launch(", "Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "DriftPlugins.shared.attach(self, overlayView:", "PBXFileSystemSynchronizedRootGroup", "Drift/Plugins", "Runner.entitlements", "CODE_SIGN_ENTITLEMENTS"} {
+	for _, want := range []string{"Runner/AppDelegate.swift", "DriftPlugins.shared.launch(", "DriftPlugins.shared.attach(self, overlayView:", "PBXFileSystemSynchronizedRootGroup", "Drift/Plugins", "Runner.entitlements", "CODE_SIGN_ENTITLEMENTS"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should mention %q:\n%v", want, err)
 		}

@@ -1,1 +1,0 @@
-../../../../templates/ios/DriftPluginCoordinator.swift

@@ -146,19 +146,6 @@ func pruneDir(dir string, keep map[string]BundleFile) ([]string, error) {
 	return removed, nil
 }
 
-// WriteAndroidAssets writes each OpAndroidAddAsset verbatim under assetsRoot
-// (typically app/src/main/assets/) at the op's relative path. Gradle's
-// build pipeline picks up the directory automatically; no manifest edits.
-func WriteAndroidAssets(assetsRoot string, ops []*protocol.OpAndroidAddAsset) ([]string, error) {
-	return writeEach(ops, func(op *protocol.OpAndroidAddAsset) (OwnedFile, error) {
-		f, err := AndroidAssetFile(assetsRoot, op)
-		if err == nil {
-			maybeWarnLargeResource(op.PluginPackage(), op.Path, len(f.Content))
-		}
-		return f, err
-	})
-}
-
 // WriteAndroidAppModuleFiles writes each OpAndroidAddAppModuleFile into the
 // app module directory (appDir, i.e. <project>/app), where Gradle plugins
 // such as google-services read their config.

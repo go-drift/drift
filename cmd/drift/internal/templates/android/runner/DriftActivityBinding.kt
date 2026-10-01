@@ -2,13 +2,13 @@
  * DriftActivityBinding.kt
  *
  * What a plugin gets when it attaches to MainActivity: the Activity, the
- * root view for overlays, and registration for Activity callbacks that
- * Android only delivers to the Activity itself. Valid from
+ * root view for overlays, and the intents Android delivers to the running
+ * Activity. Valid from
  * DriftPlugin.onAttach until onDetach; listeners are dropped on detach, and
  * a plugin must not keep the binding past it.
  *
- * The Intent that launched the Activity is `activity.intent`; the listeners
- * below cover later deliveries.
+ * The Intent that launched the Activity is `activity.intent`; the listener
+ * below covers later deliveries.
  *
  * IMPORTANT: shipped verbatim by Drift's scaffold; must not depend on the
  * user's app package.
@@ -29,8 +29,6 @@ class DriftActivityBinding(
     val overlayView: ViewGroup,
 ) {
     private val newIntentListeners = mutableListOf<(Intent) -> Boolean>()
-    private val activityResultListeners = mutableListOf<(Int, Int, Intent?) -> Boolean>()
-    private val permissionsResultListeners = mutableListOf<(Int, Array<out String>, IntArray) -> Boolean>()
 
     /**
      * Receives intents delivered to the running Activity (onNewIntent).
@@ -41,33 +39,10 @@ class DriftActivityBinding(
         newIntentListeners += listener
     }
 
-    /** Receives onActivityResult. Return true if the request code was yours. */
-    fun addActivityResultListener(listener: (requestCode: Int, resultCode: Int, data: Intent?) -> Boolean) {
-        activityResultListeners += listener
-    }
-
-    /** Receives onRequestPermissionsResult. Return true if the request code was yours. */
-    fun addRequestPermissionsResultListener(
-        listener: (requestCode: Int, permissions: Array<out String>, grantResults: IntArray) -> Boolean,
-    ) {
-        permissionsResultListeners += listener
-    }
-
     internal fun dispatchNewIntent(intent: Intent): Boolean =
         newIntentListeners.any { it(intent) }
 
-    internal fun dispatchActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean =
-        activityResultListeners.any { it(requestCode, resultCode, data) }
-
-    internal fun dispatchRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ): Boolean = permissionsResultListeners.any { it(requestCode, permissions, grantResults) }
-
     internal fun clear() {
         newIntentListeners.clear()
-        activityResultListeners.clear()
-        permissionsResultListeners.clear()
     }
 }

@@ -68,16 +68,6 @@ func ResourceXMLFile(resRoot string, op *protocol.OpAndroidWriteResourceXML) Own
 	return OwnedFile{Path: filepath.Join(resRoot, filepath.FromSlash(op.RelPath)), Content: []byte(op.Content)}
 }
 
-// AndroidAssetFile is the file an OpAndroidAddAsset writes under
-// assetsRoot.
-func AndroidAssetFile(assetsRoot string, op *protocol.OpAndroidAddAsset) (OwnedFile, error) {
-	content, err := protocol.DecodeContent(op.Content)
-	if err != nil {
-		return OwnedFile{}, fmt.Errorf("Android asset %s: decode content: %w", op.Path, err)
-	}
-	return OwnedFile{Path: filepath.Join(assetsRoot, filepath.FromSlash(op.Path)), Content: content}, nil
-}
-
 // AppModuleFile is the file an OpAndroidAddAppModuleFile writes into the
 // app module directory.
 func AppModuleFile(appDir string, op *protocol.OpAndroidAddAppModuleFile) (OwnedFile, error) {

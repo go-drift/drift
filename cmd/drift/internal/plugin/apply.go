@@ -63,7 +63,6 @@ type opBag struct {
 	resXML        []*protocol.OpAndroidWriteResourceXML
 	kotlinSources []*protocol.OpAddKotlinSource
 	gradleDeps    []*protocol.OpAndroidGradleAddDependency
-	androidAssets []*protocol.OpAndroidAddAsset
 	appModule     []*protocol.OpAndroidAddAppModuleFile
 	gradlePlugins []*protocol.OpAndroidGradleApplyPlugin
 }
@@ -158,8 +157,6 @@ func bundleAndroidOp(bag *opBag, op protocol.Op) bool {
 		bag.kotlinSources = append(bag.kotlinSources, v)
 	case *protocol.OpAndroidGradleAddDependency:
 		bag.gradleDeps = append(bag.gradleDeps, v)
-	case *protocol.OpAndroidAddAsset:
-		bag.androidAssets = append(bag.androidAssets, v)
 	case *protocol.OpAndroidAddAppModuleFile:
 		bag.appModule = append(bag.appModule, v)
 	case *protocol.OpAndroidGradleApplyPlugin:
@@ -378,14 +375,6 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 		}
 	}
 
-	if len(bag.androidAssets) > 0 {
-		paths, err := mutate.WriteAndroidAssets(androidAssetsRoot(buildDir), bag.androidAssets)
-		if err != nil {
-			return changed, err
-		}
-		changed = append(changed, paths...)
-	}
-
 	if len(bag.appModule) > 0 {
 		paths, err := mutate.WriteAndroidAppModuleFiles(androidAppDir(buildDir), bag.appModule)
 		if err != nil {
@@ -440,8 +429,6 @@ func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, 
 		return one(mutate.DrawableFile(androidDrawableDir(buildDir), v))
 	case *protocol.OpAndroidWriteResourceXML:
 		return one(mutate.ResourceXMLFile(androidResDir(buildDir), v), nil)
-	case *protocol.OpAndroidAddAsset:
-		return one(mutate.AndroidAssetFile(androidAssetsRoot(buildDir), v))
 	case *protocol.OpAndroidAddAppModuleFile:
 		return one(mutate.AppModuleFile(androidAppDir(buildDir), v))
 	}
@@ -462,9 +449,6 @@ func androidDrawableDir(buildDir string) string {
 }
 func androidJavaRoot(buildDir string) string {
 	return filepath.Join(buildDir, "app", "src", "main", "java")
-}
-func androidAssetsRoot(buildDir string) string {
-	return filepath.Join(buildDir, "app", "src", "main", "assets")
 }
 func iosAssetCatalog(buildDir string) string {
 	return filepath.Join(buildDir, "Runner", "Assets.xcassets")

@@ -757,31 +757,6 @@ func (o *OpAndroidWriteResourceXML) Validate() error {
 	return checkNonEmpty("resource content", o.Content)
 }
 
-// OpAndroidAddAsset records a file to drop into the Android app's
-// `assets/` directory. Gradle's app/src/main/assets convention auto-bundles
-// the directory; no manifest edits needed. The app reads these at runtime
-// via AssetManager (fonts, ML models, JSON data). Build-time config such as
-// google-services.json belongs in OpAndroidAddAppModuleFile instead.
-//
-// Two plugins writing divergent content to the same asset path conflict.
-type OpAndroidAddAsset struct {
-	Base
-	Path    string `json:"path"`              // assets/-relative
-	Content string `json:"content,omitempty"` // base64
-}
-
-func (o *OpAndroidAddAsset) Type() string     { return "android.assets.add" }
-func (o *OpAndroidAddAsset) Platform() string { return "android" }
-func (o *OpAndroidAddAsset) Targets() []Target {
-	return []Target{owner("android-asset:"+o.Path, o.Content)}
-}
-func (o *OpAndroidAddAsset) Validate() error {
-	if err := checkRelPath("asset path", o.Path); err != nil {
-		return err
-	}
-	return checkContent("asset content", o.Content, false)
-}
-
 // OpAndroidAddAppModuleFile records a file to drop into the Android app
 // module directory (app/<name>), next to app/build.gradle. This is where
 // Gradle plugins look for build-time config, e.g. the google-services
@@ -931,7 +906,6 @@ var opConstructors = map[string]func() Op{
 	"ios.plugin":                            func() Op { return &OpIOSPlugin{} },
 	"ios.bundle.add_resource":               func() Op { return &OpIOSAddBundleResource{} },
 	"ios.spm.add_package":                   func() Op { return &OpIOSAddPackageDependency{} },
-	"android.assets.add":                    func() Op { return &OpAndroidAddAsset{} },
 	"android.app_module.add_file":           func() Op { return &OpAndroidAddAppModuleFile{} },
 	"android.gradle.apply_plugin":           func() Op { return &OpAndroidGradleApplyPlugin{} },
 	"android.manifest.add_permission":       func() Op { return &OpAndroidManifestAddPermission{} },

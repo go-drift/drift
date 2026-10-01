@@ -108,7 +108,6 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 		&protocol.OpAndroidWriteDrawable{Base: base, Name: "p_icon", Content: enc("png")},
 		&protocol.OpAndroidWriteDrawable{Base: base, Name: "p_photo.webp", Content: enc("webp")},
 		&protocol.OpAndroidWriteResourceXML{Base: base, RelPath: "xml/p_config.xml", Content: "<config/>"},
-		&protocol.OpAndroidAddAsset{Base: base, Path: "models/p.bin", Content: enc("model")},
 		&protocol.OpAndroidAddAppModuleFile{Base: base, Name: "p-services.json", Content: enc("{}")},
 	}
 	if _, err := Apply(ops, dir, "android"); err != nil {

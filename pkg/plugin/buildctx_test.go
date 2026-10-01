@@ -7,7 +7,7 @@ import (
 
 func TestRecorderRejectsInvalidInputWithoutPanicking(t *testing.T) {
 	ctx := NewTestCtx()
-	ctx.Android.AddAsset("../escape.bin", []byte("x"))
+	ctx.Android.AddAppModuleFile("../escape.json", []byte("x"))
 	ctx.IOS.AddPackageDependency("http://example.com/pkg", SPMRequirementFrom("1.0.0"), []string{"P"})
 	ctx.IOS.Info.SetString("Valid", "kept")
 
@@ -18,7 +18,7 @@ func TestRecorderRejectsInvalidInputWithoutPanicking(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Err() to report the invalid ops")
 	}
-	for _, want := range []string{"android.assets.add", "ios.spm.add_package"} {
+	for _, want := range []string{"android.app_module.add_file", "ios.spm.add_package"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Err() = %q, want it to mention %s", err, want)
 		}

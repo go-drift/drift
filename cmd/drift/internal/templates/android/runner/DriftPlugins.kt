@@ -4,8 +4,7 @@
  * Owns the app's plugin instances and drives their lifecycle. MainActivity
  * calls in; the generated DriftPluginRegistrant only lists the plugins.
  * Drift's own handling of the same Activity events (deep links,
- * notifications, built-in permission and camera results) stays in
- * MainActivity.
+ * notifications) stays in MainActivity.
  *
  * Main thread only.
  *
@@ -36,11 +35,6 @@ object DriftPlugins {
         created.forEach { it.onRegister(host) }
     }
 
-    /** Runs each plugin's pre-super.onCreate hook for this Activity creation. */
-    fun preActivityCreate(activity: Activity) {
-        requirePlugins().forEach { it.onPreActivityCreate(activity) }
-    }
-
     /**
      * Attaches every plugin to activity, detaching from a previous Activity
      * first. overlayView hosts plugin overlays (DriftActivityBinding).
@@ -65,18 +59,6 @@ object DriftPlugins {
     fun onNewIntent(intent: Intent): Boolean {
         checkMainThread()
         return binding?.dispatchNewIntent(intent) ?: false
-    }
-
-    /** Offers an activity result to attached plugins; true if one claimed it. */
-    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        checkMainThread()
-        return binding?.dispatchActivityResult(requestCode, resultCode, data) ?: false
-    }
-
-    /** Offers a permissions result to attached plugins; true if one claimed it. */
-    fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray): Boolean {
-        checkMainThread()
-        return binding?.dispatchRequestPermissionsResult(requestCode, permissions, grantResults) ?: false
     }
 
     private fun detachAll(b: DriftActivityBinding) {

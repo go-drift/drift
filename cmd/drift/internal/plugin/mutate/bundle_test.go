@@ -30,14 +30,6 @@ func writeBundleOps(t *testing.T, dir string, ops ...*protocol.OpIOSAddBundleRes
 	return WriteIOSBundleResources(dir, files)
 }
 
-func androidAssetOp(pkg, path string, content []byte) *protocol.OpAndroidAddAsset {
-	return &protocol.OpAndroidAddAsset{
-		Base:    protocol.Base{Pkg: pkg},
-		Path:    path,
-		Content: base64.StdEncoding.EncodeToString(content),
-	}
-}
-
 func TestWriteIOSBundleResourceVerbatim(t *testing.T) {
 	dir := t.TempDir()
 	content := []byte("PROJECT_ID=test\nAPI_KEY=abc\n")
@@ -208,39 +200,6 @@ func TestWriteIOSBundleResourceBinaryRoundTrip(t *testing.T) {
 		if !bytes.Equal(got, want) {
 			t.Errorf("%s: base64 round-trip changed bytes\ngot:  %v\nwant: %v", name, got, want)
 		}
-	}
-}
-
-func TestWriteAndroidAssetVerbatim(t *testing.T) {
-	dir := t.TempDir()
-	content := []byte(`{"project_info":{"project_id":"test"}}`)
-	changed, err := WriteAndroidAssets(dir, []*protocol.OpAndroidAddAsset{
-		androidAssetOp("github.com/foo/data", "data/config.json", content),
-	})
-	if err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	if len(changed) != 1 {
-		t.Fatalf("expected 1 file changed, got %v", changed)
-	}
-	got, _ := os.ReadFile(filepath.Join(dir, "data", "config.json"))
-	if !bytes.Equal(got, content) {
-		t.Errorf("content mismatch: %q vs %q", got, content)
-	}
-}
-
-func TestWriteAndroidAssetIdempotent(t *testing.T) {
-	dir := t.TempDir()
-	op := androidAssetOp("p", "fonts/roboto.ttf", []byte("font"))
-	if _, err := WriteAndroidAssets(dir, []*protocol.OpAndroidAddAsset{op}); err != nil {
-		t.Fatalf("first: %v", err)
-	}
-	changed, err := WriteAndroidAssets(dir, []*protocol.OpAndroidAddAsset{op})
-	if err != nil {
-		t.Fatalf("second: %v", err)
-	}
-	if len(changed) != 0 {
-		t.Errorf("expected zero changes on rerun, got %v", changed)
 	}
 }
 

@@ -21,7 +21,6 @@ func fixtureOps() []Op {
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
 		&OpIOSPlugin{Base: base, Class: "FooPlugin"},
 		&OpIOSAddBundleResource{Base: base, Path: "GoogleService-Info.plist", Content: "AA=="},
-		&OpAndroidAddAsset{Base: base, Path: "models/model.tflite", Content: "AA=="},
 		&OpAndroidAddAppModuleFile{Base: base, Name: "google-services.json", Content: "AA=="},
 		&OpAndroidGradleApplyPlugin{Base: base, ID: "com.google.gms.google-services", Version: "4.4.0"},
 		&OpIOSAddPackageDependency{
@@ -337,7 +336,6 @@ func invalidOps() []Op {
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "../Foo.swift"},
 		&OpIOSPlugin{Base: base, Class: "Foo.register"},
 		&OpIOSAddBundleResource{Base: base, Path: "a/b.plist"},
-		&OpAndroidAddAsset{Base: base, Path: "models/../x.bin"},
 		&OpAndroidAddAppModuleFile{Base: base, Name: "build.gradle"},
 		&OpAndroidGradleApplyPlugin{Base: base, ID: ""},
 		&OpIOSAddPackageDependency{Base: base, URL: "http://x/y", Requirement: spmFrom("1.0.0"), Products: []string{"P"}},
@@ -378,12 +376,12 @@ func TestOpValidateRejects(t *testing.T) {
 }
 
 func TestDecodeOpsRejectsInvalid(t *testing.T) {
-	raw, err := MarshalOp(&OpAndroidAddAsset{Base: Base{Pkg: "p", Ident: "p"}, Path: "../escape"})
+	raw, err := MarshalOp(&OpAndroidAddAppModuleFile{Base: Base{Pkg: "p", Ident: "p"}, Name: "../escape"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = DecodeOps([]json.RawMessage{raw})
-	if err == nil || !strings.Contains(err.Error(), "android.assets.add") {
+	if err == nil || !strings.Contains(err.Error(), "android.app_module.add_file") {
 		t.Fatalf("expected validation error naming the op, got %v", err)
 	}
 }

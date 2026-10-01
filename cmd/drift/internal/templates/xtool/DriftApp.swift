@@ -17,10 +17,12 @@ struct DriftApp: App {
             DriftViewControllerRepresentable()
                 .ignoresSafeArea()
                 .onOpenURL { url in
-                    DeepLinkHandler.route(url: url, source: "open_url")
+                    DeepLinkHandler.handle(url: url, source: "open_url")
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                    DeepLinkHandler.route(userActivity: activity, source: "user_activity")
+                    if let url = activity.webpageURL {
+                        DeepLinkHandler.handle(url: url, source: "user_activity")
+                    }
                 }
         }
         .onChange(of: scenePhase) { newPhase in

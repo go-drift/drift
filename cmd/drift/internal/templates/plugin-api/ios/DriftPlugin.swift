@@ -11,7 +11,9 @@
 ///   3. attach(_:) when the Drift view has loaded, and detach() when it goes
 ///      away. View-bound state (overlays, view references) lives between the
 ///      two.
-///   4. The app-level hooks, as UIKit delivers them.
+///   4. The app-level hooks, as UIKit delivers them. A hook returning Bool
+///      or an optional claims the event: the first plugin (drift.yaml
+///      order) to claim it stops dispatch.
 ///
 /// Every requirement except register(host:) has a default no-op
 /// implementation, so a plugin implements only what it uses.
@@ -26,20 +28,15 @@ public protocol DriftPlugin: AnyObject {
     func attach(_ binding: DriftViewBinding)
     func detach()
 
-    /// Offers the plugin a URL the app was opened with. Return true to claim
-    /// it: the first plugin (drift.yaml order) to claim a URL stops dispatch,
-    /// and Drift's deep-link channel does not see it.
-    func open(_ url: URL) -> Bool
-
-    /// Same claim semantics as open(_:), for universal links and Handoff.
-    func continueUserActivity(_ userActivity: NSUserActivity) -> Bool
-
     func didRegisterForRemoteNotifications(deviceToken: Data)
     func didFailToRegisterForRemoteNotifications(error: Error)
 
-    /// Return true if the plugin will call completion exactly once, false to
-    /// decline. iOS gets the merged result of the plugins that accept (see
-    /// DriftPluginCoordinator), within its background-fetch deadline.
+    /// Offers a remote notification the app received (a content-available
+    /// push, in the foreground or woken in the background). Return true to
+    /// claim it, then call completion exactly once within iOS's 30-second
+    /// background-fetch deadline; return false to leave it to later plugins
+    /// (drift.yaml order). Push payloads are provider-specific, so a plugin
+    /// claims only its own provider's. Unclaimed: iOS is told .noData.
     func didReceiveRemoteNotification(
         _ userInfo: [AnyHashable: Any],
         completion: @escaping (UIBackgroundFetchResult) -> Void
@@ -50,8 +47,6 @@ public extension DriftPlugin {
     func didFinishLaunching(_ application: UIApplication, options: [UIApplication.LaunchOptionsKey: Any]?) {}
     func attach(_ binding: DriftViewBinding) {}
     func detach() {}
-    func open(_ url: URL) -> Bool { false }
-    func continueUserActivity(_ userActivity: NSUserActivity) -> Bool { false }
     func didRegisterForRemoteNotifications(deviceToken: Data) {}
     func didFailToRegisterForRemoteNotifications(error: Error) {}
     func didReceiveRemoteNotification(

@@ -74,18 +74,6 @@ final class DriftPlugins {
         }
     }
 
-    /// Offers url to each plugin in drift.yaml order. Returns true if one
-    /// claimed it.
-    func open(_ url: URL) -> Bool {
-        plugins.contains { $0.open(url) }
-    }
-
-    /// Offers userActivity to each plugin in drift.yaml order. Returns true
-    /// if one claimed it.
-    func continueUserActivity(_ userActivity: NSUserActivity) -> Bool {
-        plugins.contains { $0.continueUserActivity(userActivity) }
-    }
-
     func didRegisterForRemoteNotifications(deviceToken: Data) {
         for plugin in plugins {
             plugin.didRegisterForRemoteNotifications(deviceToken: deviceToken)
@@ -98,17 +86,15 @@ final class DriftPlugins {
         }
     }
 
+    /// Offers a remote notification to each plugin in drift.yaml order; the
+    /// one that claims it owns completion. Unclaimed: .noData.
     func didReceiveRemoteNotification(
         _ userInfo: [AnyHashable: Any],
         completion: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        let handlers = plugins.map { plugin -> DriftPluginCoordinator.BackgroundFetchHandler in
-            { userInfo, done in plugin.didReceiveRemoteNotification(userInfo, completion: done) }
+        if plugins.contains(where: { $0.didReceiveRemoteNotification(userInfo, completion: completion) }) {
+            return
         }
-        DriftPluginCoordinator.dispatchBackgroundFetch(
-            userInfo: userInfo,
-            handlers: handlers,
-            completionHandler: completion
-        )
+        completion(.noData)
     }
 }
