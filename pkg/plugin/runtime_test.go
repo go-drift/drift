@@ -90,7 +90,7 @@ func TestMainBuildRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(resp.Ops[0], &head); err != nil {
 		t.Fatalf("decode op: %v", err)
 	}
-	if head.Type != "info_plist.set_string" || head.Value != "#FF00FF" {
+	if head.Type != "ios.plist.set_string" || head.Value != "#FF00FF" {
 		t.Errorf("unexpected op: %+v", head)
 	}
 	// Confirm stdout noise didn't break the response file.
@@ -178,7 +178,7 @@ func TestBuildCtxOpsRecord(t *testing.T) {
 	if len(ops) != 2 {
 		t.Fatalf("expected 2 ops, got %d", len(ops))
 	}
-	if ops[0].Type() != "info_plist.set_string" {
+	if ops[0].Type() != "ios.plist.set_string" {
 		t.Errorf("op 0 type: %s", ops[0].Type())
 	}
 	if ops[1].Type() != "android.manifest.add_permission" {

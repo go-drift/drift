@@ -162,24 +162,16 @@ func lockKey(op protocol.Op) string {
 // describeEdit names the edit op makes inside a shared file, or "" if it
 // makes none (it owns whole files, or writes output Drift regenerates).
 func describeEdit(op protocol.Op, platform string) string {
-	plist := "Runner/Info.plist"
 	launch := "Runner/LaunchScreen.storyboard"
 	if platform == "xtool" {
-		plist = "Sources/Runner/Resources/Info.plist"
 		launch = "Sources/Runner/Resources/LaunchScreen.storyboard"
 	}
 	const manifest = "app/src/main/AndroidManifest.xml"
 	switch v := op.(type) {
-	case *protocol.OpInfoPlistSetString:
-		return fmt.Sprintf("%s: key %s", plist, v.Key)
-	case *protocol.OpInfoPlistSetBool:
-		return fmt.Sprintf("%s: key %s", plist, v.Key)
-	case *protocol.OpInfoPlistSetStringArray:
-		return fmt.Sprintf("%s: key %s", plist, v.Key)
-	case *protocol.OpInfoPlistSetDict:
-		return fmt.Sprintf("%s: key %s", plist, v.Key)
-	case *protocol.OpInfoPlistAppendArrayItem:
-		return fmt.Sprintf("%s: %q in array %s", plist, v.Value, v.Key)
+	case *protocol.OpPlistAppendArrayItem:
+		return fmt.Sprintf("%s: %q in array %s", iosPlistRelPath(platform, v.File), v.Value, v.Key)
+	case protocol.PlistOp:
+		return fmt.Sprintf("%s: key %s", iosPlistRelPath(platform, v.PlistFile()), v.PlistKey())
 	case *protocol.OpIOSReplaceLaunchScreen:
 		return fmt.Sprintf("%s: replaced; restore your own launch screen", launch)
 	case *protocol.OpAndroidManifestAddPermission:

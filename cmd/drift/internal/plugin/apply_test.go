@@ -138,3 +138,44 @@ func TestApplyAndroidAppModuleFile(t *testing.T) {
 		t.Fatalf("google-services.json not written next to app/build.gradle: %q, %v", got, err)
 	}
 }
+
+// Entitlement ops edit Runner.entitlements at the project root on both iOS
+// paths, and Info.plist ops leave it alone.
+func TestApplyEntitlementsAndInfoPlistAreSeparateFiles(t *testing.T) {
+	const empty = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict/></plist>
+`
+	for platform, infoPath := range map[string]string{
+		"ios":   "Runner/Info.plist",
+		"xtool": "Sources/Runner/Resources/Info.plist",
+	} {
+		t.Run(platform, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTree(t, dir, map[string]string{infoPath: empty, "Runner.entitlements": empty, "xtool.yml": "bundleID: com.example.app\n"})
+			ops := []protocol.Op{
+				&protocol.OpPlistSetString{
+					Base:       protocol.Base{Pkg: "fb"},
+					PlistEntry: protocol.PlistEntry{File: protocol.PlistEntitlements, Key: "aps-environment"},
+					Value:      "development",
+				},
+				&protocol.OpPlistSetBool{
+					Base:       protocol.Base{Pkg: "fb"},
+					PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "FirebaseAppDelegateProxyEnabled"},
+					Value:      false,
+				},
+			}
+			if _, err := Apply(ops, dir, platform); err != nil {
+				t.Fatalf("Apply: %v", err)
+			}
+			entitlements := readFile(t, filepath.Join(dir, "Runner.entitlements"))
+			info := readFile(t, filepath.Join(dir, infoPath))
+			if !strings.Contains(entitlements, "aps-environment") || strings.Contains(entitlements, "FirebaseAppDelegateProxyEnabled") {
+				t.Errorf("Runner.entitlements:\n%s", entitlements)
+			}
+			if !strings.Contains(info, "FirebaseAppDelegateProxyEnabled") || strings.Contains(info, "aps-environment") {
+				t.Errorf("Info.plist:\n%s", info)
+			}
+		})
+	}
+}

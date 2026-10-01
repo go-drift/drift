@@ -39,43 +39,43 @@ func TestValidate(t *testing.T) {
 		{
 			name: "identical plist values collapse",
 			ops: []protocol.Op{
-				&protocol.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "bar"},
-				&protocol.OpInfoPlistSetString{Base: mkBase("b"), Key: "Foo", Value: "bar"},
+				&protocol.OpPlistSetString{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "bar"},
+				&protocol.OpPlistSetString{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "bar"},
 			},
 			wantLen: 1,
 		},
 		{
 			name: "different plist values conflict",
 			ops: []protocol.Op{
-				&protocol.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "x"},
-				&protocol.OpInfoPlistSetString{Base: mkBase("b"), Key: "Foo", Value: "y"},
+				&protocol.OpPlistSetString{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "x"},
+				&protocol.OpPlistSetString{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "y"},
 			},
-			wantConflict: "plist:Foo",
+			wantConflict: "plist:info:Foo",
 		},
 		{
 			name: "string and bool on one plist key conflict",
 			ops: []protocol.Op{
-				&protocol.OpInfoPlistSetString{Base: mkBase("a"), Key: "Foo", Value: "true"},
-				&protocol.OpInfoPlistSetBool{Base: mkBase("b"), Key: "Foo", Value: true},
+				&protocol.OpPlistSetString{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "true"},
+				&protocol.OpPlistSetBool{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: true},
 			},
-			wantConflict: "plist:Foo",
+			wantConflict: "plist:info:Foo",
 		},
 		{
 			name: "array items merge",
 			ops: []protocol.Op{
-				&protocol.OpInfoPlistAppendArrayItem{Base: mkBase("a"), Key: "Modes", Value: "fetch"},
-				&protocol.OpInfoPlistAppendArrayItem{Base: mkBase("b"), Key: "Modes", Value: "fetch"},
-				&protocol.OpInfoPlistAppendArrayItem{Base: mkBase("b"), Key: "Modes", Value: "remote-notification"},
+				&protocol.OpPlistAppendArrayItem{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Value: "fetch"},
+				&protocol.OpPlistAppendArrayItem{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Value: "fetch"},
+				&protocol.OpPlistAppendArrayItem{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Value: "remote-notification"},
 			},
 			wantLen: 2,
 		},
 		{
 			name: "array item vs whole array conflict",
 			ops: []protocol.Op{
-				&protocol.OpInfoPlistAppendArrayItem{Base: mkBase("a"), Key: "Modes", Value: "fetch"},
-				&protocol.OpInfoPlistSetStringArray{Base: mkBase("b"), Key: "Modes", Values: []string{"audio"}},
+				&protocol.OpPlistAppendArrayItem{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Value: "fetch"},
+				&protocol.OpPlistSetStringArray{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Values: []string{"audio"}},
 			},
-			wantConflict: "plist:Modes",
+			wantConflict: "plist:info:Modes",
 			wantMixed:    true,
 		},
 		{

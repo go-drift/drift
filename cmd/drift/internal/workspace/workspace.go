@@ -371,7 +371,7 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 		var err error
 		switch platform {
 		case "ios":
-			err = driftpluginCLI.CheckEjectedIOS(platformDir)
+			err = driftpluginCLI.CheckEjectedIOS(platformDir, ops.ops)
 		case "android":
 			err = driftpluginCLI.CheckEjectedAndroid(platformDir, ops.ops)
 		}

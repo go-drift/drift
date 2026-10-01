@@ -102,7 +102,7 @@ background_color: "#1A2238"
 		}
 	}
 	// UILaunchStoryboardName=LaunchScreen is in both Info.plist templates.
-	if hasOpType(ops, "info_plist.set_string") {
+	if hasOpType(ops, "ios.plist.set_string") {
 		t.Errorf("splash should not set Info.plist keys the templates already set")
 	}
 }

@@ -50,6 +50,13 @@ func WriteIOS(root string, settings Settings) error {
 		return fmt.Errorf("failed to generate iOS icons: %w", err)
 	}
 
+	// Entitlements at the project root, outside the synchronized Runner
+	// folder so they are never a bundle resource; CODE_SIGN_ENTITLEMENTS
+	// names them. Plugins add keys (ctx.IOS.Entitlements).
+	if err := copyEntitlements(filepath.Join(root, "ios"), tmplData); err != nil {
+		return err
+	}
+
 	// Write Xcode project files
 	xcodeprojDir := filepath.Join(root, "ios", "Runner.xcodeproj")
 	if err := templates.CopyTree("xcodeproj", xcodeprojDir, tmplData, nil); err != nil {
@@ -57,4 +64,12 @@ func WriteIOS(root string, settings Settings) error {
 	}
 
 	return nil
+}
+
+// copyEntitlements writes the empty Runner.entitlements template into dir,
+// the project root of an iOS build path.
+func copyEntitlements(dir string, data *templates.TemplateData) error {
+	return templates.CopyTree("ios", dir, data, func(name string) bool {
+		return name == "Runner.entitlements"
+	})
 }

@@ -11,11 +11,11 @@ import (
 func fixtureOps() []Op {
 	base := Base{Pkg: "github.com/test/plugin", Ident: "test"}
 	return []Op{
-		&OpInfoPlistSetString{Base: base, Key: "Foo", Value: "bar"},
-		&OpInfoPlistSetBool{Base: base, Key: "Baz", Value: true},
-		&OpInfoPlistSetStringArray{Base: base, Key: "Arr", Values: []string{"a", "b"}},
-		&OpInfoPlistAppendArrayItem{Base: base, Key: "Arr2", Value: "x"},
-		&OpInfoPlistSetDict{Base: base, Key: "Dict", Value: map[string]any{"k": "v"}},
+		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Foo"}, Value: "bar"},
+		&OpPlistSetBool{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Baz"}, Value: true},
+		&OpPlistSetStringArray{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr"}, Values: []string{"a", "b"}},
+		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr2"}, Value: "x"},
+		&OpPlistSetDict{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": "v"}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: "AA=="},
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<document/>"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
@@ -283,7 +283,7 @@ func spmFrom(v string) SPMRequirement { return SPMRequirement{Kind: SPMFrom, Val
 
 func TestDecodeOpsParsesJSONList(t *testing.T) {
 	ops := []Op{
-		&OpInfoPlistSetString{Base: Base{Pkg: "p", Ident: "p"}, Key: "K", Value: "V"},
+		&OpPlistSetString{Base: Base{Pkg: "p", Ident: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "V"},
 	}
 	raw, err := MarshalOpList(ops)
 	if err != nil {
@@ -322,11 +322,13 @@ func TestFixtureOpsAreValid(t *testing.T) {
 func invalidOps() []Op {
 	base := Base{Pkg: "github.com/test/plugin", Ident: "test"}
 	return []Op{
-		&OpInfoPlistSetString{Base: base, Key: ""},
-		&OpInfoPlistSetBool{Base: base, Key: ""},
-		&OpInfoPlistSetStringArray{Base: base, Key: ""},
-		&OpInfoPlistAppendArrayItem{Base: base, Key: ""},
-		&OpInfoPlistSetDict{Base: base, Key: "Dict", Value: map[string]any{"k": nil}},
+		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
+		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{File: "Info.plist", Key: "K"}},
+		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{Key: "K"}},
+		&OpPlistSetBool{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
+		&OpPlistSetStringArray{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
+		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
+		&OpPlistSetDict{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": nil}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "../Logo", Image: "AA=="},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: ""},
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<storyboard/>"},
@@ -395,10 +397,10 @@ func TestEveryOpHasTargets(t *testing.T) {
 // Without the JSON round trip in canonicalJSON the typed map would fall
 // through to json.Marshal with unsorted keys.
 func TestSetDictTargetStableAcrossNestedConcreteTypes(t *testing.T) {
-	generic := &OpInfoPlistSetDict{Base: Base{Pkg: "p"}, Key: "K", Value: map[string]any{
+	generic := &OpPlistSetDict{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{
 		"inner": map[string]any{"b": "2", "a": "1"},
 	}}
-	typed := &OpInfoPlistSetDict{Base: Base{Pkg: "p"}, Key: "K", Value: map[string]any{
+	typed := &OpPlistSetDict{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{
 		"inner": map[string]string{"b": "2", "a": "1"},
 	}}
 	if !reflect.DeepEqual(generic.Targets(), typed.Targets()) {
@@ -407,11 +409,20 @@ func TestSetDictTargetStableAcrossNestedConcreteTypes(t *testing.T) {
 }
 
 func TestDecodeOpsRejectsInvalidPluginName(t *testing.T) {
-	raw, err := MarshalOp(&OpInfoPlistSetString{Base: Base{Pkg: "p", Ident: "Bad-Name"}, Key: "K", Value: "V"})
+	raw, err := MarshalOp(&OpPlistSetString{Base: Base{Pkg: "p", Ident: "Bad-Name"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "V"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := DecodeOps([]json.RawMessage{raw}); err == nil || !strings.Contains(err.Error(), "plugin name") {
 		t.Fatalf("expected plugin name error, got %v", err)
+	}
+}
+
+// One key in Info.plist and the entitlements are different targets.
+func TestPlistTargetsIncludeFile(t *testing.T) {
+	info := &OpPlistSetString{PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "a"}
+	ent := &OpPlistSetString{PlistEntry: PlistEntry{File: PlistEntitlements, Key: "K"}, Value: "b"}
+	if info.Targets()[0].Key == ent.Targets()[0].Key {
+		t.Errorf("both target %q", info.Targets()[0].Key)
 	}
 }
