@@ -42,7 +42,7 @@ func TestApplyAndroidManifestAddPermission(t *testing.T) {
 		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.CAMERA"},
 		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.INTERNET"}, // dedupe
 	}
-	changed, err := ApplyAndroidManifest(path, ops, nil, nil, nil)
+	changed, err := ApplyAndroidManifest(path, ManifestOps{Permissions: ops})
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -66,12 +66,50 @@ func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 	ops := []*protocol.OpAndroidManifestSetActivityAttr{
 		{Base: protocol.Base{Pkg: "p"}, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/Splash"},
 	}
-	if _, err := ApplyAndroidManifest(path, nil, nil, ops, nil); err != nil {
+	if _, err := ApplyAndroidManifest(path, ManifestOps{ActivityAttrs: ops}); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
 	if !strings.Contains(string(body), "android:theme=\"@style/Splash\"") {
 		t.Errorf("expected android:theme attr, body:\n%s", body)
+	}
+}
+
+func TestApplyAndroidManifestAddService(t *testing.T) {
+	path := writeManifest(t)
+	service := func(exported string) *protocol.OpAndroidManifestAddService {
+		return &protocol.OpAndroidManifestAddService{
+			Base: protocol.Base{Pkg: "fb"},
+			XML: `<service android:name="com.drift.plugin.firebase.PushService" android:exported="` + exported + `">
+    <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+</service>`,
+		}
+	}
+	apply := func(op *protocol.OpAndroidManifestAddService) string {
+		t.Helper()
+		if _, err := ApplyAndroidManifest(path, ManifestOps{Services: []*protocol.OpAndroidManifestAddService{op}}); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+		body, _ := os.ReadFile(path)
+		return string(body)
+	}
+
+	body := apply(service("false"))
+	if !strings.Contains(body, `android:name="com.drift.plugin.firebase.PushService"`) ||
+		!strings.Contains(body, "com.google.firebase.MESSAGING_EVENT") {
+		t.Fatalf("service missing:\n%s", body)
+	}
+	if strings.Index(body, "<service") < strings.Index(body, "<application") {
+		t.Errorf("service outside <application>:\n%s", body)
+	}
+
+	// A rerun converges; a changed declaration replaces the old one.
+	if again := apply(service("false")); again != body {
+		t.Errorf("rerun changed the manifest:\n%s", again)
+	}
+	body = apply(service("true"))
+	if strings.Count(body, "<service") != 1 || !strings.Contains(body, `android:exported="true"`) {
+		t.Errorf("want one replaced service:\n%s", body)
 	}
 }
 

@@ -55,10 +55,7 @@ type opBag struct {
 	iosBundle     []*protocol.OpIOSAddBundleResource
 	iosSPM        []*protocol.OpIOSAddPackageDependency
 	iosPlugins    []*protocol.OpIOSPlugin
-	addPerm       []*protocol.OpAndroidManifestAddPermission
-	addIntent     []*protocol.OpAndroidManifestAddIntentFilter
-	setActAttr    []*protocol.OpAndroidManifestSetActivityAttr
-	addMeta       []*protocol.OpAndroidManifestAddMetaData
+	manifest      mutate.ManifestOps
 	colors        []*protocol.OpAndroidColorSet
 	strings       []*protocol.OpAndroidStringSet
 	styles        []*protocol.OpAndroidStyleSet
@@ -138,13 +135,15 @@ func bundleIOSOp(bag *opBag, op protocol.Op) bool {
 func bundleAndroidOp(bag *opBag, op protocol.Op) bool {
 	switch v := op.(type) {
 	case *protocol.OpAndroidManifestAddPermission:
-		bag.addPerm = append(bag.addPerm, v)
+		bag.manifest.Permissions = append(bag.manifest.Permissions, v)
 	case *protocol.OpAndroidManifestAddIntentFilter:
-		bag.addIntent = append(bag.addIntent, v)
+		bag.manifest.IntentFilters = append(bag.manifest.IntentFilters, v)
 	case *protocol.OpAndroidManifestSetActivityAttr:
-		bag.setActAttr = append(bag.setActAttr, v)
+		bag.manifest.ActivityAttrs = append(bag.manifest.ActivityAttrs, v)
 	case *protocol.OpAndroidManifestAddMetaData:
-		bag.addMeta = append(bag.addMeta, v)
+		bag.manifest.MetaData = append(bag.manifest.MetaData, v)
+	case *protocol.OpAndroidManifestAddService:
+		bag.manifest.Services = append(bag.manifest.Services, v)
 	case *protocol.OpAndroidColorSet:
 		bag.colors = append(bag.colors, v)
 	case *protocol.OpAndroidStringSet:
@@ -311,8 +310,8 @@ const pluginAPITemplates = "plugin-api/ios"
 func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	var changed []string
 	manifestPath := filepath.Join(buildDir, "app", "src", "main", "AndroidManifest.xml")
-	if len(bag.addPerm)+len(bag.addIntent)+len(bag.setActAttr)+len(bag.addMeta) > 0 {
-		ch, err := mutate.ApplyAndroidManifest(manifestPath, bag.addPerm, bag.addIntent, bag.setActAttr, bag.addMeta)
+	if !bag.manifest.Empty() {
+		ch, err := mutate.ApplyAndroidManifest(manifestPath, bag.manifest)
 		if err != nil {
 			return changed, err
 		}

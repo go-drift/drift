@@ -180,6 +180,8 @@ func describeEdit(op protocol.Op, platform string) string {
 		return fmt.Sprintf("%s: an <intent-filter> on activity %s", manifest, v.Activity)
 	case *protocol.OpAndroidManifestSetActivityAttr:
 		return fmt.Sprintf("%s: %s=%q on activity %s", manifest, v.Attr, v.Value, v.Activity)
+	case *protocol.OpAndroidManifestAddService:
+		return fmt.Sprintf("%s: <service android:name=%q>", manifest, v.ServiceName())
 	case *protocol.OpAndroidManifestAddMetaData:
 		return fmt.Sprintf("%s: <meta-data android:name=%q> under %s", manifest, v.Name, v.Parent)
 	case *protocol.OpAndroidGradleAddDependency:

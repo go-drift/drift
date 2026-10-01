@@ -34,6 +34,7 @@ func fixtureOps() []Op {
 		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<intent-filter/>"},
 		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/X"},
 		&OpAndroidManifestAddMetaData{Base: base, Parent: "application", Name: "foo", Value: "bar"},
+		&OpAndroidManifestAddService{Base: base, XML: `<service android:name="com.foo.PushService" android:exported="false"/>`},
 		&OpAndroidColorSet{Base: base, Name: "splash_bg", Value: "#FFFFFF"},
 		&OpAndroidStringSet{Base: base, Name: "hello", Value: "world"},
 		&OpAndroidStyleSet{Base: base, Name: "X", Parent: "Y", Items: []StyleItem{{Name: "a", Value: "b"}}},
@@ -344,6 +345,10 @@ func invalidOps() []Op {
 		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<activity/>"},
 		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android theme", Value: "x"},
 		&OpAndroidManifestAddMetaData{Base: base, Parent: "service", Name: "foo"},
+		&OpAndroidManifestAddService{Base: base, XML: `<receiver android:name="com.foo.R"/>`},
+		&OpAndroidManifestAddService{Base: base, XML: `<service android:exported="false"/>`},
+		&OpAndroidManifestAddService{Base: base, XML: `<service android:name=".PushService" android:exported="false"/>`},
+		&OpAndroidManifestAddService{Base: base, XML: `<service android:name="com.foo.S"><intent-filter><action android:name="x"/></intent-filter></service>`},
 		&OpAndroidColorSet{Base: base, Name: "splash-bg", Value: "#FFFFFF"},
 		&OpAndroidColorSet{Base: base, Name: "splash_bg", Value: "#fff"},
 		&OpAndroidStringSet{Base: base, Name: "1hello"},
@@ -424,5 +429,21 @@ func TestPlistTargetsIncludeFile(t *testing.T) {
 	ent := &OpPlistSetString{PlistEntry: PlistEntry{File: PlistEntitlements, Key: "K"}, Value: "b"}
 	if info.Targets()[0].Key == ent.Targets()[0].Key {
 		t.Errorf("both target %q", info.Targets()[0].Key)
+	}
+}
+
+// A service is keyed by its class, so two plugins declaring one service
+// differently conflict, and different services do not.
+func TestAddServiceTargetsName(t *testing.T) {
+	a := &OpAndroidManifestAddService{XML: `<service android:name="com.a.S" android:exported="false"/>`}
+	b := &OpAndroidManifestAddService{XML: `<service android:name="com.b.S" android:exported="false"/>`}
+	if err := a.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := a.Targets()[0].Key; got != "manifest:application:service:com.a.S" {
+		t.Errorf("target %q", got)
+	}
+	if a.Targets()[0].Key == b.Targets()[0].Key {
+		t.Error("different services share a target")
 	}
 }

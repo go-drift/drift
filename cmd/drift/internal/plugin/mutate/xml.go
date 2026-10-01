@@ -13,16 +13,24 @@ import (
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
+// ManifestOps are the AndroidManifest.xml ops of one build, by type.
+type ManifestOps struct {
+	Permissions   []*protocol.OpAndroidManifestAddPermission
+	IntentFilters []*protocol.OpAndroidManifestAddIntentFilter
+	ActivityAttrs []*protocol.OpAndroidManifestSetActivityAttr
+	MetaData      []*protocol.OpAndroidManifestAddMetaData
+	Services      []*protocol.OpAndroidManifestAddService
+}
+
+// Empty reports whether there is nothing to apply.
+func (m ManifestOps) Empty() bool {
+	return len(m.Permissions)+len(m.IntentFilters)+len(m.ActivityAttrs)+len(m.MetaData)+len(m.Services) == 0
+}
+
 // ApplyAndroidManifest applies manifest ops to the file at path. Existing
 // nodes are preserved (etree round-trips comments and unrelated siblings).
 // Returns changed=true iff the file's bytes actually changed.
-func ApplyAndroidManifest(
-	path string,
-	addPerms []*protocol.OpAndroidManifestAddPermission,
-	addIntents []*protocol.OpAndroidManifestAddIntentFilter,
-	setAttrs []*protocol.OpAndroidManifestSetActivityAttr,
-	addMeta []*protocol.OpAndroidManifestAddMetaData,
-) (bool, error) {
+func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	doc, original, err := loadXML(path)
 	if err != nil {
 		return false, fmt.Errorf("read AndroidManifest: %w", err)
@@ -32,16 +40,16 @@ func ApplyAndroidManifest(
 		return false, fmt.Errorf("AndroidManifest.xml has no <manifest> root")
 	}
 
-	for _, op := range addPerms {
+	for _, op := range ops.Permissions {
 		ensurePermission(manifest, op.Name)
 	}
 
 	app := manifest.SelectElement("application")
-	if app == nil && len(setAttrs)+len(addIntents)+len(addMeta) > 0 {
-		return false, fmt.Errorf("AndroidManifest.xml has no <application>; cannot apply activity/intent ops")
+	if app == nil && len(ops.ActivityAttrs)+len(ops.IntentFilters)+len(ops.MetaData)+len(ops.Services) > 0 {
+		return false, fmt.Errorf("AndroidManifest.xml has no <application>; cannot apply activity, intent, meta-data or service ops")
 	}
 
-	for _, op := range setAttrs {
+	for _, op := range ops.ActivityAttrs {
 		act := findActivity(app, op.Activity)
 		if act == nil {
 			return false, fmt.Errorf("AndroidManifest.xml: activity %q not found for SetActivityAttr", op.Activity)
@@ -49,7 +57,7 @@ func ApplyAndroidManifest(
 		setNSAttr(act, op.Attr, op.Value)
 	}
 
-	for _, op := range addIntents {
+	for _, op := range ops.IntentFilters {
 		act := findActivity(app, op.Activity)
 		if act == nil {
 			return false, fmt.Errorf("AndroidManifest.xml: activity %q not found for AddIntentFilter", op.Activity)
@@ -59,7 +67,7 @@ func ApplyAndroidManifest(
 		}
 	}
 
-	for _, op := range addMeta {
+	for _, op := range ops.MetaData {
 		parent := app
 		if rest, ok := strings.CutPrefix(op.Parent, "activity:"); ok {
 			parent = findActivity(app, rest)
@@ -68,6 +76,12 @@ func ApplyAndroidManifest(
 			}
 		}
 		ensureMetaData(parent, op.Name, op.Value)
+	}
+
+	for _, op := range ops.Services {
+		if err := putService(app, op); err != nil {
+			return false, err
+		}
 	}
 
 	doc.Indent(4)
@@ -164,6 +178,26 @@ func canonicalIntent(el *etree.Element) string {
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "##")
+}
+
+// putService adds op's <service>, replacing one with the same android:name
+// in place (the op owns that service), so reruns converge.
+func putService(app *etree.Element, op *protocol.OpAndroidManifestAddService) error {
+	sub := etree.NewDocument()
+	if err := sub.ReadFromString(op.XML); err != nil {
+		return fmt.Errorf("parse service from %s: %w", op.PluginPackage(), err)
+	}
+	service := sub.Root().Copy()
+	name := op.ServiceName()
+	for _, el := range app.SelectElements("service") {
+		if attr := el.SelectAttr("android:name"); attr != nil && attr.Value == name {
+			app.InsertChildAt(el.Index(), service)
+			app.RemoveChild(el)
+			return nil
+		}
+	}
+	app.AddChild(service)
+	return nil
 }
 
 func ensureMetaData(parent *etree.Element, name, value string) {

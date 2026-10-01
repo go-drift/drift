@@ -593,6 +593,38 @@ func (o *OpAndroidManifestAddMetaData) Validate() error {
 	return checkNonEmpty("meta-data name", o.Name)
 }
 
+// OpAndroidManifestAddService declares a <service> in <application>, for
+// plugin classes the system starts (a FirebaseMessagingService subclass).
+// XML is the whole element; its android:name is the fully qualified class,
+// since plugin sources do not live in the app's package.
+type OpAndroidManifestAddService struct {
+	Base
+	XML string `json:"xml"`
+}
+
+func (o *OpAndroidManifestAddService) Type() string     { return "android.manifest.add_service" }
+func (o *OpAndroidManifestAddService) Platform() string { return "android" }
+func (o *OpAndroidManifestAddService) Targets() []Target {
+	return []Target{owner("manifest:application:service:"+o.ServiceName(), o.XML)}
+}
+
+// ServiceName returns the service's android:name, or "" if XML is invalid.
+func (o *OpAndroidManifestAddService) ServiceName() string {
+	name, _ := serviceName(o.XML)
+	return name
+}
+
+func (o *OpAndroidManifestAddService) Validate() error {
+	if err := checkXMLRoot("service", o.XML, "service"); err != nil {
+		return err
+	}
+	name, err := serviceName(o.XML)
+	if err != nil {
+		return err
+	}
+	return checkMatch(qualifiedIdentRe, "service android:name (fully qualified)", name)
+}
+
 // ---- Android resources --------------------------------------------------
 
 type OpAndroidColorSet struct {
@@ -906,6 +938,7 @@ var opConstructors = map[string]func() Op{
 	"android.manifest.add_intent_filter":    func() Op { return &OpAndroidManifestAddIntentFilter{} },
 	"android.manifest.set_activity_attr":    func() Op { return &OpAndroidManifestSetActivityAttr{} },
 	"android.manifest.add_meta_data":        func() Op { return &OpAndroidManifestAddMetaData{} },
+	"android.manifest.add_service":          func() Op { return &OpAndroidManifestAddService{} },
 	"android.color.set":                     func() Op { return &OpAndroidColorSet{} },
 	"android.string.set":                    func() Op { return &OpAndroidStringSet{} },
 	"android.style.set":                     func() Op { return &OpAndroidStyleSet{} },
