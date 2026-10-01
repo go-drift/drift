@@ -1,0 +1,14 @@
+app:
+  name: FirebaseDemo
+  id: com.example.driftfirebasedemo
+  orientation: portrait
+
+plugins:
+  # iOS (Xcode 16+) and Android. See plugins/firebase/plugin/plugin.go.
+  # The config files are not committed: see README.md to get them.
+  - package: github.com/go-drift/drift/plugins/firebase/plugin
+    config:
+      ios:
+        config_file: firebase/GoogleService-Info.plist
+      android:
+        config_file: firebase/google-services.json
