@@ -63,23 +63,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This guard handles the case where scene is not a UIWindowScene.
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        // Force eager init of PlatformChannelManager.shared. The singleton
-        // is lazy; without this touch, plugin registration only runs the
-        // first time Go invokes a method via the channel, which can land
-        // after the system launch screen has torn down. Plugins that
-        // install UI overlays during register (e.g. the native splash
-        // plugin) need to attach synchronously while the launch screen
-        // is still visible to avoid a one-frame flash.
-        _ = PlatformChannelManager.shared
-
-        // URLs and activities that launched the app. Routed through the
-        // generated registrant so plugins can claim them before Drift's
-        // deep-link channel sees them.
+        // URLs and activities that launched the app. Plugins registered in
+        // the app delegate, before any scene connected, so they get first
+        // refusal before Drift's deep-link channel.
         for context in connectionOptions.urlContexts {
-            DriftPluginRegistrant.openURL(context.url, source: "launch")
+            DeepLinkHandler.route(url: context.url, source: "launch")
         }
         for activity in connectionOptions.userActivities {
-            DriftPluginRegistrant.continueUserActivity(activity, source: "launch")
+            DeepLinkHandler.route(userActivity: activity, source: "launch")
         }
 
         // Create a new window attached to this window scene.
@@ -102,14 +93,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// arrive here, not at UIApplicationDelegate.application(_:open:options:).
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {
-            DriftPluginRegistrant.openURL(context.url, source: "open_url")
+            DeepLinkHandler.route(url: context.url, source: "open_url")
         }
     }
 
     /// User activities (universal links, Handoff) continued while the app is
     /// running. Scene-based apps receive these here, not at the app delegate.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        DriftPluginRegistrant.continueUserActivity(userActivity, source: "user_activity")
+        DeepLinkHandler.route(userActivity: userActivity, source: "user_activity")
     }
 
     /// Called when the scene has moved to the foreground and is active.

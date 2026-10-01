@@ -150,12 +150,14 @@ type IOSScope struct {
 	Sources     *IOSSourcesScope
 }
 
-// Registrant records an iOS registrant entry that the generated
-// DriftPluginRegistrant.swift will call as `symbol(host: host)`.
-func (s *IOSScope) Registrant(symbol string) {
-	s.b.push(&protocol.OpRegistrantIOS{
-		Base:   newBase(s.b),
-		Symbol: symbol,
+// Plugin records the Swift class the app instantiates for this plugin. The
+// class conforms to DriftPlugin and has a no-argument initializer; the host
+// drives it through the plugin lifecycle (register, attach/detach, app
+// hooks). Ship its source with Sources.
+func (s *IOSScope) Plugin(class string) {
+	s.b.push(&protocol.OpIOSPlugin{
+		Base:  newBase(s.b),
+		Class: class,
 	})
 }
 
@@ -171,20 +173,6 @@ func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products
 		URL:         url,
 		Requirement: req,
 		Products:    append([]string(nil), products...),
-	})
-}
-
-// AppDelegateRegistrant records a Swift static-function symbol to be called
-// from the generated DriftPluginRegistrant.<callback>(...) method. callback
-// names a fixed app-level hook (see IOSAppDelegateCallbacks); the plugin's
-// symbol must implement the signature documented on that constant.
-// Multiple plugins may register on the same callback; the codegen fans out
-// in drift.yaml order.
-func (s *IOSScope) AppDelegateRegistrant(callback IOSAppDelegateCallback, symbol string) {
-	s.b.push(&protocol.OpIOSAppDelegateRegistrant{
-		Base:     newBase(s.b),
-		Callback: callback,
-		Symbol:   symbol,
 	})
 }
 
@@ -307,26 +295,15 @@ type AndroidScope struct {
 	Sources   *AndroidSourcesScope
 }
 
-// Registrant records an Android registrant entry that the generated
-// DriftPluginRegistrant.kt will call as `<symbol>(host)`. Symbol is the
-// fully-qualified Kotlin identifier, e.g. com.foo.camera.CameraPlugin.register.
-func (s *AndroidScope) Registrant(symbol string) {
-	s.b.push(&protocol.OpRegistrantAndroid{
-		Base:   newBase(s.b),
-		Symbol: symbol,
-	})
-}
-
-// PreActivityRegistrant records a Kotlin symbol to be called from the
-// generated DriftPluginRegistrant.preActivityCreate(activity) body. Used by
-// plugins that need to run before MainActivity.super.onCreate (e.g. calling
-// androidx.core.splashscreen.installSplashScreen()). Symbol is the
-// fully-qualified Kotlin identifier, e.g.
-// com.foo.splash.Android12SplashController.install.
-func (s *AndroidScope) PreActivityRegistrant(symbol string) {
-	s.b.push(&protocol.OpAndroidPreActivityRegistrant{
-		Base:   newBase(s.b),
-		Symbol: symbol,
+// Plugin records the fully qualified Kotlin class the app instantiates for
+// this plugin, e.g. com.example.camera.CameraPlugin. The class implements
+// com.drift.runner.DriftPlugin and has a no-argument constructor; the host
+// drives it through the plugin lifecycle (register, pre-activity hook,
+// attach/detach). Ship its source with Sources.
+func (s *AndroidScope) Plugin(class string) {
+	s.b.push(&protocol.OpAndroidPlugin{
+		Base:  newBase(s.b),
+		Class: class,
 	})
 }
 

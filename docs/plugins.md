@@ -83,11 +83,11 @@ Ops are typed structs in `pkg/plugin/protocol/ops.go`, recorded through scopes o
 |------|----------|
 | Info.plist | `info_plist.set_string`, `set_bool`, `set_string_array`, `append_array_item`, `set_dict` |
 | iOS project | `ios.assets.add_image_set`, `ios.storyboards.replace_launch_screen`, `ios.source.add`, `ios.bundle.add_resource`, `ios.spm.add_package` |
-| iOS registrants | `ios.registrant`, `ios.app_delegate_registrant` |
+| iOS plugin class | `ios.plugin` |
 | AndroidManifest | `android.manifest.add_permission`, `add_intent_filter`, `set_activity_attr`, `add_meta_data` |
 | Android resources | `android.color.set`, `android.string.set`, `android.style.set`, `android.drawable.write`, `android.resource.write_xml`, `android.assets.add`, `android.app_module.add_file` |
 | Android build | `android.gradle.add_dependency`, `android.gradle.apply_plugin`, `android.source.add` |
-| Android registrants | `android.registrant`, `android.pre_activity_registrant` |
+| Android plugin class | `android.plugin` |
 
 Each op declares the **targets** it writes (`Targets()`): a key naming a location (`plist:<key>`, `android-res:<type>/<name>`, `ios-bundle:<file>`, `spm:<package>`, ...), optionally a member of a set at that key (a permission, a registrant, a SwiftPM product), and a hash of what it writes there. Conflicts are keyed on targets, not op types, so two different op types writing one plist key or resource are caught:
 - Ops owning the same key must write the same content (they then collapse).
@@ -102,19 +102,21 @@ Adding an op means touching: the struct and its methods (`Type`, `Targets`, `Val
 - **SwiftPM sidecar.** Both paths reference a generated local package at `Drift/Plugins` (`mutate/spm.go`). Its `DriftPlugins` target depends on every plugin-requested SwiftPM product.
 - **Bundle resources.** Files land flat in the app bundle root: `Runner/PluginResources/` on xcodeproj (synchronized folder) and `PluginResources/` listed under `xtool.yml` `resources:` on xtool. SwiftPM target resources are avoided because they land in `Runner_Runner.bundle`, which `Bundle.main` cannot see.
 - **Image sets on xtool.** xtool cannot compile asset catalogs, so image sets become loose `<Name>.png` files. `UIImage(named:)` resolves both forms. `FUTURE(xtool#219)` comments mark what changes if [xtool#219](https://github.com/xtool-org/xtool/pull/219) (asset catalog compiler, now in [AssetKit](https://github.com/xtool-org/AssetKit)) merges.
-- **App-level hooks.** `ios.app_delegate_registrant` hooks launch, URL, user activity and remote notification events. The app is scene-based, so URL and activity events arrive at `SceneDelegate` (xcodeproj) or SwiftUI modifiers (xtool) and route through the generated registrant. The first plugin returning `true` claims a URL before Drift's deep-link channel sees it. `DriftPluginCoordinator.swift` merges background-fetch results; its XCTest harness is `cmd/drift/internal/plugin/coordinator_test` (macOS only).
+- **App-level hooks.** Plugins receive launch, URL, user activity and remote notification events through `DriftPlugin` methods. The app is scene-based, so URL and activity events arrive at `SceneDelegate` (xcodeproj) or SwiftUI modifiers (xtool) and go through `DeepLinkHandler.route`: the first plugin returning `true` claims a URL before Drift's deep-link channel sees it. `DriftPluginCoordinator.swift` merges background-fetch results from the plugins that accept a remote notification; its XCTest harness is `cmd/drift/internal/plugin/coordinator_test` (macOS only).
 
-## Native host API
+## Native plugin lifecycle
 
-Plugins receive a host at registration:
+A plugin's native half is a class the build half names with `ctx.IOS.Plugin("MyPlugin")` / `ctx.Android.Plugin("com.example.MyPlugin")`. The generated `DriftPluginRegistrant` only lists these classes, in drift.yaml order; the hand-written `DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the instances and drives them on the main thread. Drift's own handling of the same events (deep links, notifications) stays in the app templates. Reference: Flutter's `FlutterPlugin` + `ActivityAware`.
 
-| | iOS (`templates/ios`) | Android (`templates/android/runner`, package `com.drift.runner`) |
+| | iOS (`templates/ios/PluginAPI`, public) | Android (`templates/android/runner`, package `com.drift.runner`) |
 |---|---|---|
-| Host | `DriftPluginHost`: `registerChannel`, `sendEvent`, `observeEvent` | `DriftPluginHost` (same shape), `MethodHandler` |
-| Overlay | `DriftOverlayHost.driftRootView()` | `DriftOverlayHost.driftRootView()` |
-| Entry points | `DriftPluginRegistrant.registerAll(host:)` plus app-level hook methods | `DriftPluginRegistrant.registerAll(host)`, `preActivityCreate(activity)` |
+| Plugin | `DriftPlugin` protocol | `DriftPlugin` interface |
+| Once per process | `register(host:)` then `didFinishLaunching`, from `AppDelegate` | `onRegister(host)`, from the first `MainActivity.onCreate` |
+| Per view / Activity | `attach(DriftViewBinding)` / `detach()` around `DriftViewController` | `onPreActivityCreate(activity)` before `super.onCreate`; `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity |
+| App events | `open(_:)`, `continueUserActivity(_:)` (return true to claim), remote-notification hooks | new-intent, activity-result and permission-result listeners on the binding (return true to claim) |
+| Host | `DriftPluginHost`: `registerChannel`, `sendEvent`, `observeEvent` | same shape, `MethodHandler` |
 
-Plugin Swift sources compile into the app module; Kotlin sources compile into the app module under the plugin's own package.
+Plugin Swift sources compile into the app module; Kotlin sources compile into the app module under the plugin's own package. Ejected projects are checked for the template calls that feed `DriftPlugins` (`ejected.go`); the plugin API and `DriftPlugins` itself are Drift-owned and rewritten by `EnsureRunnerSupport`.
 
 ## Runtime side
 

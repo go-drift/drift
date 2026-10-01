@@ -349,8 +349,14 @@ func runPluginPipeline(root, platformDir, platform string, ejected bool) error {
 		return err
 	}
 
-	if ejected && platform == "ios" {
-		if err := driftpluginCLI.CheckEjectedIOS(platformDir, normalized); err != nil {
+	if ejected {
+		switch platform {
+		case "ios":
+			err = driftpluginCLI.CheckEjectedIOS(platformDir, normalized)
+		case "android":
+			err = driftpluginCLI.CheckEjectedAndroid(platformDir, normalized)
+		}
+		if err != nil {
 			return err
 		}
 	}

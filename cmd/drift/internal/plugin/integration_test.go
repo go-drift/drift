@@ -55,9 +55,9 @@ func TestPipelineEndToEndAndroid(t *testing.T) {
 			Base: protocol.Base{Pkg: "github.com/example/other", Ident: "other"},
 			Name: "android.permission.POST_NOTIFICATIONS",
 		},
-		&protocol.OpRegistrantAndroid{
-			Base:   protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
-			Symbol: "com.example.splash.SplashPlugin.register",
+		&protocol.OpAndroidPlugin{
+			Base:  protocol.Base{Pkg: "github.com/example/splash", Ident: "splash"},
+			Class: "com.example.splash.SplashPlugin",
 		},
 	}
 
@@ -108,8 +108,8 @@ func TestPipelineEndToEndAndroid(t *testing.T) {
 	}
 
 	registrant := readFile(t, filepath.Join(dir, "app/src/main/java/com/drift/runner/DriftPluginRegistrant.kt"))
-	if !strings.Contains(registrant, "com.example.splash.SplashPlugin.register(host)") {
-		t.Errorf("registrant missing call:\n%s", registrant)
+	if !strings.Contains(registrant, "com.example.splash.SplashPlugin(),") {
+		t.Errorf("registrant missing plugin:\n%s", registrant)
 	}
 }
 

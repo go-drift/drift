@@ -1,17 +1,15 @@
 /// DriftPluginCoordinator.swift
-/// Helpers used by the generated DriftPluginRegistrant.swift to merge
-/// UIApplicationDelegate callback results across multiple plugin registrants.
+/// Merges UIApplicationDelegate callback results across plugins, for
+/// DriftPlugins.didReceiveRemoteNotification.
 ///
 /// This file is hand-written and lives in the iOS template tree. The xtool
 /// scaffold picks it up via WriteXtool's CopyTree("ios", ...) swift-glob, and
 /// ejected projects receive it from EnsureRunnerSupport, so every build path
 /// sees the same coordinator helpers.
 ///
-/// The dispatch + merge scaffolding lives here (not in the codegen) so all
-/// the lock + timer + once-only race-condition surface is in one place,
-/// testable via the harness at cmd/drift/internal/plugin/coordinator_test/.
-/// The generated DriftPluginRegistrant.didReceiveRemoteNotification just
-/// hands an array of plugin closures to dispatchBackgroundFetch.
+/// The lock + timer + once-only race-condition surface lives here in one
+/// place, testable via the harness at
+/// cmd/drift/internal/plugin/coordinator_test/.
 
 import UIKit
 
@@ -36,24 +34,27 @@ enum DriftPluginCoordinator {
         return .failed
     }
 
+    /// One plugin's share of a remote-notification fetch. Returns true if it
+    /// will call `completion` (exactly once), false to decline without
+    /// contributing a result.
     typealias BackgroundFetchHandler = (
         _ userInfo: [AnyHashable: Any],
         _ completion: @escaping (UIBackgroundFetchResult) -> Void
-    ) -> Void
+    ) -> Bool
 
-    /// Fan userInfo out to every plugin handler, accumulate their results
-    /// under a lock, and fire the real completionHandler exactly once with
-    /// the priority-merged result. A safety timeout races group.notify, so a
-    /// handler that never completes does not strand iOS waiting on
-    /// background fetch.
+    /// Fan userInfo out to every plugin handler, accumulate the results of
+    /// those that accept under a lock, and fire the real completionHandler
+    /// exactly once with the priority-merged result. A safety timeout races
+    /// group.notify, so a handler that never completes does not strand iOS
+    /// waiting on background fetch.
     ///
     /// Invariants:
     ///   - completionHandler runs exactly once, outside the lock.
-    ///   - A handler invoking its completion twice is a no-op on the second
-    ///     call.
-    ///   - No handlers (no plugin hooks this callback) completes immediately
-    ///     with `.newData`, the result Drift has always reported for its own
-    ///     notification dispatch.
+    ///   - A handler invoking its completion twice, or after declining, is a
+    ///     no-op on the extra calls.
+    ///   - When no handler accepts (including no handlers at all), completion
+    ///     fires immediately with `.newData`, the result Drift has always
+    ///     reported for its own notification dispatch.
     static func dispatchBackgroundFetch(
         userInfo: [AnyHashable: Any],
         handlers: [BackgroundFetchHandler],
@@ -61,14 +62,11 @@ enum DriftPluginCoordinator {
         completionQueue: DispatchQueue = .main,
         completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        if handlers.isEmpty {
-            completionHandler(.newData)
-            return
-        }
         let group = DispatchGroup()
         let lock = NSLock()
         var results: [UIBackgroundFetchResult] = []
         var fired = false
+        var accepted = 0
 
         let finalize: () -> Void = {
             lock.lock()
@@ -85,18 +83,30 @@ enum DriftPluginCoordinator {
         for handler in handlers {
             group.enter()
             let once = OnceFlag()
-            handler(userInfo) { result in
+            // result is nil when the handler declined.
+            let settle: (UIBackgroundFetchResult?) -> Void = { result in
                 lock.lock()
                 guard once.fire() else {
                     lock.unlock()
                     return
                 }
-                results.append(result)
+                if let result = result {
+                    results.append(result)
+                }
                 lock.unlock()
                 group.leave()
             }
+            if handler(userInfo, { settle($0) }) {
+                accepted += 1
+            } else {
+                settle(nil)
+            }
         }
 
+        if accepted == 0 {
+            completionHandler(.newData)
+            return
+        }
         group.notify(queue: completionQueue) { finalize() }
         completionQueue.asyncAfter(deadline: .now() + timeout) { finalize() }
     }

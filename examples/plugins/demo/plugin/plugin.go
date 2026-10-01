@@ -56,9 +56,8 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 // worked example that exercises all of them.
 //
 //
-// (1) Shipping native sources + registering an entry point. Sit Swift
-// files under ios/ and Kotlin under android/ next to plugin.go, then in
-// Build():
+// (1) Shipping native sources + naming the plugin class. Sit Swift files
+// under ios/ and Kotlin under android/ next to plugin.go, then in Build():
 //
 //     import "embed"
 //
@@ -71,26 +70,28 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 //     func (demo) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 //         // ...existing build-time ops...
 //         ctx.IOS.Sources.AddFS("Demo", iosSources, "ios")
-//         ctx.IOS.Registrant("DriftDemoPlugin.register")
+//         ctx.IOS.Plugin("DriftDemoPlugin")
 //         ctx.Android.Sources.AddFS("com.example.demo", androidSources, "android")
-//         ctx.Android.Registrant("com.example.demo.DriftDemoPlugin.register")
+//         ctx.Android.Plugin("com.example.demo.DriftDemoPlugin")
 //         return nil
 //     }
 //
 //
-// (2) Native entry point. The Drift runtime calls register(host) once at
-// app startup with a DriftPluginHost. The host exposes three relevant
-// methods: registerChannel (receive Go→native calls), sendEvent (emit
-// native→Go events), and observeEvent (subscribe to events from other
-// native modules). Kotlin sketch:
+// (2) Native plugin class. The app creates one instance per process and
+// calls onRegister(host) once at startup with a DriftPluginHost, then
+// onAttach/onDetach around each Activity (attach/detach around the Drift
+// view on iOS). The host exposes three relevant methods: registerChannel
+// (receive Go→native calls), sendEvent (emit native→Go events), and
+// observeEvent (subscribe to events from other native modules). Kotlin
+// sketch:
 //
 //     package com.example.demo
 //
+//     import com.drift.runner.DriftPlugin
 //     import com.drift.runner.DriftPluginHost
 //
-//     object DriftDemoPlugin {
-//         @JvmStatic
-//         fun register(host: DriftPluginHost) {
+//     class DriftDemoPlugin : DriftPlugin {
+//         override fun onRegister(host: DriftPluginHost) {
 //             // Go → native: method call with response.
 //             host.registerChannel("example/demo") { method, args ->
 //                 when (method) {
@@ -113,9 +114,10 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 //         }
 //     }
 //
-// The Swift twin lives in ios/ with the same shape: an enum or class with
-// a static register(host:) entry, channel handlers as closures, sendEvent
-// and observeEvent against the same DriftPluginHost protocol.
+// The Swift twin lives in ios/ with the same shape: a final class
+// conforming to DriftPlugin with register(host:), channel handlers as
+// closures, sendEvent and observeEvent against the same DriftPluginHost
+// protocol.
 //
 //
 // (3) Go-side runtime API. Create a sibling `runtime` package that apps

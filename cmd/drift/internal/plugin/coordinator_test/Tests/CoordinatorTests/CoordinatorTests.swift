@@ -46,8 +46,8 @@ final class MergeBackgroundFetchTests: XCTestCase {
 final class DispatchBackgroundFetchTests: XCTestCase {
     private let userInfo: [AnyHashable: Any] = ["k": "v"]
 
-    /// Empty handlers list (no plugin hooks the callback) fires completion
-    /// immediately with .newData, Drift's result for its own dispatch.
+    /// Empty handlers list (no plugins) fires completion immediately with
+    /// .newData, Drift's result for its own dispatch.
     func testEmptyHandlersShortCircuits() {
         let exp = expectation(description: "completion")
         DriftPluginCoordinator.dispatchBackgroundFetch(
@@ -67,7 +67,7 @@ final class DispatchBackgroundFetchTests: XCTestCase {
         DriftPluginCoordinator.dispatchBackgroundFetch(
             userInfo: userInfo,
             handlers: [
-                { _, completion in completion(.newData) }
+                { _, completion in completion(.newData); return true }
             ],
             completionQueue: .main
         ) { result in
@@ -83,8 +83,8 @@ final class DispatchBackgroundFetchTests: XCTestCase {
         DriftPluginCoordinator.dispatchBackgroundFetch(
             userInfo: userInfo,
             handlers: [
-                { _, completion in completion(.noData) },
-                { _, completion in completion(.newData) }
+                { _, completion in completion(.noData); return true },
+                { _, completion in completion(.newData); return true }
             ],
             completionQueue: .main
         ) { result in
@@ -101,8 +101,8 @@ final class DispatchBackgroundFetchTests: XCTestCase {
         DriftPluginCoordinator.dispatchBackgroundFetch(
             userInfo: userInfo,
             handlers: [
-                { _, completion in completion(.newData) },
-                { _, _ in /* never fires */ }
+                { _, completion in completion(.newData); return true },
+                { _, _ in true /* accepts, never fires */ }
             ],
             timeout: 0.1,
             completionQueue: .main
@@ -119,7 +119,7 @@ final class DispatchBackgroundFetchTests: XCTestCase {
         DriftPluginCoordinator.dispatchBackgroundFetch(
             userInfo: userInfo,
             handlers: [
-                { _, _ in /* never fires */ }
+                { _, _ in true /* accepts, never fires */ }
             ],
             timeout: 0.1,
             completionQueue: .main
@@ -140,6 +140,7 @@ final class DispatchBackgroundFetchTests: XCTestCase {
                 { _, completion in
                     completion(.newData)
                     completion(.failed) // would corrupt the merge if not guarded
+                    return true
                 }
             ],
             completionQueue: .main
@@ -163,7 +164,7 @@ final class DispatchBackgroundFetchTests: XCTestCase {
         DriftPluginCoordinator.dispatchBackgroundFetch(
             userInfo: userInfo,
             handlers: [
-                { _, completion in completion(.newData) }
+                { _, completion in completion(.newData); return true }
             ],
             timeout: 0.05,
             completionQueue: .main
@@ -181,5 +182,43 @@ final class DispatchBackgroundFetchTests: XCTestCase {
         wait(for: [settled], timeout: 1.0)
 
         XCTAssertEqual(fireCount, 1, "real completion must fire exactly once across timeout + group.notify")
+    }
+
+    /// Every handler declines: same as no handlers, immediate .newData
+    /// rather than waiting for the timeout.
+    func testAllHandlersDeclineShortCircuits() {
+        let exp = expectation(description: "completion")
+        DriftPluginCoordinator.dispatchBackgroundFetch(
+            userInfo: userInfo,
+            handlers: [
+                { _, _ in false },
+                { _, _ in false }
+            ],
+            timeout: 10,
+            completionQueue: .main
+        ) { result in
+            XCTAssertEqual(result, .newData)
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 0.5)
+    }
+
+    /// Declining handlers contribute no result: only the accepting one's
+    /// .noData is merged, and completion does not wait for the timeout.
+    func testDecliningHandlerDoesNotContribute() {
+        let exp = expectation(description: "completion")
+        DriftPluginCoordinator.dispatchBackgroundFetch(
+            userInfo: userInfo,
+            handlers: [
+                { _, _ in false },
+                { _, completion in completion(.noData); return true }
+            ],
+            timeout: 10,
+            completionQueue: .main
+        ) { result in
+            XCTAssertEqual(result, .noData)
+            exp.fulfill()
+        }
+        wait(for: [exp], timeout: 0.5)
     }
 }
