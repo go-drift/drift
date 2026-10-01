@@ -9,77 +9,74 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"howett.net/plist"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// ApplyInfoPlist applies Info.plist ops in-place. The file must exist already
-// (scaffold writes the template Info.plist before plugin ops run). Returns
-// changed=true iff the file was rewritten.
-func ApplyInfoPlist(
-	path string,
-	setStrings []*protocol.OpInfoPlistSetString,
-	setBools []*protocol.OpInfoPlistSetBool,
-	setArrays []*protocol.OpInfoPlistSetStringArray,
-	appendItems []*protocol.OpInfoPlistAppendArrayItem,
-	setDicts []*protocol.OpInfoPlistSetDict,
-) (bool, error) {
+// ApplyPlist applies plist ops to the plist at path in-place. The file must
+// exist already (scaffold writes Info.plist and Runner.entitlements before
+// plugin ops run); every op must target that one file. Setters run before
+// appends, so an array a plugin sets is the base others append to; appends
+// de-duplicate. Returns changed=true iff the file was rewritten.
+func ApplyPlist(path string, ops []protocol.PlistOp) (bool, error) {
+	name := filepath.Base(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return false, fmt.Errorf("read Info.plist: %w", err)
+		return false, fmt.Errorf("read %s: %w", name, err)
 	}
 
 	var root map[string]any
 	if _, err := plist.Unmarshal(data, &root); err != nil {
-		return false, fmt.Errorf("parse Info.plist: %w", err)
+		return false, fmt.Errorf("parse %s: %w", name, err)
 	}
 	if root == nil {
 		root = map[string]any{}
 	}
 
-	for _, op := range setStrings {
-		root[op.Key] = op.Value
-	}
-	for _, op := range setBools {
-		root[op.Key] = op.Value
-	}
-	for _, op := range setArrays {
-		arr := make([]any, len(op.Values))
-		for i, v := range op.Values {
-			arr[i] = v
-		}
-		root[op.Key] = arr
-	}
-	for _, op := range setDicts {
-		root[op.Key] = op.Value
-	}
-	// Append items after set arrays so the user's static array is the base
-	// and appended items extend it. De-dup on append.
-	for _, op := range appendItems {
-		existing, _ := root[op.Key].([]any)
-		seen := make(map[string]bool, len(existing))
-		for _, e := range existing {
-			if s, ok := e.(string); ok {
-				seen[s] = true
+	var appends []*protocol.OpPlistAppendArrayItem
+	for _, op := range ops {
+		switch v := op.(type) {
+		case *protocol.OpPlistSetString:
+			root[v.Key] = v.Value
+		case *protocol.OpPlistSetBool:
+			root[v.Key] = v.Value
+		case *protocol.OpPlistSetStringArray:
+			arr := make([]any, len(v.Values))
+			for i, s := range v.Values {
+				arr[i] = s
 			}
+			root[v.Key] = arr
+		case *protocol.OpPlistSetDict:
+			root[v.Key] = v.Value
+		case *protocol.OpPlistAppendArrayItem:
+			appends = append(appends, v)
+		default:
+			return false, fmt.Errorf("%s: unknown plist op %T", name, op)
 		}
-		if !seen[op.Value] {
-			existing = append(existing, op.Value)
-			root[op.Key] = existing
+	}
+	for _, op := range appends {
+		existing, ok := root[op.Key].([]any)
+		if !ok && root[op.Key] != nil {
+			return false, fmt.Errorf("%s: plugin %s appends %q to %s, which is a %T, not an array",
+				name, op.PluginPackage(), op.Value, op.Key, root[op.Key])
+		}
+		if !slices.Contains(existing, any(op.Value)) {
+			root[op.Key] = append(existing, op.Value)
 		}
 	}
 
 	out, err := plist.MarshalIndent(root, plist.XMLFormat, "\t")
 	if err != nil {
-		return false, fmt.Errorf("marshal Info.plist: %w", err)
+		return false, fmt.Errorf("marshal %s: %w", name, err)
 	}
 	if bytes.Equal(out, data) {
 		return false, nil
 	}
 	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return false, fmt.Errorf("write Info.plist: %w", err)
+		return false, fmt.Errorf("write %s: %w", name, err)
 	}
 	return true, nil
 }

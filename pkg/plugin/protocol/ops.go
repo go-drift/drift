@@ -13,7 +13,7 @@ import (
 
 // Op is the closed interface for all plugin-emitted build ops.
 type Op interface {
-	// Type returns the JSON discriminator (e.g. "info_plist.set_string").
+	// Type returns the JSON discriminator (e.g. "ios.plist.set_string").
 	Type() string
 	// Targets names every location the op writes. Two ops touching the
 	// same target must agree (see Target); the CLI's conflict check keys
@@ -85,81 +85,118 @@ type StyleItem struct {
 	Value string `json:"value"`
 }
 
-// ---- iOS Info.plist -----------------------------------------------------
+// ---- iOS plists (Info.plist, entitlements) ------------------------------
 
-type OpInfoPlistSetString struct {
+// PlistFile names an iOS plist a plist op edits.
+type PlistFile string
+
+const (
+	// PlistInfo is the app's Info.plist.
+	PlistInfo PlistFile = "info"
+	// PlistEntitlements is the app's code-signing entitlements
+	// (Runner.entitlements).
+	PlistEntitlements PlistFile = "entitlements"
+)
+
+func (f PlistFile) validate() error {
+	switch f {
+	case PlistInfo, PlistEntitlements:
+		return nil
+	}
+	return fmt.Errorf("plist file %q must be %q or %q", string(f), PlistInfo, PlistEntitlements)
+}
+
+// PlistOp is an op that edits one key of an iOS plist.
+type PlistOp interface {
+	Op
+	PlistFile() PlistFile
+	PlistKey() string
+}
+
+// PlistEntry is the plist and key a plist op edits. Embedded in every
+// plist op.
+type PlistEntry struct {
+	File PlistFile `json:"file"`
+	Key  string    `json:"key"`
+}
+
+func (e PlistEntry) PlistFile() PlistFile { return e.File }
+func (e PlistEntry) PlistKey() string     { return e.Key }
+
+func (e PlistEntry) targetKey() string { return "plist:" + string(e.File) + ":" + e.Key }
+
+func (e PlistEntry) validate() error {
+	if err := e.File.validate(); err != nil {
+		return err
+	}
+	return checkNonEmpty("plist key", e.Key)
+}
+
+type OpPlistSetString struct {
 	Base
-	Key   string `json:"key"`
+	PlistEntry
 	Value string `json:"value"`
 }
 
-func (o *OpInfoPlistSetString) Type() string     { return "info_plist.set_string" }
-func (o *OpInfoPlistSetString) Platform() string { return "ios" }
-func (o *OpInfoPlistSetString) Targets() []Target {
-	return []Target{owner("plist:"+o.Key, o.Type(), o.Value)}
+func (o *OpPlistSetString) Type() string     { return "ios.plist.set_string" }
+func (o *OpPlistSetString) Platform() string { return "ios" }
+func (o *OpPlistSetString) Targets() []Target {
+	return []Target{owner(o.targetKey(), o.Type(), o.Value)}
 }
-func (o *OpInfoPlistSetString) Validate() error {
-	return checkNonEmpty("plist key", o.Key)
-}
+func (o *OpPlistSetString) Validate() error { return o.validate() }
 
-type OpInfoPlistSetBool struct {
+type OpPlistSetBool struct {
 	Base
-	Key   string `json:"key"`
-	Value bool   `json:"value"`
+	PlistEntry
+	Value bool `json:"value"`
 }
 
-func (o *OpInfoPlistSetBool) Type() string     { return "info_plist.set_bool" }
-func (o *OpInfoPlistSetBool) Platform() string { return "ios" }
-func (o *OpInfoPlistSetBool) Targets() []Target {
-	return []Target{owner("plist:"+o.Key, o.Type(), strconv.FormatBool(o.Value))}
+func (o *OpPlistSetBool) Type() string     { return "ios.plist.set_bool" }
+func (o *OpPlistSetBool) Platform() string { return "ios" }
+func (o *OpPlistSetBool) Targets() []Target {
+	return []Target{owner(o.targetKey(), o.Type(), strconv.FormatBool(o.Value))}
 }
-func (o *OpInfoPlistSetBool) Validate() error {
-	return checkNonEmpty("plist key", o.Key)
-}
+func (o *OpPlistSetBool) Validate() error { return o.validate() }
 
-type OpInfoPlistSetStringArray struct {
+type OpPlistSetStringArray struct {
 	Base
-	Key    string   `json:"key"`
+	PlistEntry
 	Values []string `json:"values"`
 }
 
-func (o *OpInfoPlistSetStringArray) Type() string     { return "info_plist.set_string_array" }
-func (o *OpInfoPlistSetStringArray) Platform() string { return "ios" }
-func (o *OpInfoPlistSetStringArray) Targets() []Target {
-	return []Target{owner("plist:"+o.Key, append([]string{o.Type()}, o.Values...)...)}
+func (o *OpPlistSetStringArray) Type() string     { return "ios.plist.set_string_array" }
+func (o *OpPlistSetStringArray) Platform() string { return "ios" }
+func (o *OpPlistSetStringArray) Targets() []Target {
+	return []Target{owner(o.targetKey(), append([]string{o.Type()}, o.Values...)...)}
 }
-func (o *OpInfoPlistSetStringArray) Validate() error {
-	return checkNonEmpty("plist key", o.Key)
-}
+func (o *OpPlistSetStringArray) Validate() error { return o.validate() }
 
-type OpInfoPlistAppendArrayItem struct {
+type OpPlistAppendArrayItem struct {
 	Base
-	Key   string `json:"key"`
+	PlistEntry
 	Value string `json:"value"`
 }
 
-func (o *OpInfoPlistAppendArrayItem) Type() string     { return "info_plist.append_array_item" }
-func (o *OpInfoPlistAppendArrayItem) Platform() string { return "ios" }
-func (o *OpInfoPlistAppendArrayItem) Targets() []Target {
-	return []Target{member("plist:"+o.Key, o.Value)}
+func (o *OpPlistAppendArrayItem) Type() string     { return "ios.plist.append_array_item" }
+func (o *OpPlistAppendArrayItem) Platform() string { return "ios" }
+func (o *OpPlistAppendArrayItem) Targets() []Target {
+	return []Target{member(o.targetKey(), o.Value)}
 }
-func (o *OpInfoPlistAppendArrayItem) Validate() error {
-	return checkNonEmpty("plist key", o.Key)
-}
+func (o *OpPlistAppendArrayItem) Validate() error { return o.validate() }
 
-type OpInfoPlistSetDict struct {
+type OpPlistSetDict struct {
 	Base
-	Key   string         `json:"key"`
+	PlistEntry
 	Value map[string]any `json:"value"`
 }
 
-func (o *OpInfoPlistSetDict) Type() string     { return "info_plist.set_dict" }
-func (o *OpInfoPlistSetDict) Platform() string { return "ios" }
-func (o *OpInfoPlistSetDict) Targets() []Target {
-	return []Target{owner("plist:"+o.Key, o.Type(), canonicalJSON(o.Value))}
+func (o *OpPlistSetDict) Type() string     { return "ios.plist.set_dict" }
+func (o *OpPlistSetDict) Platform() string { return "ios" }
+func (o *OpPlistSetDict) Targets() []Target {
+	return []Target{owner(o.targetKey(), o.Type(), canonicalJSON(o.Value))}
 }
-func (o *OpInfoPlistSetDict) Validate() error {
-	if err := checkNonEmpty("plist key", o.Key); err != nil {
+func (o *OpPlistSetDict) Validate() error {
+	if err := o.validate(); err != nil {
 		return err
 	}
 	return checkPlistValue(o.Key, map[string]any(o.Value))
@@ -851,11 +888,11 @@ func (o *OpAndroidGradleApplyPlugin) Validate() error {
 // opConstructors maps JSON discriminators to fresh-instance constructors so
 // json.Unmarshal can target the correct concrete type.
 var opConstructors = map[string]func() Op{
-	"info_plist.set_string":                 func() Op { return &OpInfoPlistSetString{} },
-	"info_plist.set_bool":                   func() Op { return &OpInfoPlistSetBool{} },
-	"info_plist.set_string_array":           func() Op { return &OpInfoPlistSetStringArray{} },
-	"info_plist.append_array_item":          func() Op { return &OpInfoPlistAppendArrayItem{} },
-	"info_plist.set_dict":                   func() Op { return &OpInfoPlistSetDict{} },
+	"ios.plist.set_string":                  func() Op { return &OpPlistSetString{} },
+	"ios.plist.set_bool":                    func() Op { return &OpPlistSetBool{} },
+	"ios.plist.set_string_array":            func() Op { return &OpPlistSetStringArray{} },
+	"ios.plist.append_array_item":           func() Op { return &OpPlistAppendArrayItem{} },
+	"ios.plist.set_dict":                    func() Op { return &OpPlistSetDict{} },
 	"ios.assets.add_image_set":              func() Op { return &OpIOSAssetsAddImageSet{} },
 	"ios.storyboards.replace_launch_screen": func() Op { return &OpIOSReplaceLaunchScreen{} },
 	"ios.source.add":                        func() Op { return &OpAddIOSSource{} },

@@ -48,11 +48,7 @@ func Apply(ops []protocol.Op, buildDir, platform string) ([]string, error) {
 }
 
 type opBag struct {
-	infoString    []*protocol.OpInfoPlistSetString
-	infoBool      []*protocol.OpInfoPlistSetBool
-	infoArray     []*protocol.OpInfoPlistSetStringArray
-	infoAppend    []*protocol.OpInfoPlistAppendArrayItem
-	infoDict      []*protocol.OpInfoPlistSetDict
+	plists        map[protocol.PlistFile][]protocol.PlistOp
 	iosAssets     []*protocol.OpIOSAssetsAddImageSet
 	iosLaunch     []*protocol.OpIOSReplaceLaunchScreen
 	iosSources    []*protocol.OpAddIOSSource
@@ -115,16 +111,11 @@ func opAppliesTo(op protocol.Op, platform string) bool {
 
 func bundleIOSOp(bag *opBag, op protocol.Op) bool {
 	switch v := op.(type) {
-	case *protocol.OpInfoPlistSetString:
-		bag.infoString = append(bag.infoString, v)
-	case *protocol.OpInfoPlistSetBool:
-		bag.infoBool = append(bag.infoBool, v)
-	case *protocol.OpInfoPlistSetStringArray:
-		bag.infoArray = append(bag.infoArray, v)
-	case *protocol.OpInfoPlistAppendArrayItem:
-		bag.infoAppend = append(bag.infoAppend, v)
-	case *protocol.OpInfoPlistSetDict:
-		bag.infoDict = append(bag.infoDict, v)
+	case protocol.PlistOp:
+		if bag.plists == nil {
+			bag.plists = map[protocol.PlistFile][]protocol.PlistOp{}
+		}
+		bag.plists[v.PlistFile()] = append(bag.plists[v.PlistFile()], v)
 	case *protocol.OpIOSAssetsAddImageSet:
 		bag.iosAssets = append(bag.iosAssets, v)
 	case *protocol.OpIOSReplaceLaunchScreen:
@@ -195,14 +186,18 @@ func reportUnknownOp(op protocol.Op) {
 func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 	var changed []string
 
-	infoPlistPath := iosInfoPlistPath(buildDir, platform)
-	if len(bag.infoString)+len(bag.infoBool)+len(bag.infoArray)+len(bag.infoAppend)+len(bag.infoDict) > 0 {
-		ch, err := mutate.ApplyInfoPlist(infoPlistPath, bag.infoString, bag.infoBool, bag.infoArray, bag.infoAppend, bag.infoDict)
+	for _, file := range []protocol.PlistFile{protocol.PlistInfo, protocol.PlistEntitlements} {
+		ops := bag.plists[file]
+		if len(ops) == 0 {
+			continue
+		}
+		path := filepath.Join(buildDir, filepath.FromSlash(iosPlistRelPath(platform, file)))
+		ch, err := mutate.ApplyPlist(path, ops)
 		if err != nil {
 			return changed, err
 		}
 		if ch {
-			changed = append(changed, infoPlistPath)
+			changed = append(changed, path)
 		}
 	}
 
@@ -458,6 +453,7 @@ func androidAppDir(buildDir string) string { return filepath.Join(buildDir, "app
 func androidResDir(buildDir string) string {
 	return filepath.Join(buildDir, "app", "src", "main", "res")
 }
+
 // androidDrawableDir holds plugin bitmaps. They come at one pixel size, so
 // they go in drawable-nodpi: in drawable/ Android treats them as mdpi and
 // scales them up on denser screens (a 2000px image becomes ~5500px on a
@@ -475,12 +471,22 @@ func iosAssetCatalog(buildDir string) string {
 	return filepath.Join(buildDir, "Runner", "Assets.xcassets")
 }
 
-// iosInfoPlistPath returns Info.plist for managed iOS, xtool, and ejected builds.
-func iosInfoPlistPath(buildDir, platform string) string {
-	if platform == "xtool" {
-		return filepath.Join(buildDir, "Sources", "Runner", "Resources", "Info.plist")
+// iosPlistRelPath returns the project-relative, slash-separated path of an
+// iOS plist for managed iOS, xtool, and ejected builds. The entitlements
+// sit at the project root on both paths, outside the sources so neither
+// build copies them into the bundle (xcodeproj: CODE_SIGN_ENTITLEMENTS;
+// xtool: entitlementsPath in xtool.yml).
+func iosPlistRelPath(platform string, file protocol.PlistFile) string {
+	switch file {
+	case protocol.PlistInfo:
+		if platform == "xtool" {
+			return "Sources/Runner/Resources/Info.plist"
+		}
+		return "Runner/Info.plist"
+	case protocol.PlistEntitlements:
+		return "Runner.entitlements"
 	}
-	return filepath.Join(buildDir, "Runner", "Info.plist")
+	panic(fmt.Sprintf("plugin: unknown plist file %q", file))
 }
 
 func iosLaunchScreenPath(buildDir, platform string) string {

@@ -122,7 +122,8 @@ func newBuildCtx(pluginPackage, pluginName string, env protocol.Envelope) *Build
 		appID:         env.AppID,
 	}
 	b.IOS = &IOSScope{b: b}
-	b.IOS.Info = &IOSInfoScope{b: b}
+	b.IOS.Info = &IOSPlistScope{b: b, file: protocol.PlistInfo}
+	b.IOS.Entitlements = &IOSPlistScope{b: b, file: protocol.PlistEntitlements}
 	b.IOS.Assets = &IOSAssetsScope{b: b}
 	b.IOS.Storyboards = &IOSStoryboardsScope{b: b}
 	b.IOS.Sources = &IOSSourcesScope{b: b}
@@ -159,10 +160,15 @@ func (b *BuildCtx) push(op protocol.Op) {
 type IOSScope struct {
 	b *BuildCtx
 
-	Info        *IOSInfoScope
-	Assets      *IOSAssetsScope
-	Storyboards *IOSStoryboardsScope
-	Sources     *IOSSourcesScope
+	// Info edits the app's Info.plist.
+	Info *IOSPlistScope
+	// Entitlements edits the app's code-signing entitlements
+	// (Runner.entitlements), e.g. aps-environment for push notifications.
+	// Automatic signing enables the matching App ID capabilities.
+	Entitlements *IOSPlistScope
+	Assets       *IOSAssetsScope
+	Storyboards  *IOSStoryboardsScope
+	Sources      *IOSSourcesScope
 }
 
 // Plugin records the Swift class the app instantiates for this plugin. The
@@ -204,46 +210,57 @@ func (s *IOSScope) AddBundleResource(name string, content []byte) {
 	})
 }
 
-// IOSInfoScope records Info.plist mutations.
-type IOSInfoScope struct{ b *BuildCtx }
+// IOSPlistScope records edits to one iOS plist: Info.plist or the
+// entitlements.
+type IOSPlistScope struct {
+	b    *BuildCtx
+	file protocol.PlistFile
+}
 
-func (s *IOSInfoScope) SetString(key, value string) {
-	s.b.push(&protocol.OpInfoPlistSetString{
-		Base:  newBase(s.b),
-		Key:   key,
-		Value: value,
+func (s *IOSPlistScope) entry(key string) protocol.PlistEntry {
+	return protocol.PlistEntry{File: s.file, Key: key}
+}
+
+func (s *IOSPlistScope) SetString(key, value string) {
+	s.b.push(&protocol.OpPlistSetString{
+		Base:       newBase(s.b),
+		PlistEntry: s.entry(key),
+		Value:      value,
 	})
 }
 
-func (s *IOSInfoScope) SetBool(key string, value bool) {
-	s.b.push(&protocol.OpInfoPlistSetBool{
-		Base:  newBase(s.b),
-		Key:   key,
-		Value: value,
+func (s *IOSPlistScope) SetBool(key string, value bool) {
+	s.b.push(&protocol.OpPlistSetBool{
+		Base:       newBase(s.b),
+		PlistEntry: s.entry(key),
+		Value:      value,
 	})
 }
 
-func (s *IOSInfoScope) SetStringArray(key string, values []string) {
-	s.b.push(&protocol.OpInfoPlistSetStringArray{
-		Base:   newBase(s.b),
-		Key:    key,
-		Values: append([]string(nil), values...),
+func (s *IOSPlistScope) SetStringArray(key string, values []string) {
+	s.b.push(&protocol.OpPlistSetStringArray{
+		Base:       newBase(s.b),
+		PlistEntry: s.entry(key),
+		Values:     append([]string(nil), values...),
 	})
 }
 
-func (s *IOSInfoScope) AppendArrayItem(key, value string) {
-	s.b.push(&protocol.OpInfoPlistAppendArrayItem{
-		Base:  newBase(s.b),
-		Key:   key,
-		Value: value,
+// AppendArrayItem adds value to the array at key (created if absent),
+// alongside what the template and other plugins put there, e.g. a
+// UIBackgroundModes entry.
+func (s *IOSPlistScope) AppendArrayItem(key, value string) {
+	s.b.push(&protocol.OpPlistAppendArrayItem{
+		Base:       newBase(s.b),
+		PlistEntry: s.entry(key),
+		Value:      value,
 	})
 }
 
-func (s *IOSInfoScope) SetDict(key string, dict map[string]any) {
-	s.b.push(&protocol.OpInfoPlistSetDict{
-		Base:  newBase(s.b),
-		Key:   key,
-		Value: copyDict(dict),
+func (s *IOSPlistScope) SetDict(key string, dict map[string]any) {
+	s.b.push(&protocol.OpPlistSetDict{
+		Base:       newBase(s.b),
+		PlistEntry: s.entry(key),
+		Value:      copyDict(dict),
 	})
 }
 

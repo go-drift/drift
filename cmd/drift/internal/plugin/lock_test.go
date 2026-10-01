@@ -18,7 +18,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	perm := &protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"}
 	// Plugins record ops for every platform; an Android project's lock
 	// must ignore the iOS ones.
-	plist := &protocol.OpInfoPlistSetString{Base: base, Key: "NSCameraUsageDescription", Value: "camera"}
+	plist := &protocol.OpPlistSetString{Base: base, PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "NSCameraUsageDescription"}, Value: "camera"}
 	ops := []protocol.Op{src, drawable, perm, plist}
 
 	writeFiles := func() {

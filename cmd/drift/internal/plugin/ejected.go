@@ -52,16 +52,34 @@ var androidWiring = []wiringCall{
 }
 
 // CheckEjectedIOS verifies that an ejected xcodeproj project is wired for
-// plugins (see wiringCall) and links the local Drift/Plugins package.
-func CheckEjectedIOS(projectDir string) error {
+// plugins (see wiringCall), links the local Drift/Plugins package, and, when
+// a plugin edits entitlements, signs with Runner.entitlements.
+func CheckEjectedIOS(projectDir string, ops []protocol.Op) error {
 	problems := checkWiring(projectDir, iosWiring, func(name string) string {
 		return filepath.Join(projectDir, filepath.FromSlash(name))
 	})
 	data, _ := os.ReadFile(filepath.Join(projectDir, "Runner.xcodeproj", "project.pbxproj"))
-	if !strings.Contains(string(data), `relativePath = "Drift/Plugins"`) {
+	pbxproj := string(data)
+	if !strings.Contains(pbxproj, `relativePath = "Drift/Plugins"`) {
 		problems = append(problems,
 			`Runner.xcodeproj must reference the local Swift package at Drift/Plugins and link its "DriftPlugins" product, `+
 				`which holds the plugin API the app imports (Xcode: File > Add Package Dependencies > Add Local..., select Drift/Plugins)`)
+	}
+	editsEntitlements := slices.ContainsFunc(ops, func(op protocol.Op) bool {
+		p, ok := op.(protocol.PlistOp)
+		return ok && p.PlistFile() == protocol.PlistEntitlements
+	})
+	if editsEntitlements {
+		entitlements := iosPlistRelPath("ios", protocol.PlistEntitlements)
+		if _, err := os.Stat(filepath.Join(projectDir, entitlements)); err != nil {
+			problems = append(problems, fmt.Sprintf(
+				"%s is required by plugins that add entitlements: create it as an empty plist (<dict/>) next to Runner.xcodeproj", entitlements))
+		}
+		if !strings.Contains(pbxproj, "CODE_SIGN_ENTITLEMENTS = "+entitlements+";") {
+			problems = append(problems, fmt.Sprintf(
+				"the Runner target must set CODE_SIGN_ENTITLEMENTS = %s in every configuration, so the app signs with the entitlements plugins add "+
+					"(Xcode: Runner target > Build Settings > Code Signing Entitlements)", entitlements))
+		}
 	}
 	return wiringError("iOS", projectDir, problems)
 }

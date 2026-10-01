@@ -228,11 +228,16 @@ func TestCheckEjectedIOS(t *testing.T) {
 		"Runner/DriftViewController.swift": "",
 		"Runner.xcodeproj/project.pbxproj": "// no package refs\n",
 	})
-	err := CheckEjectedIOS(dir)
+	entitlementOp := []protocol.Op{&protocol.OpPlistSetString{
+		Base:       protocol.Base{Pkg: "p"},
+		PlistEntry: protocol.PlistEntry{File: protocol.PlistEntitlements, Key: "aps-environment"},
+		Value:      "development",
+	}}
+	err := CheckEjectedIOS(dir, entitlementOp)
 	if err == nil {
 		t.Fatal("expected wiring error")
 	}
-	for _, want := range []string{"Runner/AppDelegate.swift", "DriftPlugins.shared.launch(", "Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "DriftPlugins.shared.attach(self, overlayView:", "PBXFileSystemSynchronizedRootGroup", "Drift/Plugins"} {
+	for _, want := range []string{"Runner/AppDelegate.swift", "DriftPlugins.shared.launch(", "Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "DriftPlugins.shared.attach(self, overlayView:", "PBXFileSystemSynchronizedRootGroup", "Drift/Plugins", "Runner.entitlements", "CODE_SIGN_ENTITLEMENTS"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should mention %q:\n%v", want, err)
 		}
@@ -245,8 +250,9 @@ func TestCheckEjectedIOS(t *testing.T) {
 		"Runner/PlatformChannel.swift":     templateText(t, "ios/PlatformChannel.swift"),
 		"Runner/DriftViewController.swift": templateText(t, "ios/DriftViewController.swift"),
 		"Runner.xcodeproj/project.pbxproj": templateText(t, "xcodeproj/project.pbxproj.tmpl"),
+		"Runner.entitlements":              templateText(t, "ios/Runner.entitlements"),
 	})
-	if err := CheckEjectedIOS(dir); err != nil {
+	if err := CheckEjectedIOS(dir, entitlementOp); err != nil {
 		t.Errorf("template-wired project should pass: %v", err)
 	}
 }

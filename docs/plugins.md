@@ -83,7 +83,7 @@ Ops are typed structs in `pkg/plugin/protocol/ops.go`, recorded through scopes o
 
 | Area | Op types |
 |------|----------|
-| Info.plist | `info_plist.set_string`, `set_bool`, `set_string_array`, `append_array_item`, `set_dict` |
+| Info.plist, entitlements | `ios.plist.set_string`, `set_bool`, `set_string_array`, `append_array_item`, `set_dict` (each names its file: `info` or `entitlements`) |
 | iOS project | `ios.assets.add_image_set`, `ios.storyboards.replace_launch_screen`, `ios.source.add`, `ios.bundle.add_resource`, `ios.spm.add_package` |
 | iOS plugin class | `ios.plugin` |
 | AndroidManifest | `android.manifest.add_permission`, `add_intent_filter`, `set_activity_attr`, `add_meta_data` |

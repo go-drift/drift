@@ -49,6 +49,11 @@ func WriteXtool(root string, settings Settings) error {
 		return err
 	}
 
+	// Entitlements beside xtool.yml, which names them (entitlementsPath).
+	if err := copyEntitlements(xtoolDir, tmplData); err != nil {
+		return err
+	}
+
 	// Write shared Swift files from ios/ (skip AppDelegate, xtool has its own)
 	isSwiftFile := func(name string) bool {
 		return name != "AppDelegate.swift" &&
