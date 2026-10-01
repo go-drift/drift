@@ -46,15 +46,16 @@ final class DriftPlugins {
     }
 
     /// Attaches every plugin to the Drift view controller, detaching from a
-    /// previous one first.
-    func attach(_ viewController: UIViewController) {
+    /// previous one first. overlayView is the controller's plugin overlay
+    /// host (DriftViewBinding.overlayView).
+    func attach(_ viewController: UIViewController, overlayView: UIView) {
         dispatchPrecondition(condition: .onQueue(.main))
         precondition(launched, "drift: DriftPlugins.attach before launch; call DriftPlugins.shared.launch from the app delegate")
         if attachedTo != nil {
             detachAll()
         }
         attachedTo = ObjectIdentifier(viewController)
-        let binding = DriftViewBinding(rootView: viewController.view, viewController: viewController)
+        let binding = DriftViewBinding(overlayView: overlayView, viewController: viewController)
         for plugin in plugins {
             plugin.attach(binding)
         }

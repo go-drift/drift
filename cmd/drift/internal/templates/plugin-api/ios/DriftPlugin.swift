@@ -63,15 +63,16 @@ public extension DriftPlugin {
 /// The Drift view a plugin is attached to. Valid from attach(_:) until
 /// detach(); a plugin must not keep it past detach().
 public struct DriftViewBinding {
-    /// The full-screen view Drift renders into. Overlays added as subviews
-    /// should follow its bounds (autoresizing mask or constraints) so
-    /// rotation needs no extra work.
-    public let rootView: UIView
-    /// The view controller that owns rootView, for presenting UI.
+    /// A full-screen view for plugin overlays (a splash, say), kept above
+    /// Drift's content and its platform views. Touches pass through where
+    /// it has no subviews. Overlays should follow its bounds (constraints or
+    /// autoresizing mask) so rotation needs no extra work.
+    public let overlayView: UIView
+    /// The view controller hosting the Drift view, for presenting UI.
     public let viewController: UIViewController
 
-    @_spi(DriftHost) public init(rootView: UIView, viewController: UIViewController) {
-        self.rootView = rootView
+    @_spi(DriftHost) public init(overlayView: UIView, viewController: UIViewController) {
+        self.overlayView = overlayView
         self.viewController = viewController
     }
 }

@@ -286,10 +286,15 @@ enum PlatformViewHandler {
     private static var interceptors: [Int: TouchInterceptorView] = [:]
     private static var maskLayers: [Int: CAShapeLayer] = [:]
     private static weak var hostView: UIView?
+    /// A subview of hostView that platform views stay below (plugin overlays).
+    private static weak var overlayView: UIView?
 
-    /// Sets the host view where platform views will be added.
-    static func setHostView(_ view: UIView) {
+    /// Sets the host view where platform views will be added, below
+    /// overlayView, one of its subviews.
+    static func setHostView(_ view: UIView, below overlayView: UIView) {
+        precondition(overlayView.superview === view, "drift: platform view overlay must be a subview of the host view")
         hostView = view
+        self.overlayView = overlayView
     }
 
     /// Pre-warms expensive platform view classes by creating throwaway instances.
@@ -545,7 +550,7 @@ enum PlatformViewHandler {
         // Notify Go only after the interceptor is attached so resendGeometry
         // targets the actual host view (not the unattached child).
         DispatchQueue.main.async {
-            if let host = hostView {
+            if let host = hostView, let overlay = overlayView {
                 let interceptor = TouchInterceptorView(viewId: viewId)
                 if viewType == "textinput" {
                     let multiline = params["multiline"] as? Bool ?? false
@@ -562,7 +567,7 @@ enum PlatformViewHandler {
                 ])
                 interceptor.isHidden = true // Hidden until positioned
                 interceptors[viewId] = interceptor
-                host.addSubview(interceptor)
+                host.insertSubview(interceptor, belowSubview: overlay)
             }
 
             PlatformChannelManager.shared.sendEvent(

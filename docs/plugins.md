@@ -115,6 +115,7 @@ A plugin's native half is a class the build half names with `ctx.IOS.Plugin("MyP
 | Plugin | `DriftPlugin` protocol | `DriftPlugin` interface |
 | Once per process | `register(host:)` then `didFinishLaunching`, from `AppDelegate` | `onRegister(host)`, from the first `MainActivity.onCreate` |
 | Per view / Activity | `attach(DriftViewBinding)` / `detach()` around `DriftViewController` | `onPreActivityCreate(activity)` before `super.onCreate`; `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity |
+| Overlays | `binding.overlayView`: above Drift's content and platform views, touch-transparent where empty | `binding.overlayView`: the window's decor view, above content |
 | App events | `open(_:)`, `continueUserActivity(_:)` (return true to claim), remote-notification hooks | new-intent, activity-result and permission-result listeners on the binding (return true to claim) |
 | Host | `DriftPluginHost`: `registerChannel` (a `DriftMethodHandler` replying through `DriftResult`), `sendEvent`, `observeEvent` | same shape |
 

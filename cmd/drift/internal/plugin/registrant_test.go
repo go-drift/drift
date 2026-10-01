@@ -232,7 +232,7 @@ func TestCheckEjectedIOS(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected wiring error")
 	}
-	for _, want := range []string{"Runner/AppDelegate.swift", "DriftPlugins.shared.launch(", "Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "DriftPlugins.shared.attach(self)", "PBXFileSystemSynchronizedRootGroup", "Drift/Plugins"} {
+	for _, want := range []string{"Runner/AppDelegate.swift", "DriftPlugins.shared.launch(", "Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "DriftPlugins.shared.attach(self, overlayView:", "PBXFileSystemSynchronizedRootGroup", "Drift/Plugins"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should mention %q:\n%v", want, err)
 		}

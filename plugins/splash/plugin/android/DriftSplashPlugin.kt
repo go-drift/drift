@@ -57,7 +57,7 @@ class DriftSplashPlugin : DriftPlugin {
     override fun onAttach(binding: DriftActivityBinding) {
         if (dismissed) return
         val view = DriftSplashOverlayView(binding.activity)
-        binding.rootView.addView(view)
+        binding.overlayView.addView(view)
         overlay = view
     }
 

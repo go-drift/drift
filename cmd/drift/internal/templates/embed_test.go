@@ -13,9 +13,9 @@ func TestIOSPlatformView_OnViewCreatedSentAfterInterceptorAttach(t *testing.T) {
 
 	src := string(content)
 
-	addSubviewIdx := strings.Index(src, "host.addSubview(interceptor)")
-	if addSubviewIdx == -1 {
-		t.Fatal("expected host.addSubview(interceptor) in ios/PlatformView.swift")
+	attachIdx := strings.Index(src, "host.insertSubview(interceptor, belowSubview: overlay)")
+	if attachIdx == -1 {
+		t.Fatal("expected host.insertSubview(interceptor, belowSubview: overlay) in ios/PlatformView.swift")
 	}
 
 	onCreatedIdx := strings.Index(src, `"method": "onViewCreated"`)
@@ -23,7 +23,7 @@ func TestIOSPlatformView_OnViewCreatedSentAfterInterceptorAttach(t *testing.T) {
 		t.Fatal(`expected "method": "onViewCreated" in ios/PlatformView.swift`)
 	}
 
-	if onCreatedIdx < addSubviewIdx {
-		t.Fatalf("onViewCreated appears before interceptor attachment (onViewCreated=%d, addSubview=%d)", onCreatedIdx, addSubviewIdx)
+	if onCreatedIdx < attachIdx {
+		t.Fatalf("onViewCreated appears before interceptor attachment (onViewCreated=%d, attach=%d)", onCreatedIdx, attachIdx)
 	}
 }

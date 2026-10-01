@@ -36,7 +36,7 @@ var iosWiring = []wiringCall{
 	{"Runner/SceneDelegate.swift", "DeepLinkHandler.route(url:", "plugins can claim opened URLs"},
 	{"Runner/SceneDelegate.swift", "DeepLinkHandler.route(userActivity:", "plugins can claim universal links"},
 	{"Runner/PlatformChannel.swift", "static func route(url:", "DeepLinkHandler.route exists"},
-	{"Runner/DriftViewController.swift", "DriftPlugins.shared.attach(self)", "plugins attach to the Drift view"},
+	{"Runner/DriftViewController.swift", "DriftPlugins.shared.attach(self, overlayView:", "plugins attach to the Drift view"},
 	{"Runner/DriftViewController.swift", "DriftPlugins.shared.detach(", "plugins detach from the Drift view"},
 	{"Runner.xcodeproj/project.pbxproj", "PBXFileSystemSynchronizedRootGroup", "Xcode compiles the plugin sources Drift writes under Runner/ (project format 77, Xcode 16+)"},
 }
