@@ -94,7 +94,7 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 | `27167c5` | `plugins/firebase` (Core + Messaging; Go API `runtime/messaging`: `Token()` state, `Messages()`/`Opens()` queued streams); `NewTestCtxFor` |
 | `75971b7` | `examples/firebase-demo` and `tools/fcmsend` (FCM HTTP v1 sender, stdlib only) |
 
-**Verified (Linux):** `go vet`/`go test` in every module; `drift build android` and `drift build xtool` of splash-demo; `drift build android` of firebase-demo with placeholder config (google-services 4.5.0 runs on AGP 9; manifest service, permission and dependency merge); on the API 36 emulator the demo starts, Firebase initialises, and a tap intent reaches `Opens()` both while running and from a cold start. **Not yet:** a real FCM token and messages (needs the Firebase project), anything on macOS.
+**Verified (Linux):** `go vet`/`go test` in every module; `drift build android` and `drift build xtool` of splash-demo; `drift build android` of firebase-demo with placeholder config (google-services 4.5.0 runs on AGP 9; manifest service, permission and dependency merge); **FCM on the API 36 emulator, real Firebase project** (`fir-demo-71e74`, sent with `fcmsend`): token delivered to Go; foreground notification and data messages reach `Messages()` with nothing shown; in the background the notification is shown and the data message reaches `Messages()` (`foreground=false`); tapping opens the app and reaches `Opens()`, both with the process alive and after it was killed (the tap that launched it is queued until the app listens); dark-mode Activity recreation replays no tap. **Not yet:** a real Android device, anything on macOS, iOS delivery (needs the APNs `.p8`).
 
 **Phase 3 decisions:** local notifications and the notification permission stay core until a notifications plugin exists (Phase 5); core keeps the one `UNUserNotificationCenterDelegate` and offers notifications to plugins first. Firebase on xtool is an error (push needs `aps-environment`). Foreground FCM notifications are not shown on either platform; the app gets them in `Messages()`. Firebase Go API has no blocking calls. Android pins `firebase-messaging` without the BOM (one artifact).
 
@@ -282,7 +282,8 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 - **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen).
 - **Core local-notification taps at cold start are dropped**: `drift/notifications/opened` is a plain event channel; make it queued (one line) or move it with the notifications plugin.
 - **FCM with no running app**: Android data messages and token refreshes that start the process without an Activity are dropped (plugins register from `MainActivity.onCreate`); the token is fetched again at the next start.
-- **Emulator Play services**: the `pixel_8` google_apis image reports Play services 25.26 older than firebase-messaging 25.1.3 asks for (26.12); real FCM may need a Play Store image or a device.
+- **Emulator Play services**: the `pixel_8` google_apis image warns its Play services (25.26) is older than firebase-messaging 25.1.3 asks for (26.12); FCM works anyway.
+- **Android auto-grouped notifications**: tapping the system's group summary (several notifications from the app) opens the app without FCM extras, so no `Opens()` event; tapping an individual notification works. Setting a notification group per message, or handling the summary, is follow-up work.
 - **Bridge cache entries** under the cache root are never garbage-collected.
 - **iOS detach** relies on `DriftViewController.deinit`; a plugin that retains its `DriftViewBinding` keeps the view controller alive.
 
