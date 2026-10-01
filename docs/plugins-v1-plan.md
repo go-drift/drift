@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. **Phase 1 is done; start at [Status](#status-2026-10-01).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. **Phases 1 and 2 are done (Phase 2 awaits a real Android device); start at [Status](#status-2026-10-01).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -56,11 +56,29 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 
 **Verified:** `go vet`/`go test` in all modules; `drift build android` of splash-demo (with and without `android_12`); `drift build xtool` of splash-demo and of a zero-plugin app (Linux, iOS 26.5 SDK); `drift build ios` of splash-demo on Xcode 26.5 (simulator). Firebase spike (branch `spike/firebase-ios`, Mac): firebase-ios-sdk resolves, and both loose sources and per-plugin targets compile and link, with and without explicit modules.
 
-**Not yet verified:** anything running on a device or simulator; `xcodebuild test` in `cmd/drift/internal/plugin/coordinator_test` (its tests changed in `e921388`).
+**Verified since:** `xcodebuild test` in `cmd/drift/internal/plugin/coordinator_test` passes (scheme `DriftPluginCoordinatorTests-Package`).
 
 **Deviations from the original phase 1 plan:** removed plugins' in-file edits in ejected projects fail the build once instead of being probed until removed (a user may want to keep an entry); the watch-mode op hash lives on the in-memory `Workspace`. Android stays loose-source (no per-plugin Gradle modules); Firebase's `<service>` needs a manifest op in phase 3.
 
 **New plugin-author rules:** `Plugin.Name()` is a lowercase identifier (it names the iOS module); iOS plugin sources are Swift only; the iOS plugin class is `public` with `public init()`; method handlers reply through `DriftResult`.
+
+**Phase 2 is done** (`7e0178c`..`561a0a5`), verified on an iPhone (xcodeproj) and the iOS Simulator, and on an API 36 emulator. Not yet on a real Android device.
+
+| Commit | Content |
+|--------|---------|
+| `7e0178c` | Engine: `NeedsFrame` consumes the pending platform schedule. iOS skipped `StepFrame` while OnInit ran, so a frame request then left the flag set and the OnInit completion never woke the display link (black screen forever with a slow OnInit) |
+| `7e917a6` | Engine: `first_frame` only for the first frame that composited the root (`HasRenderedContent`); Android emits after that `renderFrameSync` rather than waiting for a View draw |
+| `a94eeb6` | `DriftViewBinding.overlayView` / `DriftActivityBinding.overlayView`: plugin overlays stay above platform views |
+| `1ba5474` | `protocol.Color` / `driftplugin.ParseColor`: Drift hex is alpha last; `android.color.set` validates it and writes Android's alpha-first form |
+| `fdaebc0` | Splash: `branding*`, `dark`, `android_12.branding` removed (never emitted; iOS has no appearance-aware asset ops) |
+| `d5ddeb8` | Splash: `image_width`; storyboard and iOS overlay generated from the same values and pinned with constraints |
+| `18b2f6c`, `3137839` | Splash iOS: dismissal is state (`reconcile()` on every input, no `applicationState` guard); `max_duration_ms` (default 10s) overrides Preserve but never a slow OnInit; `Preserve`/`Remove` return errors |
+| `aa14136` | Coordinator harness instructions |
+| `dfa591b` | Android toolchain: AGP 9.4.1 (built-in Kotlin), Gradle 9.8.0, compile/target SDK 36, **minSdk 31** (`templates.AndroidMinSDK`, also the NDK clang target) |
+| `ecadc57` | `AddBitmap` writes to `drawable-nodpi` |
+| `561a0a5` | Splash Android: the platform splash screen (`Drift.Splash` style over `LaunchTheme`), held with a pre-draw listener; `android.icon` / `android.icon_background_color`; overlay, `android_12` and `core-splashscreen` removed |
+
+**Phase 2 decisions:** minSdk 31 (Vulkan-only renderer; an API 29 emulator crashes in its Vulkan driver; 31 brings the platform splash API). Android's splash is the platform icon splash, so it does not match iOS's `image_width` layout. A recreated Activity (dark mode, locale) ends the splash, since it gets no platform splash.
 
 ## Review findings driving this plan
 
@@ -157,7 +175,7 @@ Phases are ordered so each one leaves the branch green. Phases 1 to 4 are the me
 7. **Keep framework built-ins out of codegen.** `NotificationHandler` / `DeepLinkHandler` calls live in hand-written templates; codegen emits only plugin lists.
 8. **Move wire types** (`Envelope`, `Response`, op marshalling) to `pkg/plugin/protocol`.
 
-### Phase 2: splash works on devices
+### Phase 2: splash works on devices (done, see Status; real Android device pending)
 
 Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1); the colour file clash (finding 6) is fixed by writing `drift_splash_colors.xml`, and `WriteXML` now rejects Drift's own values files; hex is validated as `#RRGGBB`/`#RRGGBBAA` by the `hex` tag; splash no longer fades out twice. Still to do, then verify on devices:
 
@@ -232,7 +250,7 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 |-------|------------------------------|----------------|----------------------------|
 | `go vet ./...`, `go test ./...` | | | |
 | Coordinator harness (`xcodebuild test` in `cmd/drift/internal/plugin/coordinator_test`), if kept | ✓ | | |
-| Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | ✓ | ✓ (API 29, 31+) | ✓ |
+| Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | ✓ | ✓ (API 31+) | ✓ |
 | Splash survives background/foreground during launch, dark-mode toggle | ✓ | ✓ | |
 | Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | ✓ | ✓ | |
 | Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | ✓ | ✓ | ✓ |
@@ -246,6 +264,11 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 - **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen). `ResetForTest` does not clear the replay slot.
 - **Bridge cache entries** under the cache root are never garbage-collected.
 - **iOS detach** relies on `DriftViewController.deinit`; a plugin that retains its `DriftViewBinding` keeps the view controller alive.
+
+- **Android edge-to-edge (targetSdk 35+).** `statusBarColor` (`PlatformChannel.kt` system UI handler) is deprecated and ignored; status bar icons were light on light content on the API 36 emulator. Drift content also stays light in system dark mode.
+- **Dead SDK_INT checks.** With minSdk 31, checks for M/O/P/Q/R/S in the Android templates are always true.
+- **Splash dark mode.** Needs appearance-aware image set and colour set ops on iOS (not on xtool before xtool#219), and a night colour on Android.
+- **Engine test races.** `go test -race ./pkg/engine` fails in older `init_test.go` tests: leaked OnInit goroutines dispatch to the global `app` after `swapApp` restores it.
 
 ## Unresolved questions
 
