@@ -1,46 +1,30 @@
 /**
  * SplashOverlayView.kt
  *
- * Full-screen FrameLayout that mirrors the LaunchTheme's launch_background
- * drawable so the runtime overlay can attach with no visual seam after the
- * system launch theme transitions to AppTheme. MATCH_PARENT layout params
- * keep the overlay glued to the activity's content area across rotation.
- *
- * `fadeOut(durationMs, onEnd)` runs on the main thread; callers must post
- * to a Handler before invoking.
+ * Full-screen view drawing the launch theme's own `launch_background`
+ * drawable, so it takes over from the launch window pixel for pixel
+ * (resource qualifiers such as night mode resolve the same way). Swallows
+ * touches while the splash is up. Main thread only.
  */
 package com.drift.plugin.splash
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.content.Context
-import android.graphics.Color
-import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.ImageView
 
-class DriftSplashOverlayView(context: Context) : FrameLayout(context) {
-
-    private val imageView = ImageView(context).apply {
-        scaleType = ImageView.ScaleType.FIT_CENTER
-        val params = LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { gravity = Gravity.CENTER }
-        layoutParams = params
-    }
+class DriftSplashOverlayView(context: Context) : View(context) {
 
     init {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
-        setBackgroundColor(parseHex(DriftSplashConfig.BACKGROUND_COLOR))
-        imageView.setImageResource(resources.getIdentifier(
-            "drift_splash", "drawable", context.packageName,
-        ))
-        addView(imageView)
+        val id = resources.getIdentifier("launch_background", "drawable", context.packageName)
+        check(id != 0) { "drift splash: launch_background drawable missing" }
+        background = context.getDrawable(id)
+        isClickable = true
     }
 
     fun fadeOut(durationMs: Int, onEnd: () -> Unit) {
@@ -54,14 +38,5 @@ class DriftSplashOverlayView(context: Context) : FrameLayout(context) {
                 }
             })
             .start()
-    }
-
-    private fun parseHex(s: String): Int {
-        // Accepts #RRGGBB and #RRGGBBAA. Validated at build time.
-        return try {
-            Color.parseColor(s)
-        } catch (_: IllegalArgumentException) {
-            Color.WHITE
-        }
     }
 }

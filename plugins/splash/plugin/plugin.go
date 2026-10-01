@@ -5,8 +5,9 @@
 //	plugins:
 //	  - package: github.com/go-drift/drift/plugins/splash/plugin
 //	    config:
-//	      image: assets/splash.png
-//	      background_color: "#1A2238"
+//	      image: assets/splash.png   # PNG
+//	      image_width: 200           # points / dp; height from the PNG's aspect
+//	      background_color: "#1A2238" # #RRGGBB or #RRGGBBAA (alpha last)
 //	      android_12:
 //	        icon: assets/splash_icon.png
 //	        icon_background_color: "#1A2238"
@@ -15,7 +16,9 @@
 //   - Bundles the image as an iOS asset-catalogue image set and an Android
 //     drawable bitmap.
 //   - Replaces iOS LaunchScreen.storyboard with a generated layout matching
-//     the runtime overlay so the system-to-runtime hand-off is seamless.
+//     the runtime overlay (same colour, image centred at image_width) so the
+//     launch-screen-to-overlay hand-off is seamless. On Android the overlay
+//     draws the launch drawable itself.
 //   - Replaces the Android `@drawable/launch_background` referenced by the
 //     scaffold's LaunchTheme; the theme itself is untouched, avoiding
 //     resource-merge collisions on pre-API-31 devices.
@@ -69,52 +72,32 @@ type splash struct{}
 func (splash) Name() string { return "splash" }
 
 func (s splash) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-	r, err := resolve(cfg)
+	r, err := resolve(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("splash plugin: %w", err)
+		return fmt.Errorf("splash: %w", err)
 	}
-
-	if err := emitIOS(ctx, r); err != nil {
-		return err
-	}
-	if err := emitAndroid(ctx, r); err != nil {
-		return err
-	}
+	emitIOS(ctx, r)
+	emitAndroid(ctx, r)
 	return nil
 }
 
-func emitIOS(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
-	img, err := ctx.ResolveAsset(r.Image)
-	if err != nil {
-		return fmt.Errorf("splash: read image %q: %w", r.Image, err)
-	}
-	ctx.IOS.Assets.AddImageSet("DriftSplash", img)
+func emitIOS(ctx *driftplugin.BuildCtx, r resolvedConfig) {
+	ctx.IOS.Assets.AddImageSet("DriftSplash", r.Image)
 	ctx.IOS.Storyboards.ReplaceLaunchScreen(generateLaunchStoryboard(r))
-	ctx.IOS.Info.SetString("UILaunchStoryboardName", "LaunchScreen")
 	ctx.IOS.Sources.AddFS("Splash", iosSources, "ios")
 	ctx.IOS.Sources.AddFile("Splash", "SplashConfig.swift", []byte(generateSplashConfigSwift(r)))
 	ctx.IOS.Plugin("DriftSplashPlugin")
-	return nil
 }
 
-func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
-	img, err := ctx.ResolveAsset(r.Image)
-	if err != nil {
-		return fmt.Errorf("splash: read image %q: %w", r.Image, err)
-	}
-	ctx.Android.Drawables.AddBitmap("drift_splash", img)
-	ctx.Android.Resources.WriteXML("drawable/launch_background.xml",
-		generateLayerList("drift_splash_background", "drift_splash"))
+func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) {
+	ctx.Android.Drawables.AddBitmap("drift_splash", r.Image)
+	ctx.Android.Resources.WriteXML("drawable/launch_background.xml", generateLayerList(r))
 	ctx.Android.Resources.WriteXML("values/drift_splash_colors.xml",
 		generateValuesColors(r.BackgroundColor))
 
-	if r.HasAndroid12 {
-		iconImg, err := ctx.ResolveAsset(r.Android12.Icon)
-		if err != nil {
-			return fmt.Errorf("splash: read android_12 icon %q: %w", r.Android12.Icon, err)
-		}
-		ctx.Android.Drawables.AddBitmap("drift_splash_icon", iconImg)
-		ctx.Android.Resources.WriteXML("values-v31/styles.xml", generateV31Styles(r))
+	if r.Android12 != nil {
+		ctx.Android.Drawables.AddBitmap("drift_splash_icon", r.Android12.Icon)
+		ctx.Android.Resources.WriteXML("values-v31/styles.xml", generateV31Styles(*r.Android12))
 		ctx.Android.AddGradleDependency("implementation",
 			"androidx.core:core-splashscreen:1.0.1")
 		ctx.Android.Sources.AddFS(androidPackage, android12Sources, "android12")
@@ -124,7 +107,6 @@ func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) error {
 	ctx.Android.Sources.AddFile(androidPackage, "SplashConfig.kt",
 		[]byte(generateSplashConfigKotlin(r)))
 	ctx.Android.Plugin(androidPackage + ".DriftSplashPlugin")
-	return nil
 }
 
 // Plugin is the binding the generated bridge picks up. The typed

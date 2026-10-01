@@ -55,9 +55,7 @@ public final class DriftSplashPlugin: DriftPlugin {
     public func attach(_ binding: DriftViewBinding) {
         guard !dismissed else { return }
         let view = DriftSplashOverlayView()
-        view.frame = binding.overlayView.bounds
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        binding.overlayView.addSubview(view)
+        view.install(in: binding.overlayView)
         overlay = view
         os_log("splash overlay attached", log: splashLog, type: .debug)
     }

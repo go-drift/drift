@@ -15,7 +15,11 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="DriftSplash" translatesAutoresizingMaskIntoConstraints="NO" id="Drf-1c-K0m">
-                                <rect key="frame" x="147" y="388" width="120" height="120"/>
+                                <rect key="frame" x="0.0" y="0.0" width="{{.Width}}" height="{{.Height}}"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="{{.Width}}" id="Wd1-Sp-4cd"/>
+                                    <constraint firstAttribute="height" constant="{{.Height}}" id="Ht2-Sp-5de"/>
+                                </constraints>
                             </imageView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
@@ -32,6 +36,6 @@
         </scene>
     </scenes>
     <resources>
-        <image name="DriftSplash" width="120" height="120"/>
+        <image name="DriftSplash" width="{{.Width}}" height="{{.Height}}"/>
     </resources>
 </document>
