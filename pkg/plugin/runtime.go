@@ -81,6 +81,9 @@ func checkBindings(bindings []Binding) {
 }
 
 func doBuild(env protocol.Envelope, bindings []Binding) protocol.Response {
+	if env.AppID == "" {
+		return protocol.Response{APIVersion: protocol.APIVersion, Error: "build envelope has no app_id"}
+	}
 	byPkg := make(map[string]Binding, len(bindings))
 	for _, b := range bindings {
 		byPkg[b.Package] = b
@@ -99,7 +102,7 @@ func doBuild(env protocol.Envelope, bindings []Binding) protocol.Response {
 			)
 			return resp
 		}
-		ctx := newBuildCtx(b.Package, b.Name, env.ProjectRoot, env.BuildDir, env.Platform)
+		ctx := newBuildCtx(b.Package, b.Name, env)
 		if err := b.Build(ctx, []byte(ep.ConfigYAML)); err != nil {
 			resp.Error = fmt.Sprintf("plugin %s build: %v", b.Package, err)
 			return resp

@@ -331,6 +331,7 @@ func resolvePluginOps(ws *Workspace) (pluginOps, error) {
 		Platform:    ws.Platform,
 		ProjectRoot: root,
 		BuildDir:    platformDir,
+		AppID:       ws.Config.AppID,
 		Plugins:     configsYAML,
 	}, filepath.Join(platformDir, "logs"))
 	if err != nil {

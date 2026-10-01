@@ -17,12 +17,15 @@ const APIVersion = 1
 
 // Envelope is the JSON object the Drift CLI sends on the bridge stdin.
 type Envelope struct {
-	APIVersion  int              `json:"api_version"`
-	Cmd         string           `json:"cmd"`
-	Platform    string           `json:"platform,omitempty"`
-	ProjectRoot string           `json:"project_root,omitempty"`
-	BuildDir    string           `json:"build_dir,omitempty"`
-	Plugins     []EnvelopePlugin `json:"plugins,omitempty"`
+	APIVersion  int    `json:"api_version"`
+	Cmd         string `json:"cmd"`
+	Platform    string `json:"platform,omitempty"`
+	ProjectRoot string `json:"project_root,omitempty"`
+	BuildDir    string `json:"build_dir,omitempty"`
+	// AppID is the app's bundle identifier / application id (drift.yaml
+	// app.id). Required for "build".
+	AppID   string           `json:"app_id,omitempty"`
+	Plugins []EnvelopePlugin `json:"plugins,omitempty"`
 }
 
 // EnvelopePlugin is one entry in the plugins array of the envelope.
