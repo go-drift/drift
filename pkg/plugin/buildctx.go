@@ -63,8 +63,14 @@ func NewTestCtx() *BuildCtx {
 // ResolveAsset reads from a real on-disk directory. Use this when a Build
 // implementation needs ResolveAsset to succeed during testing.
 func NewTestCtxAt(projectRoot string) *BuildCtx {
+	return NewTestCtxFor(projectRoot, "all")
+}
+
+// NewTestCtxFor is NewTestCtxAt building for one platform ("ios", "xtool"
+// or "android"), for a Build that depends on Platform().
+func NewTestCtxFor(projectRoot, platform string) *BuildCtx {
 	return newBuildCtx("test/plugin", "test", protocol.Envelope{
-		Platform:    "all",
+		Platform:    platform,
 		ProjectRoot: projectRoot,
 		BuildDir:    projectRoot,
 		AppID:       TestAppID,
