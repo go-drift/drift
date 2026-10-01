@@ -57,8 +57,9 @@ var Plugin driftplugin.Plugin[Config] = demo{}
   - A malformed tag (unknown validator, unparseable default) panics when the bridge starts.
 - `Build` must not touch disk; it only records ops on `ctx`.
 - Every op validates its input when recorded. Invalid input is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI validates again when decoding the bridge response, so mutators only see valid ops.
-- `driftplugin.NewTestCtx()` plus `ctx.Ops()` lets plugin authors unit test `Build`.
-- Reference plugins: `examples/plugins/demo` (minimal), `plugins/splash` (full, with native code and runtime API).
+- `ctx.Platform()` is the platform being built (`ios`, `xtool` or `android`); `ctx.AppID()` is drift.yaml's `app.id` (the iOS bundle ID and Android application ID), for checking SDK config files that name the app.
+- `driftplugin.NewTestCtx()` / `NewTestCtxAt(root)` / `NewTestCtxFor(root, platform)` plus `ctx.Ops()` let plugin authors unit test `Build`; test contexts have `AppID() == TestAppID`.
+- Reference plugins: `examples/plugins/demo` (minimal), `plugins/splash` (full, with native code and runtime API), `plugins/firebase` (an SDK: SwiftPM package, Gradle plugin, config files, entitlements, a manifest service).
 
 ## Build pipeline
 
@@ -125,4 +126,6 @@ Plugin Swift sources compile into the plugin's own module (see Plugin modules); 
 
 ## Runtime side
 
-Runtime packages use `pkg/platform` method and event channels. The branch added a sticky `EventChannel` variant that replays the last event to late subscribers, and `engine.FrameEvents` emitting `first_frame`.
+Runtime packages use `pkg/platform` method and event channels. Besides plain event channels there are sticky ones (`NewStickyEventChannel`: the last event replays to every new subscriber, for one-shot signals such as `first_frame` from `engine.FrameEvents`) and queued ones (`NewQueuedEventChannel`: events sent while nobody listens wait, in order, for the next subscriber, for events that must each be handled once, such as the notification tap that launched the app).
+
+Prefer APIs that cannot block the main thread: state as a `core.Signal`/`Derived` fed by an event channel, and streams, over methods waiting on native work (see Threading).
