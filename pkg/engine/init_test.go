@@ -340,6 +340,42 @@ func TestInit_PlatformWokenWhenOnInitCompletesAfterSkippedFrame(t *testing.T) {
 	}
 }
 
+// TestHasRenderedContent_OnlyAfterRootComposited pins what first_frame
+// means: the blank frames rendered while OnInit runs do not count.
+func TestHasRenderedContent_OnlyAfterRootComposited(t *testing.T) {
+	swapApp(t)
+	release := make(chan struct{})
+	app.lifecycle.phase = initPhasePending
+	app.lifecycle.ctx, app.lifecycle.cancel = context.WithCancel(context.Background())
+	app.lifecycle.onInit = func(ctx context.Context) error {
+		<-release
+		return nil
+	}
+	canvas := &nullCanvas{size: testSize}
+
+	if _, err := app.StepFrame(testSize); err != nil {
+		t.Fatalf("StepFrame: %v", err)
+	}
+	if err := app.RenderFrame(canvas); err != nil {
+		t.Fatalf("RenderFrame: %v", err)
+	}
+	if HasRenderedContent() {
+		t.Fatal("blank frame during OnInit counted as content")
+	}
+
+	close(release)
+	waitForDispatch(t, 2*time.Second)
+	if _, err := app.StepFrame(testSize); err != nil {
+		t.Fatalf("StepFrame: %v", err)
+	}
+	if err := app.RenderFrame(canvas); err != nil {
+		t.Fatalf("RenderFrame: %v", err)
+	}
+	if !HasRenderedContent() {
+		t.Fatal("expected content after the root was mounted and composited")
+	}
+}
+
 func TestLifecycleDetachedTriggersDispose(t *testing.T) {
 	swapApp(t)
 

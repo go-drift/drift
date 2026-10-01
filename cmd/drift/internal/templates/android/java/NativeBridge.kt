@@ -225,4 +225,10 @@ object NativeBridge {
 
     /** Returns 1 if platform views should be pre-warmed at startup, 0 if disabled. */
     external fun shouldWarmUpViews(): Int
+
+    /**
+     * Returns 1 once a frame has composited the app's root (not a blank
+     * frame drawn while OnInit runs), 0 before.
+     */
+    external fun hasRenderedContent(): Int
 }

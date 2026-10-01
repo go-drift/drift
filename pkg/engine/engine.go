@@ -336,6 +336,7 @@ type appRunner struct {
 	buildOwner          *core.BuildOwner
 	root                core.Element
 	rootRender          layout.RenderObject
+	contentRendered     atomic.Bool // see HasRenderedContent
 	deviceScale         float64
 	userApp             core.Widget
 	pointerHandlers     map[int64][]layout.PointerHandler
@@ -1176,5 +1177,14 @@ func (a *appRunner) RenderFrame(canvas graphics.Canvas) error {
 	compositeLayerTree(canvas, a.rootRender)
 
 	canvas.Restore()
+	a.contentRendered.Store(true)
 	return nil
+}
+
+// HasRenderedContent reports whether a frame has composited the mounted
+// root, as opposed to the blank frames drawn while OnInit runs. Once true it
+// stays true. Embedders emit the one-shot first_frame event (see
+// FrameEvents) for the first frame rendered after this becomes true.
+func HasRenderedContent() bool {
+	return app.contentRendered.Load()
 }

@@ -13,10 +13,12 @@ const FrameEventsChannelName = "drift/rendering/frame_events"
 // subscriber that registers after the first event still observes it.
 //
 // Current events:
-//   - {"type": "first_frame"} — fired once per process, after the first
-//     non-empty layer tree is observably presented to the user (post-Metal
-//     present on iOS via drawable.addPresentedHandler; post-GPU completion
-//     on Android via HardwareRenderer.FrameCompleteCallback).
+//   - {"type": "first_frame"}: fired once per process for the first frame
+//     that composited the app's root (see HasRenderedContent), so never for
+//     the blank frames drawn while App.OnInit runs. iOS fires it when that
+//     drawable is presented (command buffer completion on the Simulator);
+//     Android when that frame is rendered into its HardwareBuffer, without
+//     waiting for a View draw a splash may be holding back.
 //
 // Subscribers should treat the payload as map[string]any and dispatch on
 // the "type" string. Sticky semantics ensure plugins (e.g. the splash
