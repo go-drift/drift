@@ -340,7 +340,8 @@ func ResetForTest() {
 	SafeArea.handlers = SafeArea.handlers[:0]
 	SafeArea.mu.Unlock()
 
-	// Clear all event channel subscriptions and started flags
+	// Clear all event channel subscriptions, started flags, sticky replay
+	// slots and queues
 	registry.mu.RLock()
 	channels := make([]*EventChannel, 0, len(registry.eventChannels))
 	for _, ch := range registry.eventChannels {
@@ -352,6 +353,10 @@ func ResetForTest() {
 		ch.mu.Lock()
 		ch.subscriptions = ch.subscriptions[:0]
 		ch.started = false
+		ch.replayValid = false
+		ch.replayData = nil
+		ch.queue = nil
+		ch.draining = false
 		ch.mu.Unlock()
 	}
 
