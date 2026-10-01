@@ -80,6 +80,7 @@ func TestWriteAndroidColorsCreates(t *testing.T) {
 	path := filepath.Join(dir, "values/plugin_colors.xml")
 	ops := []*protocol.OpAndroidColorSet{
 		{Base: protocol.Base{Pkg: "p"}, Name: "splash_bg", Value: "#FFFFFF"},
+		{Base: protocol.Base{Pkg: "p"}, Name: "scrim", Value: "#11223380"},
 	}
 	wrote, changed, err := WriteAndroidColors(path, ops)
 	if err != nil {
@@ -89,8 +90,14 @@ func TestWriteAndroidColorsCreates(t *testing.T) {
 		t.Errorf("expected changed=true and path: %s changed=%v", wrote, changed)
 	}
 	body, _ := os.ReadFile(path)
-	if !strings.Contains(string(body), `<color name="splash_bg">#FFFFFF</color>`) {
-		t.Errorf("colors file content wrong:\n%s", body)
+	// Drift colours are alpha last; Android resources alpha first.
+	for _, want := range []string{
+		`<color name="splash_bg">#FFFFFF</color>`,
+		`<color name="scrim">#80112233</color>`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("colors file missing %s:\n%s", want, body)
+		}
 	}
 }
 

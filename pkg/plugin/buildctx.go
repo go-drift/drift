@@ -404,7 +404,10 @@ func (s *AndroidManifestScope) AddMetaData(parent, name, value string) {
 
 // AndroidResourcesScope groups res/values/* and arbitrary resource writers.
 type AndroidResourcesScope struct {
-	b       *BuildCtx
+	b *BuildCtx
+	// Colors values are Drift hex colours ("#RRGGBB" or "#RRGGBBAA", alpha
+	// last, as the `hex` config tag accepts); Drift writes them in Android's
+	// alpha-first format.
 	Colors  *AndroidValuesScope
 	Strings *AndroidValuesScope
 	Styles  *AndroidStylesScope

@@ -144,8 +144,8 @@ func runValidator(name string, v any, projectRoot string) string {
 	}
 	switch name {
 	case ValidatorHex:
-		if !hexColorRe.MatchString(s) {
-			return fmt.Sprintf("%q is not a hex colour (want #RRGGBB or #RRGGBBAA)", s)
+		if _, err := ParseColor(s); err != nil {
+			return err.Error()
 		}
 	case ValidatorAsset:
 		if err := checkRelPath("asset path", s); err != nil {
