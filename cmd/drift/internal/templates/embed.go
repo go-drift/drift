@@ -14,6 +14,12 @@ import (
 //go:embed android ios plugin-api bridge/* xcodeproj/* xtool/* init/* driftw driftw.bat
 var FS embed.FS
 
+// AndroidMinSDK is the lowest Android API level Drift apps run on: the
+// app's minSdk and the API level native code is compiled against. API 31
+// (Android 12) brings the platform splash screen API, and Drift's renderer
+// is Vulkan-only, whose drivers on older releases are unreliable.
+const AndroidMinSDK = 31
+
 // TemplateInput holds the caller-provided values for template rendering.
 type TemplateInput struct {
 	AppName        string
@@ -33,6 +39,8 @@ type TemplateData struct {
 	URLScheme   string // e.g., "my-app"
 	Orientation string // "portrait", "landscape", or "all"
 	AllowHTTP   bool   // allow cleartext HTTP traffic
+
+	AndroidMinSDK int // see the AndroidMinSDK constant
 }
 
 // NewTemplateData creates template data from the given input, deriving
@@ -47,6 +55,8 @@ func NewTemplateData(in TemplateInput) *TemplateData {
 		URLScheme:   sanitizeURLScheme(in.AppName),
 		Orientation: in.Orientation,
 		AllowHTTP:   in.AllowHTTP,
+
+		AndroidMinSDK: AndroidMinSDK,
 	}
 }
 
