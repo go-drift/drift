@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -289,6 +290,53 @@ func TestInitSuccess_NeedsFrameAfterOnInitCompletes(t *testing.T) {
 	}
 	if !needs {
 		t.Fatal("expected needsFrame=true with OnInit completion callback queued")
+	}
+}
+
+// TestInit_PlatformWokenWhenOnInitCompletesAfterSkippedFrame guards against
+// an iOS hang (black screen forever). The iOS frame loop asks NeedsFrame
+// first and skips StepFrame when the answer is no, as it is while OnInit
+// runs. A frame request in that window left platformFrameScheduled set with
+// no StepFrame to clear it, so OnInit's completion dispatch never woke the
+// platform again.
+func TestInit_PlatformWokenWhenOnInitCompletesAfterSkippedFrame(t *testing.T) {
+	swapApp(t)
+	var schedules atomic.Int32
+	SetPlatformScheduleFrame(func() { schedules.Add(1) })
+	t.Cleanup(func() {
+		SetPlatformScheduleFrame(func() {})
+		platformFrameScheduled.Store(false)
+	})
+	platformFrameScheduled.Store(false)
+
+	release := make(chan struct{})
+	app.lifecycle.phase = initPhasePending
+	app.lifecycle.ctx, app.lifecycle.cancel = context.WithCancel(context.Background())
+	app.lifecycle.onInit = func(ctx context.Context) error {
+		<-release
+		return nil
+	}
+
+	// First frame starts OnInit.
+	if _, err := app.StepFrame(testSize); err != nil {
+		t.Fatalf("StepFrame: %v", err)
+	}
+
+	// Something requests a frame while OnInit runs; the platform wakes,
+	// asks NeedsFrame, gets false and skips StepFrame.
+	RequestFrame()
+	if NeedsFrame() {
+		t.Fatal("expected NeedsFrame=false while OnInit runs")
+	}
+	before := schedules.Load()
+
+	close(release)
+	deadline := time.Now().Add(2 * time.Second)
+	for schedules.Load() == before {
+		if time.Now().After(deadline) {
+			t.Fatal("OnInit completed but the platform was never asked for another frame")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
