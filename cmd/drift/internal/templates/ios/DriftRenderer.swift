@@ -127,15 +127,22 @@ final class DriftRenderer {
         // Register a one-shot post-present handler that fires `first_frame`
         // on the drift/rendering/frame_events channel. Drawable presented
         // handlers fire after the buffer is actually on screen, so this is
-        // the most accurate "user can see pixels" signal iOS exposes.
+        // the most accurate "user can see pixels" signal iOS exposes. The
+        // Simulator SDK has no presented handlers; GPU completion of the
+        // frame's command buffer is the closest signal there.
         if !firstFrameRendered {
             firstFrameRendered = true
-            drawable.addPresentedHandler { _ in
+            let emitFirstFrame = {
                 PlatformChannelManager.shared.sendEvent(
                     "drift/rendering/frame_events",
                     data: ["type": "first_frame"]
                 )
             }
+            #if targetEnvironment(simulator)
+            commandBuffer.addCompletedHandler { _ in emitFirstFrame() }
+            #else
+            drawable.addPresentedHandler { _ in emitFirstFrame() }
+            #endif
         }
 
         if synchronous {
