@@ -150,45 +150,22 @@ func pruneDir(dir string, keep map[string]BundleFile) ([]string, error) {
 // (typically app/src/main/assets/) at the op's relative path. Gradle's
 // build pipeline picks up the directory automatically; no manifest edits.
 func WriteAndroidAssets(assetsRoot string, ops []*protocol.OpAndroidAddAsset) ([]string, error) {
-	var changed []string
-	for _, op := range ops {
-		content, err := protocol.DecodeContent(op.Content)
-		if err != nil {
-			return changed, fmt.Errorf("Android asset %s: decode content: %w", op.Path, err)
+	return writeEach(ops, func(op *protocol.OpAndroidAddAsset) (OwnedFile, error) {
+		f, err := AndroidAssetFile(assetsRoot, op)
+		if err == nil {
+			maybeWarnLargeResource(op.PluginPackage(), op.Path, len(f.Content))
 		}
-		maybeWarnLargeResource(op.PluginPackage(), op.Path, len(content))
-		dest := filepath.Join(assetsRoot, filepath.FromSlash(op.Path))
-		ch, err := writeIfDifferent(dest, content)
-		if err != nil {
-			return changed, fmt.Errorf("write Android asset %s: %w", op.Path, err)
-		}
-		if ch {
-			changed = append(changed, dest)
-		}
-	}
-	return changed, nil
+		return f, err
+	})
 }
 
 // WriteAndroidAppModuleFiles writes each OpAndroidAddAppModuleFile into the
 // app module directory (appDir, i.e. <project>/app), where Gradle plugins
 // such as google-services read their config.
 func WriteAndroidAppModuleFiles(appDir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
-	var changed []string
-	for _, op := range ops {
-		content, err := protocol.DecodeContent(op.Content)
-		if err != nil {
-			return changed, fmt.Errorf("Android app module file %s: decode content: %w", op.Name, err)
-		}
-		dest := filepath.Join(appDir, op.Name)
-		ch, err := writeIfDifferent(dest, content)
-		if err != nil {
-			return changed, fmt.Errorf("write Android app module file %s: %w", op.Name, err)
-		}
-		if ch {
-			changed = append(changed, dest)
-		}
-	}
-	return changed, nil
+	return writeEach(ops, func(op *protocol.OpAndroidAddAppModuleFile) (OwnedFile, error) {
+		return AppModuleFile(appDir, op)
+	})
 }
 
 // maybeWarnLargeResource emits a single stderr line when a written

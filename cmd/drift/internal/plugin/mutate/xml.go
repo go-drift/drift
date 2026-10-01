@@ -181,67 +181,59 @@ func ensureMetaData(parent *etree.Element, name, value string) {
 	parent.AddChild(meta)
 }
 
-// ApplyAndroidColors writes/updates a colors.xml at path with the given
-// OpAndroidColorSet entries.
-func ApplyAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {
-	return applyValuesXML(path, "color", func(d *etree.Document) {
-		root := ensureResourcesRoot(d)
+// WriteAndroidColors writes Drift's plugin colours file at path from ops,
+// replacing any previous content (the file is Drift-owned), or removes it
+// when there are no ops so a dropped plugin's colours do not linger.
+func WriteAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {
+	return writeValuesXML(path, "color", len(ops), func(root *etree.Element) {
 		for _, op := range ops {
 			setValueEntry(root, "color", op.Name, op.Value)
 		}
 	})
 }
 
-// ApplyAndroidStrings writes/updates a strings.xml at path.
-func ApplyAndroidStrings(path string, ops []*protocol.OpAndroidStringSet) (string, bool, error) {
-	return applyValuesXML(path, "string", func(d *etree.Document) {
-		root := ensureResourcesRoot(d)
+// WriteAndroidStrings is WriteAndroidColors for Drift's plugin strings file.
+func WriteAndroidStrings(path string, ops []*protocol.OpAndroidStringSet) (string, bool, error) {
+	return writeValuesXML(path, "string", len(ops), func(root *etree.Element) {
 		for _, op := range ops {
 			setValueEntry(root, "string", op.Name, op.Value)
 		}
 	})
 }
 
-// ApplyAndroidStyles writes/updates a styles.xml at path.
-func ApplyAndroidStyles(path string, ops []*protocol.OpAndroidStyleSet) (string, bool, error) {
-	return applyValuesXML(path, "style", func(d *etree.Document) {
-		root := ensureResourcesRoot(d)
+// WriteAndroidStyles is WriteAndroidColors for Drift's plugin styles file.
+func WriteAndroidStyles(path string, ops []*protocol.OpAndroidStyleSet) (string, bool, error) {
+	return writeValuesXML(path, "style", len(ops), func(root *etree.Element) {
 		for _, op := range ops {
 			setStyleEntry(root, op)
 		}
 	})
 }
 
-func applyValuesXML(path, kind string, mutate func(*etree.Document)) (string, bool, error) {
-	doc, original, err := loadOrCreate(path)
-	if err != nil {
-		return path, false, fmt.Errorf("load %s: %w", kind, err)
+func writeValuesXML(path, kind string, entries int, fill func(root *etree.Element)) (string, bool, error) {
+	if entries == 0 {
+		err := os.Remove(path)
+		if os.IsNotExist(err) {
+			return path, false, nil
+		}
+		if err != nil {
+			return path, false, fmt.Errorf("remove %s: %w", kind, err)
+		}
+		return path, true, nil
 	}
-	mutate(doc)
+	doc := etree.NewDocument()
+	doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
+	fill(doc.CreateElement("resources"))
 	doc.Indent(4)
 	out, err := doc.WriteToBytes()
 	if err != nil {
 		return path, false, fmt.Errorf("serialize %s: %w", kind, err)
 	}
-	if original != nil && bytes.Equal(out, original) {
-		return path, false, nil
-	}
-	if err := EnsureDir(path); err != nil {
-		return path, false, err
-	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	ch, err := writeIfDifferent(path, out)
+	if err != nil {
 		return path, false, fmt.Errorf("write %s: %w", kind, err)
 	}
-	return path, true, nil
-}
-
-func ensureResourcesRoot(doc *etree.Document) *etree.Element {
-	root := doc.SelectElement("resources")
-	if root != nil {
-		return root
-	}
-	root = doc.CreateElement("resources")
-	return root
+	return path, ch, nil
 }
 
 func setValueEntry(root *etree.Element, tag, name, value string) {
@@ -290,76 +282,21 @@ func setStyleEntry(root *etree.Element, op *protocol.OpAndroidStyleSet) {
 // WriteAndroidDrawables writes raw bitmap files under drawableDir. Returns
 // the paths that actually changed.
 func WriteAndroidDrawables(drawableDir string, ops []*protocol.OpAndroidWriteDrawable) ([]string, error) {
-	var changed []string
-	if err := os.MkdirAll(drawableDir, 0o755); err != nil {
-		return changed, fmt.Errorf("mkdir drawable: %w", err)
-	}
-	for _, op := range ops {
-		dest := filepath.Join(drawableDir, op.Name+drawableExtension(op.Name))
-		content, err := protocol.DecodeContent(op.Content)
-		if err != nil {
-			return changed, fmt.Errorf("decode drawable %s: %w", op.Name, err)
-		}
-		ch, err := writeIfDifferent(dest, content)
-		if err != nil {
-			return changed, err
-		}
-		if ch {
-			changed = append(changed, dest)
-		}
-	}
-	return changed, nil
-}
-
-// drawableExtension returns the appropriate extension based on the magic bytes
-// but we keep it simple: default to .png. Authors who need .webp/.jpg pass
-// a name that already includes the extension.
-func drawableExtension(name string) string {
-	if filepath.Ext(name) != "" {
-		return ""
-	}
-	return ".png"
+	return writeEach(ops, func(op *protocol.OpAndroidWriteDrawable) (OwnedFile, error) {
+		return DrawableFile(drawableDir, op)
+	})
 }
 
 // WriteAndroidResourceXML writes arbitrary res/<relPath> XML files.
 func WriteAndroidResourceXML(resRoot string, ops []*protocol.OpAndroidWriteResourceXML) ([]string, error) {
-	var changed []string
-	for _, op := range ops {
-		dest := filepath.Join(resRoot, filepath.FromSlash(op.RelPath))
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return changed, fmt.Errorf("mkdir %s: %w", dest, err)
-		}
-		ch, err := writeIfDifferent(dest, []byte(op.Content))
-		if err != nil {
-			return changed, err
-		}
-		if ch {
-			changed = append(changed, dest)
-		}
-	}
-	return changed, nil
+	return writeEach(ops, func(op *protocol.OpAndroidWriteResourceXML) (OwnedFile, error) {
+		return ResourceXMLFile(resRoot, op), nil
+	})
 }
 
 func loadXML(path string) (*etree.Document, []byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, err
-	}
-	doc := etree.NewDocument()
-	if err := doc.ReadFromBytes(data); err != nil {
-		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	return doc, data, nil
-}
-
-func loadOrCreate(path string) (*etree.Document, []byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			doc := etree.NewDocument()
-			doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
-			return doc, nil, nil
-		}
 		return nil, nil, err
 	}
 	doc := etree.NewDocument()

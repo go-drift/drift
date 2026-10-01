@@ -75,13 +75,13 @@ func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 	}
 }
 
-func TestApplyAndroidColorsCreates(t *testing.T) {
+func TestWriteAndroidColorsCreates(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values/plugin_colors.xml")
 	ops := []*protocol.OpAndroidColorSet{
 		{Base: protocol.Base{Pkg: "p"}, Name: "splash_bg", Value: "#FFFFFF"},
 	}
-	wrote, changed, err := ApplyAndroidColors(path, ops)
+	wrote, changed, err := WriteAndroidColors(path, ops)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestApplyAndroidColorsCreates(t *testing.T) {
 	}
 }
 
-func TestApplyAndroidStylesReplacesItems(t *testing.T) {
+func TestWriteAndroidStyles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values/plugin_styles.xml")
 	ops := []*protocol.OpAndroidStyleSet{
@@ -105,12 +105,41 @@ func TestApplyAndroidStylesReplacesItems(t *testing.T) {
 			Items:  []protocol.StyleItem{{Name: "android:windowBackground", Value: "@drawable/splash"}},
 		},
 	}
-	_, _, err := ApplyAndroidStyles(path, ops)
+	_, _, err := WriteAndroidStyles(path, ops)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
 	if !strings.Contains(string(body), `<style name="SplashTheme" parent="Theme.AppCompat">`) {
 		t.Errorf("style file content wrong:\n%s", body)
+	}
+}
+
+// The plugin values files are Drift-owned: each write replaces the
+// previous content, and no ops removes the file, so a dropped plugin's
+// entries never linger.
+func TestWriteAndroidColorsRegeneratesAndRemoves(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "values/plugin_colors.xml")
+	set := func(name string) []*protocol.OpAndroidColorSet {
+		return []*protocol.OpAndroidColorSet{{Base: protocol.Base{Pkg: "p"}, Name: name, Value: "#000000"}}
+	}
+	if _, _, err := WriteAndroidColors(path, set("old")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := WriteAndroidColors(path, set("new")); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(path)
+	if strings.Contains(string(body), "old") || !strings.Contains(string(body), "new") {
+		t.Errorf("file should hold only the latest entries:\n%s", body)
+	}
+	if _, changed, err := WriteAndroidColors(path, nil); err != nil || !changed {
+		t.Fatalf("remove: changed=%v err=%v", changed, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("file should be removed with no ops: %v", err)
+	}
+	if _, changed, err := WriteAndroidColors(path, nil); err != nil || changed {
+		t.Errorf("removing a missing file: changed=%v err=%v", changed, err)
 	}
 }
