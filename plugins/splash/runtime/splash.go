@@ -24,9 +24,9 @@
 //	}.Run()
 //
 // Preserve and Remove are counted on the native side. A Remove without a
-// matching Preserve does nothing. The splash goes after the plugin's
-// max_duration_ms whatever is preserving it, so a missed Remove cannot keep
-// it up for good.
+// matching Preserve does nothing. After the plugin's max_duration_ms,
+// Preserve no longer holds the splash, so a missed Remove cannot keep it up
+// for good; a slow App.OnInit still does, since there is nothing to show.
 package runtime
 
 import (

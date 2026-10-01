@@ -4,7 +4,8 @@
 /// thread:
 ///   1. register: the `drift/splash` channel (the Go runtime's Preserve and
 ///      Remove), the `drift/rendering/frame_events` observer (`first_frame`:
-///      the app has drawn content) and the max_duration_ms safety timer.
+///      the app has drawn content) and the max_duration_ms timer, after
+///      which Preserve no longer holds the splash.
 ///      Once per process.
 ///   2. attach: install the overlay on the binding's overlay view, unless
 ///      the splash may already go. DriftViewController attaches before its
@@ -28,13 +29,15 @@ public final class DriftSplashPlugin: DriftPlugin {
     private var preserveCount = 0
     /// The app has drawn its first frame with content.
     private var contentShown = false
-    /// max_duration_ms has passed: the splash goes whatever is preserving it.
+    /// max_duration_ms has passed: Preserve no longer holds the splash.
     private var timedOut = false
     /// The splash has gone for this process and never comes back.
     private var dismissed = false
     private var overlay: DriftSplashOverlayView?
 
-    private var dismissible: Bool { timedOut || (contentShown && preserveCount == 0) }
+    /// The splash always waits for content (a slow App.OnInit keeps it up,
+    /// as Drift promises); the timeout only overrides a missed Remove.
+    private var dismissible: Bool { contentShown && (preserveCount == 0 || timedOut) }
 
     public init() {}
 
@@ -67,11 +70,11 @@ public final class DriftSplashPlugin: DriftPlugin {
             reconcile()
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.maxDurationMs)) { [self] in
-            guard !dismissed else { return }
-            os_log("splash still up after max_duration_ms=%d (content shown: %d, outstanding Preserve: %d); dismissing",
-                   log: splashLog, type: .error,
-                   DriftSplashConfig.maxDurationMs, contentShown ? 1 : 0, preserveCount)
             timedOut = true
+            guard !dismissed, preserveCount > 0 else { return }
+            os_log("splash held past max_duration_ms=%d by %d Preserve without Remove; ignoring them",
+                   log: splashLog, type: .error,
+                   DriftSplashConfig.maxDurationMs, preserveCount)
             reconcile()
         }
     }
