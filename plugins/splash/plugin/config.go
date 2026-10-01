@@ -18,8 +18,9 @@ type Config struct {
 	ImageWidth      int    `yaml:"image_width"      drift:"default=200"`
 	BackgroundColor string `yaml:"background_color" drift:"default=#FFFFFF,hex"`
 	FadeDurationMs  int    `yaml:"fade_duration_ms" drift:"default=200"`
-	// MaxDurationMs is a safety net: the splash goes this long after launch
-	// even if a Preserve was never matched by Remove.
+	// MaxDurationMs is a safety net for a Preserve never matched by Remove:
+	// after this long from launch, Preserve no longer holds the splash. It
+	// still waits for the app's first frame, however long App.OnInit runs.
 	MaxDurationMs int        `yaml:"max_duration_ms" drift:"default=10000"`
 	Android12     *Android12 `yaml:"android_12,omitempty"`
 }
