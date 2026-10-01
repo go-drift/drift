@@ -457,7 +457,9 @@ func (s *AndroidStylesScope) Set(name, parent string, items map[string]string) {
 	})
 }
 
-// AndroidDrawablesScope writes raw bitmaps under res/drawable.
+// AndroidDrawablesScope writes raw bitmaps under res/drawable-nodpi: Android
+// does not scale them by screen density, so size them where they are used
+// (a layout, a drawable XML's item size).
 type AndroidDrawablesScope struct{ b *BuildCtx }
 
 func (s *AndroidDrawablesScope) AddBitmap(name string, content []byte) {

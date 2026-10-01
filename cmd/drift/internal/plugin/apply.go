@@ -458,8 +458,12 @@ func androidAppDir(buildDir string) string { return filepath.Join(buildDir, "app
 func androidResDir(buildDir string) string {
 	return filepath.Join(buildDir, "app", "src", "main", "res")
 }
+// androidDrawableDir holds plugin bitmaps. They come at one pixel size, so
+// they go in drawable-nodpi: in drawable/ Android treats them as mdpi and
+// scales them up on denser screens (a 2000px image becomes ~5500px on a
+// 420dpi phone).
 func androidDrawableDir(buildDir string) string {
-	return filepath.Join(androidResDir(buildDir), "drawable")
+	return filepath.Join(androidResDir(buildDir), "drawable-nodpi")
 }
 func androidJavaRoot(buildDir string) string {
 	return filepath.Join(buildDir, "app", "src", "main", "java")
