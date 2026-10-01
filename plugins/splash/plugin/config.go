@@ -15,10 +15,13 @@ type Config struct {
 	Image string `yaml:"image" drift:"required,asset"`
 	// ImageWidth is the image's on-screen width in points (iOS) and dp
 	// (Android); the height follows the PNG's aspect ratio.
-	ImageWidth      int        `yaml:"image_width"      drift:"default=200"`
-	BackgroundColor string     `yaml:"background_color" drift:"default=#FFFFFF,hex"`
-	FadeDurationMs  int        `yaml:"fade_duration_ms" drift:"default=200"`
-	Android12       *Android12 `yaml:"android_12,omitempty"`
+	ImageWidth      int    `yaml:"image_width"      drift:"default=200"`
+	BackgroundColor string `yaml:"background_color" drift:"default=#FFFFFF,hex"`
+	FadeDurationMs  int    `yaml:"fade_duration_ms" drift:"default=200"`
+	// MaxDurationMs is a safety net: the splash goes this long after launch
+	// even if a Preserve was never matched by Remove.
+	MaxDurationMs int        `yaml:"max_duration_ms" drift:"default=10000"`
+	Android12     *Android12 `yaml:"android_12,omitempty"`
 }
 
 // Android12 enables the Android 12+ SplashScreen API path. When the block
@@ -36,6 +39,7 @@ type resolvedConfig struct {
 	ImageSize       size // points / dp
 	BackgroundColor driftplugin.Color
 	FadeDurationMs  int
+	MaxDurationMs   int
 	Android12       *android12Resolved // nil when not configured
 }
 
@@ -54,6 +58,9 @@ func resolve(ctx *driftplugin.BuildCtx, cfg Config) (resolvedConfig, error) {
 	}
 	if cfg.FadeDurationMs < 0 {
 		return resolvedConfig{}, fmt.Errorf("fade_duration_ms must not be negative, got %d", cfg.FadeDurationMs)
+	}
+	if cfg.MaxDurationMs <= 0 {
+		return resolvedConfig{}, fmt.Errorf("max_duration_ms must be positive, got %d", cfg.MaxDurationMs)
 	}
 	img, err := ctx.ResolveAsset(cfg.Image)
 	if err != nil {
@@ -76,6 +83,7 @@ func resolve(ctx *driftplugin.BuildCtx, cfg Config) (resolvedConfig, error) {
 		ImageSize:       size{Width: width, Height: width * float64(px.Height) / float64(px.Width)},
 		BackgroundColor: bg,
 		FadeDurationMs:  cfg.FadeDurationMs,
+		MaxDurationMs:   cfg.MaxDurationMs,
 	}
 	if a := cfg.Android12; a != nil {
 		icon, err := ctx.ResolveAsset(a.Icon)

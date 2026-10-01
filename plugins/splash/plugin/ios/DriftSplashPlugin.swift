@@ -1,14 +1,19 @@
 /// DriftSplashPlugin.swift
 ///
-/// The splash plugin's native half, driven by DriftPlugins:
-///   1. register: the `drift/splash` channel (the Go runtime calls
-///      `preserve` / `remove`, both forwarding to SplashState.apply(±1)) and
-///      the `drift/rendering/frame_events` observer (on `first_frame`, mark
-///      state and dismiss if nothing preserves the splash). Once per process.
-///   2. attach: install the overlay on the Drift view. DriftViewController
-///      attaches before its window becomes visible, so the overlay takes
-///      over from the launch storyboard without a flash.
+/// The splash plugin's native half, driven by DriftPlugins on the main
+/// thread:
+///   1. register: the `drift/splash` channel (the Go runtime's Preserve and
+///      Remove), the `drift/rendering/frame_events` observer (`first_frame`:
+///      the app has drawn content) and the max_duration_ms safety timer.
+///      Once per process.
+///   2. attach: install the overlay on the binding's overlay view, unless
+///      the splash may already go. DriftViewController attaches before its
+///      window is visible, so the overlay takes over from the launch screen
+///      without a flash.
 ///   3. detach: drop the overlay with the view.
+///
+/// Dismissal is state, not an event: every input calls reconcile(), so an
+/// input arriving while detached or in the background is never lost.
 
 import DriftPluginAPI
 import OSLog
@@ -19,10 +24,17 @@ private let splashLog = OSLog(subsystem: "drift.splash", category: "plugin")
 /// Public, with a public initializer: the app's generated registrant
 /// creates it from outside this module (DriftPlugin_splash).
 public final class DriftSplashPlugin: DriftPlugin {
-    private var overlay: DriftSplashOverlayView?
-    /// Set once the overlay has faded out; a later attach (a new Drift view)
-    /// does not bring the splash back.
+    /// Outstanding Preserve calls.
+    private var preserveCount = 0
+    /// The app has drawn its first frame with content.
+    private var contentShown = false
+    /// max_duration_ms has passed: the splash goes whatever is preserving it.
+    private var timedOut = false
+    /// The splash has gone for this process and never comes back.
     private var dismissed = false
+    private var overlay: DriftSplashOverlayView?
+
+    private var dismissible: Bool { timedOut || (contentShown && preserveCount == 0) }
 
     public init() {}
 
@@ -30,12 +42,17 @@ public final class DriftSplashPlugin: DriftPlugin {
         host.registerChannel("drift/splash") { [self] method, _, result in
             switch method {
             case "preserve":
-                DriftSplashState.shared.apply(1)
-                maybeDismiss()
+                guard !dismissed else {
+                    result.error(NSError(domain: "drift.splash", code: 2, userInfo: [
+                        NSLocalizedDescriptionKey: "splash already dismissed; call Preserve before the first frame (App.OnInit or the root's InitState)",
+                    ]))
+                    return
+                }
+                preserveCount += 1
                 result.success(nil)
             case "remove":
-                DriftSplashState.shared.apply(-1)
-                maybeDismiss()
+                preserveCount = max(0, preserveCount - 1)
+                reconcile()
                 result.success(nil)
             default:
                 result.error(NSError(domain: "drift.splash", code: 1, userInfo: [
@@ -45,19 +62,29 @@ public final class DriftSplashPlugin: DriftPlugin {
         }
         _ = host.observeEvent("drift/rendering/frame_events") { [self] data in
             guard let payload = data as? [String: Any],
-                  let type = payload["type"] as? String,
-                  type == "first_frame" else { return }
-            DriftSplashState.shared.markFirstFrame()
-            maybeDismiss()
+                  payload["type"] as? String == "first_frame" else { return }
+            contentShown = true
+            reconcile()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.maxDurationMs)) { [self] in
+            guard !dismissed else { return }
+            os_log("splash still up after max_duration_ms=%d (content shown: %d, outstanding Preserve: %d); dismissing",
+                   log: splashLog, type: .error,
+                   DriftSplashConfig.maxDurationMs, contentShown ? 1 : 0, preserveCount)
+            timedOut = true
+            reconcile()
         }
     }
 
     public func attach(_ binding: DriftViewBinding) {
         guard !dismissed else { return }
+        if dismissible {
+            dismissed = true
+            return
+        }
         let view = DriftSplashOverlayView()
         view.install(in: binding.overlayView)
         overlay = view
-        os_log("splash overlay attached", log: splashLog, type: .debug)
     }
 
     public func detach() {
@@ -65,18 +92,14 @@ public final class DriftSplashPlugin: DriftPlugin {
         overlay = nil
     }
 
-    /// Called on the main thread, where the host runs plugin handlers and
-    /// observers.
-    private func maybeDismiss() {
-        guard !dismissed,
-              DriftSplashState.shared.canDismiss(),
-              UIApplication.shared.applicationState == .active,
-              let current = overlay else { return }
+    /// Dismisses the splash once it may go. Fades the overlay if attached;
+    /// otherwise the next attach installs none. In the background the fade
+    /// completes at once, which is fine.
+    private func reconcile() {
+        guard !dismissed, dismissible else { return }
         dismissed = true
-        current.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) { [self] in
-            if overlay === current {
-                overlay = nil
-            }
-        }
+        guard let current = overlay else { return }
+        overlay = nil
+        current.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) {}
     }
 }

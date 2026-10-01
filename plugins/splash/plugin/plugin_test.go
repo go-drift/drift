@@ -323,3 +323,13 @@ func TestBuild_RejectsNonPositiveImageWidth(t *testing.T) {
 		t.Fatal("image_width 0 accepted")
 	}
 }
+
+func TestBuild_MaxDuration(t *testing.T) {
+	ops := runBuild(t, "image: assets/splash.png\n", "assets/splash.png")
+	if cfg := iosSource(ops, "SplashConfig.swift"); !strings.Contains(cfg, "maxDurationMs = 10000") {
+		t.Errorf("default max_duration_ms should be 10000:\n%s", cfg)
+	}
+	if _, err := buildYAML(t, "image: assets/splash.png\nmax_duration_ms: 0\n", "assets/splash.png"); err == nil {
+		t.Error("max_duration_ms 0 accepted")
+	}
+}
