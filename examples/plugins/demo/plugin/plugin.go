@@ -92,11 +92,13 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 //
 //     class DriftDemoPlugin : DriftPlugin {
 //         override fun onRegister(host: DriftPluginHost) {
-//             // Go → native: method call with response.
-//             host.registerChannel("example/demo") { method, args ->
+//             // Go → native: method call with response. Handlers run on
+//             // the main thread and reply once through result, now or
+//             // later (e.g. from an SDK callback).
+//             host.registerChannel("example/demo") { method, args, result ->
 //                 when (method) {
-//                     "ping" -> Pair("pong", null)
-//                     else  -> Pair(null, IllegalArgumentException("unknown $method"))
+//                     "ping" -> result.success("pong")
+//                     else  -> result.error(IllegalArgumentException("unknown $method"))
 //                 }
 //             }
 //

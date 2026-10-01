@@ -148,16 +148,13 @@ func TestEnsureRunnerSupportMatchesTemplates(t *testing.T) {
 	}
 }
 
-// Guards against a specific class of drift: the MethodHandler interface must
-// declare operator fun invoke, not fun handle, because PlatformChannel.kt
-// calls handler(method, args).
-func TestMethodHandlerUsesOperatorInvoke(t *testing.T) {
-	content, err := templates.ReadFile("android/runner/MethodHandler.kt")
-	if err != nil {
-		t.Fatalf("read MethodHandler.kt: %v", err)
-	}
-	if !strings.Contains(string(content), "operator fun invoke(") {
-		t.Errorf("MethodHandler.kt must declare `operator fun invoke(...)`; got:\n%s", content)
+// Built-in channels register a synchronous MethodHandler that
+// PlatformChannel.kt calls as handler(method, args), which needs the
+// operator form.
+func TestBuiltInMethodHandlerUsesOperatorInvoke(t *testing.T) {
+	content := templateText(t, "android/java/PlatformChannel.kt")
+	if !strings.Contains(content, "operator fun invoke(method: String, args: Any?)") {
+		t.Errorf("PlatformChannel.kt's MethodHandler must declare `operator fun invoke(...)`")
 	}
 }
 
