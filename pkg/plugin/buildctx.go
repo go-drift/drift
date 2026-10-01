@@ -25,6 +25,7 @@ type BuildCtx struct {
 	projectRoot   string
 	buildDir      string
 	platform      string
+	appID         string
 
 	ops []protocol.Op
 
@@ -49,17 +50,25 @@ type BuildCtx struct {
 // Invalid ops are reported here and never recorded.
 func (b *BuildCtx) Err() error { return errors.Join(b.errs...) }
 
+// TestAppID is the AppID of contexts from NewTestCtx and NewTestCtxAt.
+const TestAppID = "com.example.app"
+
 // NewTestCtx returns a BuildCtx suitable for plugin author unit tests. Ops
 // recorded via the returned ctx can be inspected with Ops().
 func NewTestCtx() *BuildCtx {
-	return newBuildCtx("test/plugin", "test", "/test/project", "/test/build", "all")
+	return NewTestCtxAt("/test/project")
 }
 
 // NewTestCtxAt returns a BuildCtx whose projectRoot is the supplied path so
 // ResolveAsset reads from a real on-disk directory. Use this when a Build
 // implementation needs ResolveAsset to succeed during testing.
 func NewTestCtxAt(projectRoot string) *BuildCtx {
-	return newBuildCtx("test/plugin", "test", projectRoot, projectRoot, "all")
+	return newBuildCtx("test/plugin", "test", protocol.Envelope{
+		Platform:    "all",
+		ProjectRoot: projectRoot,
+		BuildDir:    projectRoot,
+		AppID:       TestAppID,
+	})
 }
 
 // Ops returns the ops recorded so far in the context.
@@ -78,6 +87,11 @@ func (b *BuildCtx) PluginName() string { return b.pluginName }
 // Platform returns the target platform string ("android", "ios", or "xtool").
 // "all" is reserved for unit-test contexts; plugins should not assume it.
 func (b *BuildCtx) Platform() string { return b.platform }
+
+// AppID returns the app's identifier from drift.yaml (app.id): the iOS
+// bundle identifier and the Android application id, which Drift keeps
+// equal. Plugins check SDK config files that name the app against it.
+func (b *BuildCtx) AppID() string { return b.appID }
 
 // ProjectRoot returns the absolute path of the user's project root.
 func (b *BuildCtx) ProjectRoot() string { return b.projectRoot }
@@ -98,13 +112,14 @@ func (b *BuildCtx) ResolveAsset(rel string) ([]byte, error) {
 	return os.ReadFile(abs)
 }
 
-func newBuildCtx(pluginPackage, pluginName, projectRoot, buildDir, platform string) *BuildCtx {
+func newBuildCtx(pluginPackage, pluginName string, env protocol.Envelope) *BuildCtx {
 	b := &BuildCtx{
 		pluginPackage: pluginPackage,
 		pluginName:    pluginName,
-		projectRoot:   projectRoot,
-		buildDir:      buildDir,
-		platform:      platform,
+		projectRoot:   env.ProjectRoot,
+		buildDir:      env.BuildDir,
+		platform:      env.Platform,
+		appID:         env.AppID,
 	}
 	b.IOS = &IOSScope{b: b}
 	b.IOS.Info = &IOSInfoScope{b: b}

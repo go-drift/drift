@@ -38,6 +38,7 @@ func TestMainBuildRoundTrip(t *testing.T) {
 		"platform":     "ios",
 		"project_root": tmp,
 		"build_dir":    tmp,
+		"app_id":       TestAppID,
 		"plugins": []map[string]any{
 			{
 				"package":     "github.com/example/p",
@@ -155,6 +156,7 @@ func TestUnknownEnvelopePackageSurfaces(t *testing.T) {
 	resp := doBuild(protocol.Envelope{
 		APIVersion: protocol.APIVersion,
 		Cmd:        "build",
+		AppID:      TestAppID,
 		Plugins: []protocol.EnvelopePlugin{
 			{Package: "github.com/unknown/p", ConfigYAML: ""},
 		},
@@ -198,7 +200,7 @@ func TestBindBuildDecodesTypedConfig(t *testing.T) {
 		},
 	}
 	b := Bind[cfg]("github.com/test/p", p)
-	ctx := newBuildCtx(b.Package, b.Name, "/", "/", "all")
+	ctx := newBuildCtx(b.Package, b.Name, protocol.Envelope{Platform: "all", ProjectRoot: "/", BuildDir: "/", AppID: TestAppID})
 	if err := b.Build(ctx, []byte("background_color: '#abc'\n")); err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -213,7 +215,7 @@ func TestBindBuildRejectsUnknownKeys(t *testing.T) {
 	}
 	p := pluginFn[cfg]{name: "test", build: func(*BuildCtx, cfg) error { return nil }}
 	b := Bind[cfg]("github.com/test/p", p)
-	ctx := newBuildCtx(b.Package, b.Name, "/", "/", "all")
+	ctx := newBuildCtx(b.Package, b.Name, protocol.Envelope{Platform: "all", ProjectRoot: "/", BuildDir: "/", AppID: TestAppID})
 	err := b.Build(ctx, []byte("color: red\ntpyo: oops\n"))
 	if err == nil {
 		t.Fatal("expected decode error for unknown key")
@@ -246,7 +248,7 @@ func TestBindBuildEnforcesRequiredFields(t *testing.T) {
 	}
 	p := pluginFn[cfg]{name: "test", build: func(*BuildCtx, cfg) error { return nil }}
 	b := Bind[cfg]("github.com/test/p", p)
-	ctx := newBuildCtx(b.Package, b.Name, "/", "/", "all")
+	ctx := newBuildCtx(b.Package, b.Name, protocol.Envelope{Platform: "all", ProjectRoot: "/", BuildDir: "/", AppID: TestAppID})
 	err := b.Build(ctx, []byte("color: red\n"))
 	if err == nil {
 		t.Fatal("expected required-field error")
@@ -283,6 +285,7 @@ func TestDoBuildFollowsEnvelopeOrder(t *testing.T) {
 	resp := doBuild(protocol.Envelope{
 		APIVersion: protocol.APIVersion,
 		Cmd:        "build",
+		AppID:      TestAppID,
 		Plugins:    []protocol.EnvelopePlugin{{Package: "github.com/z/plugin"}, {Package: "github.com/a/plugin"}},
 	}, bindings)
 	if resp.Error != "" {
@@ -299,4 +302,39 @@ func TestDoBuildFollowsEnvelopeOrder(t *testing.T) {
 	if want := []string{"github.com/z/plugin", "github.com/a/plugin"}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("op order %v, want %v", got, want)
 	}
+}
+
+// A build envelope must name the app, which plugins check SDK config files
+// against.
+func TestDoBuildRequiresAppID(t *testing.T) {
+	resp := doBuild(protocol.Envelope{APIVersion: protocol.APIVersion, Cmd: "build"}, nil)
+	if !strings.Contains(resp.Error, "app_id") {
+		t.Errorf("error = %q, want one naming app_id", resp.Error)
+	}
+}
+
+// Build sees the envelope's app id.
+func TestDoBuildPassesAppID(t *testing.T) {
+	var got string
+	bindings := []Binding{Bind[struct{}]("github.com/a/plugin", appIDPlugin{got: &got})}
+	resp := doBuild(protocol.Envelope{
+		APIVersion: protocol.APIVersion,
+		Cmd:        "build",
+		AppID:      "com.example.real",
+		Plugins:    []protocol.EnvelopePlugin{{Package: "github.com/a/plugin"}},
+	}, bindings)
+	if resp.Error != "" {
+		t.Fatal(resp.Error)
+	}
+	if got != "com.example.real" {
+		t.Errorf("ctx.AppID() = %q, want com.example.real", got)
+	}
+}
+
+type appIDPlugin struct{ got *string }
+
+func (appIDPlugin) Name() string { return "appid" }
+func (p appIDPlugin) Build(ctx *BuildCtx, _ struct{}) error {
+	*p.got = ctx.AppID()
+	return nil
 }
