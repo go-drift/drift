@@ -65,8 +65,6 @@ type NotificationEvent struct {
 	Timestamp time.Time
 	// IsForeground reports whether the notification was delivered while the app was in foreground.
 	IsForeground bool
-	// Source is "local" or "remote".
-	Source string
 }
 
 // NotificationOpen represents a user opening a notification.
@@ -77,35 +75,12 @@ type NotificationOpen struct {
 	Data map[string]any
 	// Action is the action identifier (if supported by the platform).
 	Action string
-	// Source is "local" or "remote".
-	Source string
 	// Timestamp is when the notification was opened.
 	Timestamp time.Time
 }
 
-// DeviceToken represents a device push token update.
-type DeviceToken struct {
-	// Platform is the push provider platform (e.g., "ios", "android").
-	Platform string
-	// Token is the raw device push token.
-	Token string
-	// Timestamp is when this token was received.
-	Timestamp time.Time
-	// IsRefresh reports whether this is a refreshed token.
-	IsRefresh bool
-}
-
-// NotificationError represents a notification-related error.
-type NotificationError struct {
-	// Code is a platform-specific error code.
-	Code string
-	// Message is the human-readable error description.
-	Message string
-	// Platform is the error source platform (e.g., "ios", "android").
-	Platform string
-}
-
-// NotificationsService provides local and push notification management.
+// NotificationsService provides local notification management. Push
+// notifications come from a plugin (plugins/firebase).
 type NotificationsService struct {
 	// Permission for notification access. Implements NotificationPermission
 	// for iOS-specific options.
@@ -114,8 +89,6 @@ type NotificationsService struct {
 	state      *notificationServiceState
 	deliveries *Stream[NotificationEvent]
 	opens      *Stream[NotificationOpen]
-	tokens     *Stream[DeviceToken]
-	errors     *Stream[NotificationError]
 }
 
 // Notifications is the singleton notifications service.
@@ -128,8 +101,6 @@ func init() {
 		state:      state,
 		deliveries: NewStream("drift/notifications/received", state.received, parseNotificationEventWithError),
 		opens:      NewStream("drift/notifications/opened", state.opened, parseNotificationOpenWithError),
-		tokens:     NewStream("drift/notifications/token", state.tokens, parseDeviceTokenWithError),
-		errors:     NewStream("drift/notifications/error", state.errors, parseNotificationErrorWithError),
 	}
 }
 
@@ -137,8 +108,6 @@ type notificationServiceState struct {
 	channel  *MethodChannel
 	received *EventChannel
 	opened   *EventChannel
-	tokens   *EventChannel
-	errors   *EventChannel
 }
 
 func newNotificationService() *notificationServiceState {
@@ -146,8 +115,6 @@ func newNotificationService() *notificationServiceState {
 		channel:  NewMethodChannel("drift/notifications"),
 		received: NewEventChannel("drift/notifications/received"),
 		opened:   NewEventChannel("drift/notifications/opened"),
-		tokens:   NewEventChannel("drift/notifications/token"),
-		errors:   NewEventChannel("drift/notifications/error"),
 	}
 }
 
@@ -217,57 +184,6 @@ func (n *NotificationsService) Opens() *Stream[NotificationOpen] {
 	return n.opens
 }
 
-// Tokens returns a stream of device push token updates.
-func (n *NotificationsService) Tokens() *Stream[DeviceToken] {
-	return n.tokens
-}
-
-// Errors returns a stream of notification errors.
-func (n *NotificationsService) Errors() *Stream[NotificationError] {
-	return n.errors
-}
-
-// RegisterForPush registers the device for push notifications.
-// On iOS, call Permission.Request() first. On Android, this triggers FCM token retrieval.
-func (n *NotificationsService) RegisterForPush() error {
-	_, err := n.state.channel.Invoke(context.Background(), "registerForPush", nil)
-	return err
-}
-
-// GetPushToken returns the current push token if available.
-func (n *NotificationsService) GetPushToken() (string, error) {
-	result, err := n.state.channel.Invoke(context.Background(), "getPushToken", nil)
-	if err != nil {
-		return "", err
-	}
-	if m, ok := result.(map[string]any); ok {
-		return parseString(m["token"]), nil
-	}
-	return "", nil
-}
-
-// SubscribeToTopic subscribes to a push notification topic.
-func (n *NotificationsService) SubscribeToTopic(topic string) error {
-	_, err := n.state.channel.Invoke(context.Background(), "subscribeToTopic", map[string]any{
-		"topic": topic,
-	})
-	return err
-}
-
-// UnsubscribeFromTopic unsubscribes from a push notification topic.
-func (n *NotificationsService) UnsubscribeFromTopic(topic string) error {
-	_, err := n.state.channel.Invoke(context.Background(), "unsubscribeFromTopic", map[string]any{
-		"topic": topic,
-	})
-	return err
-}
-
-// DeletePushToken deletes the current push token.
-func (n *NotificationsService) DeletePushToken() error {
-	_, err := n.state.channel.Invoke(context.Background(), "deletePushToken", nil)
-	return err
-}
-
 func parseNotificationEventWithError(data any) (NotificationEvent, error) {
 	m, ok := data.(map[string]any)
 	if !ok {
@@ -284,7 +200,6 @@ func parseNotificationEventWithError(data any) (NotificationEvent, error) {
 		Data:         parseMap(m["data"]),
 		Timestamp:    parseTime(m["timestamp"]),
 		IsForeground: parseBool(m["isForeground"]),
-		Source:       parseString(m["source"]),
 	}, nil
 }
 
@@ -300,41 +215,7 @@ func parseNotificationOpenWithError(data any) (NotificationOpen, error) {
 	return NotificationOpen{
 		ID:        parseString(m["id"]),
 		Action:    parseString(m["action"]),
-		Source:    parseString(m["source"]),
 		Data:      parseMap(m["data"]),
 		Timestamp: parseTime(m["timestamp"]),
-	}, nil
-}
-
-func parseDeviceTokenWithError(data any) (DeviceToken, error) {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return DeviceToken{}, &errors.ParseError{
-			Channel:  "drift/notifications/token",
-			DataType: "DeviceToken",
-			Got:      data,
-		}
-	}
-	return DeviceToken{
-		Platform:  parseString(m["platform"]),
-		Token:     parseString(m["token"]),
-		Timestamp: parseTime(m["timestamp"]),
-		IsRefresh: parseBool(m["isRefresh"]),
-	}, nil
-}
-
-func parseNotificationErrorWithError(data any) (NotificationError, error) {
-	m, ok := data.(map[string]any)
-	if !ok {
-		return NotificationError{}, &errors.ParseError{
-			Channel:  "drift/notifications/error",
-			DataType: "NotificationError",
-			Got:      data,
-		}
-	}
-	return NotificationError{
-		Code:     parseString(m["code"]),
-		Message:  parseString(m["message"]),
-		Platform: parseString(m["platform"]),
 	}, nil
 }

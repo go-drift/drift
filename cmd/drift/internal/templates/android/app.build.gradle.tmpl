@@ -47,19 +47,12 @@ dependencies {
     implementation "androidx.appcompat:appcompat:1.6.1"
     implementation "androidx.work:work-runtime-ktx:2.9.0"
     implementation "com.google.android.gms:play-services-location:21.1.0"
-    implementation platform("com.google.firebase:firebase-bom:32.7.0")
-    implementation "com.google.firebase:firebase-messaging-ktx"
     implementation "androidx.security:security-crypto:1.1.0-alpha06"
     implementation "androidx.biometric:biometric:1.1.0"
     implementation "androidx.media3:media3-exoplayer:1.2.1"
     implementation "androidx.media3:media3-exoplayer-hls:1.2.1"
     implementation "androidx.media3:media3-exoplayer-dash:1.2.1"
     implementation "androidx.media3:media3-ui:1.2.1"
-}
-
-// Apply google-services plugin only if google-services.json exists
-if (file("google-services.json").exists()) {
-    apply plugin: "com.google.gms.google-services"
 }
 
 // Compile Drift Go code before building (for ejected projects)

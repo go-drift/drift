@@ -87,9 +87,9 @@ func TestApplyGradleApplyPluginsIdempotent(t *testing.T) {
 	}
 }
 
-// Mirrors the scaffold's existing conditional google-services guard: the
-// plugin id already appears inside an `if (file(...).exists())` block.
-// Mutator must detect the live (non-commented) line and skip insertion.
+// An ejected project may apply the plugin itself, here inside an
+// `if (file(...).exists())` block. Mutator must detect the live
+// (non-commented) line and skip insertion.
 func TestApplyGradleApplyPluginsSkipsWhenPresentInConditional(t *testing.T) {
 	conditional := baseAppGradle + `
 if (file("google-services.json").exists()) {
@@ -187,8 +187,8 @@ func TestApplyGradleProjectPluginsSkipsEmptyVersion(t *testing.T) {
 	}
 }
 
-// The scaffold declares google-services 4.4.0; a plugin asking for another
-// version must fail loudly rather than silently get 4.4.0.
+// A project that declares google-services 4.4.0 itself; a plugin asking for
+// another version must fail loudly rather than silently get 4.4.0.
 func TestApplyGradleProjectPluginsRejectsVersionMismatch(t *testing.T) {
 	preDeclared := baseProjectGradle[:len(baseProjectGradle)-2] +
 		`    id "com.google.gms.google-services" version "4.4.0" apply false

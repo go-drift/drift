@@ -29,7 +29,6 @@
 ///   function automatically.
 
 import UIKit
-import UserNotifications
 
 /// The application delegate that manages application-level lifecycle events.
 ///
@@ -57,7 +56,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        NotificationHandler.handleDeviceToken(deviceToken)
         DriftPlugins.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
     }
 
@@ -65,7 +63,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        NotificationHandler.handleRemoteNotificationError(error)
         DriftPlugins.shared.didFailToRegisterForRemoteNotifications(error: error)
     }
 
@@ -74,7 +71,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        NotificationHandler.handleRemoteNotification(userInfo, isForeground: application.applicationState == .active)
         DriftPlugins.shared.didReceiveRemoteNotification(userInfo, completion: completionHandler)
     }
 
