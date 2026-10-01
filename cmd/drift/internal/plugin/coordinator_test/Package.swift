@@ -10,11 +10,11 @@
 // .swift file there into apps.)
 //
 // Run on macOS with an iOS Simulator destination because DriftPluginCoordinator
-// imports UIKit:
+// imports UIKit. Pick a simulator from `xcrun simctl list devices available`:
 //
 //   xcodebuild test \
-//     -scheme DriftPluginCoordinatorTests \
-//     -destination 'platform=iOS Simulator,name=iPhone 15'
+//     -scheme DriftPluginCoordinatorTests-Package \
+//     -destination 'platform=iOS Simulator,name=<iPhone name>'
 //
 // Or via SPM directly when the user has an iOS toolchain configured:
 //
