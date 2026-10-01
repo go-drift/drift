@@ -19,6 +19,7 @@
 /// implementation, so a plugin implements only what it uses.
 
 import UIKit
+import UserNotifications
 
 public protocol DriftPlugin: AnyObject {
     func register(host: DriftPluginHost)
@@ -41,6 +42,15 @@ public protocol DriftPlugin: AnyObject {
         _ userInfo: [AnyHashable: Any],
         completion: @escaping (UIBackgroundFetchResult) -> Void
     ) -> Bool
+
+    /// Offers a notification arriving while the app is in the foreground.
+    /// Return how to present it to claim it ([] shows nothing), or nil to
+    /// leave it to later plugins and Drift's local notifications.
+    func willPresentNotification(_ notification: UNNotification) -> UNNotificationPresentationOptions?
+
+    /// Offers the user's response to a notification (a tap or an action),
+    /// including the one that launched the app. Return true to claim it.
+    func didReceiveNotificationResponse(_ response: UNNotificationResponse) -> Bool
 }
 
 public extension DriftPlugin {
@@ -53,6 +63,8 @@ public extension DriftPlugin {
         _ userInfo: [AnyHashable: Any],
         completion: @escaping (UIBackgroundFetchResult) -> Void
     ) -> Bool { false }
+    func willPresentNotification(_ notification: UNNotification) -> UNNotificationPresentationOptions? { nil }
+    func didReceiveNotificationResponse(_ response: UNNotificationResponse) -> Bool { false }
 }
 
 /// The Drift view a plugin is attached to. Valid from attach(_:) until

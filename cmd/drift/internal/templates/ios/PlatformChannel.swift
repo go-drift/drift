@@ -943,15 +943,24 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: - UNUserNotificationCenterDelegate
 
+    // The app has one notification center delegate, this one. Plugins get
+    // first refusal (drift.yaml order, on the main thread, as for every
+    // plugin callback); what none claims is Drift's.
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        let source = notification.request.trigger is UNPushNotificationTrigger ? "remote" : "local"
-        NotificationHandler.sendReceived(notification: notification, isForeground: true, source: source)
-
-        completionHandler([.banner, .list, .sound, .badge])
+        DispatchQueue.main.async {
+            if let options = DriftPlugins.shared.willPresentNotification(notification) {
+                completionHandler(options)
+                return
+            }
+            let source = notification.request.trigger is UNPushNotificationTrigger ? "remote" : "local"
+            NotificationHandler.sendReceived(notification: notification, isForeground: true, source: source)
+            completionHandler([.banner, .list, .sound, .badge])
+        }
     }
 
     func userNotificationCenter(
@@ -959,10 +968,15 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let notification = response.notification
-        let source = notification.request.trigger is UNPushNotificationTrigger ? "remote" : "local"
-        NotificationHandler.sendOpened(notification: notification, action: response.actionIdentifier, source: source)
-        completionHandler()
+        DispatchQueue.main.async {
+            defer { completionHandler() }
+            if DriftPlugins.shared.didReceiveNotificationResponse(response) {
+                return
+            }
+            let notification = response.notification
+            let source = notification.request.trigger is UNPushNotificationTrigger ? "remote" : "local"
+            NotificationHandler.sendOpened(notification: notification, action: response.actionIdentifier, source: source)
+        }
     }
 
     static func handleRemoteNotification(_ userInfo: [AnyHashable: Any], isForeground: Bool) {
