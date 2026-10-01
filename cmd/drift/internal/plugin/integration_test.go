@@ -15,7 +15,7 @@ import (
 // EnsureRunnerSupport → WriteRegistrant. The bridge subprocess itself is
 // covered by pkg/plugin/runtime_test.go; this test fills the integration
 // gap on the CLI side by feeding hand-crafted ops through the same code
-// path Workspace.runPluginPipeline drives.
+// path the workspace plugin pipeline drives.
 func TestPipelineEndToEndAndroid(t *testing.T) {
 	dir := t.TempDir()
 	seedAndroidScaffold(t, dir)
