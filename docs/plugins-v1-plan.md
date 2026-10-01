@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. Line numbers below are from commit `261864d` and may drift.
+Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. **Phase 1 is done; start at [Status](#status-2026-10-01).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -31,6 +31,36 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 - Core features that add permissions, usage strings, entitlements, background modes or heavy dependencies migrate to plugins (see [Core feature migration](#core-feature-migration)).
 - Ejected iOS projects missing wiring fail with an error naming the fix; the CLI does not auto-patch user Swift or pbxproj files.
 - xtool has no asset catalog support. Workarounds are marked `FUTURE(xtool#219)`. Do not depend on xtool#219 landing.
+
+## Status (2026-10-01)
+
+**Phase 1 is complete** (`76a807e`..`bb740e5`, 15 commits, not yet pushed):
+
+| Commit | Content |
+|--------|---------|
+| `76a807e` | Wire protocol moved to `pkg/plugin/protocol` |
+| `e75c56d` | Every op validates at record time (into `ctx.Err()`, no panics) and at decode; path traversal closed |
+| `9349cbe` | One recursive config check (`required` = key present, `default=`, `hex`, `asset`) shared by sync and build |
+| `40a1928` | Conflicts keyed on targets (`Op.Targets()`), merge classes deleted; plugins can share a SwiftPM package with different products |
+| `e395f20` | Bridge: `-mod=readonly` with a `go mod tidy` hint, atomic cache writes, no temp-dir leak, cache key covers go.mod/go.work/GOFLAGS/toolchain and local replaces |
+| `fad4afb` | Keyword-safe bridge aliases, YAML anchors resolved, bare `plugins:`, `list --resolve` fixed |
+| `7ce9a46` | Registrants in drift.yaml order |
+| `f294d68` | Fix: xtool referenced the sidecar product by the wrong name (every xtool build failed) |
+| `e921388` | Plugin objects with a lifecycle: iOS `DriftPlugin` (register, didFinishLaunching, attach/detach, URL/activity/remote-notification hooks), Android `DriftPlugin` (onRegister once per process, onPreActivityCreate, onAttach/onDetach with intent/result/permission listeners). `DriftPlugins` owns them; codegen only lists classes; built-in deep-link/notification handling lives in templates. Ops `ios.plugin`/`android.plugin` replace the four registrant ops |
+| `d88465d` | Async method results (`DriftResult`); all plugin callbacks on the main thread; fail fast when Go calls a pending handler from the main thread; Android JNI error slot thread-local |
+| `e594a06` | Watch-mode `Refresh` regenerates the managed project when the plugin op hash changes |
+| `8fa8888` | Ejected projects: `.drift/plugins.lock.json`; removed plugins' owned files deleted (unless user-modified); in-file edits listed in a build error shown once; plugin values XML regenerated |
+| `2d3887f` | One SwiftPM module per iOS plugin (`DriftPlugin_<name>`) plus `DriftPluginAPI` in the Drift-owned `Drift/Plugins` package; plugin classes public; host-only initializers behind `@_spi(DriftHost)` |
+| `ee6fe00` | Fix: Simulator builds (no `addPresentedHandler` in the Simulator SDK; `first_frame` falls back to command-buffer completion there) |
+| `bb740e5` | Fix: splash launch storyboard that ibtool compiles |
+
+**Verified:** `go vet`/`go test` in all modules; `drift build android` of splash-demo (with and without `android_12`); `drift build xtool` of splash-demo and of a zero-plugin app (Linux, iOS 26.5 SDK); `drift build ios` of splash-demo on Xcode 26.5 (simulator). Firebase spike (branch `spike/firebase-ios`, Mac): firebase-ios-sdk resolves, and both loose sources and per-plugin targets compile and link, with and without explicit modules.
+
+**Not yet verified:** anything running on a device or simulator; `xcodebuild test` in `cmd/drift/internal/plugin/coordinator_test` (its tests changed in `e921388`).
+
+**Deviations from the original phase 1 plan:** removed plugins' in-file edits in ejected projects fail the build once instead of being probed until removed (a user may want to keep an entry); the watch-mode op hash lives on the in-memory `Workspace`. Android stays loose-source (no per-plugin Gradle modules); Firebase's `<service>` needs a manifest op in phase 3.
+
+**New plugin-author rules:** `Plugin.Name()` is a lowercase identifier (it names the iOS module); iOS plugin sources are Swift only; the iOS plugin class is `public` with `public init()`; method handlers reply through `DriftResult`.
 
 ## Review findings driving this plan
 
@@ -96,7 +126,7 @@ These come from a three-part branch review (design, pipeline correctness, native
 
 Phases are ordered so each one leaves the branch green. Phases 1 to 4 are the merge bar; phase 5 can happen before or after merge.
 
-### Phase 1: core fixes (before building more on top)
+### Phase 1: core fixes (before building more on top) (done, see Status)
 
 1. **Native lifecycle.**
    - Split registration into *register* (once per process: channels, handlers) and *attach/detach* (root view available; per Activity on Android, per scene on iOS). Add `onAttach(rootView)` / `onDetach` to the host protocols and remove `driftRootView()`.
@@ -129,19 +159,22 @@ Phases are ordered so each one leaves the branch green. Phases 1 to 4 are the me
 
 ### Phase 2: splash works on devices
 
-- Install the overlay in `onAttach`.
+Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1); the colour file clash (finding 6) is fixed by writing `drift_splash_colors.xml`, and `WriteXML` now rejects Drift's own values files; hex is validated as `#RRGGBB`/`#RRGGBBAA` by the `hex` tag; splash no longer fades out twice. Still to do, then verify on devices:
+
+- ~~Install the overlay in `onAttach`.~~ Done; confirm on device, including that iOS `detach` (from `DriftViewController.deinit`) and Android `onDetach` behave on scene disconnect / Activity recreation.
 - Gate the Android 12 controller to API 31+. Make `first_frame` independent of the keep-on-screen draw suppression; for example, emit from the engine when the first non-empty layer tree is presented, then release keep-on-screen.
 - Emit `first_frame` only after the root is mounted and composited (not during `OnInit`).
 - Retry a pending dismiss on `didBecomeActive`.
 - Add a configurable max-duration timeout. Surface `Invoke` errors (log or return).
-- Fix the colour file clash, which the target-keyed identity from phase 1 should catch.
-- Define hex as `#RRGGBB` / `#RRGGBBAA` and convert for Android.
+- ~~Fix the colour file clash.~~ Done.
+- Hex is defined and validated as `#RRGGBB` / `#RRGGBBAA` (RGBA); still convert it for Android (ARGB) and check iOS parsing matches.
+- iOS: platform views added after attach sit above the splash overlay (both are subviews of the Drift view); keep the overlay on top.
 - Emit branding and dark variants, or delete those config fields.
 - Update `examples/splash-demo/drift.yaml` (its comment about xtool is stale).
 
 ### Phase 3: Firebase plugin, push moves out of core
 
-1. **Spike on a Mac first.** Write a throwaway plugin with `AddPackageDependency(firebase-ios-sdk, FirebaseCore)` and a Swift source that imports FirebaseCore. Confirm SwiftPM resolves `package: "firebase-ios-sdk"` and that the import compiles. The result decides phase 1, item 6.
+1. ~~**Spike on a Mac first.**~~ Done (branch `spike/firebase-ios`): firebase-ios-sdk resolves and FirebaseCore/FirebaseMessaging import and link from a per-plugin target. Phase 1 item 6 shipped per-plugin SwiftPM targets.
 2. **Create `plugins/firebase`.**
    - Build half: config for `GoogleService-Info.plist` and `google-services.json` paths.
    - Runtime half: Go API for init, token, and message/open events.
@@ -155,7 +188,7 @@ Phases are ordered so each one leaves the branch green. Phases 1 to 4 are the me
    - iOS background modes.
    - Android `<service>` (`FirebaseMessagingService` subclass), unless per-plugin Gradle modules land (manifest merge).
 5. **Delete ops from `261864d` that splash and Firebase do not use.** Review list:
-   - `ios.app_delegate_registrant` callbacks: keep only those Firebase uses.
+   - `DriftPlugin` app hooks on iOS (the `ios.app_delegate_registrant` op is gone): keep only those Firebase uses.
    - `DriftPluginCoordinator` background-fetch merge.
    - `android.assets.add`.
    - `android.gradle.apply_plugin`: needed for google-services.
@@ -212,11 +245,11 @@ Phases are ordered so each one leaves the branch green. Phases 1 to 4 are the me
 - **xtool forwards only web-browsing activities.** `DriftApp.swift` forwards only `NSUserActivityTypeBrowsingWeb` activities to plugins.
 - **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen). `ResetForTest` does not clear the replay slot.
 - **Bridge cache entries** under the cache root are never garbage-collected.
-- **`drift plugin list --resolve`** rewrites the bridge file even when plugins are missing.
+- **iOS detach** relies on `DriftViewController.deinit`; a plugin that retains its `DriftViewBinding` keeps the view controller alive.
 
 ## Unresolved questions
 
-1. Per-plugin SwiftPM targets / Gradle modules, or loose sources? Decide after the phase 3 Firebase spike.
+1. ~~Per-plugin SwiftPM targets / Gradle modules, or loose sources?~~ iOS: per-plugin SwiftPM targets (shipped). Android: loose sources for v1.
 2. Do local notifications stay core until a `notifications` plugin exists, or move with push?
 3. Keep the xcodeproj/xtool dual path for plugins that need SwiftPM products on xtool, or declare some plugins xcodeproj-only?
 4. Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew (today `APIVersion` stays `1`)?
