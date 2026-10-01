@@ -425,6 +425,23 @@ func (s *AndroidManifestScope) SetActivityTheme(activity, theme string) {
 	s.SetActivityAttr(activity, "android:theme", theme)
 }
 
+// AddService declares a <service> element in <application>, written as
+// given (xml), for a plugin class the system starts. android:name is the
+// fully qualified class; a service with intent filters sets
+// android:exported. For example:
+//
+//	<service android:name="com.example.push.PushService" android:exported="false">
+//	    <intent-filter>
+//	        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+//	    </intent-filter>
+//	</service>
+func (s *AndroidManifestScope) AddService(xml string) {
+	s.b.push(&protocol.OpAndroidManifestAddService{
+		Base: newBase(s.b),
+		XML:  xml,
+	})
+}
+
 func (s *AndroidManifestScope) AddMetaData(parent, name, value string) {
 	s.b.push(&protocol.OpAndroidManifestAddMetaData{
 		Base:   newBase(s.b),

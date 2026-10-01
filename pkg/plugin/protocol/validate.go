@@ -210,3 +210,50 @@ func checkGradleCoord(coord string) error {
 	}
 	return nil
 }
+
+// serviceName reads the android:name of a <service> element and checks
+// that a service with intent filters sets android:exported, which Android
+// 12+ requires to install the app.
+func serviceName(s string) (string, error) {
+	dec := xml.NewDecoder(strings.NewReader(s))
+	var name string
+	exported, filters := false, false
+	depth := 0
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("service is not well-formed XML: %w", err)
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				for _, a := range t.Attr {
+					if a.Name.Space != "android" {
+						continue
+					}
+					switch a.Name.Local {
+					case "name":
+						name = a.Value
+					case "exported":
+						exported = true
+					}
+				}
+			} else if t.Name.Local == "intent-filter" {
+				filters = true
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		}
+	}
+	if name == "" {
+		return "", fmt.Errorf("service has no android:name")
+	}
+	if filters && !exported {
+		return "", fmt.Errorf("service %s has an intent filter but no android:exported, which Android 12+ requires", name)
+	}
+	return name, nil
+}
