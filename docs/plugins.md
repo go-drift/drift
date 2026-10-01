@@ -114,7 +114,9 @@ A plugin's native half is a class the build half names with `ctx.IOS.Plugin("MyP
 | Once per process | `register(host:)` then `didFinishLaunching`, from `AppDelegate` | `onRegister(host)`, from the first `MainActivity.onCreate` |
 | Per view / Activity | `attach(DriftViewBinding)` / `detach()` around `DriftViewController` | `onPreActivityCreate(activity)` before `super.onCreate`; `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity |
 | App events | `open(_:)`, `continueUserActivity(_:)` (return true to claim), remote-notification hooks | new-intent, activity-result and permission-result listeners on the binding (return true to claim) |
-| Host | `DriftPluginHost`: `registerChannel`, `sendEvent`, `observeEvent` | same shape, `MethodHandler` |
+| Host | `DriftPluginHost`: `registerChannel` (a `DriftMethodHandler` replying through `DriftResult`), `sendEvent`, `observeEvent` | same shape |
+
+**Threading.** Every plugin callback runs on the main thread: lifecycle methods, method handlers and event observers (observers asynchronously, in event order). A handler replies exactly once through its `DriftResult`, before returning or later from any thread; the Go caller blocks until it does. When Go calls from the main thread (inside a frame or a widget callback) the handler must reply before returning, or the app traps rather than deadlocks, so Go APIs over slow native calls are called from goroutines. Built-in channels keep a synchronous handler on the calling thread.
 
 Plugin Swift sources compile into the app module; Kotlin sources compile into the app module under the plugin's own package. Ejected projects are checked for the template calls that feed `DriftPlugins` (`ejected.go`); the plugin API and `DriftPlugins` itself are Drift-owned and rewritten by `EnsureRunnerSupport`.
 

@@ -15,8 +15,6 @@
 package com.drift.plugin.splash
 
 import android.app.Activity
-import android.os.Handler
-import android.os.Looper
 import android.view.ViewGroup
 import com.drift.runner.DriftActivityBinding
 import com.drift.runner.DriftPlugin
@@ -27,22 +25,21 @@ class DriftSplashPlugin : DriftPlugin {
     // Set once the overlay has faded out; a recreated Activity does not
     // bring the splash back.
     private var dismissed = false
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onRegister(host: DriftPluginHost) {
-        host.registerChannel("drift/splash") { method, _ ->
+        host.registerChannel("drift/splash") { method, _, result ->
             when (method) {
                 "preserve" -> {
                     DriftSplashState.apply(1)
                     maybeDismiss()
-                    Pair(null, null)
+                    result.success(null)
                 }
                 "remove" -> {
                     DriftSplashState.apply(-1)
                     maybeDismiss()
-                    Pair(null, null)
+                    result.success(null)
                 }
-                else -> Pair(null, IllegalArgumentException("unknown splash method $method"))
+                else -> result.error(IllegalArgumentException("unknown splash method $method"))
             }
         }
         host.observeEvent("drift/rendering/frame_events") { data ->
@@ -69,14 +66,14 @@ class DriftSplashPlugin : DriftPlugin {
         overlay = null
     }
 
+    // Called on the main thread, where the host runs plugin handlers and
+    // observers.
     private fun maybeDismiss() {
-        if (!DriftSplashState.canDismiss()) return
-        mainHandler.post {
-            val current = overlay ?: return@post
-            dismissed = true
-            current.fadeOut(DriftSplashConfig.FADE_DURATION_MS) {
-                if (overlay === current) overlay = null
-            }
+        if (dismissed || !DriftSplashState.canDismiss()) return
+        val current = overlay ?: return
+        dismissed = true
+        current.fadeOut(DriftSplashConfig.FADE_DURATION_MS) {
+            if (overlay === current) overlay = null
         }
     }
 }

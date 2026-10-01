@@ -157,11 +157,14 @@ final class JsonCodec {
 
 // MARK: - Platform Channel Manager
 
+/// Handler for a built-in channel: synchronous, run on the calling (Go)
+/// thread. Plugins use the asynchronous `DriftMethodHandler` instead.
+typealias MethodHandler = (String, Any?) -> (Any?, Error?)
+
 /// Manages platform channel handlers and dispatches calls between Go and iOS.
 ///
 /// Adopts `DriftPluginHost` so third-party plugins can register channels and
-/// send events without depending on host internals. `MethodHandler` is
-/// declared at top level in `PluginAPI/DriftPluginHost.swift`.
+/// send events without depending on host internals.
 ///
 /// The initializer registers Drift's built-in channels only. Plugins
 /// register later, from `DriftPlugins.launch`, once `shared` exists, so a
@@ -170,7 +173,16 @@ final class JsonCodec {
 final class PlatformChannelManager: DriftPluginHost {
     static let shared = PlatformChannelManager()
 
-    private var handlers: [String: MethodHandler] = [:]
+    /// A registered channel. Every handler takes the asynchronous form;
+    /// built-ins are adapted. Plugin handlers run on the main thread,
+    /// built-ins on the calling thread.
+    private struct Channel {
+        let handler: DriftMethodHandler
+        let onMain: Bool
+    }
+
+    private var channels: [String: Channel] = [:]
+    private let channelsLock = NSLock()
     private var eventObservers: [String: [UUID: (Any?) -> Void]] = [:]
     private let eventObserversLock = NSLock()
     private let codec = JsonCodec()
@@ -179,21 +191,34 @@ final class PlatformChannelManager: DriftPluginHost {
         registerBuiltInChannels()
     }
 
-    /// Registers a handler for a platform channel.
+    /// Registers a built-in channel handler.
     func register(channel: String, handler: @escaping MethodHandler) {
-        if handlers[channel] != nil {
+        add(channel, Channel(handler: { method, args, result in
+            let (value, error) = handler(method, args)
+            if let error = error {
+                result.error(error)
+            } else {
+                result.success(value)
+            }
+        }, onMain: false))
+    }
+
+    /// `DriftPluginHost`: register a channel handler from a plugin source.
+    func registerChannel(_ name: String, handler: @escaping DriftMethodHandler) {
+        add(name, Channel(handler: handler, onMain: true))
+    }
+
+    private func add(_ name: String, _ channel: Channel) {
+        channelsLock.lock()
+        defer { channelsLock.unlock() }
+        if channels[name] != nil {
             fatalError(
-                "drift: platform channel \"\(channel)\" is already registered. " +
+                "drift: platform channel \"\(name)\" is already registered. " +
                     "Built-in channels run first; plugins must choose a unique " +
                     "<vendor>/<feature> namespace."
             )
         }
-        handlers[channel] = handler
-    }
-
-    /// `DriftPluginHost`: register a channel handler from a plugin source.
-    func registerChannel(_ name: String, handler: @escaping MethodHandler) {
-        register(channel: name, handler: handler)
+        channels[name] = channel
     }
 
     /// `DriftPluginHost`-shaped event sender. Wraps the existing labeled
@@ -213,9 +238,17 @@ final class PlatformChannelManager: DriftPluginHost {
         sendEventDone(channel: channel)
     }
 
-    /// Handles a method call from Go and returns the result.
+    /// Handles a method call from Go and returns the result. Go's call is
+    /// synchronous, so this blocks the calling thread until the handler
+    /// replies. A plugin handler runs on the main thread; when Go itself
+    /// calls from the main thread (inside a frame or a widget callback),
+    /// the handler must reply before returning, since waiting there would
+    /// deadlock any reply that needs the main thread.
     func handleMethodCall(channel: String, method: String, argsData: Data?) -> (Data?, Error?) {
-        guard let handler = handlers[channel] else {
+        channelsLock.lock()
+        let registered = channels[channel]
+        channelsLock.unlock()
+        guard let registered = registered else {
             return (nil, NSError(domain: "PlatformChannel", code: 404, userInfo: [NSLocalizedDescriptionKey: "Channel not found: \(channel)"]))
         }
 
@@ -224,14 +257,35 @@ final class PlatformChannelManager: DriftPluginHost {
             args = codec.decode(argsData)
         }
 
-        let (result, error) = handler(method, args)
-
-        if let error = error {
-            return (nil, error)
+        // The semaphore orders the write of outcome before its read below.
+        let replied = DispatchSemaphore(value: 0)
+        var outcome: Result<Any?, Error>?
+        let result = DriftResult(call: "\(channel).\(method)") { reply in
+            outcome = reply
+            replied.signal()
+        }
+        if registered.onMain && !Thread.isMainThread {
+            DispatchQueue.main.async { registered.handler(method, args, result) }
+            replied.wait()
+        } else {
+            registered.handler(method, args, result)
+            if replied.wait(timeout: .now()) == .timedOut {
+                if Thread.isMainThread {
+                    fatalError(
+                        "drift: \(channel).\(method) did not reply before returning, but Go called it " +
+                            "on the main thread, where waiting would deadlock. Call it from a goroutine."
+                    )
+                }
+                replied.wait()
+            }
         }
 
-        let resultData = codec.encode(result)
-        return (resultData, nil)
+        switch outcome! {
+        case .failure(let error):
+            return (nil, error)
+        case .success(let value):
+            return (codec.encode(value), nil)
+        }
     }
 
     /// Sends an event to Go listeners. Also fans out to any native-side
@@ -253,9 +307,8 @@ final class PlatformChannelManager: DriftPluginHost {
     /// `DriftSubscription` token; the token's `cancel()` unsubscribes.
     /// Multiple observers per channel are supported.
     ///
-    /// Observers are invoked synchronously inside `sendEvent` on the thread
-    /// that called `sendEvent`. Handlers that need main-thread access
-    /// should dispatch themselves.
+    /// Observers run asynchronously on the main thread, in the order events
+    /// were sent.
     func observeEvent(_ channel: String, handler: @escaping (Any?) -> Void) -> DriftSubscription {
         let id = UUID()
         eventObserversLock.lock()
@@ -275,12 +328,20 @@ final class PlatformChannelManager: DriftPluginHost {
         }
     }
 
+    /// Delivers data to the channel's observers on the main thread, skipping
+    /// any cancelled before delivery.
     private func notifyEventObservers(channel: String, data: Any?) {
         eventObserversLock.lock()
-        let snapshot = eventObservers[channel].map { Array($0.values) } ?? []
+        let ids = eventObservers[channel].map { Array($0.keys) } ?? []
         eventObserversLock.unlock()
-        for handler in snapshot {
-            handler(data)
+        guard !ids.isEmpty else { return }
+        DispatchQueue.main.async { [self] in
+            for id in ids {
+                eventObserversLock.lock()
+                let handler = eventObservers[channel]?[id]
+                eventObserversLock.unlock()
+                handler?(data)
+            }
         }
     }
 

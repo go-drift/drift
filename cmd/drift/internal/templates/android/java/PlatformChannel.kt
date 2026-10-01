@@ -17,6 +17,8 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -29,14 +31,25 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.drift.runner.DriftMethodHandler
 import com.drift.runner.DriftPluginHost
+import com.drift.runner.DriftResult
 import com.drift.runner.DriftSubscription
-import com.drift.runner.MethodHandler
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+
+/**
+ * Handler for a built-in channel: synchronous, run on the calling (Go)
+ * thread. Plugins use the asynchronous com.drift.runner.DriftMethodHandler
+ * instead.
+ */
+fun interface MethodHandler {
+    operator fun invoke(method: String, args: Any?): Pair<Any?, Exception?>
+}
 
 /**
  * Manages platform channel handlers and dispatches calls between Go and Android.
@@ -49,10 +62,21 @@ object PlatformChannelManager : DriftPluginHost {
     override lateinit var context: Context
     private var view: View? = null
     private var currentActivity: Activity? = null
+    /**
+     * A registered channel. Every handler takes the asynchronous form;
+     * built-ins are adapted. Plugin handlers run on the main thread,
+     * built-ins on the calling thread.
+     */
+    private class Channel(val handler: DriftMethodHandler, val onMain: Boolean)
+
     // Written on the main thread during registration, read from Go threads.
-    private val handlers = ConcurrentHashMap<String, MethodHandler>()
+    private val channels = ConcurrentHashMap<String, Channel>()
     private val codec = JsonCodec
-    private var lastError: String? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    // The JNI bridge reads a failed call's error right after the call, on
+    // the same thread.
+    private val lastError = ThreadLocal<String?>()
     @Volatile
     private var onFrameNeeded: (() -> Unit)? = null
 
@@ -103,19 +127,27 @@ object PlatformChannelManager : DriftPluginHost {
     /**
      * Registers a handler for a platform channel.
      */
+    /** Registers a built-in channel handler. */
     fun register(channel: String, handler: MethodHandler) {
-        if (handlers.putIfAbsent(channel, handler) != null) {
+        add(channel, Channel({ method, args, result ->
+            val (value, error) = handler(method, args)
+            if (error != null) result.error(error) else result.success(value)
+        }, onMain = false))
+    }
+
+    /** DriftPluginHost: register a channel handler from a plugin source. */
+    override fun registerChannel(name: String, handler: DriftMethodHandler) {
+        add(name, Channel(handler, onMain = true))
+    }
+
+    private fun add(name: String, channel: Channel) {
+        if (channels.putIfAbsent(name, channel) != null) {
             throw IllegalStateException(
-                "drift: platform channel \"$channel\" is already registered. " +
+                "drift: platform channel \"$name\" is already registered. " +
                     "Built-in channels run first; plugins must choose a unique " +
                     "<vendor>/<feature> namespace."
             )
         }
-    }
-
-    /** DriftPluginHost: register a channel handler from a plugin source. */
-    override fun registerChannel(name: String, handler: MethodHandler) {
-        register(name, handler)
     }
 
     /**
@@ -125,10 +157,10 @@ object PlatformChannelManager : DriftPluginHost {
      */
     @JvmStatic
     fun handleMethodCallNative(channel: String, method: String, argsData: ByteArray?): ByteArray? {
-        lastError = null
+        lastError.set(null)
         val (result, error) = handleMethodCall(channel, method, argsData)
         if (error != null) {
-            lastError = error
+            lastError.set(error)
             // Log error but return null - Go will handle it
             android.util.Log.e("PlatformChannel", "Error handling $channel.$method: $error")
             return null
@@ -138,8 +170,8 @@ object PlatformChannelManager : DriftPluginHost {
 
     @JvmStatic
     fun consumeLastError(): String? {
-        val error = lastError
-        lastError = null
+        val error = lastError.get()
+        lastError.set(null)
         return error
     }
 
@@ -153,10 +185,15 @@ object PlatformChannelManager : DriftPluginHost {
     }
 
     /**
-     * Handles a method call from Go and returns the result.
+     * Handles a method call from Go and returns the result. Go's call is
+     * synchronous, so this blocks the calling thread until the handler
+     * replies. A plugin handler runs on the main thread; when Go itself
+     * calls from the main thread (inside a frame or a widget callback), the
+     * handler must reply before returning, since waiting there would
+     * deadlock any reply that needs the main thread.
      */
     fun handleMethodCall(channel: String, method: String, argsData: ByteArray?): Pair<ByteArray?, String?> {
-        val handler = handlers[channel]
+        val registered = channels[channel]
             ?: return Pair(null, errorPayload("channel_not_found", "Channel not found: $channel"))
 
         val args = if (argsData != null && argsData.isNotEmpty()) {
@@ -165,17 +202,52 @@ object PlatformChannelManager : DriftPluginHost {
             null
         }
 
-        val (result, error) = handler(method, args)
-
-        if (error != null) {
-            val code = if (error is IllegalArgumentException) "invalid_arguments" else "native_error"
-            val details = mapOf("exception" to error.javaClass.name)
-            val message = error.message ?: "Unknown error"
-            return Pair(null, errorPayload(code, message, details))
+        // The latch orders the writes of value/error before their reads below.
+        val replied = CountDownLatch(1)
+        var value: Any? = null
+        var error: Exception? = null
+        val result = DriftResult("$channel.$method") { v, e ->
+            value = v
+            error = e
+            replied.countDown()
         }
+        val invoke = {
+            try {
+                registered.handler.onMethodCall(method, args, result)
+            } catch (e: Exception) {
+                result.errorIfPending(e)
+            }
+        }
+        val onMainThread = Looper.myLooper() == Looper.getMainLooper()
+        if (registered.onMain && !onMainThread) {
+            mainHandler.post(invoke)
+        } else {
+            invoke()
+            if (replied.count > 0 && onMainThread) {
+                crash(
+                    "drift: $channel.$method did not reply before returning, but Go called it " +
+                        "on the main thread, where waiting would deadlock. Call it from a goroutine."
+                )
+            }
+        }
+        replied.await()
 
-        val resultData = codec.encode(result)
-        return Pair(resultData, null)
+        error?.let { e ->
+            val code = if (e is IllegalArgumentException) "invalid_arguments" else "native_error"
+            val details = mapOf("exception" to e.javaClass.name)
+            return Pair(null, errorPayload(code, e.message ?: "Unknown error", details))
+        }
+        return Pair(codec.encode(value), null)
+    }
+
+    /**
+     * Fails fast on a programming error. A plain throw would only reach the
+     * JNI bridge, which turns exceptions into a generic Go error.
+     */
+    private fun crash(message: String): Nothing {
+        val e = IllegalStateException(message)
+        Thread.getDefaultUncaughtExceptionHandler()?.uncaughtException(Thread.currentThread(), e)
+        throw e
     }
 
     /**
@@ -204,9 +276,8 @@ object PlatformChannelManager : DriftPluginHost {
      * [DriftSubscription] token; the token's `cancel()` unsubscribes.
      * Multiple observers per channel are supported.
      *
-     * Observers are invoked synchronously inside sendEvent on the thread
-     * that called sendEvent. Handlers that need main-thread access should
-     * post to a Handler themselves.
+     * Observers run asynchronously on the main thread, in the order events
+     * were sent.
      */
     override fun observeEvent(channel: String, handler: (Any?) -> Unit): DriftSubscription {
         val id = synchronized(eventObserversLock) {
@@ -225,11 +296,21 @@ object PlatformChannelManager : DriftPluginHost {
         }
     }
 
+    /**
+     * Delivers data to the channel's observers on the main thread, skipping
+     * any cancelled before delivery.
+     */
     private fun notifyEventObservers(channel: String, data: Any?) {
-        val snapshot = synchronized(eventObserversLock) {
-            eventObservers[channel]?.values?.toList() ?: emptyList()
+        val ids = synchronized(eventObserversLock) {
+            eventObservers[channel]?.keys?.toList()
+        } ?: return
+        if (ids.isEmpty()) return
+        mainHandler.post {
+            for (id in ids) {
+                val handler = synchronized(eventObserversLock) { eventObservers[channel]?.get(id) } ?: continue
+                handler(data)
+            }
         }
-        for (h in snapshot) h(data)
     }
 
     /**

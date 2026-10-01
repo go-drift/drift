@@ -22,18 +22,18 @@ final class DriftSplashPlugin: DriftPlugin {
     private var dismissed = false
 
     func register(host: DriftPluginHost) {
-        host.registerChannel("drift/splash") { [self] method, _ in
+        host.registerChannel("drift/splash") { [self] method, _, result in
             switch method {
             case "preserve":
                 DriftSplashState.shared.apply(1)
                 maybeDismiss()
-                return (nil, nil)
+                result.success(nil)
             case "remove":
                 DriftSplashState.shared.apply(-1)
                 maybeDismiss()
-                return (nil, nil)
+                result.success(nil)
             default:
-                return (nil, NSError(domain: "drift.splash", code: 1, userInfo: [
+                result.error(NSError(domain: "drift.splash", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: "unknown splash method \(method)",
                 ]))
             }
@@ -62,15 +62,17 @@ final class DriftSplashPlugin: DriftPlugin {
         overlay = nil
     }
 
+    /// Called on the main thread, where the host runs plugin handlers and
+    /// observers.
     private func maybeDismiss() {
-        guard DriftSplashState.shared.canDismiss() else { return }
-        DispatchQueue.main.async { [self] in
-            guard UIApplication.shared.applicationState == .active, let current = overlay else { return }
-            dismissed = true
-            current.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) { [self] in
-                if overlay === current {
-                    overlay = nil
-                }
+        guard !dismissed,
+              DriftSplashState.shared.canDismiss(),
+              UIApplication.shared.applicationState == .active,
+              let current = overlay else { return }
+        dismissed = true
+        current.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) { [self] in
+            if overlay === current {
+                overlay = nil
             }
         }
     }

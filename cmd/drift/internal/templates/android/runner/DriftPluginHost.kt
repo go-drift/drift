@@ -6,6 +6,9 @@
  * reference only com.drift.runner.* types, never the user's app package,
  * so the same source compiles in every project.
  *
+ * Threading: every plugin callback (method handlers, event observers and
+ * the DriftPlugin lifecycle) runs on the main thread.
+ *
  * IMPORTANT: This file is shipped verbatim by Drift's scaffold and must NOT
  * depend on the user's app package. The package declaration is fixed.
  */
@@ -35,7 +38,7 @@ class DriftSubscription internal constructor(private val cancelFn: () -> Unit) {
 
 interface DriftPluginHost {
     val context: Context
-    fun registerChannel(name: String, handler: MethodHandler)
+    fun registerChannel(name: String, handler: DriftMethodHandler)
     fun sendEvent(channel: String, data: Any?)
     fun sendEventError(channel: String, code: String, message: String)
     fun sendEventDone(channel: String)
@@ -43,9 +46,8 @@ interface DriftPluginHost {
     /**
      * Subscribes to events posted on [channel] via the host's `sendEvent`
      * path. Native producers (e.g. the engine emitting `first_frame` on
-     * `drift/rendering/frame_events`) fan out to all observers synchronously
-     * on the producer's thread. Handlers that need main-thread access must
-     * post to a Handler themselves.
+     * `drift/rendering/frame_events`) fan out to all observers, which run
+     * asynchronously on the main thread, in the order events were sent.
      *
      * Fan-out covers every `sendEvent` invocation regardless of caller:
      * events originating in native modules are delivered to native
@@ -53,8 +55,9 @@ interface DriftPluginHost {
      * `EventChannel.Listen` are also fanned out here in-process. A native
      * observer never has to know which side produced the event.
      *
-     * The returned token's [DriftSubscription.cancel] unsubscribes. Plugins
-     * that observe for the life of the process can discard the token.
+     * The returned token's [DriftSubscription.cancel] unsubscribes; no
+     * callback runs after it returns on the main thread. Plugins that
+     * observe for the life of the process can discard the token.
      */
     fun observeEvent(channel: String, handler: (Any?) -> Unit): DriftSubscription
 }
