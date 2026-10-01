@@ -1,35 +1,37 @@
-// Package runtime is the Go-side API for the Drift splash plugin. Apps
-// import this package and call Preserve()/Remove() from a Drift lifecycle
-// hook (typically App.OnInit, or StateBase.InitState) to hold the native
-// splash past first-frame.
+// Package runtime is the Go-side API for the Drift splash plugin.
+//
+// Without any call, the native splash stays up until the app draws its
+// first frame with content: after App.OnInit returns and the root widget is
+// built and composited. Preserve holds it past that until a matching
+// Remove, for work the first screen should not show without:
 //
 //	import splash "github.com/go-drift/drift/plugins/splash/runtime"
 //
 //	drift.App{
 //	    Root: App(),
 //	    OnInit: func(ctx context.Context) error {
-//	        splash.Preserve()
+//	        if err := splash.Preserve(); err != nil {
+//	            return err
+//	        }
 //	        go func() {
 //	            loadConfig()
-//	            splash.Remove()
+//	            if err := splash.Remove(); err != nil {
+//	                log.Printf("splash: %v", err)
+//	            }
 //	        }()
 //	        return nil
 //	    },
 //	}.Run()
 //
-// Preserve and Remove are ref-counted on the native side. Calling Remove
-// without a matching Preserve is end-to-end a no-op (native clamps the
-// preserveCount at zero).
-//
-// Go's package `func init()` runs before Drift's native bridge is up; calls
-// from there cannot reach the native handler and are silently dropped. Use
-// App.OnInit or InitState instead — both run after the bridge is alive and
-// before the first frame is composited, which is exactly the window the
-// splash plugin gates.
+// Preserve and Remove are counted on the native side. A Remove without a
+// matching Preserve does nothing. The splash goes after the plugin's
+// max_duration_ms whatever is preserving it, so a missed Remove cannot keep
+// it up for good.
 package runtime
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-drift/drift/pkg/platform"
 )
@@ -42,19 +44,27 @@ const channelName = "drift/splash"
 
 var channel = platform.NewMethodChannel(channelName)
 
-// Preserve blocks the splash from auto-dismissing on first frame. Pair
-// with Remove when the app is ready for the splash to fade.
+// Preserve keeps the splash up past the first frame until a matching
+// Remove. Call it before the first frame: from App.OnInit or the root
+// widget's InitState.
 //
-// Ref-counted: each Preserve must be matched by a Remove. Call from a
-// Drift lifecycle hook (typically StateBase.InitState or App.OnInit); see
-// the package doc for why Go's package init is out of scope.
-func Preserve() {
-	_, _ = channel.Invoke(context.Background(), "preserve", nil)
+// It fails if the splash has already gone, or if the native plugin is
+// unreachable (the plugin is not in drift.yaml, or the call came from a
+// package init before the app started).
+func Preserve() error {
+	if _, err := channel.Invoke(context.Background(), "preserve", nil); err != nil {
+		return fmt.Errorf("splash preserve: %w", err)
+	}
+	return nil
 }
 
-// Remove decrements the preserve count. Safe to call multiple times; the
-// native side clamps the resulting count at zero, so a Remove without a
-// matching Preserve is a no-op.
-func Remove() {
-	_, _ = channel.Invoke(context.Background(), "remove", nil)
+// Remove releases one Preserve. When none remain and the app has drawn its
+// first frame, the splash fades out.
+//
+// It fails if the native plugin is unreachable.
+func Remove() error {
+	if _, err := channel.Invoke(context.Background(), "remove", nil); err != nil {
+		return fmt.Errorf("splash remove: %w", err)
+	}
+	return nil
 }

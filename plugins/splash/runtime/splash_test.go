@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -14,6 +16,7 @@ type fakeBridge struct {
 	mu       sync.Mutex
 	channels []string
 	methods  []string
+	err      error // returned by every call when set
 }
 
 func (b *fakeBridge) InvokeMethod(_ context.Context, channel, method string, _ []byte) ([]byte, error) {
@@ -21,6 +24,9 @@ func (b *fakeBridge) InvokeMethod(_ context.Context, channel, method string, _ [
 	defer b.mu.Unlock()
 	b.channels = append(b.channels, channel)
 	b.methods = append(b.methods, method)
+	if b.err != nil {
+		return nil, b.err
+	}
 	resp, _ := platform.DefaultCodec.Encode(nil)
 	return resp, nil
 }
@@ -48,7 +54,9 @@ func setupBridge(t *testing.T) *fakeBridge {
 
 func TestPreserveInvokesPreserveMethod(t *testing.T) {
 	bridge := setupBridge(t)
-	Preserve()
+	if err := Preserve(); err != nil {
+		t.Fatalf("Preserve: %v", err)
+	}
 	channels, methods := bridge.snapshot()
 	if len(channels) != 1 || channels[0] != channelName {
 		t.Fatalf("expected one call on %q, got channels=%v", channelName, channels)
@@ -60,7 +68,9 @@ func TestPreserveInvokesPreserveMethod(t *testing.T) {
 
 func TestRemoveInvokesRemoveMethod(t *testing.T) {
 	bridge := setupBridge(t)
-	Remove()
+	if err := Remove(); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
 	channels, methods := bridge.snapshot()
 	if len(channels) != 1 || channels[0] != channelName {
 		t.Fatalf("expected one call on %q, got channels=%v", channelName, channels)
@@ -72,13 +82,26 @@ func TestRemoveInvokesRemoveMethod(t *testing.T) {
 
 func TestPreserveRemovePairOrdering(t *testing.T) {
 	bridge := setupBridge(t)
-	Preserve()
-	Remove()
+	_ = Preserve()
+	_ = Remove()
 	_, methods := bridge.snapshot()
 	if len(methods) != 2 {
 		t.Fatalf("expected 2 invocations, got %d", len(methods))
 	}
 	if methods[0] != "preserve" || methods[1] != "remove" {
 		t.Errorf("methods = %v, want [preserve remove]", methods)
+	}
+}
+
+// A splash that cannot be reached (plugin not configured, or already
+// dismissed for Preserve) is reported, not silently dropped.
+func TestErrorsAreReturned(t *testing.T) {
+	bridge := setupBridge(t)
+	bridge.err = errors.New("no handler for drift/splash")
+	if err := Preserve(); err == nil || !strings.Contains(err.Error(), "no handler") {
+		t.Errorf("Preserve err = %v", err)
+	}
+	if err := Remove(); err == nil || !strings.Contains(err.Error(), "no handler") {
+		t.Errorf("Remove err = %v", err)
 	}
 }

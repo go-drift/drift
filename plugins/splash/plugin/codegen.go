@@ -111,11 +111,13 @@ func generateSplashConfigSwift(cfg resolvedConfig) string {
 		Red, Green, Blue, Alpha string
 		Width, Height           string
 		FadeDurationMs          int
+		MaxDurationMs           int
 	}{
 		Red: component(c.R), Green: component(c.G), Blue: component(c.B), Alpha: component(c.A),
 		Width:          formatLength(cfg.ImageSize.Width),
 		Height:         formatLength(cfg.ImageSize.Height),
 		FadeDurationMs: cfg.FadeDurationMs,
+		MaxDurationMs:  cfg.MaxDurationMs,
 	})
 }
 

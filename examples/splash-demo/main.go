@@ -1,23 +1,16 @@
 // Splash demo: a minimal Drift app that demonstrates the splash plugin's
 // runtime API.
 //
-// `App.OnInit` blocks root mounting (and frame composition) while it runs,
-// so by default the native splash holds for as long as OnInit takes to
-// return. To extend the hold beyond OnInit — for example, to keep the
-// splash overlay visible while async background work continues after the
-// first frame paints — call `splash.Preserve()` from inside OnInit and
-// match it with a later `splash.Remove()`. This demo does exactly that:
-// OnInit returns immediately after spawning a goroutine that sleeps 2
-// seconds before releasing the splash.
-//
-// `splash.Preserve()` is the runtime-side counterpart to Drift's lifecycle
-// — call it from `App.OnInit` or a `StateBase.InitState`. Go's package
-// `func init()` runs before Drift's bridge is up and cannot reach native;
-// the splash plugin's lifecycle hooks are the supported call sites.
+// The splash stays up until the app draws its first frame with content,
+// which is after App.OnInit returns. To hold it longer, for work the first
+// screen should not show without, call splash.Preserve() before the first
+// frame (App.OnInit or the root's InitState) and splash.Remove() when done.
+// This demo holds it for 2 seconds after OnInit returns.
 package main
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/go-drift/drift/pkg/core"
@@ -33,17 +26,18 @@ func main() {
 	drift.App{
 		Root: App(),
 		OnInit: func(ctx context.Context) error {
-			// Preserve from OnInit: bumps the native preserve count
-			// before the engine starts composing real frames, so the
-			// splash overlay continues past OnInit's return.
-			splash.Preserve()
+			if err := splash.Preserve(); err != nil {
+				return err
+			}
 			go func() {
 				select {
 				case <-time.After(2 * time.Second):
 				case <-ctx.Done():
 					return
 				}
-				splash.Remove()
+				if err := splash.Remove(); err != nil {
+					log.Printf("splash: %v", err)
+				}
 			}()
 			return nil
 		},

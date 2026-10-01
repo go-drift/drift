@@ -4,9 +4,8 @@ app:
   orientation: portrait
 
 plugins:
-  # The splash plugin supports iOS (Xcode 16+) and Android. xtool builds
-  # currently skip iOS-side emission with a warning — Assets.xcassets is
-  # not yet supported upstream by xtool.
+  # Supported on iOS (Xcode 16+), xtool and Android. See
+  # plugins/splash/plugin/plugin.go for every option.
   - package: github.com/go-drift/drift/plugins/splash/plugin
     config:
       image: assets/splash.png
