@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"strings"
+	"math"
+	"strconv"
 	"text/template"
+
+	driftplugin "github.com/go-drift/drift/pkg/plugin"
 )
 
 //go:embed templates
@@ -48,29 +51,30 @@ func renderTemplate(t *template.Template, data any) string {
 }
 
 // generateLaunchStoryboard returns the bytes of a minimal LaunchScreen
-// storyboard mirroring the runtime overlay: a background-colour view filling
-// the scene, with a single centred image view referencing the `DriftSplash`
-// asset shipped in Assets.xcassets.
+// storyboard laid out exactly like the runtime overlay
+// (ios/SplashOverlayView.swift): the background colour filling the scene
+// and the `DriftSplash` image set centred at ImageSize.
 func generateLaunchStoryboard(cfg resolvedConfig) string {
 	return renderTemplate(tmplStoryboard, struct {
 		BackgroundColorAttrs string
+		Width, Height        string
 	}{
-		BackgroundColorAttrs: hexToStoryboardColor(cfg.BackgroundColor),
+		BackgroundColorAttrs: storyboardColor(cfg.BackgroundColor),
+		Width:                formatLength(cfg.ImageSize.Width),
+		Height:               formatLength(cfg.ImageSize.Height),
 	})
 }
 
-// generateLayerList returns the bytes of res/drawable/launch_background.xml:
-// a layer-list with a coloured background and the splash image centred on
-// top. This is the drawable referenced by the scaffold's LaunchTheme;
-// replacing the drawable is how the plugin owns the pre-API-31 splash
-// visuals without touching the theme XML.
-func generateLayerList(backgroundColorResource, imageResource string) string {
+// generateLayerList returns res/drawable/launch_background.xml: the
+// background colour with the splash image centred on top at ImageSize. It is
+// the drawable the scaffold's LaunchTheme references, so replacing it owns
+// the pre-API-31 splash without touching the theme XML.
+func generateLayerList(cfg resolvedConfig) string {
 	return renderTemplate(tmplLayerList, struct {
-		BackgroundColorResource string
-		ImageResource           string
+		Width, Height string
 	}{
-		BackgroundColorResource: backgroundColorResource,
-		ImageResource:           imageResource,
+		Width:  formatLength(cfg.ImageSize.Width),
+		Height: formatLength(cfg.ImageSize.Height),
 	})
 }
 
@@ -78,78 +82,68 @@ func generateLayerList(backgroundColorResource, imageResource string) string {
 // variant that opts into the Android 12+ SplashScreen API. Android resource
 // merging picks values-v31/ over values/ on API 31+, so the scaffold's
 // LaunchTheme is shadowed on those devices without resource-merge conflicts.
-func generateV31Styles(cfg resolvedConfig) string {
+func generateV31Styles(a android12Resolved) string {
 	return renderTemplate(tmplV31Styles, struct {
 		IconBackgroundColor string
 	}{
-		IconBackgroundColor: cfg.Android12.IconBackgroundColor,
+		IconBackgroundColor: a.IconBackgroundColor.AndroidHex(),
 	})
 }
 
 // generateValuesColors returns res/values/drift_splash_colors.xml declaring the
 // drift_splash_background colour. Lives in a splash-owned values file (not
 // the scaffold's colors.xml or Drift's plugin_colors.xml) to avoid clashes.
-func generateValuesColors(backgroundColor string) string {
+func generateValuesColors(c driftplugin.Color) string {
 	return renderTemplate(tmplColors, struct {
 		BackgroundColor string
 	}{
-		BackgroundColor: backgroundColor,
+		BackgroundColor: c.AndroidHex(),
 	})
 }
 
-type nativeConfigView struct {
-	BackgroundColor string
-	FadeDurationMs  int
-	Android12       bool
-}
-
-func nativeConfigData(cfg resolvedConfig) nativeConfigView {
-	return nativeConfigView{
-		BackgroundColor: cfg.BackgroundColor,
-		FadeDurationMs:  cfg.FadeDurationMs,
-		Android12:       cfg.HasAndroid12,
-	}
-}
-
-// generateSplashConfigSwift returns the bytes of Runner/Plugins/Splash/
-// SplashConfig.swift: a tiny enum holding the resolved configuration as
-// static constants. The native splash needs these values before any Go code
-// runs (the launch screen is the literal first surface), so config is baked
-// into the binary rather than fetched over the channel at startup.
+// generateSplashConfigSwift returns SplashConfig.swift: the resolved
+// configuration as static constants. The native splash needs these values
+// before any Go code runs (the launch screen is the literal first surface),
+// so config is baked into the binary rather than fetched over the channel.
 func generateSplashConfigSwift(cfg resolvedConfig) string {
-	return renderTemplate(tmplSwiftCfg, nativeConfigData(cfg))
+	c := cfg.BackgroundColor
+	return renderTemplate(tmplSwiftCfg, struct {
+		Red, Green, Blue, Alpha string
+		Width, Height           string
+		FadeDurationMs          int
+	}{
+		Red: component(c.R), Green: component(c.G), Blue: component(c.B), Alpha: component(c.A),
+		Width:          formatLength(cfg.ImageSize.Width),
+		Height:         formatLength(cfg.ImageSize.Height),
+		FadeDurationMs: cfg.FadeDurationMs,
+	})
 }
 
-// generateSplashConfigKotlin returns the bytes of
-// app/src/main/java/com/drift/plugin/splash/SplashConfig.kt: the Kotlin twin
-// of SplashConfig.swift.
+// generateSplashConfigKotlin returns SplashConfig.kt: the Kotlin twin of
+// SplashConfig.swift.
 func generateSplashConfigKotlin(cfg resolvedConfig) string {
-	return renderTemplate(tmplKotlinCfg, nativeConfigData(cfg))
+	return renderTemplate(tmplKotlinCfg, struct {
+		FadeDurationMs int
+		Android12      bool
+	}{
+		FadeDurationMs: cfg.FadeDurationMs,
+		Android12:      cfg.Android12 != nil,
+	})
 }
 
-// hexToStoryboardColor converts "#RRGGBB" to the Xcode storyboard color
-// attribute fragment. Only the 6-digit form is exercised here; the 8-digit
-// form would need alpha extraction, which the scaffold splash doesn't use.
-//
-// Boundary validation in resolve() (config.go) gates hex strings through
-// hexColorRE, so any value reaching this function is guaranteed well-formed.
-// A panic here would indicate the boundary check was bypassed and is a
-// programming error worth surfacing loudly, consistent with codegen.go's
-// mustParseTemplate / renderTemplate panic-on-internal-failure pattern.
-func hexToStoryboardColor(hex string) string {
-	if !strings.HasPrefix(hex, "#") || len(hex) < 7 {
-		panic(fmt.Sprintf("splash plugin: hexToStoryboardColor got unvalidated input %q; "+
-			"boundary check in resolve() should have rejected this", hex))
-	}
-	r := hexByte(hex[1:3])
-	g := hexByte(hex[3:5])
-	b := hexByte(hex[5:7])
-	return fmt.Sprintf(`red="%.4f" green="%.4f" blue="%.4f" alpha="1" colorSpace="custom" customColorSpace="sRGB"`,
-		float64(r)/255.0, float64(g)/255.0, float64(b)/255.0)
+// storyboardColor returns the Interface Builder colour attributes for c.
+func storyboardColor(c driftplugin.Color) string {
+	return fmt.Sprintf(`red="%s" green="%s" blue="%s" alpha="%s" colorSpace="custom" customColorSpace="sRGB"`,
+		component(c.R), component(c.G), component(c.B), component(c.A))
 }
 
-func hexByte(s string) int {
-	var v int
-	fmt.Sscanf(s, "%x", &v)
-	return v
+// component formats an 8-bit colour channel as a 0-1 fraction.
+func component(v uint8) string {
+	return strconv.FormatFloat(float64(v)/255, 'f', 4, 64)
+}
+
+// formatLength formats a length in points / dp for XML and Swift, with at
+// most two decimals.
+func formatLength(v float64) string {
+	return strconv.FormatFloat(math.Round(v*100)/100, 'f', -1, 64)
 }
