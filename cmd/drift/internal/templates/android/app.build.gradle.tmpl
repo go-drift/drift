@@ -1,42 +1,38 @@
 plugins {
+    // AGP compiles Kotlin itself (built-in Kotlin); no Kotlin plugin.
     id "com.android.application"
-    id "org.jetbrains.kotlin.android"
 }
 
 android {
-    namespace "{{.PackageName}}"
-    compileSdk 34
+    namespace = "{{.PackageName}}"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId "{{.PackageName}}"
-        minSdk 29
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        applicationId = "{{.PackageName}}"
+        minSdk = {{.AndroidMinSDK}}
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
 
         ndk {
-            abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
+            abiFilters.addAll(["arm64-v8a", "armeabi-v7a", "x86_64"])
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = false
         }
     }
 
     externalNativeBuild {
         cmake {
-            path file("src/main/cpp/CMakeLists.txt")
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 

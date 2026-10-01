@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
+	"github.com/go-drift/drift/cmd/drift/internal/templates"
 )
 
 // iosCompileConfig holds parameters for iOS Go cross-compilation.
@@ -163,9 +164,9 @@ func compileGoForAndroid(cfg androidCompileConfig) error {
 		triple   string
 		skiaArch string
 	}{
-		{"arm64-v8a", "arm64", "", "aarch64-linux-android29-clang", "aarch64-linux-android", "arm64"},
-		{"armeabi-v7a", "arm", "7", "armv7a-linux-androideabi29-clang", "arm-linux-androideabi", "arm"},
-		{"x86_64", "amd64", "", "x86_64-linux-android29-clang", "x86_64-linux-android", "amd64"},
+		{"arm64-v8a", "arm64", "", fmt.Sprintf("aarch64-linux-android%d-clang", templates.AndroidMinSDK), "aarch64-linux-android", "arm64"},
+		{"armeabi-v7a", "arm", "7", fmt.Sprintf("armv7a-linux-androideabi%d-clang", templates.AndroidMinSDK), "arm-linux-androideabi", "arm"},
+		{"x86_64", "amd64", "", fmt.Sprintf("x86_64-linux-android%d-clang", templates.AndroidMinSDK), "x86_64-linux-android", "amd64"},
 	}
 
 	if cfg.targetABI != "" {
