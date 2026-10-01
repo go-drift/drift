@@ -561,7 +561,7 @@ func (o *OpAndroidManifestAddMetaData) Validate() error {
 type OpAndroidColorSet struct {
 	Base
 	Name  string `json:"name"`
-	Value string `json:"value"`
+	Value string `json:"value"` // Drift hex colour (see Color), alpha last
 }
 
 func (o *OpAndroidColorSet) Type() string     { return "android.color.set" }
@@ -573,7 +573,10 @@ func (o *OpAndroidColorSet) Validate() error {
 	if err := checkMatch(valueResNameRe, "color name", o.Name); err != nil {
 		return err
 	}
-	return checkNonEmpty("color value", o.Value)
+	if _, err := ParseColor(o.Value); err != nil {
+		return fmt.Errorf("color value: %w", err)
+	}
+	return nil
 }
 
 type OpAndroidStringSet struct {

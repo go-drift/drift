@@ -184,10 +184,20 @@ func ensureMetaData(parent *etree.Element, name, value string) {
 // WriteAndroidColors writes Drift's plugin colours file at path from ops,
 // replacing any previous content (the file is Drift-owned), or removes it
 // when there are no ops so a dropped plugin's colours do not linger.
+// Values are Drift hex colours (alpha last), written in Android's format
+// (alpha first).
 func WriteAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {
+	values := make([]string, len(ops))
+	for i, op := range ops {
+		c, err := protocol.ParseColor(op.Value)
+		if err != nil {
+			return "", false, fmt.Errorf("color %s: %w", op.Name, err)
+		}
+		values[i] = c.AndroidHex()
+	}
 	return writeValuesXML(path, "color", len(ops), func(root *etree.Element) {
-		for _, op := range ops {
-			setValueEntry(root, "color", op.Name, op.Value)
+		for i, op := range ops {
+			setValueEntry(root, "color", op.Name, values[i])
 		}
 	})
 }

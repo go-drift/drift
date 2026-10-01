@@ -52,7 +52,7 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 - `drift:"..."` tags declare config rules, checked recursively through nested structs, lists of structs and `yaml:",inline"` embeds by the same code on `drift plugin sync` and on build:
   - `required`: the key must be present (an explicit `false` or `""` counts).
   - `default=<literal>`: used when the key is absent. Scalars only; cannot combine with `required`.
-  - `hex`: a `#RRGGBB` or `#RRGGBBAA` string.
+  - `hex`: a `#RRGGBB` or `#RRGGBBAA` string, alpha last. `ctx.Android.Resources.Colors.Set` takes the same format and Drift writes Android's alpha-first form; a plugin generating its own platform files converts with `driftplugin.ParseColor`.
   - `asset`: a canonical project-relative path to an existing file.
   - A malformed tag (unknown validator, unparseable default) panics when the bridge starts.
 - `Build` must not touch disk; it only records ops on `ctx`.
