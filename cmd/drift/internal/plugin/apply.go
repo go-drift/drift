@@ -220,7 +220,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 		}
 		bundleFiles = append(bundleFiles, images...)
 	} else if len(bag.iosAssets) > 0 {
-		paths, err := mutate.WriteIOSAssets(filepath.Join(buildDir, "Runner", "Assets.xcassets"), bag.iosAssets)
+		paths, err := mutate.WriteIOSAssets(iosAssetCatalog(buildDir), bag.iosAssets)
 		if err != nil {
 			return changed, err
 		}
@@ -294,27 +294,21 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 		}
 	}
 
-	resDir := filepath.Join(buildDir, "app", "src", "main", "res")
-	if len(bag.colors) > 0 {
-		path, ch, err := mutate.ApplyAndroidColors(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginColorsFile)), bag.colors)
-		if err != nil {
-			return changed, err
-		}
-		if ch {
-			changed = append(changed, path)
-		}
-	}
-	if len(bag.strings) > 0 {
-		path, ch, err := mutate.ApplyAndroidStrings(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStringsFile)), bag.strings)
-		if err != nil {
-			return changed, err
-		}
-		if ch {
-			changed = append(changed, path)
-		}
-	}
-	if len(bag.styles) > 0 {
-		path, ch, err := mutate.ApplyAndroidStyles(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStylesFile)), bag.styles)
+	// Drift-owned values files are always written (or removed when empty),
+	// so a dropped plugin's entries do not linger.
+	resDir := androidResDir(buildDir)
+	for _, w := range []func() (string, bool, error){
+		func() (string, bool, error) {
+			return mutate.WriteAndroidColors(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginColorsFile)), bag.colors)
+		},
+		func() (string, bool, error) {
+			return mutate.WriteAndroidStrings(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStringsFile)), bag.strings)
+		},
+		func() (string, bool, error) {
+			return mutate.WriteAndroidStyles(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStylesFile)), bag.styles)
+		},
+	} {
+		path, ch, err := w()
 		if err != nil {
 			return changed, err
 		}
@@ -324,8 +318,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	}
 
 	if len(bag.drawables) > 0 {
-		drawableDir := filepath.Join(buildDir, "app", "src", "main", "res", "drawable")
-		paths, err := mutate.WriteAndroidDrawables(drawableDir, bag.drawables)
+		paths, err := mutate.WriteAndroidDrawables(androidDrawableDir(buildDir), bag.drawables)
 		if err != nil {
 			return changed, err
 		}
@@ -333,8 +326,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	}
 
 	if len(bag.resXML) > 0 {
-		resRoot := filepath.Join(buildDir, "app", "src", "main", "res")
-		paths, err := mutate.WriteAndroidResourceXML(resRoot, bag.resXML)
+		paths, err := mutate.WriteAndroidResourceXML(androidResDir(buildDir), bag.resXML)
 		if err != nil {
 			return changed, err
 		}
@@ -342,8 +334,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	}
 
 	if len(bag.kotlinSources) > 0 {
-		javaRoot := filepath.Join(buildDir, "app", "src", "main", "java")
-		paths, err := mutate.WriteKotlinSources(javaRoot, bag.kotlinSources)
+		paths, err := mutate.WriteKotlinSources(androidJavaRoot(buildDir), bag.kotlinSources)
 		if err != nil {
 			return changed, err
 		}
@@ -362,8 +353,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	}
 
 	if len(bag.androidAssets) > 0 {
-		assetsRoot := filepath.Join(buildDir, "app", "src", "main", "assets")
-		paths, err := mutate.WriteAndroidAssets(assetsRoot, bag.androidAssets)
+		paths, err := mutate.WriteAndroidAssets(androidAssetsRoot(buildDir), bag.androidAssets)
 		if err != nil {
 			return changed, err
 		}
@@ -371,7 +361,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	}
 
 	if len(bag.appModule) > 0 {
-		paths, err := mutate.WriteAndroidAppModuleFiles(filepath.Join(buildDir, "app"), bag.appModule)
+		paths, err := mutate.WriteAndroidAppModuleFiles(androidAppDir(buildDir), bag.appModule)
 		if err != nil {
 			return changed, err
 		}
@@ -398,6 +388,57 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 	}
 
 	return changed, nil
+}
+
+// OwnedFiles returns the whole files op writes into the project at buildDir
+// (see mutate.OwnedFile), computed exactly as Apply writes them. Ops that
+// only edit shared files, or whose output Drift regenerates wholesale every
+// build (registrants, values files, bundle resources, the SwiftPM sidecar),
+// own none.
+func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, error) {
+	one := func(f mutate.OwnedFile, err error) ([]mutate.OwnedFile, error) {
+		if err != nil {
+			return nil, err
+		}
+		return []mutate.OwnedFile{f}, nil
+	}
+	switch v := op.(type) {
+	case *protocol.OpAddIOSSource:
+		return one(mutate.IOSSourceFile(iosPluginsDir(buildDir, platform), v))
+	case *protocol.OpIOSAssetsAddImageSet:
+		if platform == "xtool" {
+			return nil, nil // a loose bundle PNG, pruned with the bundle resources
+		}
+		return mutate.ImageSetFiles(iosAssetCatalog(buildDir), v)
+	case *protocol.OpAddKotlinSource:
+		return one(mutate.KotlinSourceFile(androidJavaRoot(buildDir), v))
+	case *protocol.OpAndroidWriteDrawable:
+		return one(mutate.DrawableFile(androidDrawableDir(buildDir), v))
+	case *protocol.OpAndroidWriteResourceXML:
+		return one(mutate.ResourceXMLFile(androidResDir(buildDir), v), nil)
+	case *protocol.OpAndroidAddAsset:
+		return one(mutate.AndroidAssetFile(androidAssetsRoot(buildDir), v))
+	case *protocol.OpAndroidAddAppModuleFile:
+		return one(mutate.AppModuleFile(androidAppDir(buildDir), v))
+	}
+	return nil, nil
+}
+
+func androidAppDir(buildDir string) string { return filepath.Join(buildDir, "app") }
+func androidResDir(buildDir string) string {
+	return filepath.Join(buildDir, "app", "src", "main", "res")
+}
+func androidDrawableDir(buildDir string) string {
+	return filepath.Join(androidResDir(buildDir), "drawable")
+}
+func androidJavaRoot(buildDir string) string {
+	return filepath.Join(buildDir, "app", "src", "main", "java")
+}
+func androidAssetsRoot(buildDir string) string {
+	return filepath.Join(buildDir, "app", "src", "main", "assets")
+}
+func iosAssetCatalog(buildDir string) string {
+	return filepath.Join(buildDir, "Runner", "Assets.xcassets")
 }
 
 // iosInfoPlistPath returns Info.plist for managed iOS, xtool, and ejected builds.

@@ -73,7 +73,9 @@ var Plugin driftplugin.Plugin[Config] = demo{}
 
 With zero plugins, the bridge is skipped but the registrant, sidecar and resource directories are still reset so generated projects always compile.
 
-Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files. `CheckEjectedIOS` (`ejected.go`) fails early when an ejected iOS project lacks wiring a plugin needs.
+Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files. `CheckEjectedIOS` / `CheckEjectedAndroid` (`ejected.go`) fail early when the project lacks the template calls plugins need. After applying, `SyncEjectedLock` (`lock.go`) compares the ops with `.drift/plugins.lock.json` from the previous build (commit it): files a removed plugin owned are deleted unless the user changed them, and edits it made inside shared files (Info.plist keys, manifest entries, Gradle lines) are listed once in a build error for the user to undo, since Drift cannot remove them safely.
+
+Managed builds regenerate the whole project every build; in watch mode, `Refresh` regenerates it when the plugin op set changes.
 
 ## Ops
 

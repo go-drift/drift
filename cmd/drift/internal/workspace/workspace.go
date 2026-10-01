@@ -360,8 +360,9 @@ func newPluginOps(ops []protocol.Op) (pluginOps, error) {
 // Drift-owned plugin support files and the registrant. With no ops it
 // still writes those, with an empty registrant, and resets
 // plugin-generated output (bundle resources, the SwiftPM sidecar) so the
-// project compiles. Ejected projects are checked for plugin wiring first,
-// and get a summary of modified files.
+// project compiles. Ejected projects are checked for plugin wiring first;
+// afterwards, output from plugins removed since the last build is cleaned
+// up (see SyncEjectedLock) and the modified files are summarised.
 func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	platformDir := platformProjectDir(ws, ws.Platform)
 	platform := ws.Platform
@@ -395,11 +396,15 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	}
 	changed = append(changed, registrant...)
 
+	var lockErr error
 	if ws.Ejected {
+		var deleted []string
+		deleted, lockErr = driftpluginCLI.SyncEjectedLock(platformDir, platform, ops.ops)
+		changed = append(changed, deleted...)
 		reportChangedFiles(changed, ws.Root)
 	}
 	ws.pluginOps = ops
-	return nil
+	return lockErr
 }
 
 func reportChangedFiles(changed []string, root string) {

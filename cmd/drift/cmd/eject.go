@@ -34,8 +34,11 @@ The ejected project is a real, fully-functioning project with all template
 values substituted. You can edit Swift/Kotlin code, modify project settings,
 add dependencies, etc.
 
-Note: Changes to drift.yaml will NOT affect ejected platforms. To incorporate
-drift.yaml changes, delete the platform directory and re-eject.`,
+Note: App settings in drift.yaml (name, id, icon, ...) do NOT reach ejected
+platforms; to pick them up, delete the platform directory and re-eject.
+Plugins do: every build applies their project changes, records them in
+.drift/plugins.lock.json inside the platform directory (commit it), and
+cleans up after plugins removed from drift.yaml.`,
 		Usage: "drift eject <ios|android|all> [--force]",
 		Run:   runEject,
 	})
@@ -187,8 +190,9 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 		fmt.Printf("Open in Android Studio:\n  studio %s\n\n", platformDir)
 	}
 
-	fmt.Println("Note: Changes to drift.yaml will NOT affect this ejected project.")
-	fmt.Println("To incorporate drift.yaml changes, delete the platform directory and re-eject.")
+	fmt.Println("Note: App settings in drift.yaml will NOT affect this ejected project;")
+	fmt.Println("to pick them up, delete the platform directory and re-eject. Plugins do:")
+	fmt.Println("builds apply them and record what they changed in .drift/plugins.lock.json (commit it).")
 	fmt.Println()
 	fmt.Println("Suggested .gitignore additions:")
 	switch platform {
