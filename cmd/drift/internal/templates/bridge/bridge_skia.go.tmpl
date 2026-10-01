@@ -60,6 +60,19 @@ func DriftNeedsFrame() C.int {
 	return 0
 }
 
+// DriftHasRenderedContent returns 1 once a frame has composited the mounted
+// root (not a blank frame drawn while OnInit runs), 0 before. Embedders emit
+// the one-shot first_frame event for the first frame rendered after it
+// returns 1.
+//
+//export DriftHasRenderedContent
+func DriftHasRenderedContent() C.int {
+	if engine.HasRenderedContent() {
+		return 1
+	}
+	return 0
+}
+
 // DriftSkiaLastError returns a pointer to a C string describing the last Skia error.
 // The native caller is responsible for freeing the returned string by calling free().
 //

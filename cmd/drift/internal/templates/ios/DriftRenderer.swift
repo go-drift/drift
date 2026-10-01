@@ -27,6 +27,10 @@ func DriftSkiaRenderMetalSync(
     _ texture: UInt
 ) -> Int32
 
+/// FFI declaration: 1 once a frame has composited the mounted root.
+@_silgen_name("DriftHasRenderedContent")
+func DriftHasRenderedContent() -> Int32
+
 /// FFI declaration for running the engine pipeline and returning geometry snapshot.
 @_silgen_name("DriftStepAndSnapshot")
 func DriftStepAndSnapshot(
@@ -71,9 +75,9 @@ final class DriftRenderer {
     /// The command queue for presenting drawables.
     private let commandQueue: MTLCommandQueue
 
-    /// One-shot guard for the first-frame post-present event. Set to true the
-    /// first time a drawable's `addPresentedHandler` fires. Subsequent frames
-    /// skip registration so we don't emit `first_frame` more than once.
+    /// One-shot guard for the first-frame post-present event. Set once the
+    /// handler is armed on the first frame with content; later frames skip
+    /// registration so `first_frame` fires once.
     private var firstFrameRendered = false
 
     /// Initializes the renderer with the default Metal device.
@@ -125,12 +129,14 @@ final class DriftRenderer {
         guard let commandBuffer = commandQueue.makeCommandBuffer() else { return }
 
         // Register a one-shot post-present handler that fires `first_frame`
-        // on the drift/rendering/frame_events channel. Drawable presented
-        // handlers fire after the buffer is actually on screen, so this is
-        // the most accurate "user can see pixels" signal iOS exposes. The
-        // Simulator SDK has no presented handlers; GPU completion of the
-        // frame's command buffer is the closest signal there.
-        if !firstFrameRendered {
+        // on the drift/rendering/frame_events channel, on the first frame
+        // that composited the app's root (not the blank frames drawn while
+        // OnInit runs). Drawable presented handlers fire after the buffer is
+        // actually on screen, so this is the most accurate "user can see
+        // pixels" signal iOS exposes. The Simulator SDK has no presented
+        // handlers; GPU completion of the frame's command buffer is the
+        // closest signal there.
+        if !firstFrameRendered && DriftHasRenderedContent() != 0 {
             firstFrameRendered = true
             let emitFirstFrame = {
                 PlatformChannelManager.shared.sendEvent(

@@ -164,6 +164,9 @@ static DriftSkiaPurgeResourcesFn drift_skia_purge_resources = NULL;
 typedef int (*DriftShouldWarmUpViewsFn)(void);
 static DriftShouldWarmUpViewsFn drift_should_warm_up_views = NULL;
 
+typedef int (*DriftHasRenderedContentFn)(void);
+static DriftHasRenderedContentFn drift_has_rendered_content = NULL;
+
 /* Handle to the loaded Go shared library. NULL until loaded. */
 static void *drift_handle = NULL;
 
@@ -1347,4 +1350,19 @@ Java_{{.JNIPackage}}_NativeBridge_shouldWarmUpViews(JNIEnv *env, jclass clazz) {
     }
 
     return (jint)drift_should_warm_up_views();
+}
+
+/**
+ * JNI: NativeBridge.hasRenderedContent()
+ * Returns 1 once a frame has composited the app's root, 0 before.
+ */
+JNIEXPORT jint JNICALL
+Java_{{.JNIPackage}}_NativeBridge_hasRenderedContent(JNIEnv *env, jclass clazz) {
+    (void)env; (void)clazz;
+
+    if (resolve_symbol("DriftHasRenderedContent", (void **)&drift_has_rendered_content) != 0) {
+        return 0;
+    }
+
+    return (jint)drift_has_rendered_content();
 }
