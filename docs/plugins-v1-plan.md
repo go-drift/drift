@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. **Phases 1 and 2 are done (Phase 2 awaits a real Android device); start at [Status](#status-2026-10-01).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. **Phases 1 and 2 are done (Phase 2 awaits a real Android device); Phase 3's code is done and awaits device runs; start at [Status](#status-2026-10-01).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -79,6 +79,26 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 | `561a0a5` | Splash Android: the platform splash screen (`Drift.Splash` style over `LaunchTheme`), held with a pre-draw listener; `android.icon` / `android.icon_background_color`; overlay, `android_12` and `core-splashscreen` removed |
 
 **Phase 2 decisions:** minSdk 31 (Vulkan-only renderer; an API 29 emulator crashes in its Vulkan driver; 31 brings the platform splash API). Android's splash is the platform icon splash, so it does not match iOS's `image_width` layout. A recreated Activity (dark mode, locale) ends the splash, since it gets no platform splash.
+
+**Phase 3 code is done** (`784571c`..`75971b7`); device runs pending (see Verification matrix).
+
+| Commit | Content |
+|--------|---------|
+| `784571c` | `platform.NewQueuedEventChannel`: events sent while nobody listens wait for the next subscriber; `ResetForTest` clears sticky slots and queues |
+| `f480ce3` | `ctx.AppID()` (envelope `app_id`, required for build) |
+| `3558506` | Entitlements: `info_plist.*` became `ios.plist.*` with a file (`info`/`entitlements`); `Runner.entitlements` at the project root on both iOS paths (`CODE_SIGN_ENTITLEMENTS`, xtool `entitlementsPath`); appending to a non-array plist value errors |
+| `1454635` | `android.manifest.add_service`; manifest mutator takes `ManifestOps` |
+| `329c431` | Deleted: `android.assets.add`; iOS `open`/`continueUserActivity` and `DeepLinkHandler.route`; Android `onPreActivityCreate` and activity/permission-result listeners; `DriftPluginCoordinator` and its harness (remote notifications are claimed, not merged) |
+| `67d69ee` | iOS `willPresentNotification` / `didReceiveNotificationResponse`, offered by Drift's notification-center delegate before local handling |
+| `fa68886` | Push left core (Go API, both iOS paths, Android handler, Gradle Firebase deps, `remote-notification` mode) |
+| `27167c5` | `plugins/firebase` (Core + Messaging; Go API `runtime/messaging`: `Token()` state, `Messages()`/`Opens()` queued streams); `NewTestCtxFor` |
+| `75971b7` | `examples/firebase-demo` and `tools/fcmsend` (FCM HTTP v1 sender, stdlib only) |
+
+**Verified (Linux):** `go vet`/`go test` in every module; `drift build android` and `drift build xtool` of splash-demo; `drift build android` of firebase-demo with placeholder config (google-services 4.5.0 runs on AGP 9; manifest service, permission and dependency merge); on the API 36 emulator the demo starts, Firebase initialises, and a tap intent reaches `Opens()` both while running and from a cold start. **Not yet:** a real FCM token and messages (needs the Firebase project), anything on macOS.
+
+**Phase 3 decisions:** local notifications and the notification permission stay core until a notifications plugin exists (Phase 5); core keeps the one `UNUserNotificationCenterDelegate` and offers notifications to plugins first. Firebase on xtool is an error (push needs `aps-environment`). Foreground FCM notifications are not shown on either platform; the app gets them in `Messages()`. Firebase Go API has no blocking calls. Android pins `firebase-messaging` without the BOM (one artifact).
+
+**Deviations from the Phase 3 plan:** no background-modes op (`append_array_item` does it); build half and native/runtime halves landed in one commit (the build half embeds the native sources); `core.Watchable` does not exist, so `Token()` returns a read-only `*core.Derived[string]`.
 
 ## Review findings driving this plan
 
@@ -249,7 +269,6 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 | Check | iOS xcodeproj (Mac + device) | Android device | xtool (Linux, best effort) |
 |-------|------------------------------|----------------|----------------------------|
 | `go vet ./...`, `go test ./...` | | | |
-| Coordinator harness (`xcodebuild test` in `cmd/drift/internal/plugin/coordinator_test`), if kept | ✓ | | |
 | Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | ✓ | ✓ (API 31+) | ✓ |
 | Splash survives background/foreground during launch, dark-mode toggle | ✓ | ✓ | |
 | Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | ✓ | ✓ | |
@@ -260,8 +279,10 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 
 - **xtool may create two windows (unverified).** `SceneDelegate.swift` is copied into xtool (`scaffold/xtool.go:52-57`) and named in `xtool/Info.plist.tmpl` next to a SwiftUI `WindowGroup`. The `xtool/AppDelegate.swift` comment claims there is no SceneDelegate.
 - **xtool launch storyboard.** It is uncompiled and sits in the SwiftPM resource bundle, while `UILaunchStoryboardName` looks in the main bundle.
-- **xtool forwards only web-browsing activities.** `DriftApp.swift` forwards only `NSUserActivityTypeBrowsingWeb` activities to plugins.
-- **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen). `ResetForTest` does not clear the replay slot.
+- **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen).
+- **Core local-notification taps at cold start are dropped**: `drift/notifications/opened` is a plain event channel; make it queued (one line) or move it with the notifications plugin.
+- **FCM with no running app**: Android data messages and token refreshes that start the process without an Activity are dropped (plugins register from `MainActivity.onCreate`); the token is fetched again at the next start.
+- **Emulator Play services**: the `pixel_8` google_apis image reports Play services 25.26 older than firebase-messaging 25.1.3 asks for (26.12); real FCM may need a Play Store image or a device.
 - **Bridge cache entries** under the cache root are never garbage-collected.
 - **iOS detach** relies on `DriftViewController.deinit`; a plugin that retains its `DriftViewBinding` keeps the view controller alive.
 
@@ -273,6 +294,6 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 ## Unresolved questions
 
 1. ~~Per-plugin SwiftPM targets / Gradle modules, or loose sources?~~ iOS: per-plugin SwiftPM targets (shipped). Android: loose sources for v1.
-2. Do local notifications stay core until a `notifications` plugin exists, or move with push?
+2. ~~Do local notifications stay core until a `notifications` plugin exists, or move with push?~~ Stay core until Phase 5 (see Phase 3 decisions).
 3. Keep the xcodeproj/xtool dual path for plugins that need SwiftPM products on xtool, or declare some plugins xcodeproj-only?
 4. Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew (today `APIVersion` stays `1`)?
