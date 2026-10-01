@@ -109,7 +109,14 @@ func schedulePlatformFrame() {
 // Uses TryLock to avoid blocking the platform main thread when StepFrame or
 // RenderFrame holds the lock. If the lock is held, a frame is actively being
 // processed so we return true to keep the render loop alive.
+//
+// A platform frame callback starts here, and the platform may skip
+// StepFrame when the answer is false (iOS does while OnInit runs), so the
+// pending schedule is consumed here too: a request after this point must
+// wake the platform again. It is cleared before reading state, so a request
+// that still saw it set has already queued its work and is seen below.
 func NeedsFrame() bool {
+	platformFrameScheduled.Store(false)
 	if !frameLock.TryLock() {
 		// The lock is held (typically by StepFrame/RenderFrame), so return
 		// true rather than blocking the caller. At worst this schedules one
