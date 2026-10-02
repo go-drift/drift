@@ -17,10 +17,6 @@ func WriteIOS(root string, settings Settings) error {
 	if settings.Ejected {
 		return nil
 	}
-
-	iosDir := filepath.Join(root, "ios", "Runner")
-
-	// Create template data
 	tmplData := templates.NewTemplateData(templates.TemplateInput{
 		AppName:        settings.AppName,
 		AndroidPackage: settings.AppID,
@@ -28,6 +24,15 @@ func WriteIOS(root string, settings Settings) error {
 		Orientation:    settings.Orientation,
 		AllowHTTP:      settings.AllowHTTP,
 	})
+	return WriteIOSProject(filepath.Join(root, "ios"), tmplData, settings.ProjectRoot, settings.Icon)
+}
+
+// WriteIOSProject writes a complete Xcode project into dir: the Runner
+// sources, Info.plist and launch screen, app icons, Runner.entitlements and
+// Runner.xcodeproj. Managed builds and `drift eject` both write through it,
+// so an ejected project has every file the project template names.
+func WriteIOSProject(dir string, data *templates.TemplateData, projectRoot, icon string) error {
+	runnerDir := filepath.Join(dir, "Runner")
 
 	// Write iOS template files (Info.plist, Swift sources, LaunchScreen.storyboard)
 	isIOSFile := func(name string) bool {
@@ -36,34 +41,28 @@ func WriteIOS(root string, settings Settings) error {
 			name == "LaunchScreen.storyboard" ||
 			name == "Info.plist.tmpl"
 	}
-	if err := templates.CopyTree("ios", iosDir, tmplData, isIOSFile); err != nil {
+	if err := templates.CopyTree("ios", runnerDir, data, isIOSFile); err != nil {
 		return err
 	}
 
 	// Generate app icon assets
-	assetDir := filepath.Join(iosDir, "Assets.xcassets")
-	iconSrc, err := icongen.LoadSource(settings.ProjectRoot, settings.Icon)
+	iconSrc, err := icongen.LoadSource(projectRoot, icon)
 	if err != nil {
 		return fmt.Errorf("failed to load icon: %w", err)
 	}
-	if err := iconSrc.GenerateIOS(assetDir); err != nil {
+	if err := iconSrc.GenerateIOS(filepath.Join(runnerDir, "Assets.xcassets")); err != nil {
 		return fmt.Errorf("failed to generate iOS icons: %w", err)
 	}
 
 	// Entitlements at the project root, outside the synchronized Runner
 	// folder so they are never a bundle resource; CODE_SIGN_ENTITLEMENTS
 	// names them. Plugins add keys (ctx.IOS.Entitlements).
-	if err := copyEntitlements(filepath.Join(root, "ios"), tmplData); err != nil {
+	if err := copyEntitlements(dir, data); err != nil {
 		return err
 	}
 
 	// Write Xcode project files
-	xcodeprojDir := filepath.Join(root, "ios", "Runner.xcodeproj")
-	if err := templates.CopyTree("xcodeproj", xcodeprojDir, tmplData, nil); err != nil {
-		return err
-	}
-
-	return nil
+	return templates.CopyTree("xcodeproj", filepath.Join(dir, "Runner.xcodeproj"), data, nil)
 }
 
 // copyEntitlements writes the empty Runner.entitlements template into dir,

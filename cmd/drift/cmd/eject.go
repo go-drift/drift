@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/cmd/drift/internal/icongen"
+	"github.com/go-drift/drift/cmd/drift/internal/scaffold"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
@@ -142,7 +143,7 @@ func ejectPlatform(root string, cfg *config.Resolved, platform string, opts ejec
 	// Write platform files
 	switch platform {
 	case "ios":
-		if err := ejectIOS(platformDir, tmplData, root, cfg.Icon); err != nil {
+		if err := scaffold.WriteIOSProject(platformDir, tmplData, root, cfg.Icon); err != nil {
 			return err
 		}
 	case "android":
@@ -233,39 +234,6 @@ func createBackup(dir string) (string, error) {
 	}
 
 	return "", fmt.Errorf("too many backups exist for %s", dir)
-}
-
-func ejectIOS(platformDir string, data *templates.TemplateData, projectRoot, iconPath string) error {
-	runnerDir := filepath.Join(platformDir, "Runner")
-
-	// Write iOS template files (Info.plist, Swift sources, LaunchScreen.storyboard)
-	isIOSFile := func(name string) bool {
-		return strings.HasSuffix(name, ".swift") ||
-			strings.HasSuffix(name, ".swift.tmpl") ||
-			name == "LaunchScreen.storyboard" ||
-			name == "Info.plist.tmpl"
-	}
-	if err := templates.CopyTree("ios", runnerDir, data, isIOSFile); err != nil {
-		return err
-	}
-
-	// Generate app icon assets
-	assetDir := filepath.Join(runnerDir, "Assets.xcassets")
-	iconSrc, err := icongen.LoadSource(projectRoot, iconPath)
-	if err != nil {
-		return fmt.Errorf("failed to load icon: %w", err)
-	}
-	if err := iconSrc.GenerateIOS(assetDir); err != nil {
-		return fmt.Errorf("failed to generate iOS icons: %w", err)
-	}
-
-	// Write Xcode project files
-	xcodeprojDir := filepath.Join(platformDir, "Runner.xcodeproj")
-	if err := templates.CopyTree("xcodeproj", xcodeprojDir, data, nil); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func ejectAndroid(platformDir string, data *templates.TemplateData, projectRoot, iconPath, iconBackground string) error {
