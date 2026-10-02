@@ -114,14 +114,12 @@ object NotificationHandler {
         )
         if (repeats && intervalSeconds > 0) {
             alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, triggerAt, intervalSeconds * 1000, pendingIntent)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        } else {
             try {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
             } catch (e: SecurityException) {
                 alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
             }
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
         }
         trackScheduled(context, payload.id)
     }
@@ -184,7 +182,6 @@ object NotificationHandler {
     }
 
     private fun ensureChannel(context: Context, channelId: String?) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val id = channelId ?: defaultChannelId
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (manager.getNotificationChannel(id) == null) {

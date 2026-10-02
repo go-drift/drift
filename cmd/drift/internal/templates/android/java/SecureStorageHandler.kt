@@ -11,7 +11,6 @@ package {{.PackageName}}
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -27,7 +26,6 @@ object SecureStorageHandler {
     private const val ERROR_AUTH_CANCELLED = "auth_cancelled"
     private const val ERROR_BIOMETRIC_NOT_AVAILABLE = "biometric_not_available"
     private const val ERROR_BIOMETRIC_NOT_ENROLLED = "biometric_not_enrolled"
-    private const val ERROR_PLATFORM_NOT_SUPPORTED = "platform_not_supported"
 
     private const val DEFAULT_PREFS_NAME = "drift_secure_storage"
     private const val BIOMETRIC_PREFS_SUFFIX = "_biometric"
@@ -36,18 +34,6 @@ object SecureStorageHandler {
     private val prefsCache = mutableMapOf<String, SharedPreferences>()
 
     fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        // EncryptedSharedPreferences requires API 23+
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return when (method) {
-                "isBiometricAvailable" -> Pair(mapOf("available" to false), null)
-                "getBiometricType" -> Pair(mapOf("type" to "none", "reason" to "api_too_low"), null)
-                else -> Pair(
-                    mapOf("error" to ERROR_PLATFORM_NOT_SUPPORTED),
-                    null
-                )
-            }
-        }
-
         return when (method) {
             "set" -> set(context, args)
             "get" -> get(context, args)
@@ -262,9 +248,6 @@ object SecureStorageHandler {
     // MARK: - Biometric Methods
 
     private fun isBiometricAvailable(context: Context): Pair<Any?, Exception?> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return Pair(mapOf("available" to false), null)
-        }
         val biometricManager = BiometricManager.from(context)
         val canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
         val available = canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS
@@ -272,17 +255,12 @@ object SecureStorageHandler {
     }
 
     private fun getBiometricType(context: Context): Pair<Any?, Exception?> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return Pair(mapOf("type" to "none", "reason" to "api_too_low"), null)
-        }
-
         val biometricManager = BiometricManager.from(context)
         val canAuthenticate = biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
 
         return when (canAuthenticate) {
             BiometricManager.BIOMETRIC_SUCCESS -> {
-                val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                    context.packageManager.hasSystemFeature("android.hardware.biometrics.face")) {
+                val type = if (context.packageManager.hasSystemFeature("android.hardware.biometrics.face")) {
                     "face"
                 } else {
                     "fingerprint"

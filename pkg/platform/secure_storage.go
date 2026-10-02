@@ -12,7 +12,6 @@ import (
 //
 // Security notes:
 //   - All data is encrypted at rest using platform-native encryption (Keychain/EncryptedSharedPreferences)
-//   - On Android API < 23, secure storage is not available and operations return ErrPlatformNotSupported
 //   - Biometric protection (RequireBiometric option) provides app-level authentication:
 //   - On iOS: Hardware-backed via Keychain SecAccessControl with .biometryCurrentSet
 //   - On Android: App-level UI gate only (BiometricPrompt without CryptoObject).
@@ -85,7 +84,6 @@ const (
 	SecureStorageErrorBiometricNotAvailable = "biometric_not_available"
 	SecureStorageErrorBiometricNotEnrolled  = "biometric_not_enrolled"
 	SecureStorageErrorAuthPending           = "auth_pending"
-	SecureStorageErrorPlatformNotSupported  = "platform_not_supported"
 )
 
 // ErrAuthPending is returned when an operation requires biometric authentication
@@ -94,13 +92,6 @@ const (
 var ErrAuthPending = &SecureStorageError{
 	Code:    SecureStorageErrorAuthPending,
 	Message: "Biometric authentication pending - listen for result on event channel",
-}
-
-// ErrPlatformNotSupported is returned when secure storage is not available on the platform.
-// On Android, this occurs on API < 23 (pre-Marshmallow).
-var ErrPlatformNotSupported = &SecureStorageError{
-	Code:    SecureStorageErrorPlatformNotSupported,
-	Message: "Secure storage requires Android 6.0 (API 23) or higher",
 }
 
 // SecureStorageOptions configures secure storage operations.
@@ -408,9 +399,6 @@ func (s *SecureStorageService) Listen() <-chan SecureStorageEvent {
 func (s *SecureStorageService) checkResultError(result any) error {
 	if m, ok := result.(map[string]any); ok {
 		if errCode, ok := m["error"].(string); ok {
-			if errCode == SecureStorageErrorPlatformNotSupported {
-				return ErrPlatformNotSupported
-			}
 			return &SecureStorageError{Code: errCode, Message: "Platform error: " + errCode}
 		}
 	}
@@ -435,8 +423,7 @@ func (s *SecureStorageService) wrapError(err error) error {
 			SecureStorageErrorAuthCancelled,
 			SecureStorageErrorBiometricNotAvailable,
 			SecureStorageErrorBiometricNotEnrolled,
-			SecureStorageErrorAuthPending,
-			SecureStorageErrorPlatformNotSupported:
+			SecureStorageErrorAuthPending:
 			return &SecureStorageError{
 				Code:    ce.Code,
 				Message: ce.Message,

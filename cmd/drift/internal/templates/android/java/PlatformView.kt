@@ -373,16 +373,8 @@ class NativeWebViewContainer(
                 error: android.webkit.WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                val code = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    webViewErrorCodeString(error?.errorCode ?: 0)
-                } else {
-                    "load_failed"
-                }
-                val message = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    error?.description?.toString() ?: "Unknown error"
-                } else {
-                    "Unknown error"
-                }
+                val code = webViewErrorCodeString(error?.errorCode ?: 0)
+                val message = error?.description?.toString() ?: "Unknown error"
                 PlatformChannelManager.sendEvent(
                     "drift/platform_views",
                     mapOf(
