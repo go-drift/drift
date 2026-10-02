@@ -186,22 +186,23 @@ Limitations:
 
 ## Authoring plugins
 
-The splash and Firebase plugins are complete references: splash for native UI and lifecycle, Firebase for an SDK with a SwiftPM package, a Gradle plugin, config files, entitlements and a manifest service.
+Start from [`examples/plugins/hello`](https://github.com/go-drift/drift/tree/master/examples/plugins/hello), the smallest complete plugin: it takes a greeting from `drift.yaml` and ships native code that returns it to Go. The code on this page is that plugin's. The splash and Firebase plugins are full references: splash for native UI and lifecycle, Firebase for an SDK with a SwiftPM package, a Gradle plugin, config files, entitlements and a manifest service.
 
 ### Module layout
 
 ```
-myplugin/
-├── go.mod                  # module example.com/myplugin
+hello/
+├── go.mod                  # module github.com/go-drift/drift/examples/plugins/hello
 ├── plugin/                 # build half (drift.yaml names this package)
 │   ├── plugin.go
-│   ├── config.go
+│   ├── plugin_test.go
 │   ├── ios/                # Swift, embedded and shipped by Build
-│   │   └── MyPlugin.swift
+│   │   └── HelloPlugin.swift
 │   └── android/            # Kotlin, embedded and shipped by Build
-│       └── MyPlugin.kt
+│       └── HelloPlugin.kt
 └── runtime/                # Go API for apps
-    └── myplugin.go
+    ├── hello.go
+    └── hello_test.go
 ```
 
 The build half compiles into the bridge, the runtime half into the app. Keep them in separate packages so neither pulls in the other's dependencies.
@@ -212,9 +213,9 @@ The build half compiles into the bridge, the runtime half into the app. Keep the
 package plugin
 
 import (
-    "embed"
+	"embed"
 
-    driftplugin "github.com/go-drift/drift/pkg/plugin"
+	driftplugin "github.com/go-drift/drift/pkg/plugin"
 )
 
 //go:embed ios
@@ -223,30 +224,34 @@ var iosSources embed.FS
 //go:embed android
 var androidSources embed.FS
 
+// Config is the plugin's drift.yaml config block.
 type Config struct {
-    Greeting string `yaml:"greeting" drift:"required"`
+	Greeting string `yaml:"greeting" drift:"required"`
 }
 
-type myPlugin struct{}
+type hello struct{}
 
-func (myPlugin) Name() string { return "myplugin" }
+func (hello) Name() string { return "hello" }
 
-func (myPlugin) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-    ctx.IOS.Info.SetString("MyPluginGreeting", cfg.Greeting)
-    ctx.IOS.Sources.AddFS("MyPlugin", iosSources, "ios")
-    ctx.IOS.Plugin("MyPlugin")
+func (hello) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
+	// iOS: the greeting goes in Info.plist; HelloPlugin.swift reads it.
+	ctx.IOS.Info.SetString("HelloGreeting", cfg.Greeting)
+	ctx.IOS.Sources.AddFS("Hello", iosSources, "ios")
+	ctx.IOS.Plugin("HelloPlugin")
 
-    ctx.Android.Resources.Strings.Set("my_plugin_greeting", cfg.Greeting)
-    ctx.Android.Sources.AddFS("com.example.myplugin", androidSources, "android")
-    ctx.Android.Plugin("com.example.myplugin.MyPlugin")
-    return nil
+	// Android: the greeting is a string resource; HelloPlugin.kt reads it.
+	ctx.Android.Resources.Strings.Set("hello_greeting", cfg.Greeting)
+	ctx.Android.Sources.AddFS("com.example.hello", androidSources, "android")
+	ctx.Android.Plugin("com.example.hello.HelloPlugin")
+	return nil
 }
 
-// The bridge binds this exact variable name and type.
-var Plugin driftplugin.Plugin[Config] = myPlugin{}
+// Plugin is the value the generated bridge binds: this exact name, typed
+// as driftplugin.Plugin[Config].
+var Plugin driftplugin.Plugin[Config] = hello{}
 ```
 
-- `Name()` is a short lowercase identifier, unique among the app's plugins. It names the plugin's iOS Swift module (`DriftPlugin_myplugin`).
+- `Name()` is a short lowercase identifier, unique among the app's plugins. It names the plugin's iOS Swift module (`DriftPlugin_hello`).
 - `var Plugin` must have the typed form `driftplugin.Plugin[Config]`.
 - `Build` only records ops on `ctx`; it must not write files. Drift validates the full op list from every plugin before touching the project.
 - Record ops for every platform unconditionally; Drift applies the ones for the platform being built. `ctx.Platform()` (`"ios"`, `"xtool"` or `"android"`) is for the rare plugin whose ops must differ between them.
@@ -293,18 +298,18 @@ Native sources ship inside the build half: embed them and record them with `Sour
 
 ```swift
 import DriftPluginAPI
-import UIKit
+import Foundation
 
-public final class MyPlugin: DriftPlugin {
+public final class HelloPlugin: DriftPlugin {
     public init() {}
 
     public func register(host: DriftPluginHost) {
-        host.registerChannel("example/myplugin") { method, args, result in
+        host.registerChannel("example/hello") { method, _, result in
             switch method {
             case "greeting":
-                result.success(Bundle.main.object(forInfoDictionaryKey: "MyPluginGreeting"))
+                result.success(Bundle.main.object(forInfoDictionaryKey: "HelloGreeting") as? String)
             default:
-                result.error(NSError(domain: "example.myplugin", code: 1, userInfo: [
+                result.error(NSError(domain: "example.hello", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: "unknown method \(method)",
                 ]))
             }
@@ -318,20 +323,20 @@ SDKs come from SwiftPM with `ctx.IOS.AddPackageDependency`; the plugin's module 
 **Android.** Kotlin sources compile into the app module, under the package passed to `Sources.AddFS`. The plugin class implements `com.drift.runner.DriftPlugin` and has a no-argument constructor. Plugin code references only `com.drift.runner` types, never the app's package, so it compiles in every app:
 
 ```kotlin
-package com.example.myplugin
+package com.example.hello
 
 import com.drift.runner.DriftPlugin
 import com.drift.runner.DriftPluginHost
 
-class MyPlugin : DriftPlugin {
+class HelloPlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
-        host.registerChannel("example/myplugin") { method, _, result ->
+        host.registerChannel("example/hello") { method, _, result ->
             when (method) {
                 "greeting" -> {
                     // Plugin code cannot see the app's R class; look the
                     // resource up by name.
                     val res = host.context.resources
-                    val id = res.getIdentifier("my_plugin_greeting", "string", host.context.packageName)
+                    val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
                     result.success(res.getString(id))
                 }
                 else -> result.error(IllegalArgumentException("unknown method $method"))
@@ -387,29 +392,31 @@ When Go calls a method from the main thread, inside a frame or a widget callback
 The runtime half wraps platform channels in a Go API, using the same channel names as the native code:
 
 ```go
-package myplugin
+package runtime
 
 import (
-    "context"
-    "fmt"
+	"context"
+	"fmt"
 
-    "github.com/go-drift/drift/pkg/platform"
+	"github.com/go-drift/drift/pkg/platform"
 )
 
-var channel = platform.NewMethodChannel("example/myplugin")
+// channel matches the name the native halves register
+// (plugin/ios/HelloPlugin.swift, plugin/android/HelloPlugin.kt).
+var channel = platform.NewMethodChannel("example/hello")
 
-// Greeting returns the configured greeting. It waits on the native side:
-// call it from a goroutine, not from a widget callback.
+// Greeting returns the greeting configured in drift.yaml. It waits for the
+// native side: call it from a goroutine, not from a widget callback.
 func Greeting(ctx context.Context) (string, error) {
-    res, err := channel.Invoke(ctx, "greeting", nil)
-    if err != nil {
-        return "", fmt.Errorf("myplugin greeting: %w", err)
-    }
-    s, ok := res.(string)
-    if !ok {
-        return "", fmt.Errorf("myplugin greeting: got %T, want string", res)
-    }
-    return s, nil
+	res, err := channel.Invoke(ctx, "greeting", nil)
+	if err != nil {
+		return "", fmt.Errorf("hello greeting: %w", err)
+	}
+	s, ok := res.(string)
+	if !ok {
+		return "", fmt.Errorf("hello greeting: got %T, want string", res)
+	}
+	return s, nil
 }
 ```
 
@@ -425,24 +432,46 @@ Wrap a channel in `platform.NewStream(name, channel, parse)` to give apps typed 
 
 ### Testing
 
-Test the build half by building it the way the bridge does: `Bind(...).Build` checks and defaults the config, then calls `Build`.
+Test the build half by building it the way the bridge does: `Bind(...).Build` checks and defaults the config, then calls `Build`. From the hello plugin's `plugin_test.go`:
 
 ```go
-func TestBuild(t *testing.T) {
-    ctx := driftplugin.NewTestCtxFor(t.TempDir(), "android")
-    err := driftplugin.Bind("example.com/myplugin/plugin", Plugin).
-        Build(ctx, []byte(`greeting: hello`))
-    if err != nil {
-        t.Fatal(err)
-    }
-    if err := ctx.Err(); err != nil {
-        t.Fatal(err)
-    }
-    for _, op := range ctx.Ops() {
-        if s, ok := op.(*protocol.OpAndroidStringSet); ok && s.Value != "hello" {
-            t.Errorf("greeting = %q, want hello", s.Value)
-        }
-    }
+// build runs the plugin the way the bridge does (config checked against
+// the schema, defaulted, decoded, then Build), recording for every
+// platform.
+func build(t *testing.T, config string) ([]protocol.Op, error) {
+	t.Helper()
+	ctx := driftplugin.NewTestCtx()
+	if err := driftplugin.Bind("github.com/go-drift/drift/examples/plugins/hello/plugin", Plugin).
+		Build(ctx, []byte(config)); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("ctx.Err: %v", err)
+	}
+	return ctx.Ops(), nil
+}
+
+func TestBuildShipsGreeting(t *testing.T) {
+	ops, err := build(t, "greeting: hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plist, resource string
+	for _, op := range ops {
+		switch o := op.(type) {
+		case *protocol.OpPlistSetString:
+			if o.Key == "HelloGreeting" {
+				plist = o.Value
+			}
+		case *protocol.OpAndroidStringSet:
+			if o.Name == "hello_greeting" {
+				resource = o.Value
+			}
+		}
+	}
+	if plist != "hello" || resource != "hello" {
+		t.Errorf("Info.plist greeting = %q, string resource = %q, want hello for both", plist, resource)
+	}
 }
 ```
 
@@ -450,7 +479,7 @@ func TestBuild(t *testing.T) {
 - Test contexts have `AppID() == driftplugin.TestAppID`.
 - Recorded ops are the types in `github.com/go-drift/drift/pkg/plugin/protocol`.
 
-Test the runtime half against a fake native side from `pkg/platform`:
+Test the runtime half against a fake native side from `pkg/platform` (the hello plugin's `runtime/hello_test.go` shows the pattern):
 
 - `platform.SetNativeBridge(fake)` with a `platform.NativeBridge` implementation captures method calls and returns canned replies.
 - `platform.HandleEvent(channel, data)` delivers an event as native code would; encode `data` with `platform.DefaultCodec.Encode`.
