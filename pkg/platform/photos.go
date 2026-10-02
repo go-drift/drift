@@ -8,5 +8,5 @@ type PhotosService struct {
 
 // Photos is the singleton photos service.
 var Photos = &PhotosService{
-	Permission: newPerm("photos"),
+	Permission: NewPermission("photos"),
 }

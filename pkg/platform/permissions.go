@@ -3,8 +3,8 @@ package platform
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
-	"time"
 
 	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
@@ -45,8 +45,8 @@ const (
 )
 
 // Shared platform channel and event stream used by every permission instance.
-// Initialized eagerly so that service singletons constructed at package init
-// (Camera, Location, Notifications, etc.) all share the same channel state.
+// Initialized eagerly so that permissions constructed at package init all
+// share the same channel state.
 var (
 	permissionsChannel = NewMethodChannel("drift/permissions")
 	permissionChanges  = NewStream(
@@ -56,46 +56,68 @@ var (
 	)
 )
 
-// permission is the single concrete implementation of Permission used by every
-// service that exposes one (camera, photos, contacts, microphone, calendar,
-// location when-in-use, location_always). Notifications wraps it with
-// notificationPermission to add RequestWithOptions.
+// NewPermission returns the permission of the given kind, such as
+// "location". Native code registers each kind: Drift registers
+// "notifications", and plugins register theirs (DriftPluginHost
+// registerPermission on iOS and Android). Plugins call this from their
+// runtime package and expose the result; apps use those values.
 //
-// Context usage: only Request takes ctx because it owns a caller-visible
-// Go-side wait that ctx can abandon. Status / IsGranted / IsDenied /
-// ShouldShowRationale are simple native invocations, so the high-level
-// permission API does not expose ctx for them.
+// Calls on a kind no native code registered fail with
+// [ErrPermissionNotRegistered]: the plugin providing it is missing from
+// drift.yaml, or not configured for that kind.
+func NewPermission(kind string) Permission {
+	return newPermission(kind)
+}
+
+// permission is the single concrete implementation of Permission.
+// notificationPermission wraps it to add RequestWithOptions.
+//
+// Context usage: only Request takes ctx because it waits for the user.
+// Status / IsGranted / IsDenied / ShouldShowRationale reply in place, so
+// the high-level permission API does not expose ctx for them.
 type permission struct {
-	name      string
+	name string
+	// requestMu serializes requests for this kind, so one prompt shows at
+	// a time.
 	requestMu sync.Mutex
 }
 
-// newPerm constructs a permission for the given native permission name
-// (e.g. "camera", "location", "location_always", "notifications").
-func newPerm(name string) *permission {
+func newPermission(name string) *permission {
+	if name == "" {
+		panic("platform: NewPermission with an empty kind")
+	}
 	return &permission{name: name}
 }
 
 // Status returns the current status of the permission.
 func (p *permission) Status() (PermissionResult, error) {
-	return p.status(context.Background())
-}
-
-// status is the ctx-aware variant used by internal callers (requestAndWait)
-// that already have a ctx in hand and want the initial status check to honor
-// cancellation.
-func (p *permission) status(ctx context.Context) (PermissionResult, error) {
-	result, err := permissionsChannel.Invoke(ctx, "check", map[string]any{"permission": p.name})
+	result, err := permissionsChannel.Invoke(context.Background(), "check", map[string]any{"permission": p.name})
 	if err != nil {
 		return PermissionResultUnknown, err
 	}
-	return parsePermissionResult(result), nil
+	return parsePermissionStatus(p.name, result)
 }
 
-// Request prompts the user for the permission and blocks until they respond
-// or the context is canceled.
+// Request prompts the user for the permission if needed and returns the
+// resulting status, or fails when ctx is done.
 func (p *permission) Request(ctx context.Context) (PermissionResult, error) {
-	return requestAndWait(ctx, p, map[string]any{"permission": p.name})
+	return p.request(ctx, nil)
+}
+
+// request asks native to request the permission, with kind-specific
+// options, and returns the status native replies with. Native replies once
+// the user has answered (or at once when no prompt is needed).
+func (p *permission) request(ctx context.Context, options map[string]any) (PermissionResult, error) {
+	p.requestMu.Lock()
+	defer p.requestMu.Unlock()
+
+	args := map[string]any{"permission": p.name}
+	maps.Copy(args, options)
+	result, err := permissionsChannel.Invoke(ctx, "request", args)
+	if err != nil {
+		return PermissionResultUnknown, normalizePermissionCtxErr(err)
+	}
+	return parsePermissionStatus(p.name, result)
 }
 
 // IsGranted returns true if the permission is currently granted.
@@ -145,16 +167,16 @@ type notificationPermission struct {
 	*permission
 }
 
-// newNotificationPerm constructs the notifications permission.
+// newNotificationPerm constructs the notifications permission, a kind
+// Drift itself registers natively.
 func newNotificationPerm() *notificationPermission {
-	return &notificationPermission{permission: newPerm("notifications")}
+	return &notificationPermission{permission: newPermission("notifications")}
 }
 
 // RequestWithOptions prompts for notification permission with iOS-specific options.
 // Zero values mean the capability is NOT requested. On Android, options are ignored.
 func (n *notificationPermission) RequestWithOptions(ctx context.Context, opts NotificationPermissionOptions) (PermissionResult, error) {
-	return requestAndWait(ctx, n.permission, map[string]any{
-		"permission":  n.name,
+	return n.request(ctx, map[string]any{
 		"alert":       opts.Alert,
 		"sound":       opts.Sound,
 		"badge":       opts.Badge,
@@ -162,68 +184,10 @@ func (n *notificationPermission) RequestWithOptions(ctx context.Context, opts No
 	})
 }
 
-// requestAndWait performs the request-and-wait dance shared by every
-// permission Request implementation: serialize concurrent requests, fast-path
-// when status is already terminal, subscribe to permission-change events
-// filtered by name, invoke "request" on native, and resolve when the matching
-// change arrives or ctx is canceled. On ctx cancellation, status is re-checked
-// once in case the change event was missed.
-func requestAndWait(ctx context.Context, p *permission, args map[string]any) (PermissionResult, error) {
-	p.requestMu.Lock()
-	defer p.requestMu.Unlock()
-
-	// Initial status: honor caller's ctx via the private status() helper.
-	// If ctx is already canceled, status(ctx) returns context.Canceled here;
-	// normalize to the platform's stable error contract.
-	currentStatus, err := p.status(ctx)
-	if err != nil {
-		return PermissionResultUnknown, normalizePermissionCtxErr(err)
-	}
-	if isTerminalStatus(currentStatus) {
-		return currentStatus, nil
-	}
-
-	resultChan := make(chan PermissionResult, 1)
-	unsubscribe := permissionChanges.Listen(func(change permissionChange) {
-		if change.Permission != p.name {
-			return
-		}
-		select {
-		case resultChan <- change.Result:
-		default:
-		}
-	})
-	defer unsubscribe()
-
-	if _, err := permissionsChannel.Invoke(ctx, "request", args); err != nil {
-		return PermissionResultUnknown, normalizePermissionCtxErr(err)
-	}
-
-	select {
-	case result := <-resultChan:
-		return result, nil
-	case <-ctx.Done():
-		// Final missed-event re-check covers the race where a permission
-		// change event arrived between Listen setup and ctx firing. Bound it
-		// with its own short timeout — the caller's ctx is already canceled
-		// and we promised them a prompt return, so we can't wait forever for
-		// native status if it hangs.
-		recheckCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-		defer cancel()
-		if finalStatus, err := p.status(recheckCtx); err == nil && isTerminalStatus(finalStatus) {
-			return finalStatus, nil
-		}
-		if ctx.Err() == context.DeadlineExceeded {
-			return PermissionResultUnknown, ErrTimeout
-		}
-		return PermissionResultUnknown, ErrCanceled
-	}
-}
-
 // normalizePermissionCtxErr maps raw context.Canceled / context.DeadlineExceeded
-// (returned from ctx-aware Invoke calls) to the permission package's stable
-// sentinels. Other errors pass through unchanged. Preserves the public error
-// contract: callers can keep using `errors.Is(err, ErrCanceled)`.
+// (returned from ctx-aware Invoke calls) to the platform's stable sentinels.
+// Other errors pass through unchanged, so callers can use
+// `errors.Is(err, ErrCanceled)`.
 func normalizePermissionCtxErr(err error) error {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ErrTimeout
@@ -234,32 +198,26 @@ func normalizePermissionCtxErr(err error) error {
 	return err
 }
 
-// isTerminalStatus reports whether the status will not change as a result of
-// showing a permission dialog.
-func isTerminalStatus(status PermissionResult) bool {
-	switch status {
-	case PermissionGranted, PermissionPermanentlyDenied, PermissionRestricted,
-		PermissionLimited, PermissionProvisional:
-		return true
-	default:
-		return false
-	}
-}
-
 // permissionChange is the typed payload of the "drift/permissions/changes" event channel.
 type permissionChange struct {
 	Permission string
 	Result     PermissionResult
 }
 
-// parsePermissionResult extracts a PermissionResult from a {"status": "..."} map.
-func parsePermissionResult(result any) PermissionResult {
+// parsePermissionStatus extracts the status from a {"status": "..."} reply
+// for kind. A malformed reply is a ParseError: native and Go disagree on the
+// wire format. Unknown status strings pass through verbatim.
+func parsePermissionStatus(kind string, result any) (PermissionResult, error) {
 	if m, ok := result.(map[string]any); ok {
 		if status := parseString(m["status"]); status != "" {
-			return PermissionResult(status)
+			return PermissionResult(status), nil
 		}
 	}
-	return PermissionResultUnknown
+	return PermissionResultUnknown, &drifterrors.ParseError{
+		Channel:  "drift/permissions",
+		DataType: "status of " + kind,
+		Got:      result,
+	}
 }
 
 // parsePermissionChange parses a {"permission": "...", "status": "..."} map.

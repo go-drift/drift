@@ -4,24 +4,30 @@ import "context"
 
 // Permission provides access to a runtime permission for a platform feature.
 // Use Status to check current state, Request to prompt the user, and Listen
-// to observe changes.
+// to observe changes. Plugins provide permissions (see [NewPermission]);
+// Drift provides the notification permission ([Notifications]).
 //
-// Context: only Request takes ctx because it owns a caller-visible Go-side
-// wait that ctx can abandon (the call blocks on a result event from native
-// and can be unblocked early on cancellation). Status, IsGranted, IsDenied,
-// and ShouldShowRationale are simple native invocations, so the high-level
-// permission API does not expose ctx for them.
+// Every method fails with [ErrPermissionNotRegistered] when no native code
+// registered the kind, and on Android with [ErrPermissionNotDeclared] when
+// the manifest lacks a permission the kind needs.
+//
+// Context: only Request takes ctx because it waits for the user. Status,
+// IsGranted, IsDenied, and ShouldShowRationale reply in place, so the
+// high-level permission API does not expose ctx for them.
 type Permission interface {
 	// Status returns the current permission status.
 	Status() (PermissionResult, error)
 
-	// Request prompts the user for permission and blocks until they respond
-	// or ctx is canceled. If already in a terminal state, returns immediately
+	// Request prompts the user for permission if needed and returns the
+	// resulting status once they respond. When no prompt can change the
+	// status (granted, permanently denied, restricted), it returns at once
 	// without showing a dialog.
 	//
-	// Cancellation: returns ErrCanceled or ErrTimeout (via the package's
-	// stable error contract) on ctx cancellation; the underlying native
-	// dialog continues to completion in the background.
+	// Request waits for the user, so call it from a goroutine: from the UI
+	// thread it fails with [ErrBlocksUIThread] before any prompt shows.
+	//
+	// Cancellation: returns ErrCanceled or ErrTimeout on ctx cancellation;
+	// the native dialog stays up until the user answers it.
 	Request(ctx context.Context) (PermissionResult, error)
 
 	// IsGranted returns true if permission is granted.

@@ -13,9 +13,8 @@ Drift provides access to native platform capabilities through the `platform` pac
 Most platform methods are simple native invocations or native-owned waits where
 Drift does not expose cancellation.
 
-`ctx` is reserved for APIs with a **caller-visible Go-side wait** — the call
-subscribes to a result event from native and `select`s on `ctx.Done()`, so ctx
-cancellation actually unblocks the Go caller:
+`ctx` is reserved for APIs that wait for the user, so ctx cancellation
+unblocks the Go caller:
 
 - `Permission.Request(ctx)` and `NotificationPermission.RequestWithOptions(ctx)`
 - `Camera.CapturePhoto(ctx, ...)`, `Camera.PickFromGallery(ctx, ...)`
@@ -24,201 +23,30 @@ cancellation actually unblocks the Go caller:
 When ctx fires on these methods, the Go caller is unblocked promptly with the
 package's stable error sentinels (`ErrCanceled` / `ErrTimeout` for permissions,
 `ctx.Err()` for camera/storage). The native operation continues to completion
-in the background and its result is discarded — CGO has no abort path.
+in the background and its result is discarded.
 
 These calls wait for the user, and the reply needs the platform main thread.
 Go's UI thread (widget callbacks, `Build`, `InitState`) **is** that main
-thread, so calling them from it freezes the app. Call them from a goroutine
-and publish the result with `drift.Dispatch` or a `Signal`:
+thread, so call them from a goroutine and publish the result with
+`drift.Dispatch` or a `Signal`:
 
 ```go
 go func() {
-    result, err := platform.Camera.Permission.Request(ctx)
-    drift.Dispatch(func() { s.cameraAllowed = err == nil && result == platform.PermissionGranted })
+    result, err := platform.Notifications.Permission.Request(ctx)
+    drift.Dispatch(func() { s.notificationsAllowed = err == nil && result == platform.PermissionGranted })
 }()
 ```
 
-The same applies to the date and time pickers. Plugin methods that reply
-later fail fast with `platform.ErrBlocksUIThread` when called from the UI
-thread; these built-ins gain that guard as they move to plugins.
-
-## Clipboard
-
-Copy and paste text:
-
-```go
-import "github.com/go-drift/drift/pkg/platform"
-
-// Copy text to clipboard
-err := platform.Clipboard.SetText("Hello, World!")
-
-// Get text from clipboard
-text, err := platform.Clipboard.GetText()
-
-// Check if clipboard has text
-hasText, err := platform.Clipboard.HasText()
-
-// Clear clipboard
-err := platform.Clipboard.Clear()
-```
-
-### Example: Copy Button
-
-```go
-// In a Build method with access to ctx:
-theme.ButtonOf(ctx, "Copy Link", func() {
-    platform.Clipboard.SetText(shareURL)
-    platform.Haptics.LightImpact()
-    showToast("Link copied!")
-})
-```
-
-## Haptic Feedback
-
-Provide tactile feedback to users:
-
-```go
-// Light feedback for selections
-platform.Haptics.LightImpact()
-
-// Medium feedback for toggles and confirmations
-platform.Haptics.MediumImpact()
-
-// Heavy feedback for errors or warnings
-platform.Haptics.HeavyImpact()
-
-// Selection change feedback
-platform.Haptics.SelectionClick()
-
-// Custom vibration duration (milliseconds)
-platform.Haptics.Vibrate(100)
-```
-
-### When to Use Haptics
-
-| Feedback Type | Use Case |
-|--------------|----------|
-| `LightImpact` | List item selection, minor interactions |
-| `MediumImpact` | Toggle switches, button taps |
-| `HeavyImpact` | Errors, deletions, significant actions |
-| `SelectionClick` | Picker value changes, slider movements |
-
-## App Lifecycle
-
-### App-Level Init and Dispose
-
-Use `OnInit` and `OnDispose` on `drift.App` to run one-time setup and teardown at the application level, outside the widget tree. `OnInit` runs in a background goroutine before the root widget is mounted. While it executes, the platform's native splash screen stays visible.
-
-```go
-app := drift.NewApp(root)
-app.OnInit = func(ctx context.Context) error {
-    db, err := sql.Open("sqlite3", dbPath)
-    if err != nil {
-        return err
-    }
-    appDB = db
-    return nil
-}
-app.OnDispose = func() {
-    appDB.Close()
-}
-app.Run()
-```
-
-If `OnInit` returns an error, a debug error screen is shown instead of the root widget. The user can tap "Restart" to retry with the normal root widget (OnInit does not re-run on restart).
-
-The `ctx` passed to `OnInit` is cancelled before `OnDispose` runs, so long-running initialization can select on `ctx.Done()` for clean shutdown:
-
-```go
-app.OnInit = func(ctx context.Context) error {
-    select {
-    case <-ctx.Done():
-        return ctx.Err()
-    case result := <-loadConfig():
-        return result.Err
-    }
-}
-```
-
-:::tip When to use OnInit vs InitState
-Use `OnInit` for work that must complete before any widget mounts: opening databases, loading configuration, restoring authentication tokens. Use `InitState` in a stateful widget for setup that belongs to a specific screen or component.
-:::
-
-### Widget-Level Lifecycle Observation
-
-Respond to app lifecycle state changes using `UseLifecycleObserver`. The handler is automatically cleaned up when the state is disposed, and always runs on the UI thread via `Dispatch`:
-
-```go
-func (s *myState) InitState() {
-    platform.UseLifecycleObserver(s, func(state platform.LifecycleState) {
-        switch state {
-        case platform.LifecycleStateResumed:
-            // App came to foreground
-            s.refreshData()
-        case platform.LifecycleStatePaused:
-            // App went to background
-            s.saveState()
-        case platform.LifecycleStateInactive:
-            // App is transitioning (e.g., receiving a phone call)
-        case platform.LifecycleStateDetached:
-            // App is detached from any view
-        }
-    })
-}
-```
-
-For advanced use cases (e.g., subscribing outside a stateful widget), you can use `AddHandler` and `OnDispose` manually:
-
-```go
-removeHandler := platform.Lifecycle.AddHandler(func(state platform.LifecycleState) {
-    // handle state change
-})
-s.OnDispose(removeHandler)
-```
-
-### Lifecycle States
-
-| State | Description |
-|-------|-------------|
-| `LifecycleStateResumed` | App is visible and responding to user input |
-| `LifecycleStateInactive` | App is transitioning (system dialog, app switcher) |
-| `LifecycleStatePaused` | App is not visible but still running |
-| `LifecycleStateDetached` | App is detached from any view |
-
-### Checking Current State
-
-```go
-// Get current state
-currentState := platform.Lifecycle.State()
-
-// Convenience methods
-if platform.Lifecycle.IsResumed() {
-    // App is active
-}
-
-if platform.Lifecycle.IsPaused() {
-    // App is in background
-}
-```
-
-## System UI
-
-Drift draws edge to edge on both platforms: content extends behind the status bar and navigation bar, so inset it with `SafeArea`. Choose the status bar's visibility and icon colour to suit the content behind it:
-
-```go
-platform.SetSystemUI(platform.SystemUIStyle{
-    StatusBarHidden: false,
-    // StatusBarStyleDefault follows the system theme; StatusBarStyleLight
-    // (light icons) suits dark content, StatusBarStyleDark light content.
-    StatusBarStyle: platform.StatusBarStyleDark,
-})
-```
-
-The style persists until the next call, including across Android Activity recreation (dark mode or locale changes).
+From the UI thread, `Request` and `RequestWithOptions` fail at once with
+`platform.ErrBlocksUIThread`, as plugin methods that reply later do. The
+camera, storage pickers and the date and time pickers still freeze the app
+when called from the UI thread.
 
 ## Permissions
 
 Permissions are attached to the features that use them. Each feature service provides a `Permission` field for checking and requesting access.
+
+Drift owns the request mechanism; the plugin providing a feature registers its permission kind and declares what the platform needs (Android manifest permissions, iOS usage strings). A plugin's runtime package exposes its permissions, built with `platform.NewPermission(kind)`. Calling a permission whose plugin is missing from `drift.yaml` fails with `platform.ErrPermissionNotRegistered`; on Android, one whose manifest permission no plugin declares fails with `platform.ErrPermissionNotDeclared`.
 
 ### Camera Permission
 
@@ -340,7 +168,7 @@ platform.OpenAppSettings()
 | `PermissionDenied` | Permission was denied (the app may request again) |
 | `PermissionPermanentlyDenied` | User selected "Don't ask again" |
 | `PermissionRestricted` | Restricted by device policy |
-| `PermissionLimited` | Limited access granted (iOS photos) |
+| `PermissionLimited` | Partial access: selected photos (iOS), approximate location (Android) |
 | `PermissionProvisional` | Provisional access (iOS notifications) |
 | `PermissionNotDetermined` | Permission has not been requested yet |
 | `PermissionResultUnknown` | Permission status could not be determined |

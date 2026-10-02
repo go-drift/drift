@@ -224,12 +224,7 @@ final class LocationHandler: NSObject, CLLocationManagerDelegate {
 
         switch authStatus {
         case .notDetermined:
-            // Trigger the system prompt on the main thread via PermissionHandler
-            // so permission change events stay consistent across the app.
-            DispatchQueue.main.async {
-                _ = PermissionHandler.handle(method: "request", args: ["permission": "location"])
-            }
-            return NSError(domain: "Location", code: 401, userInfo: [NSLocalizedDescriptionKey: "Location permission not determined. Requesting permission."])
+            return NSError(domain: "Location", code: 401, userInfo: [NSLocalizedDescriptionKey: "Location permission not determined; request it first"])
         case .denied:
             return NSError(domain: "Location", code: 403, userInfo: [NSLocalizedDescriptionKey: "Location permission denied"])
         case .restricted:

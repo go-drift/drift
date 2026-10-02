@@ -29,6 +29,7 @@ var AndroidRunnerSupportFiles = []struct {
 	{"DriftActivityBinding.kt", "android/runner/DriftActivityBinding.kt"},
 	{"DriftPlugins.kt", "android/runner/DriftPlugins.kt"},
 	{"DriftMethodHandler.kt", "android/runner/DriftMethodHandler.kt"},
+	{"DriftPermission.kt", "android/runner/DriftPermission.kt"},
 }
 
 // WriteRegistrant generates DriftPluginRegistrant for the target platform and

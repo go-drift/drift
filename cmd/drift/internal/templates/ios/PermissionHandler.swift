@@ -1,456 +1,330 @@
 /// PermissionHandler.swift
-/// Handles runtime permission requests for the Drift platform channel.
+///
+/// The drift/permissions channel: Drift's permission request mechanism.
+/// Permission kinds are registered by plugins (DriftPluginHost
+/// registerPermission) and by Drift itself (notifications, below); Go's
+/// platform.Permission reaches a kind by name. "request" is an async method
+/// that replies with the status once the user has answered, and reports it
+/// on drift/permissions/changes.
 
-import UIKit
 import AVFoundation
-import Photos
-import CoreLocation
 import Contacts
+import CoreLocation
+import DriftPluginAPI
 import EventKit
+import Photos
+import UIKit
 import UserNotifications
 
 enum PermissionHandler {
-    private static var locationManager: CLLocationManager?
-    private static var locationDelegate: LocationPermissionDelegate?
+    private static var kinds: [String: DriftPermission] = [:]
+    private static let kindsLock = NSLock()
 
-    private static func getLocationManager() -> CLLocationManager {
-        if let manager = locationManager {
-            return manager
+    /// Registers the permission `kind`; a second registration traps.
+    static func register(_ kind: String, _ permission: DriftPermission) {
+        kindsLock.lock()
+        defer { kindsLock.unlock() }
+        if kinds[kind] != nil {
+            fatalError("drift: permission kind \"\(kind)\" is already registered")
         }
-
-        if Thread.isMainThread {
-            let manager = CLLocationManager()
-            locationManager = manager
-            return manager
-        }
-
-        var manager: CLLocationManager?
-        DispatchQueue.main.sync {
-            let created = CLLocationManager()
-            locationManager = created
-            manager = created
-        }
-        return manager ?? CLLocationManager()
+        kinds[kind] = permission
     }
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "check":
-            return check(args: args)
-        case "request":
-            return request(args: args)
-        case "requestMultiple":
-            return requestMultiple(args: args)
-        case "openSettings":
-            return openSettings()
-        case "shouldShowRationale":
-            // iOS doesn't have this concept
-            return (["shouldShow": false], nil)
-        default:
-            return (nil, NSError(domain: "Permissions", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
-        }
-    }
-
-    private static func check(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let permission = dict["permission"] as? String else {
-            return (nil, NSError(domain: "Permissions", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing permission"]))
-        }
-
-        let status = checkPermissionStatus(permission)
-        return (["status": status], nil)
-    }
-
-    private static func request(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let permission = dict["permission"] as? String else {
-            return (nil, NSError(domain: "Permissions", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing permission"]))
-        }
-
-        let currentStatus = checkPermissionStatus(permission)
-        requestPermission(permission, args: dict)
-        return (["status": currentStatus], nil)
-    }
-
-    private static func requestMultiple(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let permissions = dict["permissions"] as? [String] else {
-            return (nil, NSError(domain: "Permissions", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing permissions"]))
-        }
-
-        var results: [String: String] = [:]
-        for permission in permissions {
-            results[permission] = checkPermissionStatus(permission)
-            requestPermission(permission)
-        }
-
-        return (["results": results], nil)
-    }
-
-    private static func openSettings() -> (Any?, Error?) {
-        DispatchQueue.main.async {
-            if let url = URL(string: UIApplication.openSettingsURLString) {
-                UIApplication.shared.open(url)
+    /// Registers the drift/permissions channel and Drift's own kinds.
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/permissions") { channel in
+            channel.method("check") { args in
+                ["status": try lookup(args).permission.status().rawValue]
+            }
+            channel.asyncMethod("request") { args, result in
+                let entry: (kind: String, permission: DriftPermission)
+                do {
+                    entry = try lookup(args)
+                } catch {
+                    result.error(error)
+                    return
+                }
+                request(entry.kind, entry.permission, options: args as? [String: Any] ?? [:], result: result)
+            }
+            channel.method("shouldShowRationale") { args in
+                _ = try lookup(args)
+                // iOS has no rationale concept.
+                return ["shouldShow": false]
+            }
+            channel.method("openSettings") { _ in
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+                return nil
             }
         }
-        return (nil, nil)
+
+        host.registerPermission("notifications", NotificationsPermission())
+        // Moving to plugins (Phase 5); registered here until each moves.
+        host.registerPermission("camera", CapturePermission(.video))
+        host.registerPermission("microphone", CapturePermission(.audio))
+        host.registerPermission("photos", PhotosPermission())
+        host.registerPermission("location", LocationPermission(always: false))
+        host.registerPermission("location_always", LocationPermission(always: true))
+        host.registerPermission("contacts", ContactsPermission())
+        host.registerPermission("calendar", CalendarPermission())
     }
 
-    private static func checkPermissionStatus(_ permission: String) -> String {
-        switch permission {
-        case "camera":
-            return cameraStatus()
-        case "microphone":
-            return microphoneStatus()
-        case "photos":
-            return photosStatus()
-        case "location":
-            return locationStatus(always: false)
-        case "location_always":
-            return locationStatus(always: true)
-        case "contacts":
-            return contactsStatus()
-        case "calendar":
-            return calendarStatus()
-        case "notifications":
-            return notificationsStatus()
-        default:
-            return "unknown"
+    private static func lookup(_ args: Any?) throws -> (kind: String, permission: DriftPermission) {
+        guard let kind = (args as? [String: Any])?["permission"] as? String else {
+            throw NSError(domain: "invalid_arguments", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "drift/permissions: missing permission kind",
+            ])
         }
+        kindsLock.lock()
+        let permission = kinds[kind]
+        kindsLock.unlock()
+        guard let permission else {
+            throw NSError(domain: "permission_not_registered", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "no plugin registered the permission kind \"\(kind)\"; add the plugin that provides it to drift.yaml",
+            ])
+        }
+        return (kind, permission)
     }
 
-    private static func requestPermission(_ permission: String, args: [String: Any]? = nil) {
-        switch permission {
-        case "camera":
-            requestCamera()
-        case "microphone":
-            requestMicrophone()
-        case "photos":
-            requestPhotos()
-        case "location":
-            requestLocation(always: false)
-        case "location_always":
-            requestLocation(always: true)
-        case "contacts":
-            requestContacts()
-        case "calendar":
-            requestCalendar()
-        case "notifications":
-            requestNotifications(args: args)
+    private static func request(_ kind: String, _ permission: DriftPermission, options: [String: Any], result: DriftResult) {
+        let current = permission.status()
+        switch current {
+        case .granted, .permanentlyDenied, .restricted:
+            // No prompt can change these.
+            result.success(["status": current.rawValue])
+            return
         default:
             break
         }
-    }
-
-    // MARK: - Camera
-
-    private static func cameraStatus() -> String {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
-            return "granted"
-        case .denied:
-            return "permanently_denied"
-        case .restricted:
-            return "restricted"
-        case .notDetermined:
-            return "not_determined"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private static func requestCamera() {
-        AVCaptureDevice.requestAccess(for: .video) { granted in
-            // Use permanently_denied for consistency with cameraStatus()
-            let status = granted ? "granted" : "permanently_denied"
-            sendPermissionChange("camera", status: status)
-        }
-    }
-
-    // MARK: - Microphone
-
-    private static func microphoneStatus() -> String {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            return "granted"
-        case .denied:
-            return "permanently_denied"
-        case .restricted:
-            return "restricted"
-        case .notDetermined:
-            return "not_determined"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private static func requestMicrophone() {
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            // Use permanently_denied for consistency with microphoneStatus()
-            let status = granted ? "granted" : "permanently_denied"
-            sendPermissionChange("microphone", status: status)
-        }
-    }
-
-    // MARK: - Photos
-
-    private static func photosStatus() -> String {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-
-        switch status {
-        case .authorized:
-            return "granted"
-        case .denied:
-            return "permanently_denied"
-        case .restricted:
-            return "restricted"
-        case .notDetermined:
-            return "not_determined"
-        case .limited:
-            return "limited"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private static func requestPhotos() {
-        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-            let statusStr: String
-            switch status {
-            case .authorized:
-                statusStr = "granted"
-            case .limited:
-                statusStr = "limited"
-            case .restricted:
-                statusStr = "restricted"
-            default:
-                // Use permanently_denied for consistency with photosStatus()
-                statusStr = "permanently_denied"
+        var options = options
+        options.removeValue(forKey: "permission")
+        permission.request(options: options) { status in
+            DispatchQueue.main.async {
+                PlatformChannelManager.shared.sendEvent(channel: "drift/permissions/changes", data: [
+                    "permission": kind,
+                    "status": status.rawValue,
+                ])
             }
-            sendPermissionChange("photos", status: statusStr)
-        }
-    }
-
-    // MARK: - Location
-
-    private static func locationStatus(always: Bool) -> String {
-        let status = getLocationManager().authorizationStatus
-
-        switch status {
-        case .authorizedAlways:
-            return "granted"
-        case .authorizedWhenInUse:
-            return always ? "denied" : "granted"
-        case .denied:
-            return "permanently_denied"
-        case .restricted:
-            return "restricted"
-        case .notDetermined:
-            return "not_determined"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private static func requestLocation(always: Bool) {
-        let manager = getLocationManager()
-        locationDelegate = LocationPermissionDelegate(always: always)
-        manager.delegate = locationDelegate
-
-        if always {
-            manager.requestAlwaysAuthorization()
-        } else {
-            manager.requestWhenInUseAuthorization()
-        }
-    }
-
-    // MARK: - Contacts
-
-    private static func contactsStatus() -> String {
-        switch CNContactStore.authorizationStatus(for: .contacts) {
-        case .authorized:
-            return "granted"
-        case .denied:
-            return "permanently_denied"
-        case .restricted:
-            return "restricted"
-        case .notDetermined:
-            return "not_determined"
-        case .limited:
-            return "limited"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private static func requestContacts() {
-        CNContactStore().requestAccess(for: .contacts) { granted, _ in
-            // Use permanently_denied for consistency with contactsStatus()
-            let status = granted ? "granted" : "permanently_denied"
-            sendPermissionChange("contacts", status: status)
-        }
-    }
-
-    // MARK: - Calendar
-
-    private static func calendarStatus() -> String {
-        switch EKEventStore.authorizationStatus(for: .event) {
-        case .authorized:
-            return "granted"
-        case .denied:
-            return "permanently_denied"
-        case .restricted:
-            return "restricted"
-        case .notDetermined:
-            return "not_determined"
-        case .fullAccess:
-            return "granted"
-        case .writeOnly:
-            return "limited"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private static func requestCalendar() {
-        if #available(iOS 17.0, *) {
-            EKEventStore().requestFullAccessToEvents { granted, _ in
-                // Use permanently_denied for consistency with calendarStatus()
-                let status = granted ? "granted" : "permanently_denied"
-                sendPermissionChange("calendar", status: status)
-            }
-        } else {
-            EKEventStore().requestAccess(to: .event) { granted, _ in
-                // Use permanently_denied for consistency with calendarStatus()
-                let status = granted ? "granted" : "permanently_denied"
-                sendPermissionChange("calendar", status: status)
-            }
-        }
-    }
-
-    // MARK: - Notifications
-
-    private static func notificationsStatus() -> String {
-        var status = "unknown"
-        let semaphore = DispatchSemaphore(value: 0)
-
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            switch settings.authorizationStatus {
-            case .authorized:
-                status = "granted"
-            case .denied:
-                status = "permanently_denied"
-            case .notDetermined:
-                status = "not_determined"
-            case .provisional:
-                status = "provisional"
-            case .ephemeral:
-                status = "provisional"
-            @unknown default:
-                status = "unknown"
-            }
-            semaphore.signal()
-        }
-
-        semaphore.wait()
-        return status
-    }
-
-    private static func requestNotifications(args: [String: Any]? = nil) {
-        var authOptions: UNAuthorizationOptions = []
-
-        // Parse notification options from args
-        let alertEnabled = args?["alert"] as? Bool ?? true
-        let soundEnabled = args?["sound"] as? Bool ?? true
-        let badgeEnabled = args?["badge"] as? Bool ?? true
-        let provisionalEnabled = args?["provisional"] as? Bool ?? false
-
-        if alertEnabled {
-            authOptions.insert(.alert)
-        }
-        if soundEnabled {
-            authOptions.insert(.sound)
-        }
-        if badgeEnabled {
-            authOptions.insert(.badge)
-        }
-        if provisionalEnabled {
-            authOptions.insert(.provisional)
-        }
-
-        UNUserNotificationCenter.current().requestAuthorization(options: authOptions) { granted, _ in
-            // Get the actual status after authorization
-            UNUserNotificationCenter.current().getNotificationSettings { settings in
-                let status: String
-                switch settings.authorizationStatus {
-                case .authorized:
-                    status = "granted"
-                case .provisional:
-                    status = "provisional"
-                case .denied:
-                    // Use permanently_denied for consistency with notificationsStatus()
-                    status = "permanently_denied"
-                default:
-                    status = granted ? "granted" : "permanently_denied"
-                }
-                sendPermissionChange("notifications", status: status)
-            }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private static func sendPermissionChange(_ permission: String, status: String) {
-        DispatchQueue.main.async {
-            PlatformChannelManager.shared.sendEvent(channel: "drift/permissions/changes", data: [
-                "permission": permission,
-                "status": status
-            ])
+            result.success(["status": status.rawValue])
         }
     }
 }
 
-// MARK: - Location Permission Delegate
+// MARK: - Notifications (Drift's own kind)
 
-private class LocationPermissionDelegate: NSObject, CLLocationManagerDelegate {
+/// Notification authorization. No Info.plist key is needed; the alert,
+/// sound, badge and provisional options come from Go's RequestWithOptions
+/// (alert, sound and badge default to on).
+private final class NotificationsPermission: DriftPermission {
+    func status() -> DriftPermissionStatus {
+        // UNUserNotificationCenter answers on its own queue, so waiting on
+        // the main thread cannot deadlock.
+        var status = DriftPermissionStatus.unknown
+        let done = DispatchSemaphore(value: 0)
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            status = Self.map(settings.authorizationStatus)
+            done.signal()
+        }
+        done.wait()
+        return status
+    }
+
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        var authOptions: UNAuthorizationOptions = []
+        if options["alert"] as? Bool ?? true { authOptions.insert(.alert) }
+        if options["sound"] as? Bool ?? true { authOptions.insert(.sound) }
+        if options["badge"] as? Bool ?? true { authOptions.insert(.badge) }
+        if options["provisional"] as? Bool ?? false { authOptions.insert(.provisional) }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: authOptions) { _, _ in
+            center.getNotificationSettings { settings in
+                completion(Self.map(settings.authorizationStatus))
+            }
+        }
+    }
+
+    private static func map(_ status: UNAuthorizationStatus) -> DriftPermissionStatus {
+        switch status {
+        case .authorized: return .granted
+        // iOS asks once; after a denial only Settings can change it.
+        case .denied: return .permanentlyDenied
+        case .notDetermined: return .notDetermined
+        case .provisional, .ephemeral: return .provisional
+        @unknown default: return .unknown
+        }
+    }
+}
+
+// MARK: - Kinds moving to plugins
+
+/// Camera or microphone access.
+private final class CapturePermission: DriftPermission {
+    private let media: AVMediaType
+
+    init(_ media: AVMediaType) {
+        self.media = media
+    }
+
+    func status() -> DriftPermissionStatus {
+        switch AVCaptureDevice.authorizationStatus(for: media) {
+        case .authorized: return .granted
+        case .denied: return .permanentlyDenied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
+        }
+    }
+
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        AVCaptureDevice.requestAccess(for: media) { granted in
+            completion(granted ? .granted : .permanentlyDenied)
+        }
+    }
+}
+
+private final class PhotosPermission: DriftPermission {
+    func status() -> DriftPermissionStatus {
+        Self.map(PHPhotoLibrary.authorizationStatus(for: .readWrite))
+    }
+
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            completion(Self.map(status))
+        }
+    }
+
+    private static func map(_ status: PHAuthorizationStatus) -> DriftPermissionStatus {
+        switch status {
+        case .authorized: return .granted
+        case .limited: return .limited
+        case .denied: return .permanentlyDenied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
+        }
+    }
+}
+
+private final class ContactsPermission: DriftPermission {
+    func status() -> DriftPermissionStatus {
+        switch CNContactStore.authorizationStatus(for: .contacts) {
+        case .authorized: return .granted
+        case .limited: return .limited
+        case .denied: return .permanentlyDenied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
+        }
+    }
+
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        CNContactStore().requestAccess(for: .contacts) { [self] _, _ in
+            completion(status())
+        }
+    }
+}
+
+private final class CalendarPermission: DriftPermission {
+    func status() -> DriftPermissionStatus {
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .authorized, .fullAccess: return .granted
+        case .writeOnly: return .limited
+        case .denied: return .permanentlyDenied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
+        }
+    }
+
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        let done: (Bool, Error?) -> Void = { [self] _, _ in completion(status()) }
+        if #available(iOS 17.0, *) {
+            EKEventStore().requestFullAccessToEvents(completion: done)
+        } else {
+            EKEventStore().requestAccess(to: .event, completion: done)
+        }
+    }
+}
+
+/// When-in-use or always location access, on a main-thread
+/// CLLocationManager.
+private final class LocationPermission: NSObject, DriftPermission, CLLocationManagerDelegate {
+    /// How long to wait for the app to go inactive behind a prompt before
+    /// concluding iOS showed none.
+    private static let promptGrace: TimeInterval = 1
+
     private let always: Bool
+    private lazy var manager: CLLocationManager = {
+        let manager = CLLocationManager()
+        manager.delegate = self
+        return manager
+    }()
+    private var pending: [(DriftPermissionStatus) -> Void] = []
+    private var statusAtRequest: CLAuthorizationStatus = .notDetermined
+    private var observers: [NSObjectProtocol] = []
 
     init(always: Bool) {
         self.always = always
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        handleAuthorizationStatus(manager.authorizationStatus)
+    func status() -> DriftPermissionStatus {
+        map(manager.authorizationStatus)
     }
 
-    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        handleAuthorizationStatus(status)
-    }
-
-    private func handleAuthorizationStatus(_ status: CLAuthorizationStatus) {
-        let permission = always ? "location_always" : "location"
-        let statusText: String
-
-        switch status {
-        case .authorizedAlways:
-            statusText = "granted"
-        case .authorizedWhenInUse:
-            statusText = always ? "denied" : "granted"
-        case .denied:
-            statusText = "permanently_denied"
-        case .restricted:
-            statusText = "restricted"
-        case .notDetermined:
-            return
-        @unknown default:
-            statusText = "unknown"
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        pending.append(completion)
+        guard pending.count == 1 else { return } // A prompt is already up.
+        statusAtRequest = manager.authorizationStatus
+        if always {
+            manager.requestAlwaysAuthorization()
+        } else {
+            manager.requestWhenInUseAuthorization()
         }
+        // iOS sends no callback when it shows no prompt (it already asked),
+        // or when the user keeps the current level (upgrading to Always).
+        // A prompt makes the app inactive: finish when it is active again,
+        // or shortly after the request if it never went inactive.
+        let center = NotificationCenter.default
+        var prompted = false
+        observers.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+            prompted = true
+        })
+        observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.finish()
+        })
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.promptGrace) { [weak self] in
+            if !prompted { self?.finish() }
+        }
+    }
 
-        DispatchQueue.main.async {
-            PlatformChannelManager.shared.sendEvent(channel: "drift/permissions/changes", data: [
-                "permission": permission,
-                "status": statusText
-            ])
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        // The delegate also reports the status it starts with; only a change
+        // answers a request.
+        if !pending.isEmpty, manager.authorizationStatus != statusAtRequest {
+            finish()
+        }
+    }
+
+    private func finish() {
+        guard !pending.isEmpty else { return }
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers.removeAll()
+        let status = status()
+        let completions = pending
+        pending.removeAll()
+        completions.forEach { $0(status) }
+    }
+
+    private func map(_ status: CLAuthorizationStatus) -> DriftPermissionStatus {
+        switch status {
+        case .authorizedAlways: return .granted
+        // When-in-use can still be upgraded to Always.
+        case .authorizedWhenInUse: return always ? .denied : .granted
+        case .denied: return .permanentlyDenied
+        case .restricted: return .restricted
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown
         }
     }
 }

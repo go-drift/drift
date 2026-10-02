@@ -8,5 +8,5 @@ type CalendarService struct {
 
 // Calendar is the singleton calendar service.
 var Calendar = &CalendarService{
-	Permission: newPerm("calendar"),
+	Permission: NewPermission("calendar"),
 }

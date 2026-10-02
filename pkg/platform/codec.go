@@ -78,6 +78,16 @@ var (
 	// ErrReplyDropped indicates native discarded a method call's reply
 	// without answering it, a bug in the native handler.
 	ErrReplyDropped = errors.New("native handler dropped the call without replying")
+
+	// ErrPermissionNotRegistered indicates no native code registered the
+	// permission kind: the plugin providing it is missing from drift.yaml,
+	// or not configured for that kind.
+	ErrPermissionNotRegistered = errors.New("permission kind not registered")
+
+	// ErrPermissionNotDeclared indicates the Android manifest does not
+	// declare a permission the kind needs, so Android would deny it without
+	// asking. Add the plugin that declares it to drift.yaml.
+	ErrPermissionNotDeclared = errors.New("permission not declared in the Android manifest")
 )
 
 // channelErrorCodes are the wire codes of the standard errors, shared by
@@ -93,6 +103,9 @@ var channelErrorCodes = map[error]string{
 	ErrViewTypeNotFound:    "view_type_not_found",
 	ErrBlocksUIThread:      "blocks_ui_thread",
 	ErrReplyDropped:        "reply_dropped",
+
+	ErrPermissionNotRegistered: "permission_not_registered",
+	ErrPermissionNotDeclared:   "permission_not_declared",
 }
 
 // AsChannelError converts a Go error to the ChannelError sent to native:

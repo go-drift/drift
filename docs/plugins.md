@@ -84,6 +84,16 @@ Method calls cross as callbacks keyed by call ID. Go starts the call on the call
 - A `DriftResult` released without a reply answers `reply_dropped` (iOS `deinit`, Android `PhantomReference` reaper). A second reply crashes on both platforms.
 - Native error codes match Go sentinels under `errors.Is` (`ChannelError.Is`, `pkg/platform/codec.go`).
 
+## Permissions
+
+Drift owns the request mechanism; permission kinds come from plugins. `PermissionHandler` (iOS `templates/ios/PermissionHandler.swift`, Android `templates/android/java/PermissionHandler.kt`) holds the registry, fed by `DriftPluginHost.registerPermission(kind, permission)`, and registers the `drift/permissions` channel through the same `registerChannel` plugins use: `check`, `shouldShowRationale` and `openSettings` reply in place, and `request` is an async method whose reply is the resulting status (so the UI-thread guard applies). After a request it also sends `drift/permissions/changes` for `Permission.Listen`. Go reaches a kind with `platform.NewPermission(kind)`.
+
+- A kind nobody registered fails with `permission_not_registered` (`platform.ErrPermissionNotRegistered`); registering a kind twice crashes at startup.
+- `request` is skipped when the status is granted, permanently denied or restricted, since no prompt can change them.
+- iOS kinds implement `DriftPermission` (`templates/plugin-api/ios/DriftPermission.swift`) and must complete even when iOS sends no callback (no prompt shown, Always upgrade declined).
+- Android kinds implement `DriftPermission` (`templates/android/runner/DriftPermission.kt`); most use `DriftRuntimePermission(manifestPermissions...)`, which requests through the Activity's `activityResultRegistry` (no request codes), infers "permanently denied" from a remembered request plus the rationale flag, reads LIMITED when only some of its permissions are granted, and fails with `permission_not_declared` (`platform.ErrPermissionNotDeclared`) when the merged manifest lacks one.
+- Drift registers one kind itself: `notifications`, shared by every plugin that shows notifications. Those plugins declare `POST_NOTIFICATIONS`.
+
 ## Ejected projects
 
 Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files.

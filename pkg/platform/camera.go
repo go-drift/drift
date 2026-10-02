@@ -81,7 +81,7 @@ var Camera *CameraService
 
 func init() {
 	Camera = &CameraService{
-		Permission: newPerm("camera"),
+		Permission: NewPermission("camera"),
 		state:      newCameraService(),
 	}
 }

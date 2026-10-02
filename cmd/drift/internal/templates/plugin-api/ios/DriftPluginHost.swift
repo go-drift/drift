@@ -169,4 +169,9 @@ public protocol DriftPluginHost: AnyObject {
     /// it returns on the main thread. Plugins that observe for the life of
     /// the process can discard the token.
     func observeEvent(_ channel: String, handler: @escaping (Any?) -> Void) -> DriftSubscription
+
+    /// Registers the permission `kind` (Go: `platform.NewPermission(kind)`).
+    /// Register each kind once, from `register(host:)`, together with the
+    /// Info.plist usage string it needs; registering a kind twice traps.
+    func registerPermission(_ kind: String, _ permission: DriftPermission)
 }

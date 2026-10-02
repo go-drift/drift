@@ -17,6 +17,9 @@ type permissionsBridge struct {
 	mu       sync.Mutex
 	calls    []recordedCall
 	handlers map[string]func(args map[string]any) (any, error)
+	// held lists methods that never reply, like a prompt the user has not
+	// answered.
+	held map[string]bool
 }
 
 type recordedCall struct {
@@ -26,7 +29,17 @@ type recordedCall struct {
 }
 
 func newPermissionsBridge() *permissionsBridge {
-	return &permissionsBridge{handlers: map[string]func(args map[string]any) (any, error){}}
+	return &permissionsBridge{
+		handlers: map[string]func(args map[string]any) (any, error){},
+		held:     map[string]bool{},
+	}
+}
+
+// hold makes calls to method wait forever for their reply.
+func (b *permissionsBridge) hold(method string) {
+	b.mu.Lock()
+	b.held[method] = true
+	b.mu.Unlock()
 }
 
 func (b *permissionsBridge) on(method string, fn func(args map[string]any) (any, error)) {
@@ -36,7 +49,13 @@ func (b *permissionsBridge) on(method string, fn func(args map[string]any) (any,
 }
 
 func (b *permissionsBridge) InvokeMethod(channel, method string, args []byte, reply func([]byte, error)) {
-	reply(b.answer(channel, method, args))
+	data, err := b.answer(channel, method, args)
+	b.mu.Lock()
+	held := b.held[method]
+	b.mu.Unlock()
+	if !held {
+		reply(data, err)
+	}
 }
 
 func (b *permissionsBridge) answer(channel, method string, args []byte) ([]byte, error) {
@@ -113,115 +132,83 @@ func dispatchChange(t *testing.T, name string, status PermissionResult) {
 	}
 }
 
-func TestRequest_FastPathTerminalStatus(t *testing.T) {
+func TestRequest_RepliesWithStatus(t *testing.T) {
 	bridge := newPermissionsBridge()
-	bridge.on("check", func(map[string]any) (any, error) {
-		return map[string]any{"status": "granted"}, nil
+	bridge.on("request", func(map[string]any) (any, error) {
+		return map[string]any{"status": "limited"}, nil
 	})
 	setupPermissions(t, bridge)
 
-	got, err := newPerm("camera").Request(context.Background())
+	got, err := NewPermission("location").Request(context.Background())
 	if err != nil {
 		t.Fatalf("Request: %v", err)
 	}
-	if got != PermissionGranted {
-		t.Errorf("status = %q, want %q", got, PermissionGranted)
+	if got != PermissionLimited {
+		t.Errorf("status = %q, want %q", got, PermissionLimited)
 	}
-	for _, c := range bridge.snapshot() {
-		if c.Method == "request" {
-			t.Errorf("expected no native request call when status is terminal; got %+v", c)
-		}
-	}
-}
-
-func TestRequest_AsyncResolutionViaEvent(t *testing.T) {
-	bridge := newPermissionsBridge()
-	bridge.on("check", func(map[string]any) (any, error) {
-		return map[string]any{"status": "not_determined"}, nil
-	})
-	bridge.on("request", func(map[string]any) (any, error) { return nil, nil })
-	setupPermissions(t, bridge)
-
-	p := newPerm("camera")
-	resultCh := make(chan PermissionResult, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		got, err := p.Request(context.Background())
-		if err != nil {
-			errCh <- err
-			return
-		}
-		resultCh <- got
-	}()
-
-	bridge.waitForCall(t, "request")
-	dispatchChange(t, "camera", PermissionGranted)
-
-	select {
-	case got := <-resultCh:
-		if got != PermissionGranted {
-			t.Errorf("status = %q, want %q", got, PermissionGranted)
-		}
-	case err := <-errCh:
-		t.Fatalf("Request returned error: %v", err)
-	case <-time.After(time.Second):
-		t.Fatal("Request did not resolve after matching change event")
+	calls := bridge.snapshot()
+	if len(calls) != 1 || calls[0].Method != "request" || calls[0].Args["permission"] != "location" {
+		t.Errorf("calls = %+v, want one request for location", calls)
 	}
 }
 
-func TestRequest_IgnoresOtherPermissions(t *testing.T) {
+func TestRequest_MalformedReply(t *testing.T) {
 	bridge := newPermissionsBridge()
-	bridge.on("check", func(map[string]any) (any, error) {
-		return map[string]any{"status": "not_determined"}, nil
+	bridge.on("request", func(map[string]any) (any, error) {
+		return map[string]any{"granted": true}, nil
 	})
-	bridge.on("request", func(map[string]any) (any, error) { return nil, nil })
 	setupPermissions(t, bridge)
 
-	p := newPerm("camera")
-	resultCh := make(chan PermissionResult, 1)
-	go func() {
-		got, _ := p.Request(context.Background())
-		resultCh <- got
-	}()
-
-	bridge.waitForCall(t, "request")
-
-	dispatchChange(t, "microphone", PermissionGranted)
-	select {
-	case got := <-resultCh:
-		t.Fatalf("Request resolved on unrelated permission change: %q", got)
-	case <-time.After(50 * time.Millisecond):
+	_, err := NewPermission("camera").Request(context.Background())
+	var parseErr *drifterrors.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("err = %v, want a ParseError", err)
 	}
+}
 
-	dispatchChange(t, "camera", PermissionDenied)
-	select {
-	case got := <-resultCh:
-		if got != PermissionDenied {
-			t.Errorf("status = %q, want %q", got, PermissionDenied)
+func TestStatus_NativeErrorCodes(t *testing.T) {
+	cases := []struct {
+		code string
+		want error
+	}{
+		{"permission_not_registered", ErrPermissionNotRegistered},
+		{"permission_not_declared", ErrPermissionNotDeclared},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			bridge := newPermissionsBridge()
+			bridge.on("check", func(map[string]any) (any, error) {
+				return nil, NewChannelError(tc.code, "native says no")
+			})
+			setupPermissions(t, bridge)
+
+			_, err := NewPermission("contacts").Status()
+			if !errors.Is(err, tc.want) {
+				t.Errorf("err = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewPermission_EmptyKindPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("NewPermission(\"\") did not panic")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Request did not resolve after matching change event")
-	}
+	}()
+	NewPermission("")
 }
 
 func TestRequest_CtxCanceled(t *testing.T) {
 	bridge := newPermissionsBridge()
-	bridge.on("check", func(map[string]any) (any, error) {
-		return map[string]any{"status": "not_determined"}, nil
-	})
-	bridge.on("request", func(map[string]any) (any, error) { return nil, nil })
+	bridge.hold("request")
 	setupPermissions(t, bridge)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	resultCh := make(chan PermissionResult, 1)
 	errCh := make(chan error, 1)
 	go func() {
-		got, err := newPerm("camera").Request(ctx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-		resultCh <- got
+		_, err := NewPermission("camera").Request(ctx)
+		errCh <- err
 	}()
 
 	bridge.waitForCall(t, "request")
@@ -232,8 +219,6 @@ func TestRequest_CtxCanceled(t *testing.T) {
 		if !errors.Is(err, ErrCanceled) {
 			t.Errorf("err = %v, want ErrCanceled", err)
 		}
-	case got := <-resultCh:
-		t.Fatalf("Request resolved instead of canceling: %q", got)
 	case <-time.After(time.Second):
 		t.Fatal("Request did not unblock after ctx cancel")
 	}
@@ -243,7 +228,7 @@ func TestListen_FiresOnMatchingChange(t *testing.T) {
 	setupPermissions(t, newPermissionsBridge())
 
 	got := make(chan PermissionResult, 1)
-	unsubscribe := newPerm("camera").Listen(func(s PermissionResult) { got <- s })
+	unsubscribe := NewPermission("camera").Listen(func(s PermissionResult) { got <- s })
 	defer unsubscribe()
 
 	dispatchChange(t, "camera", PermissionGranted)
@@ -261,7 +246,7 @@ func TestListen_IgnoresOther(t *testing.T) {
 	setupPermissions(t, newPermissionsBridge())
 
 	got := make(chan PermissionResult, 1)
-	unsubscribe := newPerm("camera").Listen(func(s PermissionResult) { got <- s })
+	unsubscribe := NewPermission("camera").Listen(func(s PermissionResult) { got <- s })
 	defer unsubscribe()
 
 	dispatchChange(t, "microphone", PermissionGranted)
@@ -276,7 +261,7 @@ func TestListen_Unsubscribe(t *testing.T) {
 	setupPermissions(t, newPermissionsBridge())
 
 	got := make(chan PermissionResult, 1)
-	unsubscribe := newPerm("camera").Listen(func(s PermissionResult) { got <- s })
+	unsubscribe := NewPermission("camera").Listen(func(s PermissionResult) { got <- s })
 	unsubscribe()
 
 	dispatchChange(t, "camera", PermissionGranted)
@@ -317,7 +302,7 @@ func TestParsePermissionChange_ReportedViaStream(t *testing.T) {
 	t.Cleanup(func() { drifterrors.SetHandler(prev) })
 
 	// One subscriber so the Stream forwards parse failures through its parser.
-	unsubscribe := newPerm("camera").Listen(func(PermissionResult) {})
+	unsubscribe := NewPermission("camera").Listen(func(PermissionResult) {})
 	defer unsubscribe()
 
 	payload, err := DefaultCodec.Encode("not a map")
@@ -340,7 +325,7 @@ func TestLocationAlways_ShouldShowRationale(t *testing.T) {
 	})
 	setupPermissions(t, bridge)
 
-	if _, err := newPerm("location_always").ShouldShowRationale(); err != nil {
+	if _, err := NewPermission("location_always").ShouldShowRationale(); err != nil {
 		t.Fatalf("ShouldShowRationale: %v", err)
 	}
 
@@ -358,27 +343,20 @@ func TestLocationAlways_ShouldShowRationale(t *testing.T) {
 
 func TestNotifications_RequestWithOptions(t *testing.T) {
 	bridge := newPermissionsBridge()
-	bridge.on("check", func(map[string]any) (any, error) {
-		return map[string]any{"status": "not_determined"}, nil
+	bridge.on("request", func(map[string]any) (any, error) {
+		return map[string]any{"status": "provisional"}, nil
 	})
-	bridge.on("request", func(map[string]any) (any, error) { return nil, nil })
 	setupPermissions(t, bridge)
 
-	n := newNotificationPerm()
-	resultCh := make(chan PermissionResult, 1)
-	go func() {
-		got, _ := n.RequestWithOptions(context.Background(), NotificationPermissionOptions{
-			Alert:       true,
-			Sound:       false,
-			Badge:       true,
-			Provisional: true,
-		})
-		resultCh <- got
-	}()
-
-	bridge.waitForCall(t, "request")
-	dispatchChange(t, "notifications", PermissionGranted)
-	<-resultCh
+	got, err := newNotificationPerm().RequestWithOptions(context.Background(), NotificationPermissionOptions{
+		Alert:       true,
+		Sound:       false,
+		Badge:       true,
+		Provisional: true,
+	})
+	if err != nil || got != PermissionProvisional {
+		t.Fatalf("RequestWithOptions = %q, %v; want provisional", got, err)
+	}
 
 	for _, c := range bridge.snapshot() {
 		if c.Method != "request" {
@@ -404,10 +382,9 @@ func TestNotifications_RequestWithOptions(t *testing.T) {
 	t.Fatal("no request call recorded")
 }
 
-// TestRequest_PreCanceledCtx covers the new ctx-aware path through
-// requestAndWait → status(ctx). With a pre-canceled ctx, the initial status
-// check should fast-fail; no native "request" call should be made.
-// Cancellation is normalized to ErrCanceled (not raw context.Canceled).
+// TestRequest_PreCanceledCtx: with a pre-canceled ctx no native "request"
+// call is made, and cancellation is normalized to ErrCanceled (not raw
+// context.Canceled).
 func TestRequest_PreCanceledCtx(t *testing.T) {
 	bridge := newPermissionsBridge()
 	bridge.on("check", func(map[string]any) (any, error) {
@@ -419,7 +396,7 @@ func TestRequest_PreCanceledCtx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := newPerm("camera").Request(ctx)
+	_, err := NewPermission("camera").Request(ctx)
 	if !errors.Is(err, ErrCanceled) {
 		t.Fatalf("err = %v, want ErrCanceled", err)
 	}
@@ -443,7 +420,7 @@ func TestRequest_PreCanceledCtx_DeadlineExceeded(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 
-	_, err := newPerm("camera").Request(ctx)
+	_, err := NewPermission("camera").Request(ctx)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("err = %v, want ErrTimeout", err)
 	}
@@ -457,7 +434,7 @@ func TestShouldShowRationale_PropagatesBridgeError(t *testing.T) {
 	})
 	setupPermissions(t, bridge)
 
-	got, err := newPerm("camera").ShouldShowRationale()
+	got, err := NewPermission("camera").ShouldShowRationale()
 	if err == nil {
 		t.Fatal("expected error from bridge, got nil")
 	}

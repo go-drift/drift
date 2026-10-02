@@ -15,12 +15,16 @@
  */
 package com.drift.runner
 
-import android.app.Activity
 import android.content.Intent
 import android.view.ViewGroup
+import androidx.fragment.app.FragmentActivity
 
 class DriftActivityBinding(
-    val activity: Activity,
+    /**
+     * MainActivity, a FragmentActivity: plugins can start activities for a
+     * result through its activityResultRegistry and show BiometricPrompt.
+     */
+    val activity: FragmentActivity,
     /**
      * Host for plugin overlays (a splash, say): the window's root view, so
      * overlays cover the whole window, above Drift's content and its

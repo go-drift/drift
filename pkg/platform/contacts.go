@@ -8,5 +8,5 @@ type ContactsService struct {
 
 // Contacts is the singleton contacts service.
 var Contacts = &ContactsService{
-	Permission: newPerm("contacts"),
+	Permission: NewPermission("contacts"),
 }

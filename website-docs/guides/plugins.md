@@ -365,6 +365,7 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 | `sendEvent(channel, data)` | Send an event to Go |
 | `sendEventError(channel, code, message)` / `sendEventDone(channel)` | Report a stream error or end |
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
+| `registerPermission(kind, permission)` | Provide a runtime permission kind (see [Permissions](#permissions)) |
 | `context` (Android only) | The application `Context` |
 
 Each method declares how it replies:
@@ -411,6 +412,40 @@ go func() {
 From a goroutine, both kinds of method run on the main thread and the call waits for the reply or the context, whichever comes first. A canceled context returns at once; the native work finishes in the background and its reply is discarded.
 
 When a runtime API wraps an async method, say so in its doc comment. Prefer APIs that cannot block where they fit: state the native side pushes as events, and streams.
+
+### Permissions
+
+Drift owns the permission request mechanism; a plugin provides the kinds its feature needs. In `Build`, declare what the platform requires (Android manifest permissions, iOS usage strings); in native code, register the kind once with `host.registerPermission`; in the runtime half, expose it with `platform.NewPermission(kind)`. Apps then call `Status`, `Request` and `Listen` on it like any other `platform.Permission`.
+
+```go
+// Build
+ctx.IOS.Info.SetString("NSContactsUsageDescription", cfg.IOSDescription)
+ctx.Android.Manifest.AddPermission("android.permission.READ_CONTACTS")
+
+// Runtime half
+var Permission = platform.NewPermission("contacts")
+```
+
+On iOS a kind implements `DriftPermission`: `status()` returns the current `DriftPermissionStatus` and `request(options:completion:)` prompts, then calls the completion exactly once. iOS sends no callback when it shows no prompt (it already asked) or when the user keeps the current level; the kind must still complete, with the current status.
+
+```swift
+final class ContactsPermission: DriftPermission {
+    func status() -> DriftPermissionStatus { /* CNContactStore.authorizationStatus */ }
+    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
+        CNContactStore().requestAccess(for: .contacts) { [self] _, _ in completion(status()) }
+    }
+}
+
+host.registerPermission("contacts", ContactsPermission())
+```
+
+On Android most kinds are runtime permissions; `DriftRuntimePermission` implements them. Listing several requests them together, and the kind reads `LIMITED` when only some are granted (approximate location):
+
+```kotlin
+host.registerPermission("contacts", DriftRuntimePermission(Manifest.permission.READ_CONTACTS))
+```
+
+Drift requests only when a prompt can change the status, reports each result on `Listen`, and fails calls on a kind nobody registered with `platform.ErrPermissionNotRegistered`. On Android, a kind whose manifest permission is missing fails with `platform.ErrPermissionNotDeclared`. `Request` waits for the user, so it fails with `platform.ErrBlocksUIThread` on the UI thread.
 
 ### The runtime half
 

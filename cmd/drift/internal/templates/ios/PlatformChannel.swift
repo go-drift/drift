@@ -216,6 +216,11 @@ final class PlatformChannelManager: DriftPluginHost {
         channels[name] = channel
     }
 
+    /// `DriftPluginHost`: register a permission kind.
+    func registerPermission(_ kind: String, _ permission: DriftPermission) {
+        PermissionHandler.register(kind, permission)
+    }
+
     /// `DriftPluginHost`-shaped event sender. Wraps the existing labeled
     /// method so the dozens of in-tree callers (`sendEvent(channel:data:)`)
     /// continue to work without a sweeping rename.
@@ -422,10 +427,8 @@ final class PlatformChannelManager: DriftPluginHost {
             return PlatformViewHandler.handle(method: method, args: args)
         }
 
-        // Permissions channel
-        register(channel: "drift/permissions") { method, args in
-            return PermissionHandler.handle(method: method, args: args)
-        }
+        // Permissions channel and Drift's own permission kinds
+        PermissionHandler.start(host: self)
 
         // Location channel
         register(channel: "drift/location") { method, args in

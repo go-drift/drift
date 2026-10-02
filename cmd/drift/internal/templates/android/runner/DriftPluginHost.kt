@@ -75,4 +75,11 @@ interface DriftPluginHost {
      * observe for the life of the process can discard the token.
      */
     fun observeEvent(channel: String, handler: (Any?) -> Unit): DriftSubscription
+
+    /**
+     * Registers the permission [kind] (Go: `platform.NewPermission(kind)`).
+     * Register each kind once, from onRegister, and declare its manifest
+     * permissions in the plugin's Build; registering a kind twice crashes.
+     */
+    fun registerPermission(kind: String, permission: DriftPermission)
 }

@@ -63,8 +63,8 @@ func init() {
 		state:   state,
 		updates: NewStream("drift/location/updates", state.updates, parseLocationUpdateWithError),
 	}
-	Location.Permission.WhenInUse = newPerm("location")
-	Location.Permission.Always = newPerm("location_always")
+	Location.Permission.WhenInUse = NewPermission("location")
+	Location.Permission.Always = NewPermission("location_always")
 }
 
 type locationServiceState struct {

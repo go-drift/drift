@@ -1,6 +1,12 @@
 /**
  * PermissionHandler.kt
- * Handles runtime permission requests for the Drift platform channel.
+ *
+ * The drift/permissions channel: Drift's permission request mechanism.
+ * Permission kinds are registered by plugins (DriftPluginHost
+ * registerPermission) and by Drift itself (notifications, below); Go's
+ * platform.Permission reaches a kind by name. "request" is an async method
+ * that replies with the status once the user has answered, and reports it
+ * on drift/permissions/changes.
  */
 package {{.PackageName}}
 
@@ -8,227 +14,139 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.fragment.app.FragmentActivity
+import com.drift.runner.DriftCallError
+import com.drift.runner.DriftPermission
+import com.drift.runner.DriftPermissionStatus
+import com.drift.runner.DriftPluginHost
+import com.drift.runner.DriftRuntimePermission
+import com.drift.runner.driftCrash
+import java.util.concurrent.ConcurrentHashMap
 
 object PermissionHandler {
-    private const val PERMISSION_REQUEST_CODE = 9001
-    private var pendingCallback: ((Map<String, String>) -> Unit)? = null
-    private var pendingPermissions: Array<String>? = null
+    private val kinds = ConcurrentHashMap<String, DriftPermission>()
 
-    private val permissionMap = mapOf(
-        "camera" to Manifest.permission.CAMERA,
-        "microphone" to Manifest.permission.RECORD_AUDIO,
-        "photos" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        },
-        "location" to Manifest.permission.ACCESS_FINE_LOCATION,
-        "location_always" to Manifest.permission.ACCESS_BACKGROUND_LOCATION,
-        "contacts" to Manifest.permission.READ_CONTACTS,
-        "calendar" to Manifest.permission.READ_CALENDAR,
-        "notifications" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.POST_NOTIFICATIONS
-        } else {
-            null
+    /** Registers the permission [kind]; a second registration crashes. */
+    fun register(kind: String, permission: DriftPermission) {
+        if (kinds.putIfAbsent(kind, permission) != null) {
+            driftCrash("drift: permission kind \"$kind\" is already registered")
         }
+    }
+
+    /** Registers the drift/permissions channel and Drift's own kinds. */
+    fun start(host: DriftPluginHost) {
+        val context = host.context
+        host.registerChannel("drift/permissions") {
+            method("check") { args ->
+                mapOf("status" to lookup(args).second.status(context, foreground()).wire)
+            }
+            asyncMethod("request") { args, result ->
+                val (kind, permission) = lookup(args)
+                val current = permission.status(context, foreground())
+                when (current) {
+                    // No prompt can change these.
+                    DriftPermissionStatus.GRANTED,
+                    DriftPermissionStatus.PERMANENTLY_DENIED,
+                    DriftPermissionStatus.RESTRICTED -> {
+                        result.success(mapOf("status" to current.wire))
+                        return@asyncMethod
+                    }
+                    else -> {}
+                }
+                val activity = foreground() as? FragmentActivity
+                    ?: throw DriftCallError("platform_unavailable", "no foreground Activity to show the $kind permission prompt")
+                @Suppress("UNCHECKED_CAST")
+                val options = (args as Map<String, Any?>) - "permission"
+                permission.request(activity, options) { status ->
+                    host.sendEvent("drift/permissions/changes", mapOf("permission" to kind, "status" to status.wire))
+                    result.success(mapOf("status" to status.wire))
+                }
+            }
+            method("shouldShowRationale") { args ->
+                val permission = lookup(args).second
+                val activity = foreground()
+                mapOf("shouldShow" to (activity != null && permission.shouldShowRationale(activity)))
+            }
+            method("openSettings") { _ ->
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+                null
+            }
+        }
+
+        host.registerPermission("notifications", NotificationsPermission)
+        // Moving to plugins (Phase 5); registered here until each moves.
+        host.registerPermission("camera", DriftRuntimePermission(Manifest.permission.CAMERA))
+        host.registerPermission("microphone", DriftRuntimePermission(Manifest.permission.RECORD_AUDIO))
+        host.registerPermission("photos", DriftRuntimePermission(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+        ))
+        host.registerPermission("location", DriftRuntimePermission(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ))
+        host.registerPermission("location_always", DriftRuntimePermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+        host.registerPermission("contacts", DriftRuntimePermission(Manifest.permission.READ_CONTACTS))
+        host.registerPermission("calendar", DriftRuntimePermission(Manifest.permission.READ_CALENDAR))
+    }
+
+    private fun foreground(): Activity? = PlatformChannelManager.currentActivity()
+
+    private fun lookup(args: Any?): Pair<String, DriftPermission> {
+        val kind = (args as? Map<*, *>)?.get("permission") as? String
+            ?: throw IllegalArgumentException("drift/permissions: missing permission kind")
+        val permission = kinds[kind] ?: throw DriftCallError(
+            "permission_not_registered",
+            "no plugin registered the permission kind \"$kind\"; add the plugin that provides it to drift.yaml",
+        )
+        return kind to permission
+    }
+}
+
+/**
+ * Notification permission: POST_NOTIFICATIONS from Android 13; before
+ * that, whether the user left notifications enabled. Drift owns the kind,
+ * but plugins that show notifications declare the manifest permission.
+ */
+private object NotificationsPermission : DriftPermission {
+    private val runtime = DriftRuntimePermission(
+        Manifest.permission.POST_NOTIFICATIONS,
+        whenUndeclared = "add a plugin that shows notifications (notifications or firebase) to drift.yaml",
     )
 
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "check" -> check(context, args)
-            "request" -> request(context, args)
-            "requestMultiple" -> requestMultiple(context, args)
-            "openSettings" -> openSettings(context)
-            "shouldShowRationale" -> shouldShowRationale(args)
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
-        }
-    }
-
-    private fun check(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val permission = argsMap["permission"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing permission"))
-
-        val status = checkPermissionStatus(context, permission)
-        return Pair(mapOf("status" to status), null)
-    }
-
-    private fun request(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val permission = argsMap["permission"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing permission"))
-
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(mapOf("status" to "denied"), null)
-
-        // Handle notification permission with options
-        if (permission == "notifications") {
-            return requestNotificationPermission(context, argsMap)
-        }
-
-        val androidPermission = permissionMap[permission]
-        if (androidPermission == null) {
-            // Permission not required on this Android version
-            return Pair(mapOf("status" to "granted"), null)
-        }
-
-        val currentStatus = checkPermissionStatus(context, permission)
-        if (currentStatus == "granted") {
-            return Pair(mapOf("status" to "granted"), null)
-        }
-
-        // Don't request if permanently denied - user must go to settings
-        if (currentStatus == "permanently_denied") {
-            return Pair(mapOf("status" to "permanently_denied"), null)
-        }
-
-        // Request permission on the UI thread
-        // The actual permission request happens asynchronously
-        activity.runOnUiThread {
-            ActivityCompat.requestPermissions(activity, arrayOf(androidPermission), PERMISSION_REQUEST_CODE)
-        }
-
-        // Return current status - the result will come through onRequestPermissionsResult
-        return Pair(mapOf("status" to currentStatus), null)
-    }
-
-    private fun requestNotificationPermission(context: Context, args: Map<*, *>): Pair<Any?, Exception?> {
-        // On Android, notification options (alert, sound, badge) are handled at the
-        // notification channel level, not at permission request time.
-        // The provisional option is iOS-specific and ignored on Android.
-        val status = checkPermissionStatus(context, "notifications")
-
-        // Don't request if already granted or permanently denied
-        if (status == "granted" || status == "permanently_denied") {
-            return Pair(mapOf("status" to status), null)
-        }
-
+    override fun status(context: Context, activity: Activity?): DriftPermissionStatus {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val activity = PlatformChannelManager.currentActivity()
-            if (activity != null) {
-                activity.runOnUiThread {
-                    ActivityCompat.requestPermissions(
-                        activity,
-                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                        PERMISSION_REQUEST_CODE
-                    )
-                }
-                return Pair(mapOf("status" to "not_determined"), null)
-            }
+            return runtime.status(context, activity)
         }
-
-        return Pair(mapOf("status" to status), null)
+        // Checked for the declaration, so a missing plugin fails the same
+        // way on every API level.
+        runtime.status(context, activity)
+        return if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            DriftPermissionStatus.GRANTED
+        } else {
+            DriftPermissionStatus.PERMANENTLY_DENIED
+        }
     }
 
-    private fun requestMultiple(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        @Suppress("UNCHECKED_CAST")
-        val permissions = argsMap["permissions"] as? List<String>
-            ?: return Pair(null, IllegalArgumentException("Missing permissions"))
-
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(mapOf("results" to permissions.associateWith { "denied" }), null)
-
-        val androidPermissions = permissions.mapNotNull { permissionMap[it] }.toTypedArray()
-
-        if (androidPermissions.isEmpty()) {
-            return Pair(mapOf("results" to permissions.associateWith { "granted" }), null)
-        }
-
-        val results = permissions.associateWith { checkPermissionStatus(context, it) }
-
-        // Request any not-granted permissions
-        val notGranted = androidPermissions.filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (notGranted.isNotEmpty()) {
-            activity.runOnUiThread {
-                ActivityCompat.requestPermissions(activity, notGranted.toTypedArray(), PERMISSION_REQUEST_CODE)
-            }
-        }
-
-        return Pair(mapOf("results" to results), null)
+    override fun request(
+        activity: FragmentActivity,
+        options: Map<String, Any?>,
+        completion: (DriftPermissionStatus) -> Unit,
+    ) {
+        // Below Android 13, status() is never one that reaches here.
+        runtime.request(activity, options, completion)
     }
 
-    private fun openSettings(context: Context): Pair<Any?, Exception?> {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-            data = Uri.fromParts("package", context.packageName, null)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-        return Pair(null, null)
-    }
-
-    private fun shouldShowRationale(args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val permission = argsMap["permission"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing permission"))
-
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(mapOf("shouldShow" to false), null)
-
-        val androidPermission = permissionMap[permission]
-            ?: return Pair(mapOf("shouldShow" to false), null)
-
-        val shouldShow = ActivityCompat.shouldShowRequestPermissionRationale(activity, androidPermission)
-        return Pair(mapOf("shouldShow" to shouldShow), null)
-    }
-
-    private fun checkPermissionStatus(context: Context, permission: String): String {
-        val androidPermission = permissionMap[permission]
-            ?: return "granted" // Permission not required on this version
-
-        if (ContextCompat.checkSelfPermission(context, androidPermission) == PackageManager.PERMISSION_GRANTED) {
-            return "granted"
-        }
-        val activity = PlatformChannelManager.currentActivity()
-        if (activity == null || ActivityCompat.shouldShowRequestPermissionRationale(activity, androidPermission)) {
-            return "denied"
-        }
-        // Either never asked or permanently denied
-        val prefs = context.getSharedPreferences("drift_permissions", Context.MODE_PRIVATE)
-        return if (prefs.getBoolean("asked_$permission", false)) "permanently_denied" else "not_determined"
-    }
-
-    fun onRequestPermissionsResult(activity: Activity, requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (requestCode != PERMISSION_REQUEST_CODE) return
-
-        val prefs = activity.getSharedPreferences("drift_permissions", Context.MODE_PRIVATE)
-        val editor = prefs.edit()
-
-        permissions.forEachIndexed { index, androidPermission ->
-            // Find the drift permission name
-            val driftPermission = permissionMap.entries.find { it.value == androidPermission }?.key
-            if (driftPermission != null) {
-                editor.putBoolean("asked_$driftPermission", true)
-
-                val status = if (grantResults.getOrNull(index) == PackageManager.PERMISSION_GRANTED) {
-                    "granted"
-                } else if (!ActivityCompat.shouldShowRequestPermissionRationale(activity, androidPermission)) {
-                    "permanently_denied"
-                } else {
-                    "denied"
-                }
-
-                // Send permission change event
-                PlatformChannelManager.sendEvent("drift/permissions/changes", mapOf(
-                    "permission" to driftPermission,
-                    "status" to status
-                ))
-            }
-        }
-
-        editor.apply()
-    }
+    override fun shouldShowRationale(activity: Activity): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && runtime.shouldShowRationale(activity)
 }

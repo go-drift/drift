@@ -17,6 +17,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Looper
 import android.view.ViewGroup
+import androidx.fragment.app.FragmentActivity
 
 object DriftPlugins {
     private var plugins: List<DriftPlugin>? = null
@@ -39,7 +40,7 @@ object DriftPlugins {
      * Attaches every plugin to activity, detaching from a previous Activity
      * first. overlayView hosts plugin overlays (DriftActivityBinding).
      */
-    fun attach(activity: Activity, overlayView: ViewGroup) {
+    fun attach(activity: FragmentActivity, overlayView: ViewGroup) {
         val all = requirePlugins()
         binding?.let { detachAll(it) }
         val b = DriftActivityBinding(activity, overlayView)
