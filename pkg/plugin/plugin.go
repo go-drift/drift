@@ -72,26 +72,36 @@ func Bind[T any](pkgPath string, p Plugin[T]) Binding {
 
 // decodeConfig turns a plugin's raw drift.yaml config into T: the generic
 // mapping is checked against the schema (the same ValidateConfig that
-// `drift plugin sync` runs), defaults fill absent keys, and the result is
-// decoded strictly into T.
+// `drift plugin sync` runs), defaults fill absent keys, and the YAML node,
+// whose scalars keep their source text, is decoded strictly into T.
 func decodeConfig[T any](schema protocol.PluginSchema, configYAML []byte, projectRoot string) (T, error) {
 	var cfg T
-	raw := map[string]any{}
-	if err := yaml.Unmarshal(configYAML, &raw); err != nil {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(configYAML, &doc); err != nil {
 		return cfg, fmt.Errorf("decode config: %w", err)
 	}
-	if raw == nil {
-		raw = map[string]any{}
+	node, err := protocol.ResolveYAML(&doc)
+	if err != nil {
+		return cfg, fmt.Errorf("decode config: %w", err)
+	}
+	if node.ShortTag() == "!!null" {
+		node = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	}
+	raw := map[string]any{}
+	if err := node.Decode(&raw); err != nil {
+		return cfg, fmt.Errorf("decode config: %w", err)
 	}
 	if err := protocol.DiagnosticsError(schema.ValidateConfig(raw, projectRoot)); err != nil {
 		return cfg, fmt.Errorf("invalid config: %w", err)
 	}
-	resolved, err := yaml.Marshal(schema.ApplyDefaults(raw))
+	schema.ApplyDefaults(node)
+	resolved, err := yaml.Marshal(node)
 	if err != nil {
 		return cfg, fmt.Errorf("encode config: %w", err)
 	}
 	// KnownFields keeps typed decoding strict for anything the schema walk
-	// cannot see (e.g. map values).
+	// cannot see (e.g. map values). Node.Decode has no such option, hence
+	// the round trip through text, which preserves every scalar as written.
 	dec := yaml.NewDecoder(bytes.NewReader(resolved))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {

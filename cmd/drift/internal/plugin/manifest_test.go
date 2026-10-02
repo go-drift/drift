@@ -131,3 +131,32 @@ plugins:
 		}
 	}
 }
+
+// The bridge decodes config into typed fields, so the text it receives must
+// keep each scalar as written: a YAML number reading would turn a string
+// field's 1.10 into "1.1".
+func TestConfigYAMLKeepsScalarsAsWritten(t *testing.T) {
+	plugins, err := ParseManifest([]byte(`plugins:
+  - package: github.com/a/b/plugin
+    config:
+      version: 1.10
+      code: 0123
+`))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	text, err := plugins[0].ConfigYAML()
+	if err != nil {
+		t.Fatalf("ConfigYAML: %v", err)
+	}
+	var got struct {
+		Version string `yaml:"version"`
+		Code    string `yaml:"code"`
+	}
+	if err := yaml.Unmarshal([]byte(text), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != "1.10" || got.Code != "0123" {
+		t.Errorf("config = %+v, want version 1.10 and code 0123\n%s", got, text)
+	}
+}

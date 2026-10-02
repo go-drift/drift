@@ -274,48 +274,51 @@ func (v *configValidator) value(p string, f SchemaField, val any) {
 	}
 }
 
-// ApplyDefaults returns a copy of config with each absent defaulted key set
-// to its default, recursing into nested mappings that are present. The
-// schema must have passed Check.
-func (s PluginSchema) ApplyDefaults(config map[string]any) map[string]any {
-	return applyDefaults(s.Fields, config)
+// ApplyDefaults sets each absent defaulted key of config, a mapping node
+// from ResolveYAML, to its default, recursing into nested mappings that are
+// present. Values already in config are left exactly as written. Shape
+// errors are ValidateConfig's to report, so nodes of the wrong kind are
+// skipped.
+func (s PluginSchema) ApplyDefaults(config *yaml.Node) {
+	applyDefaults(s.Fields, config)
 }
 
-func applyDefaults(fields []SchemaField, config map[string]any) map[string]any {
-	out := make(map[string]any, len(config)+len(fields))
-	for k, val := range config {
-		out[k] = val
+func applyDefaults(fields []SchemaField, m *yaml.Node) {
+	if m.Kind != yaml.MappingNode {
+		return
+	}
+	values := make(map[string]*yaml.Node, len(m.Content)/2)
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		values[m.Content[i].Value] = m.Content[i+1]
 	}
 	for _, f := range fields {
-		val, present := out[f.Name]
+		val, present := values[f.Name]
 		if !present {
 			if f.Default != "" {
-				d, err := parseDefault(f)
-				if err != nil {
-					panic(fmt.Sprintf("drift plugin: ApplyDefaults on unchecked schema: %v", err))
-				}
-				out[f.Name] = d
+				m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: f.Name}, defaultNode(f))
 			}
 			continue
 		}
 		switch f.Type {
 		case "struct":
-			if m, ok := val.(map[string]any); ok {
-				out[f.Name] = applyDefaults(f.Fields, m)
-			}
+			applyDefaults(f.Fields, val)
 		case "[]struct":
-			if list, ok := val.([]any); ok {
-				cp := make([]any, len(list))
-				for i, e := range list {
-					if m, ok := e.(map[string]any); ok {
-						cp[i] = applyDefaults(f.Fields, m)
-					} else {
-						cp[i] = e
-					}
+			if val.Kind == yaml.SequenceNode {
+				for _, e := range val.Content {
+					applyDefaults(f.Fields, e)
 				}
-				out[f.Name] = cp
 			}
 		}
 	}
-	return out
+}
+
+// defaultNode returns the scalar for a field's default literal. A string
+// default is tagged so it is taken verbatim ("#FFFFFF" is not a comment);
+// other defaults are plain scalars, which Check has parsed as their type.
+func defaultNode(f SchemaField) *yaml.Node {
+	n := &yaml.Node{Kind: yaml.ScalarNode, Value: f.Default}
+	if f.Type == "string" {
+		n.Tag = "!!str"
+	}
+	return n
 }
