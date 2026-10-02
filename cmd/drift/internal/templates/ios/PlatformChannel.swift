@@ -623,14 +623,10 @@ enum ShareHandler {
 struct SystemUIStyle {
     var statusBarHidden: Bool
     var statusBarStyle: UIStatusBarStyle
-    var transparent: Bool
-    var backgroundColor: UIColor?
 
     static let `default` = SystemUIStyle(
         statusBarHidden: false,
-        statusBarStyle: .default,
-        transparent: false,
-        backgroundColor: nil
+        statusBarStyle: .default
     )
 }
 
@@ -648,14 +644,10 @@ enum SystemUIHandler {
 
         let statusBarHidden = dict["statusBarHidden"] as? Bool ?? false
         let statusBarStyle = parseStatusBarStyle(dict["statusBarStyle"] as? String)
-        let transparent = dict["transparent"] as? Bool ?? false
-        let backgroundColor = parseColor(dict["backgroundColor"])
 
         let style = SystemUIStyle(
             statusBarHidden: statusBarHidden,
-            statusBarStyle: statusBarStyle,
-            transparent: transparent,
-            backgroundColor: backgroundColor
+            statusBarStyle: statusBarStyle
         )
 
         apply(style)
@@ -727,16 +719,6 @@ enum SystemUIHandler {
         default:
             return .default
         }
-    }
-
-    private static func parseColor(_ value: Any?) -> UIColor? {
-        guard let number = value as? NSNumber else { return nil }
-        let argb = UInt32(truncating: number)
-        let a = CGFloat((argb >> 24) & 0xFF) / 255.0
-        let r = CGFloat((argb >> 16) & 0xFF) / 255.0
-        let g = CGFloat((argb >> 8) & 0xFF) / 255.0
-        let b = CGFloat(argb & 0xFF) / 255.0
-        return UIColor(red: r, green: g, blue: b, alpha: a)
     }
 }
 

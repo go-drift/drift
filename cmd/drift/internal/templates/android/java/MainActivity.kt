@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import com.drift.runner.DriftPlugins
@@ -30,6 +31,10 @@ class MainActivity : AppCompatActivity() {
 
         setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
+        // Drift draws behind the system bars on every API level (Android 15+
+        // enforces it); apps inset content with SafeArea.
+        enableEdgeToEdge()
+        SystemUIHandler.apply(this)
 
         Log.i("DriftDeepLink", "onCreate intent action=${intent?.action} data=${intent?.dataString}")
         // A recreated Activity (dark mode, locale) or one relaunched from

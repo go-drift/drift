@@ -13,8 +13,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -25,10 +24,8 @@ import android.os.VibratorManager
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.drift.runner.DriftMethodHandler
@@ -737,76 +734,54 @@ object LifecycleHandler {
 
 // MARK: - System UI Handler
 
+/**
+ * Status bar visibility and icon colour. The window is always edge to edge
+ * (MainActivity.onCreate; Android 15+ enforces it): Drift draws behind the
+ * system bars and apps inset content with SafeArea, as on iOS.
+ *
+ * The style is state, not a command: MainActivity reapplies it to a
+ * recreated Activity (dark mode, locale), which Go does not hear about.
+ */
 object SystemUIHandler {
+    private data class Style(val statusBarHidden: Boolean, val statusBarStyle: String)
+
+    @Volatile
+    private var current = Style(statusBarHidden = false, statusBarStyle = "default")
+
     fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
         if (method != "setStyle") {
             return Pair(null, IllegalArgumentException("Unknown method: $method"))
         }
-
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(null, IllegalStateException("No active activity"))
-
         val argsMap = args as? Map<*, *>
             ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-
-        val statusBarHidden = argsMap["statusBarHidden"] as? Boolean ?: false
-        val statusBarStyle = argsMap["statusBarStyle"] as? String ?: "default"
-        val titleBarHidden = argsMap["titleBarHidden"] as? Boolean ?: false
-        val transparent = argsMap["transparent"] as? Boolean ?: false
-        val backgroundColor = parseColor(argsMap["backgroundColor"])
-
-        activity.runOnUiThread {
-            val window = activity.window
-            WindowCompat.setDecorFitsSystemWindows(window, !transparent)
-            // Force the system to re-dispatch insets immediately so the Go
-            // safe-area values update before the next frame.
-            window.decorView.requestApplyInsets()
-
-            val controller = WindowInsetsControllerCompat(window, window.decorView)
-            if (statusBarHidden) {
-                controller.hide(WindowInsetsCompat.Type.statusBars())
-            } else {
-                controller.show(WindowInsetsCompat.Type.statusBars())
-            }
-
-            when (statusBarStyle) {
-                "dark" -> controller.isAppearanceLightStatusBars = true
-                "light" -> controller.isAppearanceLightStatusBars = false
-            }
-
-            val targetColor = when {
-                transparent -> Color.TRANSPARENT
-                backgroundColor != null -> backgroundColor
-                else -> window.statusBarColor
-            }
-            window.statusBarColor = targetColor
-
-            if (transparent) {
-                window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            } else if (backgroundColor != null) {
-                window.setBackgroundDrawable(ColorDrawable(backgroundColor))
-            }
-
-            if (activity is AppCompatActivity) {
-                val actionBar = activity.supportActionBar
-                if (titleBarHidden) {
-                    actionBar?.hide()
-                } else {
-                    actionBar?.show()
-                }
-            }
+        current = Style(
+            statusBarHidden = argsMap["statusBarHidden"] as? Boolean ?: false,
+            statusBarStyle = argsMap["statusBarStyle"] as? String ?: "default",
+        )
+        PlatformChannelManager.currentActivity()?.let { activity ->
+            activity.runOnUiThread { apply(activity) }
         }
-
         return Pair(null, null)
     }
 
-    private fun parseColor(value: Any?): Int? {
-        val number = when (value) {
-            is Number -> value.toLong()
-            is String -> value.toLongOrNull()
-            else -> null
-        } ?: return null
-        return number.toInt()
+    /** Applies the current style to activity's window. Main thread. */
+    fun apply(activity: Activity) {
+        val style = current
+        val window = activity.window
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        if (style.statusBarHidden) {
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+        }
+        // Light status bar = dark icons. "default" follows the system
+        // theme, like iOS's .default.
+        controller.isAppearanceLightStatusBars = when (style.statusBarStyle) {
+            "dark" -> true
+            "light" -> false
+            else -> (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) !=
+                Configuration.UI_MODE_NIGHT_YES
+        }
     }
 }
 

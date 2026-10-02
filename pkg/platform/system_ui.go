@@ -1,27 +1,25 @@
 package platform
 
-import (
-	"context"
+import "context"
 
-	"github.com/go-drift/drift/pkg/graphics"
-)
-
-// StatusBarStyle indicates the status bar icon color scheme.
+// StatusBarStyle is the colour of the status bar's icons and text.
 type StatusBarStyle string
 
 const (
+	// StatusBarStyleDefault follows the system theme: dark icons in light
+	// mode, light icons in dark mode.
 	StatusBarStyleDefault StatusBarStyle = "default"
-	StatusBarStyleLight   StatusBarStyle = "light"
-	StatusBarStyleDark    StatusBarStyle = "dark"
+	// StatusBarStyleLight is light icons, for dark content.
+	StatusBarStyleLight StatusBarStyle = "light"
+	// StatusBarStyleDark is dark icons, for light content.
+	StatusBarStyleDark StatusBarStyle = "dark"
 )
 
-// SystemUIStyle describes system bar and window styling.
+// SystemUIStyle describes the system bars. Drift always draws behind them,
+// on both platforms; inset content with SafeArea.
 type SystemUIStyle struct {
 	StatusBarHidden bool
 	StatusBarStyle  StatusBarStyle
-	TitleBarHidden  bool            // Android only (no-op on iOS)
-	BackgroundColor *graphics.Color // Android only (no-op on iOS)
-	Transparent     bool            // Android only (no-op on iOS)
 }
 
 var systemUIChannel = NewMethodChannel("drift/system_ui")
@@ -36,11 +34,6 @@ func SetSystemUI(style SystemUIStyle) error {
 	args := map[string]any{
 		"statusBarHidden": style.StatusBarHidden,
 		"statusBarStyle":  string(statusStyle),
-		"titleBarHidden":  style.TitleBarHidden,
-		"transparent":     style.Transparent,
-	}
-	if style.BackgroundColor != nil {
-		args["backgroundColor"] = uint32(*style.BackgroundColor)
 	}
 
 	_, err := systemUIChannel.Invoke(context.Background(), "setStyle", args)

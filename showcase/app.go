@@ -178,12 +178,7 @@ func (s *showcaseState) applySystemUI() {
 	if appThemeData.Brightness() == theme.BrightnessDark {
 		statusStyle = platform.StatusBarStyleLight
 	}
-	backgroundColor := appThemeData.Material.ColorScheme.Surface
-	_ = platform.SetSystemUI(platform.SystemUIStyle{
-		StatusBarStyle:  statusStyle,
-		BackgroundColor: &backgroundColor,
-		Transparent:     true,
-	})
+	_ = platform.SetSystemUI(platform.SystemUIStyle{StatusBarStyle: statusStyle})
 }
 
 func (s *showcaseState) deepLinkRoute(link platform.DeepLink) (navigation.DeepLinkRoute, bool) {
