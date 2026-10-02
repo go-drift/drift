@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -193,7 +194,113 @@ type OpPlistSetDict struct {
 func (o *OpPlistSetDict) Type() string     { return "ios.plist.set_dict" }
 func (o *OpPlistSetDict) Platform() string { return "ios" }
 func (o *OpPlistSetDict) Targets() []Target {
-	return []Target{owner(o.targetKey(), o.Type(), canonicalJSON(o.Value))}
+	return []Target{owner(o.targetKey(), o.Type(), canonicalJSON(markPlistReals(o.Value)))}
+}
+
+// MarshalJSON writes Value's floats so they read back as floats; see
+// markPlistReals.
+func (o *OpPlistSetDict) MarshalJSON() ([]byte, error) {
+	type plain OpPlistSetDict
+	p := plain(*o)
+	p.Value, _ = markPlistReals(o.Value).(map[string]any)
+	return json.Marshal(p)
+}
+
+// UnmarshalJSON reads Value's numbers back as the kind they were written
+// as: int64 for an integer literal, float64 for one with a fraction or
+// exponent.
+func (o *OpPlistSetDict) UnmarshalJSON(data []byte) error {
+	type plain OpPlistSetDict
+	var p struct {
+		plain
+		Value json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*o = OpPlistSetDict(p.plain)
+	o.Value = nil
+	if len(p.Value) == 0 || string(p.Value) == "null" {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(p.Value))
+	dec.UseNumber()
+	var v map[string]any
+	if err := dec.Decode(&v); err != nil {
+		return err
+	}
+	typed, err := readPlistNumbers(v)
+	if err != nil {
+		return fmt.Errorf("value: %w", err)
+	}
+	o.Value = typed.(map[string]any)
+	return nil
+}
+
+// markPlistReals returns v with each float as a json.Number that keeps a
+// fraction or exponent (2 becomes 2.0). Plain JSON writes float64(2) as 2,
+// indistinguishable from an integer, and a plist tells <real> from
+// <integer>.
+func markPlistReals(v any) any {
+	switch t := v.(type) {
+	case float32:
+		return realNumber(float64(t), 32)
+	case float64:
+		return realNumber(t, 64)
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = markPlistReals(e)
+		}
+		return out
+	case map[string]any:
+		if t == nil {
+			return t
+		}
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			out[k] = markPlistReals(e)
+		}
+		return out
+	}
+	return v
+}
+
+func realNumber(f float64, bits int) json.Number {
+	s := strconv.FormatFloat(f, 'g', -1, bits)
+	if !strings.ContainsAny(s, ".eEnN") { // NaN and Inf fail later, in json.Marshal
+		s += ".0"
+	}
+	return json.Number(s)
+}
+
+// readPlistNumbers converts the json.Numbers in v (decoded with UseNumber)
+// to int64 or float64, by how the literal is written.
+func readPlistNumbers(v any) (any, error) {
+	switch t := v.(type) {
+	case json.Number:
+		if strings.ContainsAny(string(t), ".eE") {
+			return t.Float64()
+		}
+		return t.Int64()
+	case []any:
+		for i, e := range t {
+			r, err := readPlistNumbers(e)
+			if err != nil {
+				return nil, err
+			}
+			t[i] = r
+		}
+	case map[string]any:
+		for k, e := range t {
+			r, err := readPlistNumbers(e)
+			if err != nil {
+				return nil, err
+			}
+			t[k] = r
+		}
+	}
+	return v, nil
 }
 func (o *OpPlistSetDict) Validate() error {
 	if err := o.validate(); err != nil {
@@ -426,10 +533,12 @@ func (o *OpIOSAddPackageDependency) Platform() string { return "ios" }
 func (o *OpIOSAddPackageDependency) Targets() []Target {
 	id := SPMPackageIdentity(o.URL)
 	// One requirement per package identity (SwiftPM cannot reconcile two),
-	// while each plugin may ask for its own products from it.
+	// while each plugin's module links the products it asks for: products
+	// are members per plugin, so two plugins asking for one product both
+	// keep it.
 	ts := []Target{owner("spm:"+id, o.URL, o.Requirement.canonicalString())}
 	for _, p := range o.Products {
-		ts = append(ts, member("spm-products:"+id, p))
+		ts = append(ts, member("spm-products:"+id, o.PluginID()+"/"+p))
 	}
 	return ts
 }
@@ -1040,8 +1149,11 @@ func canonicalJSON(v any) string {
 	if err != nil {
 		return ""
 	}
+	// UseNumber keeps each number's literal, so 2 and 2.0 stay distinct.
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
 	var generic any
-	if err := json.Unmarshal(raw, &generic); err != nil {
+	if err := dec.Decode(&generic); err != nil {
 		return ""
 	}
 	b, err := canonicalEncode(generic)
