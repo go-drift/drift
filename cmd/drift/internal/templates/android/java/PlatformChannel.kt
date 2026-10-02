@@ -14,12 +14,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
-import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import android.view.HapticFeedbackConstants
@@ -491,11 +489,7 @@ object ClipboardHandler {
             }
 
             "clear" -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    clipboard.clearPrimaryClip()
-                } else {
-                    clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
-                }
+                clipboard.clearPrimaryClip()
                 Pair(null, null)
             }
 
@@ -537,21 +531,9 @@ object HapticsHandler {
             "medium" -> HapticFeedbackConstants.VIRTUAL_KEY
             "heavy" -> HapticFeedbackConstants.LONG_PRESS
             "selection" -> HapticFeedbackConstants.CLOCK_TICK
-            "success" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                HapticFeedbackConstants.CONFIRM
-            } else {
-                HapticFeedbackConstants.VIRTUAL_KEY
-            }
-            "warning" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                HapticFeedbackConstants.REJECT
-            } else {
-                HapticFeedbackConstants.LONG_PRESS
-            }
-            "error" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                HapticFeedbackConstants.REJECT
-            } else {
-                HapticFeedbackConstants.LONG_PRESS
-            }
+            "success" -> HapticFeedbackConstants.CONFIRM
+            "warning" -> HapticFeedbackConstants.REJECT
+            "error" -> HapticFeedbackConstants.REJECT
             else -> HapticFeedbackConstants.VIRTUAL_KEY
         }
 
@@ -571,20 +553,10 @@ object HapticsHandler {
     }
 
     private fun vibrate(context: Context, durationMs: Long) {
-        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vibratorManager.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(durationMs)
-        }
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        vibratorManager.defaultVibrator.vibrate(
+            VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE)
+        )
     }
 }
 

@@ -173,7 +173,7 @@ object LocationHandler {
             "heading" to location.bearing.toDouble(),
             "speed" to location.speed.toDouble(),
             "timestamp" to location.time,
-            "isMocked" to location.isFromMockProvider
+            "isMocked" to location.isMock
         )
     }
 }

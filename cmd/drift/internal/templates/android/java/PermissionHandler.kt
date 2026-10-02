@@ -189,24 +189,16 @@ object PermissionHandler {
         val androidPermission = permissionMap[permission]
             ?: return "granted" // Permission not required on this version
 
-        return when {
-            ContextCompat.checkSelfPermission(context, androidPermission) == PackageManager.PERMISSION_GRANTED -> "granted"
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                val activity = PlatformChannelManager.currentActivity()
-                if (activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(activity, androidPermission)) {
-                    // Either never asked or permanently denied
-                    val prefs = context.getSharedPreferences("drift_permissions", Context.MODE_PRIVATE)
-                    if (prefs.getBoolean("asked_$permission", false)) {
-                        "permanently_denied"
-                    } else {
-                        "not_determined"
-                    }
-                } else {
-                    "denied"
-                }
-            }
-            else -> "denied"
+        if (ContextCompat.checkSelfPermission(context, androidPermission) == PackageManager.PERMISSION_GRANTED) {
+            return "granted"
         }
+        val activity = PlatformChannelManager.currentActivity()
+        if (activity == null || ActivityCompat.shouldShowRequestPermissionRationale(activity, androidPermission)) {
+            return "denied"
+        }
+        // Either never asked or permanently denied
+        val prefs = context.getSharedPreferences("drift_permissions", Context.MODE_PRIVATE)
+        return if (prefs.getBoolean("asked_$permission", false)) "permanently_denied" else "not_determined"
     }
 
     fun onRequestPermissionsResult(activity: Activity, requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
