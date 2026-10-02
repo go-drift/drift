@@ -143,6 +143,8 @@ func bundleAndroidOp(bag *opBag, op protocol.Op) bool {
 		bag.manifest.MetaData = append(bag.manifest.MetaData, v)
 	case *protocol.OpAndroidManifestAddService:
 		bag.manifest.Services = append(bag.manifest.Services, v)
+	case *protocol.OpAndroidManifestAddReceiver:
+		bag.manifest.Receivers = append(bag.manifest.Receivers, v)
 	case *protocol.OpAndroidColorSet:
 		bag.colors = append(bag.colors, v)
 	case *protocol.OpAndroidStringSet:

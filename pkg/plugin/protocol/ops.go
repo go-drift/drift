@@ -725,19 +725,47 @@ func (o *OpAndroidManifestAddService) Targets() []Target {
 
 // ServiceName returns the service's android:name, or "" if XML is invalid.
 func (o *OpAndroidManifestAddService) ServiceName() string {
-	name, _ := serviceName(o.XML)
+	name, _ := componentName("service", o.XML)
 	return name
 }
 
 func (o *OpAndroidManifestAddService) Validate() error {
-	if err := checkXMLRoot("service", o.XML, "service"); err != nil {
+	return validateComponent("service", o.XML)
+}
+
+// OpAndroidManifestAddReceiver declares a <receiver> in <application>, for
+// plugin broadcast receivers the system starts (an alarm firing, a
+// notification action). XML is the whole element, as for services.
+type OpAndroidManifestAddReceiver struct {
+	Base
+	XML string `json:"xml"`
+}
+
+func (o *OpAndroidManifestAddReceiver) Type() string     { return "android.manifest.add_receiver" }
+func (o *OpAndroidManifestAddReceiver) Platform() string { return "android" }
+func (o *OpAndroidManifestAddReceiver) Targets() []Target {
+	return []Target{owner("manifest:application:receiver:"+o.ReceiverName(), o.XML)}
+}
+func (o *OpAndroidManifestAddReceiver) ReceiverName() string {
+	name, _ := componentName("receiver", o.XML)
+	return name
+}
+func (o *OpAndroidManifestAddReceiver) Validate() error {
+	return validateComponent("receiver", o.XML)
+}
+
+// validateComponent checks a manifest component element of kind (its tag):
+// one root of that tag, named by a fully qualified class, since plugin
+// sources do not live in the app's package.
+func validateComponent(kind, xml string) error {
+	if err := checkXMLRoot(kind, xml, kind); err != nil {
 		return err
 	}
-	name, err := serviceName(o.XML)
+	name, err := componentName(kind, xml)
 	if err != nil {
 		return err
 	}
-	return checkMatch(qualifiedIdentRe, "service android:name (fully qualified)", name)
+	return checkMatch(qualifiedIdentRe, kind+" android:name (fully qualified)", name)
 }
 
 // ---- Android resources --------------------------------------------------
@@ -1028,6 +1056,7 @@ var opConstructors = map[string]func() Op{
 	"android.manifest.set_activity_attr":    func() Op { return &OpAndroidManifestSetActivityAttr{} },
 	"android.manifest.add_meta_data":        func() Op { return &OpAndroidManifestAddMetaData{} },
 	"android.manifest.add_service":          func() Op { return &OpAndroidManifestAddService{} },
+	"android.manifest.add_receiver":         func() Op { return &OpAndroidManifestAddReceiver{} },
 	"android.color.set":                     func() Op { return &OpAndroidColorSet{} },
 	"android.string.set":                    func() Op { return &OpAndroidStringSet{} },
 	"android.style.set":                     func() Op { return &OpAndroidStyleSet{} },

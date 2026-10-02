@@ -429,7 +429,7 @@ class HelloPlugin : DriftPlugin {
 }
 ```
 
-Android libraries come from `ctx.Android.AddGradleDependency`; components the system starts, such as a `FirebaseMessagingService`, are declared with `ctx.Android.Manifest.AddService`.
+Android libraries come from `ctx.Android.AddGradleDependency`; components the system starts are declared with `ctx.Android.Manifest.AddService` (a `FirebaseMessagingService`, say) and `AddReceiver` (a `BroadcastReceiver`, such as an alarm's).
 
 ### Lifecycle
 
@@ -669,6 +669,7 @@ Each recorder records one op type, shown here by its wire name. "Same location" 
 | `Android.Manifest.SetActivityAttr(activity, attr, value)` / `SetActivityTheme(activity, theme)` | `android.manifest.set_activity_attr` | Activity attribute, such as `android:theme` | Same location |
 | `Android.Manifest.AddMetaData(parent, name, value)` | `android.manifest.add_meta_data` | `<meta-data>` in `application` or `activity:<name>` | Same location |
 | `Android.Manifest.AddService(xml)` | `android.manifest.add_service` | `<service>` in `<application>`, named by its fully qualified class | Same location |
+| `Android.Manifest.AddReceiver(xml)` | `android.manifest.add_receiver` | `<receiver>` in `<application>`, named by its fully qualified class | Same location |
 | `Android.Resources.Colors.Set(name, hex)` | `android.color.set` | `@color/<name>`, from a Drift hex colour | Same location |
 | `Android.Resources.Strings.Set(name, value)` | `android.string.set` | `@string/<name>` | Same location |
 | `Android.Resources.Styles.Set(name, parent, items)` | `android.style.set` | `@style/<name>` | Same location |

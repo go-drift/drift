@@ -21,11 +21,12 @@ type ManifestOps struct {
 	ActivityAttrs []*protocol.OpAndroidManifestSetActivityAttr
 	MetaData      []*protocol.OpAndroidManifestAddMetaData
 	Services      []*protocol.OpAndroidManifestAddService
+	Receivers     []*protocol.OpAndroidManifestAddReceiver
 }
 
 // Empty reports whether there is nothing to apply.
 func (m ManifestOps) Empty() bool {
-	return len(m.Permissions)+len(m.IntentFilters)+len(m.ActivityAttrs)+len(m.MetaData)+len(m.Services) == 0
+	return len(m.Permissions)+len(m.IntentFilters)+len(m.ActivityAttrs)+len(m.MetaData)+len(m.Services)+len(m.Receivers) == 0
 }
 
 // ApplyAndroidManifest applies manifest ops to the file at path. Existing
@@ -46,8 +47,8 @@ func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	}
 
 	app := manifest.SelectElement("application")
-	if app == nil && len(ops.ActivityAttrs)+len(ops.IntentFilters)+len(ops.MetaData)+len(ops.Services) > 0 {
-		return false, fmt.Errorf("AndroidManifest.xml has no <application>; cannot apply activity, intent, meta-data or service ops")
+	if app == nil && len(ops.ActivityAttrs)+len(ops.IntentFilters)+len(ops.MetaData)+len(ops.Services)+len(ops.Receivers) > 0 {
+		return false, fmt.Errorf("AndroidManifest.xml has no <application>; cannot apply activity, intent, meta-data, service or receiver ops")
 	}
 
 	for _, op := range ops.ActivityAttrs {
@@ -80,7 +81,12 @@ func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	}
 
 	for _, op := range ops.Services {
-		if err := putService(app, op); err != nil {
+		if err := putComponent(app, "service", op.ServiceName(), op.XML, op.PluginPackage()); err != nil {
+			return false, err
+		}
+	}
+	for _, op := range ops.Receivers {
+		if err := putComponent(app, "receiver", op.ReceiverName(), op.XML, op.PluginPackage()); err != nil {
 			return false, err
 		}
 	}
@@ -186,23 +192,23 @@ func canonicalIntent(el *etree.Element) string {
 	return strings.Join(parts, "##")
 }
 
-// putService adds op's <service>, replacing one with the same android:name
-// in place (the op owns that service), so reruns converge.
-func putService(app *etree.Element, op *protocol.OpAndroidManifestAddService) error {
+// putComponent adds a <tag> element (service, receiver) from pkg's xml,
+// replacing one with the same android:name in place (the op owns that
+// component), so reruns converge.
+func putComponent(app *etree.Element, tag, name, xml, pkg string) error {
 	sub := etree.NewDocument()
-	if err := sub.ReadFromString(op.XML); err != nil {
-		return fmt.Errorf("parse service from %s: %w", op.PluginPackage(), err)
+	if err := sub.ReadFromString(xml); err != nil {
+		return fmt.Errorf("parse %s from %s: %w", tag, pkg, err)
 	}
-	service := sub.Root().Copy()
-	name := op.ServiceName()
-	for _, el := range app.SelectElements("service") {
+	component := sub.Root().Copy()
+	for _, el := range app.SelectElements(tag) {
 		if attr := el.SelectAttr("android:name"); attr != nil && attr.Value == name {
-			app.InsertChildAt(el.Index(), service)
+			app.InsertChildAt(el.Index(), component)
 			app.RemoveChild(el)
 			return nil
 		}
 	}
-	app.AddChild(service)
+	app.AddChild(component)
 	return nil
 }
 

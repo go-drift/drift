@@ -447,6 +447,19 @@ func (s *AndroidManifestScope) AddService(xml string) {
 	})
 }
 
+// AddReceiver declares a <receiver> in <application>, for a plugin
+// BroadcastReceiver the system starts. xml is the whole element, with the
+// fully qualified class as android:name; a receiver with an intent filter
+// must set android:exported. For example:
+//
+//	<receiver android:name="com.example.alarms.AlarmReceiver" android:exported="false" />
+func (s *AndroidManifestScope) AddReceiver(xml string) {
+	s.b.push(&protocol.OpAndroidManifestAddReceiver{
+		Base: newBase(s.b),
+		XML:  xml,
+	})
+}
+
 func (s *AndroidManifestScope) AddMetaData(parent, name, value string) {
 	s.b.push(&protocol.OpAndroidManifestAddMetaData{
 		Base:   newBase(s.b),

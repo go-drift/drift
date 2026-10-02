@@ -117,6 +117,26 @@ func TestApplyAndroidManifestAddService(t *testing.T) {
 	}
 }
 
+func TestApplyAndroidManifestAddReceiver(t *testing.T) {
+	path := writeManifest(t)
+	op := &protocol.OpAndroidManifestAddReceiver{
+		Base: protocol.Base{Pkg: "n"},
+		XML:  `<receiver android:name="com.drift.plugin.notifications.AlarmReceiver" android:exported="false" />`,
+	}
+	for range 2 { // a rerun converges
+		if _, err := ApplyAndroidManifest(path, ManifestOps{Receivers: []*protocol.OpAndroidManifestAddReceiver{op}}); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+	}
+	body, _ := os.ReadFile(path)
+	if strings.Count(string(body), `<receiver android:name="com.drift.plugin.notifications.AlarmReceiver"`) != 1 {
+		t.Errorf("want one receiver:\n%s", body)
+	}
+	if strings.Index(string(body), "<receiver") < strings.Index(string(body), "<application") {
+		t.Errorf("receiver outside <application>:\n%s", body)
+	}
+}
+
 func TestWriteAndroidColorsCreates(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values/plugin_colors.xml")
