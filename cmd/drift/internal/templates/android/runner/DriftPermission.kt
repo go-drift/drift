@@ -149,17 +149,21 @@ open class DriftRuntimePermission(
         prefs(context).edit().putBoolean(askedKey, true).apply()
     }
 
-    private companion object {
-        val requests = AtomicLong()
+    companion object {
+        /** Whether the merged manifest declares [permission]. */
+        fun isDeclared(context: Context, permission: String): Boolean =
+            permission in declaredPermissions(context)
+
+        private val requests = AtomicLong()
 
         @Volatile
-        var declared: Set<String>? = null
+        private var declared: Set<String>? = null
 
-        fun prefs(context: Context) =
+        private fun prefs(context: Context) =
             context.getSharedPreferences("drift_permissions", Context.MODE_PRIVATE)
 
         @Suppress("DEPRECATION") // PackageInfoFlags needs API 33; minSdk is 31.
-        fun declaredPermissions(context: Context): Set<String> =
+        private fun declaredPermissions(context: Context): Set<String> =
             declared ?: context.packageManager
                 .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
                 .requestedPermissions.orEmpty().toSet()

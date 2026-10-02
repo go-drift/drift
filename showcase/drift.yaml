@@ -1,2 +1,9 @@
 app:
   orientation: all
+
+plugins:
+  - package: github.com/go-drift/drift/plugins/location/plugin
+    config:
+      when_in_use_description: The Location demo shows where you are.
+      always:
+        description: The Location demo can request background location.

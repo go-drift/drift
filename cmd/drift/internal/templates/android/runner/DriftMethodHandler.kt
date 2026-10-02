@@ -151,8 +151,13 @@ class DriftResult internal constructor(
     }
 }
 
-/** A call failure Go sees with a specific error code. */
-internal class DriftCallError(val code: String, message: String) : Exception(message)
+/**
+ * A call failure Go sees with [code]: a `*platform.ChannelError` whose
+ * Code is [code], matching Drift's sentinel errors under errors.Is for
+ * Drift's own codes. Throw it from a method, or pass it to
+ * [DriftResult.error]. (iOS: an NSError whose domain is the code.)
+ */
+class DriftCallError(val code: String, message: String) : Exception(message)
 
 /**
  * Fails fast on a programming error: reports to the default uncaught

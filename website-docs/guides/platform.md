@@ -76,38 +76,6 @@ unsubscribe := platform.Camera.Permission.Listen(func(status platform.Permission
 defer unsubscribe()
 ```
 
-### Location Permissions
-
-Location has two permission levels - when in use and always (background):
-
-```go
-ctx := context.Background()
-
-// When-in-use location
-status, err := platform.Location.Permission.WhenInUse.Status()
-result, err := platform.Location.Permission.WhenInUse.Request(ctx)
-
-// Background (always) location
-// Note: On iOS, WhenInUse must be granted before requesting Always.
-status, err := platform.Location.Permission.Always.Status()
-result, err := platform.Location.Permission.Always.Request(ctx)
-
-// Convenience check
-if platform.Location.Permission.Always.IsGranted() {
-    // Background location available
-}
-
-// Listen for permission changes
-whenInUseUnsub := platform.Location.Permission.WhenInUse.Listen(func(status platform.PermissionResult) {
-    drift.Dispatch(func() { updateWhenInUseUI(status) })
-})
-alwaysUnsub := platform.Location.Permission.Always.Listen(func(status platform.PermissionResult) {
-    drift.Dispatch(func() { updateAlwaysUI(status) })
-})
-defer whenInUseUnsub()
-defer alwaysUnsub()
-```
-
 ### Notification Permissions
 
 Notifications support iOS-specific options via `RequestWithOptions`:
@@ -329,57 +297,7 @@ func (s *cameraState) takePhoto() {
 
 ## Location
 
-Access device location using the Location service:
-
-```go
-ctx := context.Background()
-
-// Request permission first
-platform.Location.Permission.WhenInUse.Request(ctx)
-
-// Get current location (synchronous)
-loc, err := platform.Location.GetCurrent(platform.LocationOptions{
-    HighAccuracy: true,
-})
-if err == nil {
-    fmt.Printf("Lat: %f, Lng: %f\n", loc.Latitude, loc.Longitude)
-}
-
-// Start continuous location updates
-platform.Location.StartUpdates(platform.LocationOptions{
-    HighAccuracy:   true,
-    DistanceFilter: 10, // meters
-})
-
-// Listen for updates using Stream
-unsubscribe := platform.Location.Updates().Listen(func(update platform.LocationUpdate) {
-    drift.Dispatch(func() {
-        s.userLocation = &update
-    })
-})
-defer unsubscribe()
-
-// Stop updates when done
-platform.Location.StopUpdates()
-
-// Check if location services are enabled
-enabled, err := platform.Location.IsEnabled()
-
-// Get last known location without triggering a new request
-lastKnown, err := platform.Location.LastKnown()
-```
-
-### Location Data
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `Latitude` | `float64` | Latitude in degrees |
-| `Longitude` | `float64` | Longitude in degrees |
-| `Altitude` | `float64` | Altitude in meters |
-| `Accuracy` | `float64` | Accuracy in meters |
-| `Heading` | `float64` | Direction in degrees |
-| `Speed` | `float64` | Speed in m/s |
-| `Timestamp` | `time.Time` | When reading was taken |
+Location is a plugin: see [Location](/docs/guides/plugins#location) in the plugins guide.
 
 ## Notifications
 
@@ -678,11 +596,11 @@ Secure storage works on every platform Drift supports: the Keychain on iOS, Encr
 Platform services are safe to call from any goroutine, but calls that wait for the user must not run on the UI thread (see [Context conventions](#context-conventions)). When updating UI state from platform callbacks, use `drift.Dispatch`:
 
 ```go
-unsubscribe := platform.Location.Updates().Listen(func(update platform.LocationUpdate) {
+unsubscribe := platform.DeepLinks.Links().Listen(func(link platform.DeepLink) {
     // Called from background goroutine
     drift.Dispatch(func() {
         // Now safe to update UI
-        s.location = &update
+        s.lastLink = link
     })
 })
 defer unsubscribe()

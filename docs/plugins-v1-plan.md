@@ -134,6 +134,17 @@ A second three-part review (design, pipeline correctness, native runtime) checke
 
 **Behaviour to know:** built-in channels still run synchronously on the calling thread, so `ErrBlocksUIThread` only protects plugin methods. Built-ins that wait for the user (permission requests, camera, pickers) still freeze the app if called from the UI thread; they get the guard by moving to plugins with `asyncMethod` in Phase 5. On Android a dropped result is detected only after garbage collection.
 
+### Phase 5 status
+
+Branch `feat/core-plugins`, from `feat/plugins` (`83a177b`; rebase onto `master` once that merges). Decisions (2026-10-02): background tasks are deleted (a stub that never ran Go; a real plugin needs a headless Go start and follows Phase 5); Contacts, Calendar, Microphone and Photos become one `permissions` plugin; video and audio become one `media` plugin; WebView, file storage and the FileProvider stay core.
+
+| Commit | Content |
+|--------|---------|
+| `66801b6` | Permission registry: Drift keeps the request mechanism, plugins register kinds (`DriftPluginHost.registerPermission`, `platform.NewPermission`). `Request` replies with the status (async, so the UI-thread guard applies); `ErrPermissionNotRegistered` / `ErrPermissionNotDeclared`; Android requests through `activityResultRegistry`, reads LIMITED for partial grants; `DriftActivityBinding.activity` is a `FragmentActivity` |
+| (this commit) | `plugins/location`: usage strings from config, `always:` opt-in for background location; `Current`/`LastKnown`/`IsEnabled` async; sentinels for denied, disabled, unavailable. Core location removed (Go API, handlers, kinds, 3 permissions, `uses-feature` gps, `play-services-location`, 2 usage strings). `DriftCallError` is public for plugins |
+
+**Verified:** step 1 on the API 36 emulator (approximate reads `limited`, upgrade to precise, two denials read `permanently_denied`, notification grant) and `drift build xtool`; step 2 on the emulator (denied before grant, fix, update stream with `geo fix`, Always through Settings), merged APK manifest, `drift build xtool` (Info.plist carries only the plugin's strings).
+
 ## Review findings driving this plan
 
 These come from a three-part branch review (design, pipeline correctness, native runtime). Items marked *(device)* are code-level findings that need confirming on hardware.

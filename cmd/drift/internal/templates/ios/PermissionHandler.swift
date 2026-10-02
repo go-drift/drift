@@ -9,7 +9,6 @@
 
 import AVFoundation
 import Contacts
-import CoreLocation
 import DriftPluginAPI
 import EventKit
 import Photos
@@ -64,8 +63,6 @@ enum PermissionHandler {
         host.registerPermission("camera", CapturePermission(.video))
         host.registerPermission("microphone", CapturePermission(.audio))
         host.registerPermission("photos", PhotosPermission())
-        host.registerPermission("location", LocationPermission(always: false))
-        host.registerPermission("location_always", LocationPermission(always: true))
         host.registerPermission("contacts", ContactsPermission())
         host.registerPermission("calendar", CalendarPermission())
     }
@@ -243,88 +240,6 @@ private final class CalendarPermission: DriftPermission {
             EKEventStore().requestFullAccessToEvents(completion: done)
         } else {
             EKEventStore().requestAccess(to: .event, completion: done)
-        }
-    }
-}
-
-/// When-in-use or always location access, on a main-thread
-/// CLLocationManager.
-private final class LocationPermission: NSObject, DriftPermission, CLLocationManagerDelegate {
-    /// How long to wait for the app to go inactive behind a prompt before
-    /// concluding iOS showed none.
-    private static let promptGrace: TimeInterval = 1
-
-    private let always: Bool
-    private lazy var manager: CLLocationManager = {
-        let manager = CLLocationManager()
-        manager.delegate = self
-        return manager
-    }()
-    private var pending: [(DriftPermissionStatus) -> Void] = []
-    private var statusAtRequest: CLAuthorizationStatus = .notDetermined
-    private var observers: [NSObjectProtocol] = []
-
-    init(always: Bool) {
-        self.always = always
-    }
-
-    func status() -> DriftPermissionStatus {
-        map(manager.authorizationStatus)
-    }
-
-    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        pending.append(completion)
-        guard pending.count == 1 else { return } // A prompt is already up.
-        statusAtRequest = manager.authorizationStatus
-        if always {
-            manager.requestAlwaysAuthorization()
-        } else {
-            manager.requestWhenInUseAuthorization()
-        }
-        // iOS sends no callback when it shows no prompt (it already asked),
-        // or when the user keeps the current level (upgrading to Always).
-        // A prompt makes the app inactive: finish when it is active again,
-        // or shortly after the request if it never went inactive.
-        let center = NotificationCenter.default
-        var prompted = false
-        observers.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
-            prompted = true
-        })
-        observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.finish()
-        })
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.promptGrace) { [weak self] in
-            if !prompted { self?.finish() }
-        }
-    }
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        // The delegate also reports the status it starts with; only a change
-        // answers a request.
-        if !pending.isEmpty, manager.authorizationStatus != statusAtRequest {
-            finish()
-        }
-    }
-
-    private func finish() {
-        guard !pending.isEmpty else { return }
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
-        observers.removeAll()
-        let status = status()
-        let completions = pending
-        pending.removeAll()
-        completions.forEach { $0(status) }
-    }
-
-    private func map(_ status: CLAuthorizationStatus) -> DriftPermissionStatus {
-        switch status {
-        case .authorizedAlways: return .granted
-        // When-in-use can still be upgraded to Always.
-        case .authorizedWhenInUse: return always ? .denied : .granted
-        case .denied: return .permanentlyDenied
-        case .restricted: return .restricted
-        case .notDetermined: return .notDetermined
-        @unknown default: return .unknown
         }
     }
 }

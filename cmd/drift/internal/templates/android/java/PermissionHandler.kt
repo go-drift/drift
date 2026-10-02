@@ -91,11 +91,6 @@ object PermissionHandler {
                 Manifest.permission.READ_EXTERNAL_STORAGE
             }
         ))
-        host.registerPermission("location", DriftRuntimePermission(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-        ))
-        host.registerPermission("location_always", DriftRuntimePermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
         host.registerPermission("contacts", DriftRuntimePermission(Manifest.permission.READ_CONTACTS))
         host.registerPermission("calendar", DriftRuntimePermission(Manifest.permission.READ_CALENDAR))
     }

@@ -394,11 +394,6 @@ object PlatformChannelManager : DriftPluginHost {
         // Permissions channel and Drift's own permission kinds
         PermissionHandler.start(this)
 
-        // Location channel
-        register("drift/location") { method, args ->
-            LocationHandler.handle(context, method, args)
-        }
-
         // Storage channel
         register("drift/storage") { method, args ->
             StorageHandler.handle(context, method, args)

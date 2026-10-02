@@ -20,6 +20,7 @@ First-party plugins live in the Drift repository:
 
 - [`plugins/splash`](#splash): a native splash screen held until the first frame.
 - [`plugins/firebase`](#firebase): Firebase Core and Cloud Messaging (push notifications).
+- [`plugins/location`](#location): the device's location and the location permissions.
 
 ## Using plugins
 
@@ -183,6 +184,61 @@ Limitations:
 - Push on iOS needs a paid Apple Developer team, on xtool as with Xcode. With a free team the app still runs, but Apple grants no push capability, so no token or message arrives.
 - Android: data messages and token refreshes that arrive while no Activity has started in the process are dropped; the token is fetched again at the next launch.
 - Android: when the system groups several notifications from the app, tapping the group summary opens the app without an `Opens()` event. Tapping an individual notification works.
+
+### Location
+
+The device's location, once or as a stream, and the location permissions.
+
+```yaml
+plugins:
+  - package: github.com/go-drift/drift/plugins/location/plugin
+    config:
+      when_in_use_description: Shows stores near you.
+      always:                       # optional
+        description: Tracks your runs while the app is closed.
+```
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `when_in_use_description` | required | Why the app needs location; iOS shows it in the permission prompt |
+| `always.description` | none | Enables the Always permission; iOS shows it when asking to upgrade |
+
+Leave `always` out unless the app needs location while closed: it adds Android's `ACCESS_BACKGROUND_LOCATION`, which Google Play accepts only with a background location declaration. Without it, `Permission.Always` fails with `platform.ErrPermissionNotRegistered`.
+
+```go
+import location "github.com/go-drift/drift/plugins/location/runtime"
+
+go func() {
+    status, err := location.Permission.WhenInUse.Request(ctx)
+    if err != nil || (status != platform.PermissionGranted && status != platform.PermissionLimited) {
+        return
+    }
+    fix, err := location.Current(ctx, location.Options{HighAccuracy: true})
+    if err != nil {
+        log.Printf("location: %v", err)
+        return
+    }
+    drift.Dispatch(func() { showOnMap(fix) })
+}()
+
+// A stream of updates while StartUpdates is in effect.
+unsubscribe := location.Updates().Listen(func(u location.Update) {
+    drift.Dispatch(func() { moveMarker(u) })
+})
+err := location.StartUpdates(location.Options{HighAccuracy: true, DistanceFilter: 10})
+```
+
+| Function | Waits | Notes |
+|----------|-------|-------|
+| `Permission.WhenInUse`, `Permission.Always` | `Request` does | `platform.Permission`s; approximate-only access on Android reads `PermissionLimited` |
+| `Current(ctx, opts)` | yes | A fresh fix |
+| `LastKnown(ctx)` | yes | The cached fix, or nil |
+| `IsEnabled(ctx)` | yes | Whether location services are on |
+| `StartUpdates(opts)`, `StopUpdates()` | no | Start or stop `Updates()` |
+
+Functions that wait must be called from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`. Failures match `location.ErrPermissionDenied`, `location.ErrDisabled` (location services off) and `location.ErrUnavailable` (no fix, Android) under `errors.Is`.
+
+On iOS, Always can be requested only after WhenInUse is granted, and iOS asks at most once. On Android, Always is granted in Settings, where the request takes the user. Supported on iOS, xtool and Android (Google Play services).
 
 ## Authoring plugins
 
@@ -385,6 +441,8 @@ host.registerChannel("acme/push") { channel in
 ```
 
 Calling a method that is not declared fails with `platform.ErrMethodNotFound`.
+
+To fail a call with an error Go can match, give it a code: on iOS an `NSError` whose domain is the code, on Android a `DriftCallError(code, message)` (thrown, or passed to `result.error`). Go receives a `*platform.ChannelError` with that `Code`; the runtime half maps codes to its own sentinel errors.
 
 Values crossing the channel are JSON-like: nil, booleans, numbers, strings, lists and string-keyed maps.
 
