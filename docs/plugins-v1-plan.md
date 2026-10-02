@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read [plugins.md](plugins.md) first for how the system works. **Phases 1 and 2 are done (Phase 2 awaits a real Android device); Phase 3 is done except real-device push (Android device, iOS with the APNs key); next is Phase 4; start at [Status](#status-2026-10-01).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 3 are done; Phase 4 code and docs are done. What remains before merge is device runs: a real Android device (splash, Firebase), real iOS push through FCM (APNs `.p8`), and a final iPhone pass; see [Verification matrix](#verification-matrix-merge-gate).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -97,6 +97,23 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 **Verified (Linux):** `go vet`/`go test` in every module; `drift build android` and `drift build xtool` of splash-demo; `drift build android` of firebase-demo with placeholder config (google-services 4.5.0 runs on AGP 9; manifest service, permission and dependency merge); **FCM on the API 36 emulator, real Firebase project** (`fir-demo-71e74`, sent with `fcmsend`): token delivered to Go; foreground notification and data messages reach `Messages()` with nothing shown; in the background the notification is shown and the data message reaches `Messages()` (`foreground=false`); tapping opens the app and reaches `Opens()`, both with the process alive and after it was killed (the tap that launched it is queued until the app listens); dark-mode Activity recreation replays no tap. **Mac (reported 2026-10-02):** `drift build ios` of splash-demo and firebase-demo; splash on the Simulator; firebase-demo on the Simulator with `xcrun simctl push` payloads carrying `gcm.message_id`: foreground message reaches `Messages()` with no banner, background banner tap and cold-start tap reach `Opens()`. **Not yet:** a real Android device; real iOS delivery through FCM (needs the APNs `.p8` uploaded; config only, no code).
 
 **Phase 3 decisions:** local notifications and the notification permission stay core until a notifications plugin exists (Phase 5); core keeps the one `UNUserNotificationCenterDelegate` and offers notifications to plugins first. Firebase on xtool is an error (push needs `aps-environment`). Foreground FCM notifications are not shown on either platform; the app gets them in `Messages()`. Firebase Go API has no blocking calls. Android pins `firebase-messaging` without the BOM (one artifact).
+
+**Phase 4 code and docs are done** (`c5d464d`..`36c37c8`):
+
+| Commit | Content |
+|--------|---------|
+| `c5d464d` | Core local-notification taps queued until the app listens (`drift/notifications/opened` is a queued channel); Android does not replay the launch tap on Activity recreation or a Recents relaunch |
+| `740d718` | Android edge-to-edge under targetSdk 36 (a regression from `dfa591b`): always edge to edge (`enableEdgeToEdge`, appcompat 1.7.1); system UI style is state, reapplied to a recreated Activity; `StatusBarStyleDefault` follows the system theme. `SystemUIStyle` loses the no-op `TitleBarHidden`, `BackgroundColor`, `Transparent` |
+| `9bdd240` | Android API checks below minSdk 31 removed, with the unreachable `ErrPlatformNotSupported`; `isMock` replaces `isFromMockProvider`; docs say Android 12 (API 31) |
+| `05679cd` | `BuildCtx.Xtool` deleted (unused); stale API comments fixed; `Binding.Build` documented as the test entry point |
+| `328f8ad` | Website guide `website-docs/guides/plugins.md` (using, authoring, op reference) with `TestOpReferenceListsEveryOp`; eject guide points to plugins and covers ejected plugin output |
+| `c0c1580` | `docs/plugins.md` is internals only; `examples/plugins/demo` deleted |
+| `a3053b8` | CI vets and tests `plugins/*` (separate modules) |
+| `36c37c8` | Watch mode ignores the generated bridge (adding or removing a plugin rebuilt twice) |
+
+**Verified (Linux, Phase 4):** `go vet`/`go test` in the root and plugin modules; Docusaurus build (no broken links from the new pages); edge-to-edge on the API 36 emulator (showcase: icons follow the app theme, and an explicit style survives dark-mode recreation); `drift build xtool` of splash-demo (shared Swift compiles); plugin removal leaves a compiling project: managed Android, watch mode on the emulator (one rebuild), ejected Android (owned files deleted, the theme edit listed once, compiles after undoing it), managed xtool.
+
+**Phase 4 decisions:** follow-ups that land before merge are the ones this branch caused (edge-to-edge from targetSdk 36, dead API checks from minSdk 31) plus the one-line cold-start tap fix; the rest are post-merge (see Known follow-ups). `go test -race ./pkg/engine` fails the same way on `master`, so it is a separate fix.
 
 **Deviations from the Phase 3 plan:** no background-modes op (`append_array_item` does it); build half and native/runtime halves landed in one commit (the build half embeds the native sources); `core.Watchable` does not exist, so `Token()` returns a read-only `*core.Derived[string]`.
 
@@ -232,10 +249,10 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
    - `android.gradle.apply_plugin`: needed for google-services.
    - `android.app_module.add_file`: needed for `google-services.json`.
 
-### Phase 4: docs and merge
+### Phase 4: docs and merge (code and docs done, see Status)
 
-- Add `website-docs/guides/plugins.md` covering using plugins, authoring plugins (build half, runtime half, native code, testing with `NewTestCtx`) and the op reference.
-- Update `docs/plugins.md` to match the final design.
+- ~~Add `website-docs/guides/plugins.md` covering using plugins, authoring plugins and the op reference.~~ Done.
+- ~~Update `docs/plugins.md` to match the final design.~~ Done (internals only).
 - Walk through the device verification matrix below, then merge.
 
 ### Phase 5: core feature migration
@@ -266,13 +283,15 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 
 ## Verification matrix (merge gate)
 
+Cells give status; "pending" cells gate the merge. Re-run anything marked done before Phase 4 on the final branch where noted.
+
 | Check | iOS xcodeproj (Mac + device) | Android device | xtool (Linux, best effort) |
 |-------|------------------------------|----------------|----------------------------|
-| `go vet ./...`, `go test ./...` | | | |
-| Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | ✓ | ✓ (API 31+) | ✓ |
-| Splash survives background/foreground during launch, dark-mode toggle | ✓ | ✓ | |
-| Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | ✓ | ✓ | |
-| Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | ✓ | ✓ | ✓ |
+| `go vet ./...`, `go test ./...` (root and `plugins/*`) | done (Linux, CI) | done (Linux, CI) | done |
+| Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | done on iPhone (Phase 2); re-run on final branch | pending (emulator done) | build only |
+| Splash survives background/foreground during launch, dark-mode toggle | done on iPhone (Phase 2); re-run on final branch | pending (emulator done) | n/a |
+| Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | pending: real FCM push (Simulator done with `simctl push`) | pending (emulator done) | n/a (unsupported) |
+| Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | pending (managed, ejected) | done on emulator: managed, watch, ejected | done: managed |
 | Two plugins touching the same plist key / resource file report a conflict | unit test | unit test | |
 
 ## Known follow-ups (not merge blocking)
@@ -280,17 +299,16 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 - **xtool may create two windows (unverified).** `SceneDelegate.swift` is copied into xtool (`scaffold/xtool.go:52-57`) and named in `xtool/Info.plist.tmpl` next to a SwiftUI `WindowGroup`. The `xtool/AppDelegate.swift` comment claims there is no SceneDelegate.
 - **xtool launch storyboard.** It is uncompiled and sits in the SwiftPM resource bundle, while `UILaunchStoryboardName` looks in the main bundle.
 - **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen).
-- **Core local-notification taps at cold start are dropped**: `drift/notifications/opened` is a plain event channel; make it queued (one line) or move it with the notifications plugin.
 - **FCM with no running app**: Android data messages and token refreshes that start the process without an Activity are dropped (plugins register from `MainActivity.onCreate`); the token is fetched again at the next start.
 - **Emulator Play services**: the `pixel_8` google_apis image warns its Play services (25.26) is older than firebase-messaging 25.1.3 asks for (26.12); FCM works anyway.
 - **Android auto-grouped notifications**: tapping the system's group summary (several notifications from the app) opens the app without FCM extras, so no `Opens()` event; tapping an individual notification works. Setting a notification group per message, or handling the summary, is follow-up work.
 - **Bridge cache entries** under the cache root are never garbage-collected.
 - **iOS detach** relies on `DriftViewController.deinit`; a plugin that retains its `DriftViewBinding` keeps the view controller alive.
 
-- **Android edge-to-edge (targetSdk 35+).** `statusBarColor` (`PlatformChannel.kt` system UI handler) is deprecated and ignored; status bar icons were light on light content on the API 36 emulator. Drift content also stays light in system dark mode.
-- **Dead SDK_INT checks.** With minSdk 31, checks for M/O/P/Q/R/S in the Android templates are always true.
+- **System dark mode.** Neither platform reports the system appearance to Go, so apps cannot follow it.
+- **Deep links replay on Android recreation.** `MainActivity.onCreate` passes the launch intent to `DeepLinkHandler` again after dark-mode recreation or a Recents relaunch (notification taps no longer do).
 - **Splash dark mode.** Needs appearance-aware image set and colour set ops on iOS (not on xtool before xtool#219), and a night colour on Android.
-- **Engine test races.** `go test -race ./pkg/engine` fails in older `init_test.go` tests: leaked OnInit goroutines dispatch to the global `app` after `swapApp` restores it.
+- **Engine test races.** `go test -race ./pkg/engine` fails in older `init_test.go` tests (also on `master`): leaked OnInit goroutines dispatch to the global `app` after `swapApp` restores it.
 
 ## Unresolved questions
 
