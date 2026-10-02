@@ -7,7 +7,6 @@
 /// that replies with the status once the user has answered, and reports it
 /// on drift/permissions/changes.
 
-import AVFoundation
 import DriftPluginAPI
 import UIKit
 import UserNotifications
@@ -56,8 +55,6 @@ enum PermissionHandler {
         }
 
         host.registerPermission("notifications", NotificationsPermission())
-        // Moving to plugins (Phase 5); registered here until each moves.
-        host.registerPermission("camera", CameraPermission())
     }
 
     private static func lookup(_ args: Any?) throws -> (kind: String, permission: DriftPermission) {
@@ -142,27 +139,6 @@ private final class NotificationsPermission: DriftPermission {
         case .notDetermined: return .notDetermined
         case .provisional, .ephemeral: return .provisional
         @unknown default: return .unknown
-        }
-    }
-}
-
-// MARK: - Kinds moving to plugins
-
-/// Camera access.
-private final class CameraPermission: DriftPermission {
-    func status() -> DriftPermissionStatus {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: return .granted
-        case .denied: return .permanentlyDenied
-        case .restricted: return .restricted
-        case .notDetermined: return .notDetermined
-        @unknown default: return .unknown
-        }
-    }
-
-    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        AVCaptureDevice.requestAccess(for: .video) { granted in
-            completion(granted ? .granted : .permanentlyDenied)
         }
     }
 }

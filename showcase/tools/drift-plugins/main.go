@@ -8,9 +8,10 @@ package main
 import (
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
 
+	imagepicker "github.com/go-drift/drift/plugins/imagepicker/plugin"
 	location "github.com/go-drift/drift/plugins/location/plugin"
-	permissions "github.com/go-drift/drift/plugins/permissions/plugin"
 	notifications "github.com/go-drift/drift/plugins/notifications/plugin"
+	permissions "github.com/go-drift/drift/plugins/permissions/plugin"
 )
 
 func main() {
@@ -18,5 +19,6 @@ func main() {
 		driftplugin.Bind("github.com/go-drift/drift/plugins/location/plugin", location.Plugin),
 		driftplugin.Bind("github.com/go-drift/drift/plugins/permissions/plugin", permissions.Plugin),
 		driftplugin.Bind("github.com/go-drift/drift/plugins/notifications/plugin", notifications.Plugin),
+		driftplugin.Bind("github.com/go-drift/drift/plugins/imagepicker/plugin", imagepicker.Plugin),
 	)
 }

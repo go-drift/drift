@@ -18,3 +18,7 @@ plugins:
       photos:
         description: The Permissions demo shows how photo library access is requested.
   - package: github.com/go-drift/drift/plugins/notifications/plugin
+  - package: github.com/go-drift/drift/plugins/imagepicker/plugin
+    config:
+      camera:
+        description: The Camera demo takes a photo to show it.

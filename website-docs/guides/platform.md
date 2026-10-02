@@ -17,12 +17,11 @@ Drift does not expose cancellation.
 unblocks the Go caller:
 
 - `Permission.Request(ctx)` and `NotificationPermission.RequestWithOptions(ctx)`
-- `Camera.CapturePhoto(ctx, ...)`, `Camera.PickFromGallery(ctx, ...)`
 - `Storage.PickFile(ctx, ...)`, `Storage.PickDirectory(ctx)`, `Storage.SaveFile(ctx, ...)`
 
 When ctx fires on these methods, the Go caller is unblocked promptly with the
 package's stable error sentinels (`ErrCanceled` / `ErrTimeout` for permissions,
-`ctx.Err()` for camera/storage). The native operation continues to completion
+`ctx.Err()` for storage). The native operation continues to completion
 in the background and its result is discarded.
 
 These calls wait for the user, and the reply needs the platform main thread.
@@ -39,42 +38,14 @@ go func() {
 
 From the UI thread, `Request` and `RequestWithOptions` fail at once with
 `platform.ErrBlocksUIThread`, as plugin methods that reply later do. The
-camera, storage pickers and the date and time pickers still freeze the app
-when called from the UI thread.
+storage pickers and the date and time pickers still freeze the app when
+called from the UI thread.
 
 ## Permissions
 
 Permissions are attached to the features that use them. Each feature service provides a `Permission` field for checking and requesting access.
 
 Drift owns the request mechanism; the plugin providing a feature registers its permission kind and declares what the platform needs (Android manifest permissions, iOS usage strings). A plugin's runtime package exposes its permissions, built with `platform.NewPermission(kind)`. Calling a permission whose plugin is missing from `drift.yaml` fails with `platform.ErrPermissionNotRegistered`; on Android, one whose manifest permission no plugin declares fails with `platform.ErrPermissionNotDeclared`.
-
-### Camera Permission
-
-```go
-ctx := context.Background()
-
-// Check status
-status, err := platform.Camera.Permission.Status()
-
-// Request permission
-result, err := platform.Camera.Permission.Request(ctx)
-if result == platform.PermissionGranted {
-    // Camera is available
-}
-
-// Convenience checks
-if platform.Camera.Permission.IsGranted() {
-    // Camera is available
-}
-
-// Listen for permission changes
-unsubscribe := platform.Camera.Permission.Listen(func(status platform.PermissionResult) {
-    drift.Dispatch(func() {
-        updateUI(status)
-    })
-})
-defer unsubscribe()
-```
 
 ### Notification Permissions
 
@@ -123,157 +94,7 @@ platform.OpenAppSettings()
 
 ## Camera
 
-Capture photos and select images from the photo library using the synchronous API.
-Methods block until the user completes or cancels the operation.
-
-**Important:** Always use a context with a timeout. If the native layer fails to respond
-and the context has no deadline, the call blocks forever and holds the camera mutex,
-preventing further operations.
-
-**Note:** Only one camera operation can run at a time. If another operation is in progress,
-`CapturePhoto` and `PickFromGallery` return `platform.ErrCameraBusy`.
-
-```go
-import "github.com/go-drift/drift/pkg/platform"
-
-// Request permission first
-ctx := context.Background()
-if !platform.Camera.Permission.IsGranted() {
-    platform.Camera.Permission.Request(ctx)
-}
-
-// Capture a photo (blocks until complete or cancelled)
-// Call from a goroutine, not the main/render thread
-go func() {
-    // Use timeout to prevent blocking forever if native layer fails
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-    defer cancel()
-
-    result, err := platform.Camera.CapturePhoto(ctx, platform.CapturePhotoOptions{})
-    drift.Dispatch(func() {
-        if err != nil {
-            handleError(err)
-            return
-        }
-        if result.Cancelled {
-            return
-        }
-        handleMedia(result.Media)
-    })
-}()
-
-// Capture a selfie with the front camera
-go func() {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-    defer cancel()
-
-    result, err := platform.Camera.CapturePhoto(ctx, platform.CapturePhotoOptions{
-        UseFrontCamera: true,
-    })
-    // ... handle result
-}()
-
-// Pick from gallery (blocks until complete)
-go func() {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-    defer cancel()
-
-    result, err := platform.Camera.PickFromGallery(ctx, platform.PickFromGalleryOptions{})
-    // ... handle result
-}()
-
-// Pick multiple images (Android only; iOS returns single image)
-go func() {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-    defer cancel()
-
-    result, err := platform.Camera.PickFromGallery(ctx, platform.PickFromGalleryOptions{
-        AllowMultiple: true,
-    })
-    // ... handle result.MediaList for multiple images
-}()
-```
-
-### CapturedMedia Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `Path` | `string` | Absolute path to the image file |
-| `MimeType` | `string` | Media type (e.g., "image/jpeg") |
-| `Width` | `int` | Image width in pixels |
-| `Height` | `int` | Image height in pixels |
-| `Size` | `int64` | File size in bytes |
-
-### Example: Camera Page
-
-```go
-type cameraState struct {
-    core.StateBase
-    status           *core.Signal[string]
-    image            *core.Signal[image.Image]
-    permissionStatus *core.Signal[platform.PermissionResult]
-}
-
-func (s *cameraState) InitState() {
-    s.status = core.NewSignal("Tap to capture")
-    s.image = core.NewSignal[image.Image](nil)
-    s.permissionStatus = core.NewSignal(platform.PermissionNotDetermined)
-    core.UseListenable(&s.StateBase, s.status)
-    core.UseListenable(&s.StateBase, s.image)
-    core.UseListenable(&s.StateBase, s.permissionStatus)
-
-    ctx := context.Background()
-
-    // Check initial permission
-    go func() {
-        status, _ := platform.Camera.Permission.Status()
-        drift.Dispatch(func() { s.permissionStatus.Set(status) })
-    }()
-
-    // Listen for permission changes
-    unsub := platform.Camera.Permission.Listen(func(status platform.PermissionResult) {
-        drift.Dispatch(func() { s.permissionStatus.Set(status) })
-    })
-    s.OnDispose(unsub)
-}
-
-func (s *cameraState) takePhoto() {
-    s.status.Set("Opening camera...")
-    go func() {
-        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-        defer cancel()
-
-        result, err := platform.Camera.CapturePhoto(ctx, platform.CapturePhotoOptions{})
-        drift.Dispatch(func() {
-            if err != nil {
-                s.status.Set("Error: " + err.Error())
-                return
-            }
-            if result.Cancelled {
-                s.status.Set("Cancelled")
-                return
-            }
-            if result.Media != nil {
-                img, err := loadImage(result.Media.Path)
-                if err != nil {
-                    s.status.Set("Failed to load: " + err.Error())
-                    return
-                }
-                s.image.Set(img)
-                s.status.Set("Photo captured!")
-            }
-        })
-    }()
-}
-```
-
-:::note Platform Notes
-- **iOS**: Multi-select (`AllowMultiple`) is not supported; only a single image is returned
-- **iOS**: Camera availability is checked; an error is returned if no camera is present (e.g., on simulator)
-- **Android**: The front camera hint (`UseFrontCamera`) is not guaranteed to be honored by all camera apps
-- Captured images are saved to the app's temp directory as JPEGs
-- Gallery selections are copied to temp files for reliable cross-process access
-:::
+Taking photos and picking images is a plugin: see [Image picker](/docs/guides/plugins#image-picker) in the plugins guide.
 
 ## Location
 

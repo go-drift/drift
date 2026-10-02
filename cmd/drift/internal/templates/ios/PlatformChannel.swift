@@ -433,11 +433,6 @@ final class PlatformChannelManager: DriftPluginHost {
             return StorageHandler.handle(method: method, args: args)
         }
 
-        // Camera channel
-        register(channel: "drift/camera") { method, args in
-            return CameraHandler.handle(method: method, args: args)
-        }
-
         // Accessibility channel
         register(channel: "drift/accessibility") { method, args in
             return AccessibilityHandler.handle(method: method, args: args)

@@ -23,6 +23,7 @@ First-party plugins live in the Drift repository:
 - [`plugins/location`](#location): the device's location and the location permissions.
 - [`plugins/permissions`](#permissions): contacts, calendar, microphone and photos permissions.
 - [`plugins/notifications`](#notifications): local notifications and taps on them.
+- [`plugins/imagepicker`](#image-picker): a photo from the camera, or images from the photo library.
 
 ## Using plugins
 
@@ -322,6 +323,38 @@ Limitations:
 - `Deliveries()` reports notifications shown while the app runs; one that fires while the app is closed reaches only `Opens()`, if tapped.
 
 Supported on iOS, xtool and Android.
+
+### Image picker
+
+A photo from the camera, or images from the photo library, through the system's own camera and photo picker.
+
+```yaml
+plugins:
+  - package: github.com/go-drift/drift/plugins/imagepicker/plugin
+    config:
+      camera:                       # optional: needed to take photos on iOS
+        description: Takes a photo for your profile.
+```
+
+`camera.description` is the text iOS shows when asking for camera access. Picking from the library needs no permission on either platform, and Android takes photos through the system camera app, which needs none either.
+
+```go
+import imagepicker "github.com/go-drift/drift/plugins/imagepicker/runtime"
+
+go func() {
+    images, err := imagepicker.Pick(ctx, imagepicker.PickOptions{Multiple: true})
+    if err != nil || len(images) == 0 {
+        return // failed, or the user canceled
+    }
+    drift.Dispatch(func() { s.show(images) })
+}()
+
+photo, err := imagepicker.Capture(ctx, imagepicker.CaptureOptions{}) // nil if canceled
+```
+
+`Capture` and `Pick` wait for the user, so call them from a goroutine. Each `Image` is a file in the app's cache directory (`Path`, `MimeType`, `Width`, `Height`, `Size`); move it to keep it. Failures match `imagepicker.ErrBusy` (a picker is open), `ErrCameraUnavailable` (no camera, such as the iOS Simulator), `ErrCameraNotConfigured` (iOS without `camera:`) and `ErrPermissionDenied` under `errors.Is`.
+
+On Android the camera writes through Drift's `FileProvider`. If another plugin declares `CAMERA`, Android requires that permission for the camera app too, so `Capture` asks for it first. `FrontCamera` is a hint some Android camera apps ignore. Supported on iOS, xtool and Android.
 
 ## Authoring plugins
 

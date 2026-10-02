@@ -3,7 +3,9 @@ package platform
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
@@ -324,4 +326,9 @@ func parseInt64(value any) int64 {
 	default:
 		return 0
 	}
+}
+
+// generateRequestID creates a unique ID for request correlation.
+func generateRequestID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

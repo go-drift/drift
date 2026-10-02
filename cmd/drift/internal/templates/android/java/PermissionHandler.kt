@@ -78,8 +78,6 @@ object PermissionHandler {
         }
 
         host.registerPermission("notifications", NotificationsPermission)
-        // Moving to plugins (Phase 5); registered here until each moves.
-        host.registerPermission("camera", DriftRuntimePermission(Manifest.permission.CAMERA))
     }
 
     private fun foreground(): Activity? = PlatformChannelManager.currentActivity()
