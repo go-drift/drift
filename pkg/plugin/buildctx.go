@@ -34,14 +34,12 @@ type BuildCtx struct {
 	// via Err() after Build returns and abort the build.
 	errs []error
 
-	// IOS records ops for the iOS build target. Methods are no-ops on
-	// non-iOS builds; plugins may unconditionally call them and the CLI
-	// drops ops whose target platform does not match the build.
+	// IOS records ops for iOS builds, both xcodeproj ("ios") and xtool.
+	// Plugins record for every platform unconditionally; the CLI applies
+	// only the ops for the platform being built.
 	IOS *IOSScope
-	// Android records ops for the Android build target.
+	// Android records ops for Android builds.
 	Android *AndroidScope
-	// Xtool aliases the iOS surface; xtool reuses the iOS scaffold.
-	Xtool *IOSScope
 }
 
 // Err returns every error recorders captured during Build (invalid input,
@@ -50,11 +48,14 @@ type BuildCtx struct {
 // Invalid ops are reported here and never recorded.
 func (b *BuildCtx) Err() error { return errors.Join(b.errs...) }
 
-// TestAppID is the AppID of contexts from NewTestCtx and NewTestCtxAt.
+// TestAppID is the AppID of test contexts (NewTestCtx, NewTestCtxAt,
+// NewTestCtxFor).
 const TestAppID = "com.example.app"
 
-// NewTestCtx returns a BuildCtx suitable for plugin author unit tests. Ops
-// recorded via the returned ctx can be inspected with Ops().
+// NewTestCtx returns a BuildCtx for plugin unit tests, building for every
+// platform (Platform() is "all"). Run a plugin with
+// Bind(pkg, Plugin).Build(ctx, configYAML), which checks and defaults the
+// config like the bridge, then inspect Ops() and Err().
 func NewTestCtx() *BuildCtx {
 	return NewTestCtxAt("/test/project")
 }
@@ -90,8 +91,9 @@ func (b *BuildCtx) Plugin() string { return b.pluginPackage }
 // PluginName returns the friendly name of the plugin currently being built.
 func (b *BuildCtx) PluginName() string { return b.pluginName }
 
-// Platform returns the target platform string ("android", "ios", or "xtool").
-// "all" is reserved for unit-test contexts; plugins should not assume it.
+// Platform returns the platform being built: "android", "ios" (xcodeproj)
+// or "xtool". Test contexts from NewTestCtx and NewTestCtxAt return "all"
+// (record for every platform); most plugins never need to branch on it.
 func (b *BuildCtx) Platform() string { return b.platform }
 
 // AppID returns the app's identifier from drift.yaml (app.id): the iOS
@@ -148,8 +150,6 @@ func newBuildCtx(pluginPackage, pluginName string, env protocol.Envelope) *Build
 	}
 	b.Android.Drawables = &AndroidDrawablesScope{b: b}
 	b.Android.Sources = &AndroidSourcesScope{b: b}
-
-	b.Xtool = b.IOS
 	return b
 }
 
@@ -300,8 +300,8 @@ func (s *IOSStoryboardsScope) ReplaceLaunchScreen(content string) {
 type IOSSourcesScope struct{ b *BuildCtx }
 
 // AddFS walks the supplied embed.FS rooted at root (slash-separated) and
-// records one OpAddIOSSource per file. Files land under
-// Runner/Plugins/<group>/<relpath> in the generated project tree.
+// records one Swift source per file, at <group>/<relpath> in the plugin's
+// own module (Drift/Plugins/Sources/DriftPlugin_<name>).
 func (s *IOSSourcesScope) AddFS(group string, sources embed.FS, root string) {
 	s.b.walkEmbedFS(sources, root, func(rel string, content []byte) {
 		s.b.push(&protocol.OpAddIOSSource{
@@ -313,7 +313,8 @@ func (s *IOSSourcesScope) AddFS(group string, sources embed.FS, root string) {
 	})
 }
 
-// AddFile records a single Swift source file at Runner/Plugins/<group>/<rel>.
+// AddFile records a single Swift source file at <group>/<rel> in the
+// plugin's own module.
 func (s *IOSSourcesScope) AddFile(group, rel string, content []byte) {
 	s.b.push(&protocol.OpAddIOSSource{
 		Base:    newBase(s.b),
@@ -336,8 +337,8 @@ type AndroidScope struct {
 // Plugin records the fully qualified Kotlin class the app instantiates for
 // this plugin, e.g. com.example.camera.CameraPlugin. The class implements
 // com.drift.runner.DriftPlugin and has a no-argument constructor; the host
-// drives it through the plugin lifecycle (register, pre-activity hook,
-// attach/detach). Ship its source with Sources.
+// drives it through the plugin lifecycle (register, attach/detach). Ship
+// its source with Sources.
 func (s *AndroidScope) Plugin(class string) {
 	s.b.push(&protocol.OpAndroidPlugin{
 		Base:  newBase(s.b),
