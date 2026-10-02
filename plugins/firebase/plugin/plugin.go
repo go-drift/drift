@@ -26,7 +26,11 @@
 //
 // # Platform support
 //
-// iOS (Xcode 16+) and Android. xtool is not supported: see Build.
+// iOS (Xcode 16+), xtool and Android. xtool, Drift's development path on
+// Linux, gets the same integration as iOS; release builds use Xcode. Push
+// needs a paid Apple Developer team on either path: with a free team the
+// app still runs, but Apple grants no push capability, so no FCM token or
+// message arrives.
 package plugin
 
 import (
@@ -58,17 +62,11 @@ type firebase struct{}
 
 func (firebase) Name() string { return "firebase" }
 
-// Build emits the native integration for the platform being built.
-//
-// xtool builds fail: push needs the aps-environment entitlement, which a
-// free Apple ID cannot sign, and xtool is Drift's Linux development path
-// rather than a shipping one. Build for iOS with Xcode instead.
+// Build emits the native integration for the platform being built; xtool
+// gets the iOS integration.
 func (firebase) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 	platform := ctx.Platform()
-	if platform == "xtool" {
-		return fmt.Errorf("firebase: xtool builds are not supported (push needs the aps-environment entitlement); build for iOS with Xcode (drift build ios)")
-	}
-	wantIOS := platform == "ios" || (platform == "all" && cfg.IOS != nil)
+	wantIOS := platform == "ios" || platform == "xtool" || (platform == "all" && cfg.IOS != nil)
 	wantAndroid := platform == "android" || (platform == "all" && cfg.Android != nil)
 	if wantIOS {
 		if cfg.IOS == nil {

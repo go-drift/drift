@@ -151,10 +151,18 @@ func TestBuildNeedsOnlyThePlatformsSection(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsXtool(t *testing.T) {
-	_, err := build(t, "xtool", fullConfig)
-	if err == nil || !strings.Contains(err.Error(), "xtool") {
-		t.Errorf("err = %v, want xtool unsupported", err)
+// xtool (iOS development on Linux) gets the iOS integration.
+func TestBuildXtoolEmitsIOS(t *testing.T) {
+	xtool, err := protocol.MarshalOpList(mustBuild(t, "xtool", fullConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ios, err := protocol.MarshalOpList(mustBuild(t, "ios", fullConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(xtool) != string(ios) {
+		t.Errorf("xtool ops differ from iOS ops:\nxtool: %s\nios:   %s", xtool, ios)
 	}
 }
 

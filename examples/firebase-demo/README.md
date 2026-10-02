@@ -30,7 +30,9 @@ taps. Every event is also logged (`FCM received ...`, `FCM tapped ...`).
 ```
 
 On iOS, pick your team under Runner, Signing & Capabilities; the Push
-Notifications capability comes from the entitlements the plugin adds.
+Notifications capability comes from the entitlements the plugin adds. Push
+needs a paid Apple Developer team, also with `drift run xtool` on Linux; with
+a free team the app runs without a token.
 
 ## Send test messages
 
