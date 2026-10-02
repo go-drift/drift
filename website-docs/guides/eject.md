@@ -12,12 +12,11 @@ By default, Drift manages platform projects (Xcode, Android Studio) behind the s
 
 Eject when you need to:
 
-- Add native SDKs (Firebase, push notifications, analytics)
-- Edit `Info.plist` or `AndroidManifest.xml` for custom permissions
-- Modify the Xcode project or Gradle build configuration
+- Modify the Xcode project or Gradle build configuration in ways no plugin covers
+- Edit native code Drift generates
 - Open the project in Xcode or Android Studio for debugging
 
-If you only need to change your app name, bundle ID, or other values in `drift.yaml`, you do not need to eject.
+To add a native SDK, permissions or platform hooks, use a [plugin](/docs/guides/plugins) first: plugins change the generated project on every build, so you keep a managed project. If you only need to change your app name, bundle ID, or other values in `drift.yaml`, you do not need to eject.
 
 ## Ejecting a Platform
 
@@ -83,8 +82,8 @@ Platforms:
 | Aspect | Before eject | After eject |
 |--------|--------------|-------------|
 | Build location | `~/.drift/build/` | `./platform/<platform>/` |
-| Project files | Generated fresh each build | User-owned, never overwritten |
-| `drift.yaml` | Used for all values | Only affects non-ejected platforms |
+| Project files | Generated fresh each build | User-owned; only Drift's own files and plugin output change |
+| `drift.yaml` | Used for all values | `plugins:` still applies; other values only affect non-ejected platforms |
 | IDE usage | Not practical | Full Xcode/Android Studio support |
 | Version control | Nothing to commit | Commit `./platform/` to repo |
 
@@ -115,7 +114,7 @@ Open `platform/android/` and press Run. A Gradle task calls `drift compile` auto
 
 ## File Ownership
 
-After ejecting, some files belong to you and some are managed by Drift. Drift never overwrites your files on build.
+After ejecting, some files belong to you and some are managed by Drift. Drift never overwrites your files on build, except for the edits plugins make (see [Plugins](#plugins)).
 
 **iOS:**
 
@@ -127,6 +126,7 @@ After ejecting, some files belong to you and some are managed by Drift. Drift ne
 | `bridge/` | Drift (regenerated on build) |
 | `Runner/libdrift.a` | Drift (regenerated on build) |
 | `Runner/libdrift_skia.a` | Drift (updated when Drift version changes) |
+| `Drift/Plugins/`, `Runner/DriftPlugins.swift`, `Runner/DriftPluginRegistrant.swift` | Drift (regenerated on build) |
 
 **Android:**
 
@@ -137,10 +137,17 @@ After ejecting, some files belong to you and some are managed by Drift. Drift ne
 | `settings.gradle`, `gradle.properties`, `gradle/` | You |
 | `bridge/` | Drift (regenerated on build) |
 | `app/src/main/jniLibs/` | Drift (overwritten on build) |
+| `app/src/main/java/com/drift/runner/` | Drift (regenerated on build) |
 
 :::warning
 Do not place custom native libraries in `app/src/main/jniLibs/` as Drift overwrites this directory on each build. Use a separate directory and configure Gradle's `jniLibs.srcDirs` if you need additional native libraries.
 :::
+
+## Plugins
+
+Plugins in `drift.yaml` keep working after ejecting: each build applies them to the ejected project, editing `Info.plist`, `Runner.entitlements`, `AndroidManifest.xml`, Gradle files and resources, and writing the plugins' own files. Drift records what it applied in `.drift/plugins.lock.json` inside each platform project; commit it.
+
+When you remove a plugin, Drift deletes the files it owned (unless you changed them) and fails the next build once with a list of the edits it made inside your files, for you to undo or keep. If the project is missing the calls plugins need, the build names the file and call to restore. See [Plugins](/docs/guides/plugins#ejected-projects).
 
 ## `.gitignore` Setup
 
@@ -220,5 +227,6 @@ git commit -m "Return iOS to managed mode"
 
 ## Next Steps
 
+- [Plugins](/docs/guides/plugins) - Native SDKs and hooks without ejecting
 - [Platform Services](/docs/guides/platform) - Access native platform capabilities
 - [iOS on Linux with xtool](/docs/guides/xtool-setup) - Build iOS apps without a Mac

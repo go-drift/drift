@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,6 +59,20 @@ func TestOpsCoverAllConstructors(t *testing.T) {
 	}
 	if len(seen) != len(OpTypes()) {
 		t.Errorf("fixtureOps has duplicates: %d unique types, %d constructors", len(seen), len(OpTypes()))
+	}
+}
+
+// The plugin guide's op reference is hand-written; every op type must
+// appear in it.
+func TestOpReferenceListsEveryOp(t *testing.T) {
+	guide, err := os.ReadFile("../../../website-docs/guides/plugins.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, typ := range OpTypes() {
+		if !strings.Contains(string(guide), "`"+typ+"`") {
+			t.Errorf("website-docs/guides/plugins.md op reference does not list %q", typ)
+		}
 	}
 }
 
