@@ -141,7 +141,8 @@ Branch `feat/core-plugins`, from `feat/plugins` (`83a177b`; rebase onto `master`
 | Commit | Content |
 |--------|---------|
 | `66801b6` | Permission registry: Drift keeps the request mechanism, plugins register kinds (`DriftPluginHost.registerPermission`, `platform.NewPermission`). `Request` replies with the status (async, so the UI-thread guard applies); `ErrPermissionNotRegistered` / `ErrPermissionNotDeclared`; Android requests through `activityResultRegistry`, reads LIMITED for partial grants; `DriftActivityBinding.activity` is a `FragmentActivity` |
-| (this commit) | `plugins/location`: usage strings from config, `always:` opt-in for background location; `Current`/`LastKnown`/`IsEnabled` async; sentinels for denied, disabled, unavailable. Core location removed (Go API, handlers, kinds, 3 permissions, `uses-feature` gps, `play-services-location`, 2 usage strings). `DriftCallError` is public for plugins |
+| `a1aedda` | `plugins/location`: usage strings from config, `always:` opt-in for background location; `Current`/`LastKnown`/`IsEnabled` async; sentinels for denied, disabled, unavailable. Core location removed (Go API, handlers, kinds, 3 permissions, `uses-feature` gps, `play-services-location`, 2 usage strings). `DriftCallError` is public for plugins |
+| (this commit) | Background tasks deleted: the Go API, both handlers, `work-runtime` (whose manifest brought `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`, `FOREGROUND_SERVICE`), those three template permissions, the `fetch`/`processing` modes and `BGTaskSchedulerPermittedIdentifiers`. See the background-tasks follow-up |
 
 **Verified:** step 1 on the API 36 emulator (approximate reads `limited`, upgrade to precise, two denials read `permanently_denied`, notification grant) and `drift build xtool`; step 2 on the emulator (denied before grant, fix, update stream with `geo fix`, Always through Settings), merged APK manifest, `drift build xtool` (Info.plist carries only the plugin's strings).
 
@@ -357,6 +358,10 @@ Not merge blocking. File references are from `c62b3cb`.
 - **Missing hooks, undocumented:** Android activity-result and permission-result listeners; iOS open-URL and user-activity hooks (deleted in `329c431`), so a deep-link or OAuth plugin can only be written for Android.
 
 ### Later
+
+**After Phase 5**
+- **Background tasks plugin.** Deleted from core in Phase 5: it never ran app code. Go starts only with a view (`SkiaHostView.initEngine`, `DriftRenderer.init`), the Android worker reported completion at once and iOS after a hard-coded second, iOS registered `BGTaskScheduler` handlers after launch, and events went to a live channel nobody listened to. A plugin needs a headless Go start on both platforms (OnInit without a view), a way for Go to hold the task until it completes within the OS budget, Android process-level plugin registration, and launch-time `BGTaskScheduler` registration (the plugin `register(host:)` hook runs at the right moment). Declares `fetch`/`processing` and `BGTaskSchedulerPermittedIdentifiers` (`ctx.AppID()` prefix) through `append_array_item`, and WorkManager on Android.
+- **Optional hardware features.** Google Play infers required features from permissions (location permissions imply `android.hardware.location`; `RECORD_AUDIO` implies `android.hardware.microphone`), which hides the app from devices without them. A plugin cannot mark them optional: add an `android.manifest.add_uses_feature` op when one needs it.
 
 **Correctness, low severity**
 - **`theme` vs `android:theme` do not conflict.** `SetActivityAttr.Targets()` uses the raw attribute name, while `setNSAttr` adds the `android:` prefix; normalise in `Targets()`.

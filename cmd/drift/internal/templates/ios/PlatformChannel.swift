@@ -440,11 +440,6 @@ final class PlatformChannelManager: DriftPluginHost {
             return CameraHandler.handle(method: method, args: args)
         }
 
-        // Background tasks channel
-        register(channel: "drift/background") { method, args in
-            return BackgroundHandler.handle(method: method, args: args)
-        }
-
         // Accessibility channel
         register(channel: "drift/accessibility") { method, args in
             return AccessibilityHandler.handle(method: method, args: args)

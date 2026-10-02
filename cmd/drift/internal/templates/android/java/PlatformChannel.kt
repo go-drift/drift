@@ -404,11 +404,6 @@ object PlatformChannelManager : DriftPluginHost {
             CameraHandler.handle(context, method, args)
         }
 
-        // Background tasks channel
-        register("drift/background") { method, args ->
-            BackgroundHandler.handle(context, method, args)
-        }
-
         // Accessibility channel
         register("drift/accessibility") { method, args ->
             AccessibilityHandler.handle(context, method, args)

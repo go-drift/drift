@@ -12,6 +12,5 @@ enum DriftLog {
 
     static let general = Logger(subsystem: subsystem, category: "general")
     static let deeplink = Logger(subsystem: subsystem, category: "deeplink")
-    static let background = Logger(subsystem: subsystem, category: "background")
     static let platform = Logger(subsystem: subsystem, category: "platform")
 }
