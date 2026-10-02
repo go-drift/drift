@@ -13,15 +13,68 @@
 
 import Foundation
 
-/// Handles one call on a plugin channel, on the main thread. Reply through
-/// `result` exactly once, either before returning or later from any thread
-/// (e.g. an SDK completion handler).
-public typealias DriftMethodHandler = (_ method: String, _ args: Any?, _ result: DriftResult) -> Void
+/// A plugin channel's methods, declared inside
+/// `DriftPluginHost.registerChannel`. Every method runs on the main thread.
+///
+/// A method replies in one of two declared ways:
+/// - `method(_:_:)` replies by returning. Go may call it from any goroutine,
+///   including the UI thread.
+/// - `asyncMethod(_:_:)` replies later, through a `DriftResult`, from any
+///   thread (an SDK completion handler, a dialog). Go must call it from a
+///   goroutine: a call from the UI thread fails with `blocks_ui_thread`
+///   every time, before the handler runs, since the UI thread cannot wait
+///   for a reply that needs it.
+public final class DriftChannel {
+    @_spi(DriftHost) public enum Method {
+        case sync((_ args: Any?) throws -> Any?)
+        case async((_ args: Any?, _ result: DriftResult) -> Void)
+    }
 
-/// The reply to one method call. Exactly one of success(_:) or error(_:)
-/// must be called, once; a second reply is a programming error and traps.
-/// Until the reply arrives the Go caller waits, so a handler must not drop
-/// its result.
+    private let name: String
+    private var methods: [String: Method] = [:]
+    // Set by the host once the declare closure returns; the methods are
+    // then read from Go threads and must not change.
+    private var sealed = false
+
+    @_spi(DriftHost) public init(name: String) {
+        self.name = name
+    }
+
+    /// Declares `method` as replying by returning: the return value
+    /// (JSON-like, or nil) is the reply, and a thrown error fails the call.
+    public func method(_ method: String, _ handler: @escaping (_ args: Any?) throws -> Any?) {
+        add(method, .sync(handler))
+    }
+
+    /// Declares `method` as replying later through its `DriftResult`,
+    /// exactly once, from any thread. A result dropped without a reply
+    /// fails the call with `reply_dropped`.
+    public func asyncMethod(_ method: String, _ handler: @escaping (_ args: Any?, _ result: DriftResult) -> Void) {
+        add(method, .async(handler))
+    }
+
+    private func add(_ method: String, _ m: Method) {
+        if sealed {
+            fatalError("drift: \(name).\(method) declared after registerChannel returned; declare methods inside its closure")
+        }
+        if methods.updateValue(m, forKey: method) != nil {
+            fatalError("drift: \(name).\(method) declared twice")
+        }
+    }
+
+    @_spi(DriftHost) public func seal() {
+        sealed = true
+    }
+
+    @_spi(DriftHost) public func lookup(_ method: String) -> Method? {
+        methods[method]
+    }
+}
+
+/// The reply to one asynchronous method call. Exactly one of success(_:) or
+/// error(_:) must be called, once, from any thread; a second reply is a
+/// programming error and traps. Until the reply arrives the Go caller
+/// waits; a result released without a reply fails the call.
 public final class DriftResult {
     private let lock = NSLock()
     private var replied = false
@@ -31,6 +84,14 @@ public final class DriftResult {
     @_spi(DriftHost) public init(call: String, deliver: @escaping (Result<Any?, Error>) -> Void) {
         self.call = call
         self.deliver = deliver
+    }
+
+    deinit {
+        if !replied {
+            deliver(.failure(NSError(domain: "reply_dropped", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "drift: \(call) released its DriftResult without replying",
+            ])))
+        }
     }
 
     /// Replies with a JSON-encodable value (or nil).
@@ -79,7 +140,16 @@ public final class DriftSubscription {
 }
 
 public protocol DriftPluginHost: AnyObject {
-    func registerChannel(_ name: String, handler: @escaping DriftMethodHandler)
+    /// Registers the channel `name` and its methods, declared in `declare`:
+    ///
+    ///     host.registerChannel("acme/camera") { channel in
+    ///         channel.method("isAvailable") { _ in hasCamera() }
+    ///         channel.asyncMethod("takePicture") { args, result in capture(args, result) }
+    ///     }
+    ///
+    /// See `DriftChannel` for how each kind of method replies. Declare every
+    /// method inside the closure; the channel is fixed once it returns.
+    func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void)
     func sendEvent(_ channel: String, data: Any?)
     func sendEventError(_ channel: String, code: String, message: String)
     func sendEventDone(_ channel: String)

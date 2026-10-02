@@ -51,16 +51,26 @@ func DriftPlatformIsStreamActive(_ channel: UnsafePointer<CChar>) -> Int32
 @_silgen_name("DriftPlatformFree")
 func DriftPlatformFree(_ ptr: UnsafeMutableRawPointer?)
 
+/// FFI declaration for replying to a Go method call (see
+/// `DriftNativeMethodHandler`). Go copies the bytes.
+@_silgen_name("DriftPlatformReply")
+func DriftPlatformReply(
+    _ callID: Int64,
+    _ data: UnsafeRawPointer?,
+    _ dataLen: Int32,
+    _ errorJSON: UnsafePointer<CChar>?
+)
+
 /// Type alias for the native method handler callback.
-/// Must match the C typedef in bridge_platform.go.tmpl.
+/// Must match the C typedef in bridge_platform.go.tmpl: Go calls it on the
+/// calling thread, and the call is answered through DriftPlatformReply
+/// exactly once, in place or later. Returns 0 once the call is taken.
 typealias DriftNativeMethodHandler = @convention(c) (
+    Int64,                 // callID
     UnsafePointer<CChar>,  // channel
     UnsafePointer<CChar>,  // method
     UnsafeRawPointer?,     // argsData
-    Int32,                 // argsLen
-    UnsafeMutablePointer<UnsafeMutableRawPointer?>,  // resultData
-    UnsafeMutablePointer<Int32>,                     // resultLen
-    UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>  // errorMsg
+    Int32                  // argsLen
 ) -> Int32
 
 /// FFI declaration for registering the native method handler with Go.
@@ -75,34 +85,23 @@ func DriftPlatformRegisterHandler() {
 
 /// The native method handler implementation that bridges Go calls to Swift.
 /// This is a C-convention function that can be passed as a function pointer.
-private let driftNativeMethodHandlerImpl: DriftNativeMethodHandler = { channelPtr, methodPtr, argsPtr, argsLen, resultPtr, resultLen, errorPtr in
-    let channel = String(cString: channelPtr)
-    let method = String(cString: methodPtr)
-
+private let driftNativeMethodHandlerImpl: DriftNativeMethodHandler = { callID, channelPtr, methodPtr, argsPtr, argsLen in
     var argsData: Data? = nil
     if argsLen > 0, let ptr = argsPtr {
         argsData = Data(bytes: ptr, count: Int(argsLen))
     }
-
-    let (result, error) = PlatformChannelManager.shared.handleMethodCall(
-        channel: channel,
-        method: method,
+    PlatformChannelManager.shared.handleMethodCall(
+        channel: String(cString: channelPtr),
+        method: String(cString: methodPtr),
         argsData: argsData
-    )
-
-    if let error = error {
-        let errStr = encodeErrorPayload(error)
-        errorPtr.pointee = strdup(errStr)
-        return 1
+    ) { outcome in
+        switch outcome {
+        case .success(let data):
+            data.withUnsafeBytes { DriftPlatformReply(callID, $0.baseAddress, Int32(data.count), nil) }
+        case .failure(let error):
+            encodeErrorPayload(error).withCString { DriftPlatformReply(callID, nil, 0, $0) }
+        }
     }
-
-    if let result = result {
-        let ptr = UnsafeMutableRawPointer.allocate(byteCount: result.count, alignment: 1)
-        result.copyBytes(to: ptr.assumingMemoryBound(to: UInt8.self), count: result.count)
-        resultPtr.pointee = ptr
-        resultLen.pointee = Int32(result.count)
-    }
-
     return 0
 }
 
@@ -159,7 +158,7 @@ final class JsonCodec {
 // MARK: - Platform Channel Manager
 
 /// Handler for a built-in channel: synchronous, run on the calling (Go)
-/// thread. Plugins use the asynchronous `DriftMethodHandler` instead.
+/// thread. Plugins declare their methods on a `DriftChannel` instead.
 typealias MethodHandler = (String, Any?) -> (Any?, Error?)
 
 /// Manages platform channel handlers and dispatches calls between Go and iOS.
@@ -174,12 +173,11 @@ typealias MethodHandler = (String, Any?) -> (Any?, Error?)
 final class PlatformChannelManager: DriftPluginHost {
     static let shared = PlatformChannelManager()
 
-    /// A registered channel. Every handler takes the asynchronous form;
-    /// built-ins are adapted. Plugin handlers run on the main thread,
-    /// built-ins on the calling thread.
-    private struct Channel {
-        let handler: DriftMethodHandler
-        let onMain: Bool
+    /// A registered channel: a built-in's handler runs on the calling
+    /// thread, a plugin's declared methods on the main thread.
+    private enum Channel {
+        case builtIn(MethodHandler)
+        case plugin(DriftChannel)
     }
 
     private var channels: [String: Channel] = [:]
@@ -194,19 +192,15 @@ final class PlatformChannelManager: DriftPluginHost {
 
     /// Registers a built-in channel handler.
     func register(channel: String, handler: @escaping MethodHandler) {
-        add(channel, Channel(handler: { method, args, result in
-            let (value, error) = handler(method, args)
-            if let error = error {
-                result.error(error)
-            } else {
-                result.success(value)
-            }
-        }, onMain: false))
+        add(channel, .builtIn(handler))
     }
 
-    /// `DriftPluginHost`: register a channel handler from a plugin source.
-    func registerChannel(_ name: String, handler: @escaping DriftMethodHandler) {
-        add(name, Channel(handler: handler, onMain: true))
+    /// `DriftPluginHost`: register a plugin channel and its methods.
+    func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void) {
+        let channel = DriftChannel(name: name)
+        declare(channel)
+        channel.seal()
+        add(name, .plugin(channel))
     }
 
     private func add(_ name: String, _ channel: Channel) {
@@ -239,18 +233,30 @@ final class PlatformChannelManager: DriftPluginHost {
         sendEventDone(channel: channel)
     }
 
-    /// Handles a method call from Go and returns the result. Go's call is
-    /// synchronous, so this blocks the calling thread until the handler
-    /// replies. A plugin handler runs on the main thread; when Go itself
-    /// calls from the main thread (inside a frame or a widget callback),
-    /// the handler must reply before returning, since waiting there would
-    /// deadlock any reply that needs the main thread.
-    func handleMethodCall(channel: String, method: String, argsData: Data?) -> (Data?, Error?) {
+    /// Handles a method call from Go, answering through `reply` exactly
+    /// once with the encoded result or an error.
+    ///
+    /// Go calls on its own thread. A plugin method runs on the main thread:
+    /// in place when Go called from it, otherwise queued there with the
+    /// reply coming later. The main thread is then blocked in Go until this
+    /// returns, so a method that replies asynchronously is refused there
+    /// before it runs: its reply could need the main thread.
+    func handleMethodCall(
+        channel: String,
+        method: String,
+        argsData: Data?,
+        reply: @escaping (Result<Data, Error>) -> Void
+    ) {
+        let codec = self.codec
+        let answer: (Result<Any?, Error>) -> Void = { outcome in
+            reply(outcome.map { codec.encode($0) })
+        }
         channelsLock.lock()
         let registered = channels[channel]
         channelsLock.unlock()
         guard let registered = registered else {
-            return (nil, NSError(domain: "PlatformChannel", code: 404, userInfo: [NSLocalizedDescriptionKey: "Channel not found: \(channel)"]))
+            answer(.failure(callError("channel_not_found", "channel not found: \(channel)")))
+            return
         }
 
         var args: Any? = nil
@@ -258,35 +264,43 @@ final class PlatformChannelManager: DriftPluginHost {
             args = codec.decode(argsData)
         }
 
-        // The semaphore orders the write of outcome before its read below.
-        let replied = DispatchSemaphore(value: 0)
-        var outcome: Result<Any?, Error>?
-        let result = DriftResult(call: "\(channel).\(method)") { reply in
-            outcome = reply
-            replied.signal()
-        }
-        if registered.onMain && !Thread.isMainThread {
-            DispatchQueue.main.async { registered.handler(method, args, result) }
-            replied.wait()
-        } else {
-            registered.handler(method, args, result)
-            if replied.wait(timeout: .now()) == .timedOut {
+        switch registered {
+        case .builtIn(let handler):
+            let (value, error) = handler(method, args)
+            if let error = error {
+                answer(.failure(error))
+            } else {
+                answer(.success(value))
+            }
+        case .plugin(let declared):
+            switch declared.lookup(method) {
+            case nil:
+                answer(.failure(callError("method_not_found", "\(channel) has no method \(method)")))
+            case .sync(let handler)?:
+                let run = { answer(Result(catching: { try handler(args) })) }
                 if Thread.isMainThread {
-                    fatalError(
-                        "drift: \(channel).\(method) did not reply before returning, but Go called it " +
-                            "on the main thread, where waiting would deadlock. Call it from a goroutine."
-                    )
+                    run()
+                } else {
+                    DispatchQueue.main.async(execute: run)
                 }
-                replied.wait()
+            case .async(let handler)?:
+                guard !Thread.isMainThread else {
+                    answer(.failure(callError(
+                        "blocks_ui_thread",
+                        "drift: \(channel).\(method) replies asynchronously; Go must call it from a goroutine, not the UI thread"
+                    )))
+                    return
+                }
+                DispatchQueue.main.async {
+                    handler(args, DriftResult(call: "\(channel).\(method)", deliver: answer))
+                }
             }
         }
+    }
 
-        switch outcome! {
-        case .failure(let error):
-            return (nil, error)
-        case .success(let value):
-            return (codec.encode(value), nil)
-        }
+    /// An error Go receives with `code` (see encodeErrorPayload).
+    private func callError(_ code: String, _ message: String) -> NSError {
+        NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
     /// Sends an event to Go listeners. Also fans out to any native-side

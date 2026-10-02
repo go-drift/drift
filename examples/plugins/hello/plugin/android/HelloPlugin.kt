@@ -12,16 +12,13 @@ import com.drift.runner.DriftPluginHost
 
 class HelloPlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
-        host.registerChannel("example/hello") { method, _, result ->
-            when (method) {
-                "greeting" -> {
-                    // Plugin code cannot see the app's R class; look the
-                    // resource up by name.
-                    val res = host.context.resources
-                    val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
-                    result.success(res.getString(id))
-                }
-                else -> result.error(IllegalArgumentException("unknown method $method"))
+        host.registerChannel("example/hello") {
+            method("greeting") { _ ->
+                // Plugin code cannot see the app's R class; look the
+                // resource up by name.
+                val res = host.context.resources
+                val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
+                res.getString(id)
             }
         }
     }

@@ -13,8 +13,9 @@ import (
 // (plugin/ios/HelloPlugin.swift, plugin/android/HelloPlugin.kt).
 var channel = platform.NewMethodChannel("example/hello")
 
-// Greeting returns the greeting configured in drift.yaml. It waits for the
-// native side: call it from a goroutine, not from a widget callback.
+// Greeting returns the greeting configured in drift.yaml. The native
+// method replies in place, so any goroutine may call it, including widget
+// callbacks.
 func Greeting(ctx context.Context) (string, error) {
 	res, err := channel.Invoke(ctx, "greeting", nil)
 	if err != nil {

@@ -16,12 +16,13 @@ type fakeNative struct {
 	calls []string
 }
 
-func (f *fakeNative) InvokeMethod(_ context.Context, channel, method string, _ []byte) ([]byte, error) {
+func (f *fakeNative) InvokeMethod(channel, method string, _ []byte, reply func([]byte, error)) {
 	f.calls = append(f.calls, channel+"."+method)
 	if f.err != nil {
-		return nil, f.err
+		reply(nil, f.err)
+		return
 	}
-	return platform.DefaultCodec.Encode(f.reply)
+	reply(platform.DefaultCodec.Encode(f.reply))
 }
 
 func (f *fakeNative) StartEventStream(string) error { return nil }
