@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	driftpluginCLI "github.com/go-drift/drift/cmd/drift/internal/plugin"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
 
@@ -51,7 +52,7 @@ func watchAndRun(ctx context.Context, ws *workspace.Workspace, rebuild func() er
 					watcher.Add(event.Name)
 				}
 			}
-			if !isRelevantChange(event) {
+			if !isRelevantChange(ws.Root, event) {
 				continue
 			}
 			if timer != nil {
@@ -109,9 +110,14 @@ func addWatchDirs(watcher *fsnotify.Watcher, root, buildDir string) error {
 }
 
 // isRelevantChange returns true for write/create/remove/rename events on
-// .go files or the drift config file.
-func isRelevantChange(event fsnotify.Event) bool {
+// .go files or the drift config file under root. The generated plugin
+// bridge is not: the build that rewrites or removes it is already running,
+// and the app does not compile it (build tag drift_tool).
+func isRelevantChange(root string, event fsnotify.Event) bool {
 	if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+		return false
+	}
+	if rel, err := filepath.Rel(root, event.Name); err == nil && filepath.ToSlash(rel) == driftpluginCLI.BridgeFilePath {
 		return false
 	}
 	base := filepath.Base(event.Name)
