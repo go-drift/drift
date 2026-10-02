@@ -100,8 +100,10 @@ func decodeConfig[T any](schema protocol.PluginSchema, configYAML []byte, projec
 	return cfg, nil
 }
 
-// Build dispatches a single plugin's Build with the raw YAML config bytes.
-// Exposed for the bridge runtime; plugin authors do not call this.
+// Build runs the plugin's Build for raw drift.yaml config bytes, checked
+// against the config schema and defaulted first. The bridge calls it for
+// each configured plugin; plugin tests call it to build exactly as the
+// bridge does (see NewTestCtx).
 func (b Binding) Build(ctx *BuildCtx, configYAML []byte) error {
 	if b.buildAny == nil {
 		return fmt.Errorf("plugin %s: binding missing build hook", b.Package)
