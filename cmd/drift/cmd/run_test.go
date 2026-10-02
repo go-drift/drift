@@ -48,10 +48,13 @@ func TestIsRelevantChange(t *testing.T) {
 		{"non-go file", fsnotify.Event{Name: "/app/README.md", Op: fsnotify.Write}, false},
 		{"chmod only", fsnotify.Event{Name: "/app/main.go", Op: fsnotify.Chmod}, false},
 		{"go file in subdir", fsnotify.Event{Name: "/app/pkg/util.go", Op: fsnotify.Write}, true},
+		{"plugin bridge write", fsnotify.Event{Name: "/app/tools/drift-plugins/main.go", Op: fsnotify.Write}, false},
+		{"plugin bridge remove", fsnotify.Event{Name: "/app/tools/drift-plugins/main.go", Op: fsnotify.Remove}, false},
+		{"other tool", fsnotify.Event{Name: "/app/tools/gen/main.go", Op: fsnotify.Write}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isRelevantChange(tt.event)
+			got := isRelevantChange("/app", tt.event)
 			if got != tt.want {
 				t.Errorf("isRelevantChange() = %v, want %v", got, tt.want)
 			}
