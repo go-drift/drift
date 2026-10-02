@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"go/format"
 	"go/token"
 	"go/types"
 	"os"
@@ -262,7 +263,9 @@ func GenerateBridgeSource(plugins []ConfiguredPlugin) ([]byte, error) {
 	}
 	b.WriteString("\t)\n")
 	b.WriteString("}\n")
-	return b.Bytes(), nil
+	// gofmt sorts the imports, so the committed file stays gofmt-clean;
+	// registration keeps drift.yaml order.
+	return format.Source(b.Bytes())
 }
 
 func assignAliases(plugins []ConfiguredPlugin) map[string]string {

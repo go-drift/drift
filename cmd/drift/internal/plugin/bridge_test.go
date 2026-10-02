@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -34,6 +35,32 @@ func TestGenerateBridgeSourceCarriesBuildTag(t *testing.T) {
 	}
 	if !strings.Contains(body, "driftplugin.Bind(\"github.com/foo/drift-camera/plugin\", camera.Plugin)") {
 		t.Errorf("missing camera Bind")
+	}
+}
+
+// The committed bridge is gofmt-clean (imports sorted) while Bind keeps
+// drift.yaml order, which decides claim priority.
+func TestGenerateBridgeSourceIsGofmtClean(t *testing.T) {
+	src, err := GenerateBridgeSource([]ConfiguredPlugin{
+		{Package: "github.com/foo/drift-splash/plugin"},
+		{Package: "github.com/foo/drift-camera/plugin"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	formatted, err := format.Source(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(formatted) != string(src) {
+		t.Errorf("bridge source is not gofmt-clean:\n%s", src)
+	}
+	body := string(src)
+	if strings.Index(body, `camera "`) > strings.Index(body, `splash "`) {
+		t.Error("imports not sorted")
+	}
+	if strings.Index(body, "splash.Plugin") > strings.Index(body, "camera.Plugin") {
+		t.Error("Bind order is not drift.yaml order")
 	}
 }
 
