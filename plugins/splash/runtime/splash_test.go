@@ -47,8 +47,6 @@ func setupBridge(t *testing.T) *fakeBridge {
 	platform.RegisterDispatch(func(cb func()) { cb() })
 	bridge := &fakeBridge{}
 	platform.SetNativeBridge(bridge)
-	// Re-create the package-level channel against the reset registry.
-	channel = platform.NewMethodChannel(channelName)
 	return bridge
 }
 

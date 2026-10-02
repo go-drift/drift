@@ -25,7 +25,7 @@ jobs:
         run: go test ./...
       - name: Plugin modules
         run: |
-          for mod in plugins/*/; do
+          for mod in plugins/*/ examples/plugins/*/; do
             echo "::group::$mod"
             (cd "$mod" && go vet ./... && go test ./...) || exit 1
             echo "::endgroup::"

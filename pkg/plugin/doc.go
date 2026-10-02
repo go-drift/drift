@@ -8,7 +8,8 @@
 // (envelope, response, op types, config schema) lives in the protocol
 // sub-package.
 //
-// The plugin guide (website-docs/guides/plugins.md) covers authoring; the
-// first-party plugins under plugins/ (splash, firebase) are complete
+// The plugin guide (website-docs/guides/plugins.md) covers authoring.
+// examples/plugins/hello is the smallest complete plugin, quoted by the
+// guide; the first-party plugins under plugins/ (splash, firebase) are full
 // references.
 package plugin
