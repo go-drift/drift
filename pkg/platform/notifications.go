@@ -110,11 +110,17 @@ type notificationServiceState struct {
 	opened   *EventChannel
 }
 
+// notificationOpensQueueCapacity bounds the taps kept while the app has no
+// Opens listener.
+const notificationOpensQueueCapacity = 32
+
 func newNotificationService() *notificationServiceState {
 	return &notificationServiceState{
 		channel:  NewMethodChannel("drift/notifications"),
 		received: NewEventChannel("drift/notifications/received"),
-		opened:   NewEventChannel("drift/notifications/opened"),
+		// Queued: the tap that launched the app arrives before the app
+		// listens.
+		opened: NewQueuedEventChannel("drift/notifications/opened", notificationOpensQueueCapacity),
 	}
 }
 
@@ -179,7 +185,10 @@ func (n *NotificationsService) Deliveries() *Stream[NotificationEvent] {
 	return n.deliveries
 }
 
-// Opens returns a stream of notification open events (user tapped notification).
+// Opens returns a stream of notification open events (user tapped
+// notification), including the tap that launched the app. Taps while no
+// listener is subscribed are queued for the next one, so subscribe once the
+// app can act on them.
 func (n *NotificationsService) Opens() *Stream[NotificationOpen] {
 	return n.opens
 }

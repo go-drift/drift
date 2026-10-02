@@ -8,6 +8,7 @@
  */
 package {{.PackageName}}
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
@@ -31,7 +32,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         Log.i("DriftDeepLink", "onCreate intent action=${intent?.action} data=${intent?.dataString}")
-        NotificationHandler.handleNotificationOpen(intent)
+        // A recreated Activity (dark mode, locale) or one relaunched from
+        // Recents carries the launch intent again; its tap was handled.
+        val relaunched = savedInstanceState != null ||
+            (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        if (!relaunched) {
+            NotificationHandler.handleNotificationOpen(intent)
+        }
         DeepLinkHandler.handleIntent(intent, "launch")
 
         container = DriftContainer(this)
@@ -78,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         DriftPlugins.attach(this, window.decorView as ViewGroup)
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         Log.i("DriftDeepLink", "onNewIntent action=${intent.action} data=${intent.dataString}")
@@ -97,7 +104,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         CameraHandler.onActivityResult(requestCode, resultCode, data, this)
         StorageHandler.onActivityResult(requestCode, resultCode, data, this)

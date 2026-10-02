@@ -591,6 +591,8 @@ opensUnsub := platform.Notifications.Opens().Listen(func(open platform.Notificat
 defer opensUnsub()
 ```
 
+Taps that arrive while nothing listens to `Opens()`, such as the tap that launched the app, are queued and delivered once to the next listener. Subscribe once the app can act on them (for example, after the navigator is ready).
+
 ## Share
 
 Open the native share sheet:
