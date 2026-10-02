@@ -9,10 +9,12 @@ import (
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
 
 	location "github.com/go-drift/drift/plugins/location/plugin"
+	permissions "github.com/go-drift/drift/plugins/permissions/plugin"
 )
 
 func main() {
 	driftplugin.Main(
 		driftplugin.Bind("github.com/go-drift/drift/plugins/location/plugin", location.Plugin),
+		driftplugin.Bind("github.com/go-drift/drift/plugins/permissions/plugin", permissions.Plugin),
 	)
 }

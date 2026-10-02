@@ -21,6 +21,7 @@ First-party plugins live in the Drift repository:
 - [`plugins/splash`](#splash): a native splash screen held until the first frame.
 - [`plugins/firebase`](#firebase): Firebase Core and Cloud Messaging (push notifications).
 - [`plugins/location`](#location): the device's location and the location permissions.
+- [`plugins/permissions`](#permissions): contacts, calendar, microphone and photos permissions.
 
 ## Using plugins
 
@@ -240,6 +241,40 @@ Functions that wait must be called from a goroutine; from the UI thread they fai
 
 On iOS, Always can be requested only after WhenInUse is granted, and iOS asks at most once. On Android, Always is granted in Settings, where the request takes the user. Supported on iOS, xtool and Android (Google Play services).
 
+### Permissions
+
+Contacts, calendar, microphone and photos permissions, for apps whose own native code or SDKs use them. Add a section for each permission the app needs; the others are not declared.
+
+```yaml
+plugins:
+  - package: github.com/go-drift/drift/plugins/permissions/plugin
+    config:
+      contacts:
+        description: Finds friends who already use the app.
+      photos:
+        description: Picks a profile photo.
+```
+
+| Section | Android | iOS usage string |
+|---------|---------|------------------|
+| `contacts` | `READ_CONTACTS` | `NSContactsUsageDescription` |
+| `calendar` | `READ_CALENDAR` | `NSCalendarsFullAccessUsageDescription`, `NSCalendarsUsageDescription` |
+| `microphone` | `RECORD_AUDIO` | `NSMicrophoneUsageDescription` |
+| `photos` | `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` up to API 32 | `NSPhotoLibraryUsageDescription` |
+
+Each `description` is the text iOS shows in the permission prompt. A permission without a section fails with `platform.ErrPermissionNotRegistered`, naming the missing section.
+
+```go
+import permissions "github.com/go-drift/drift/plugins/permissions/runtime"
+
+go func() {
+    status, err := permissions.Contacts.Request(ctx)
+    ...
+}()
+```
+
+`permissions.Contacts`, `Calendar`, `Microphone` and `Photos` are `platform.Permission`s. Selected photos (iOS) and write-only calendar access (iOS 17) read `PermissionLimited`. Supported on iOS, xtool and Android.
+
 ## Authoring plugins
 
 Start from [`examples/plugins/hello`](https://github.com/go-drift/drift/tree/master/examples/plugins/hello), the smallest complete plugin: it takes a greeting from `drift.yaml` and ships native code that returns it to Go. The code on this page is that plugin's. The splash and Firebase plugins are full references: splash for native UI and lifecycle, Firebase for an SDK with a SwiftPM package, a Gradle plugin, config files, entitlements and a manifest service.
@@ -421,7 +456,7 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 | `sendEvent(channel, data)` | Send an event to Go |
 | `sendEventError(channel, code, message)` / `sendEventDone(channel)` | Report a stream error or end |
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
-| `registerPermission(kind, permission)` | Provide a runtime permission kind (see [Permissions](#permissions)) |
+| `registerPermission(kind, permission)` | Provide a runtime permission kind (see [Providing permissions](#providing-permissions)) |
 | `context` (Android only) | The application `Context` |
 
 Each method declares how it replies:
@@ -471,7 +506,7 @@ From a goroutine, both kinds of method run on the main thread and the call waits
 
 When a runtime API wraps an async method, say so in its doc comment. Prefer APIs that cannot block where they fit: state the native side pushes as events, and streams.
 
-### Permissions
+### Providing permissions
 
 Drift owns the permission request mechanism; a plugin provides the kinds its feature needs. In `Build`, declare what the platform requires (Android manifest permissions, iOS usage strings); in native code, register the kind once with `host.registerPermission`; in the runtime half, expose it with `platform.NewPermission(kind)`. Apps then call `Status`, `Request` and `Listen` on it like any other `platform.Permission`.
 

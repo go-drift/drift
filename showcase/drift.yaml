@@ -7,3 +7,13 @@ plugins:
       when_in_use_description: The Location demo shows where you are.
       always:
         description: The Location demo can request background location.
+  - package: github.com/go-drift/drift/plugins/permissions/plugin
+    config:
+      contacts:
+        description: The Permissions demo shows how contacts access is requested.
+      calendar:
+        description: The Permissions demo shows how calendar access is requested.
+      microphone:
+        description: The Permissions demo shows how microphone access is requested.
+      photos:
+        description: The Permissions demo shows how photo library access is requested.

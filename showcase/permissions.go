@@ -11,6 +11,7 @@ import (
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
+	permissions "github.com/go-drift/drift/plugins/permissions/runtime"
 )
 
 // permissionsPage is the permissions demo widget.
@@ -29,10 +30,10 @@ type permissionDemo struct {
 
 // Define which permissions to show (orphan permissions not covered by dedicated pages)
 var otherPermissions = []permissionDemo{
-	{"Contacts", platform.Contacts.Permission},
-	{"Calendar", platform.Calendar.Permission},
-	{"Microphone", platform.Microphone.Permission},
-	{"Photos", platform.Photos.Permission},
+	{"Contacts", permissions.Contacts},
+	{"Calendar", permissions.Calendar},
+	{"Microphone", permissions.Microphone},
+	{"Photos", permissions.Photos},
 }
 
 type permissionsState struct {

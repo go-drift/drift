@@ -97,29 +97,9 @@ result, err := platform.Notifications.Permission.RequestWithOptions(ctx,
 )
 ```
 
-### Other Permissions
+### Plugin Permissions
 
-For permissions without dedicated feature services:
-
-```go
-ctx := context.Background()
-
-// Microphone
-status, err := platform.Microphone.Permission.Status()
-result, err := platform.Microphone.Permission.Request(ctx)
-
-// Photos
-status, err := platform.Photos.Permission.Status()
-result, err := platform.Photos.Permission.Request(ctx)
-
-// Contacts
-status, err := platform.Contacts.Permission.Status()
-result, err := platform.Contacts.Permission.Request(ctx)
-
-// Calendar
-status, err := platform.Calendar.Permission.Status()
-result, err := platform.Calendar.Permission.Request(ctx)
-```
+Permissions for features that live in plugins come from those plugins: location from the [location plugin](/docs/guides/plugins#location), and contacts, calendar, microphone and photos from the [permissions plugin](/docs/guides/plugins#permissions). They are `platform.Permission` values like the ones above.
 
 ### Open App Settings
 

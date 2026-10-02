@@ -8,10 +8,7 @@
 /// on drift/permissions/changes.
 
 import AVFoundation
-import Contacts
 import DriftPluginAPI
-import EventKit
-import Photos
 import UIKit
 import UserNotifications
 
@@ -60,11 +57,7 @@ enum PermissionHandler {
 
         host.registerPermission("notifications", NotificationsPermission())
         // Moving to plugins (Phase 5); registered here until each moves.
-        host.registerPermission("camera", CapturePermission(.video))
-        host.registerPermission("microphone", CapturePermission(.audio))
-        host.registerPermission("photos", PhotosPermission())
-        host.registerPermission("contacts", ContactsPermission())
-        host.registerPermission("calendar", CalendarPermission())
+        host.registerPermission("camera", CameraPermission())
     }
 
     private static func lookup(_ args: Any?) throws -> (kind: String, permission: DriftPermission) {
@@ -155,16 +148,10 @@ private final class NotificationsPermission: DriftPermission {
 
 // MARK: - Kinds moving to plugins
 
-/// Camera or microphone access.
-private final class CapturePermission: DriftPermission {
-    private let media: AVMediaType
-
-    init(_ media: AVMediaType) {
-        self.media = media
-    }
-
+/// Camera access.
+private final class CameraPermission: DriftPermission {
     func status() -> DriftPermissionStatus {
-        switch AVCaptureDevice.authorizationStatus(for: media) {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized: return .granted
         case .denied: return .permanentlyDenied
         case .restricted: return .restricted
@@ -174,72 +161,8 @@ private final class CapturePermission: DriftPermission {
     }
 
     func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        AVCaptureDevice.requestAccess(for: media) { granted in
+        AVCaptureDevice.requestAccess(for: .video) { granted in
             completion(granted ? .granted : .permanentlyDenied)
-        }
-    }
-}
-
-private final class PhotosPermission: DriftPermission {
-    func status() -> DriftPermissionStatus {
-        Self.map(PHPhotoLibrary.authorizationStatus(for: .readWrite))
-    }
-
-    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-            completion(Self.map(status))
-        }
-    }
-
-    private static func map(_ status: PHAuthorizationStatus) -> DriftPermissionStatus {
-        switch status {
-        case .authorized: return .granted
-        case .limited: return .limited
-        case .denied: return .permanentlyDenied
-        case .restricted: return .restricted
-        case .notDetermined: return .notDetermined
-        @unknown default: return .unknown
-        }
-    }
-}
-
-private final class ContactsPermission: DriftPermission {
-    func status() -> DriftPermissionStatus {
-        switch CNContactStore.authorizationStatus(for: .contacts) {
-        case .authorized: return .granted
-        case .limited: return .limited
-        case .denied: return .permanentlyDenied
-        case .restricted: return .restricted
-        case .notDetermined: return .notDetermined
-        @unknown default: return .unknown
-        }
-    }
-
-    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        CNContactStore().requestAccess(for: .contacts) { [self] _, _ in
-            completion(status())
-        }
-    }
-}
-
-private final class CalendarPermission: DriftPermission {
-    func status() -> DriftPermissionStatus {
-        switch EKEventStore.authorizationStatus(for: .event) {
-        case .authorized, .fullAccess: return .granted
-        case .writeOnly: return .limited
-        case .denied: return .permanentlyDenied
-        case .restricted: return .restricted
-        case .notDetermined: return .notDetermined
-        @unknown default: return .unknown
-        }
-    }
-
-    func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        let done: (Bool, Error?) -> Void = { [self] _, _ in completion(status()) }
-        if #available(iOS 17.0, *) {
-            EKEventStore().requestFullAccessToEvents(completion: done)
-        } else {
-            EKEventStore().requestAccess(to: .event, completion: done)
         }
     }
 }

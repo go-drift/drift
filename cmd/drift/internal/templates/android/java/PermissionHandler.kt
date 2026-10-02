@@ -83,16 +83,6 @@ object PermissionHandler {
         host.registerPermission("notifications", NotificationsPermission)
         // Moving to plugins (Phase 5); registered here until each moves.
         host.registerPermission("camera", DriftRuntimePermission(Manifest.permission.CAMERA))
-        host.registerPermission("microphone", DriftRuntimePermission(Manifest.permission.RECORD_AUDIO))
-        host.registerPermission("photos", DriftRuntimePermission(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }
-        ))
-        host.registerPermission("contacts", DriftRuntimePermission(Manifest.permission.READ_CONTACTS))
-        host.registerPermission("calendar", DriftRuntimePermission(Manifest.permission.READ_CALENDAR))
     }
 
     private fun foreground(): Activity? = PlatformChannelManager.currentActivity()
