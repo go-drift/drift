@@ -60,7 +60,7 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 
 **Deviations from the original phase 1 plan:** removed plugins' in-file edits in ejected projects fail the build once instead of being probed until removed (a user may want to keep an entry); the watch-mode op hash lives on the in-memory `Workspace`. Android stays loose-source (no per-plugin Gradle modules); Firebase's `<service>` needs a manifest op in phase 3.
 
-**New plugin-author rules:** `Plugin.Name()` is a lowercase identifier (it names the iOS module); iOS plugin sources are Swift only; the iOS plugin class is `public` with `public init()`; method handlers reply through `DriftResult`.
+**New plugin-author rules:** `Plugin.Name()` is a lowercase identifier (it names the iOS module); iOS plugin sources are Swift only; the iOS plugin class is `public` with `public init()`; channels declare each method as `method` (replies by returning) or `asyncMethod` (replies through `DriftResult`; Go must call it off the UI thread).
 
 **Phase 2 is done** (`7e0178c`..`561a0a5`), verified on an iPhone (xcodeproj) and the iOS Simulator, and on an API 36 emulator. Not yet on a real Android device.
 

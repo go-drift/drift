@@ -35,7 +35,11 @@ func (b *permissionsBridge) on(method string, fn func(args map[string]any) (any,
 	b.mu.Unlock()
 }
 
-func (b *permissionsBridge) InvokeMethod(_ context.Context, channel, method string, args []byte) ([]byte, error) {
+func (b *permissionsBridge) InvokeMethod(channel, method string, args []byte, reply func([]byte, error)) {
+	reply(b.answer(channel, method, args))
+}
+
+func (b *permissionsBridge) answer(channel, method string, args []byte) ([]byte, error) {
 	var argsMap map[string]any
 	if len(args) > 0 {
 		decoded, _ := DefaultCodec.Decode(args)

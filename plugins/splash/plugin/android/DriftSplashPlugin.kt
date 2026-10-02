@@ -50,23 +50,19 @@ class DriftSplashPlugin : DriftPlugin {
     private val dismissible get() = contentShown && (preserveCount == 0 || timedOut)
 
     override fun onRegister(host: DriftPluginHost) {
-        host.registerChannel("drift/splash") { method, _, result ->
-            when (method) {
-                "preserve" -> if (dismissed) {
-                    result.error(IllegalStateException(
-                        "splash already dismissed; call Preserve before the first frame " +
-                            "(App.OnInit or the root's InitState)"
-                    ))
-                } else {
-                    preserveCount++
-                    result.success(null)
+        host.registerChannel("drift/splash") {
+            method("preserve") { _ ->
+                check(!dismissed) {
+                    "splash already dismissed; call Preserve before the first frame " +
+                        "(App.OnInit or the root's InitState)"
                 }
-                "remove" -> {
-                    preserveCount = maxOf(0, preserveCount - 1)
-                    reconcile()
-                    result.success(null)
-                }
-                else -> result.error(IllegalArgumentException("unknown splash method $method"))
+                preserveCount++
+                null
+            }
+            method("remove") { _ ->
+                preserveCount = maxOf(0, preserveCount - 1)
+                reconcile()
+                null
             }
         }
         host.observeEvent("drift/rendering/frame_events") { data ->

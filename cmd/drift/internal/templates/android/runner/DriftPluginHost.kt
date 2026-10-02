@@ -38,7 +38,22 @@ class DriftSubscription internal constructor(private val cancelFn: () -> Unit) {
 
 interface DriftPluginHost {
     val context: Context
-    fun registerChannel(name: String, handler: DriftMethodHandler)
+
+    /**
+     * Registers the channel [name] and its methods, declared in [declare]:
+     *
+     * ```
+     * host.registerChannel("acme/camera") {
+     *     method("isAvailable") { _ -> hasCamera() }
+     *     asyncMethod("takePicture") { args, result -> capture(args, result) }
+     * }
+     * ```
+     *
+     * See [DriftChannel] for how each kind of method replies. Declare every
+     * method inside the block; the channel is fixed once it returns.
+     */
+    fun registerChannel(name: String, declare: DriftChannel.() -> Unit)
+
     fun sendEvent(channel: String, data: Any?)
     fun sendEventError(channel: String, code: String, message: String)
     fun sendEventDone(channel: String)

@@ -120,6 +120,17 @@ object NativeBridge {
     // Platform Channel methods
 
     /**
+     * Replies to a Go method call, from any thread. Each call gets exactly
+     * one reply.
+     *
+     * @param callId The call's ID, as passed to handleMethodCallNative.
+     * @param data   JSON-encoded result; ignored when error is set.
+     * @param error  JSON error payload ({"code","message","details"}), or
+     *               null on success.
+     */
+    external fun platformReply(callId: Long, data: ByteArray?, error: String?)
+
+    /**
      * Sends an event to Go event listeners for the given channel.
      *
      * @param channel The channel name (e.g., "drift/lifecycle/events").

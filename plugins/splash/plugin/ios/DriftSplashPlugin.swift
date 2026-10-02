@@ -42,25 +42,20 @@ public final class DriftSplashPlugin: DriftPlugin {
     public init() {}
 
     public func register(host: DriftPluginHost) {
-        host.registerChannel("drift/splash") { [self] method, _, result in
-            switch method {
-            case "preserve":
+        host.registerChannel("drift/splash") { channel in
+            channel.method("preserve") { [self] _ in
                 guard !dismissed else {
-                    result.error(NSError(domain: "drift.splash", code: 2, userInfo: [
+                    throw NSError(domain: "drift.splash", code: 2, userInfo: [
                         NSLocalizedDescriptionKey: "splash already dismissed; call Preserve before the first frame (App.OnInit or the root's InitState)",
-                    ]))
-                    return
+                    ])
                 }
                 preserveCount += 1
-                result.success(nil)
-            case "remove":
+                return nil
+            }
+            channel.method("remove") { [self] _ in
                 preserveCount = max(0, preserveCount - 1)
                 reconcile()
-                result.success(nil)
-            default:
-                result.error(NSError(domain: "drift.splash", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: "unknown splash method \(method)",
-                ]))
+                return nil
             }
         }
         _ = host.observeEvent("drift/rendering/frame_events") { [self] data in

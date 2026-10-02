@@ -1,12 +1,10 @@
 package platform
 
-import "context"
-
 // noopBridge is a NativeBridge that accepts all calls without side effects.
 type noopBridge struct{}
 
-func (noopBridge) InvokeMethod(_ context.Context, channel, method string, args []byte) ([]byte, error) {
-	return DefaultCodec.Encode(nil)
+func (noopBridge) InvokeMethod(_, _ string, _ []byte, reply func([]byte, error)) {
+	reply(DefaultCodec.Encode(nil))
 }
 func (noopBridge) StartEventStream(string) error { return nil }
 func (noopBridge) StopEventStream(string) error  { return nil }

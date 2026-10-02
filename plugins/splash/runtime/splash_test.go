@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -19,16 +18,17 @@ type fakeBridge struct {
 	err      error // returned by every call when set
 }
 
-func (b *fakeBridge) InvokeMethod(_ context.Context, channel, method string, _ []byte) ([]byte, error) {
+func (b *fakeBridge) InvokeMethod(channel, method string, _ []byte, reply func([]byte, error)) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	b.channels = append(b.channels, channel)
 	b.methods = append(b.methods, method)
-	if b.err != nil {
-		return nil, b.err
+	err := b.err
+	b.mu.Unlock()
+	if err != nil {
+		reply(nil, err)
+		return
 	}
-	resp, _ := platform.DefaultCodec.Encode(nil)
-	return resp, nil
+	reply(platform.DefaultCodec.Encode(nil))
 }
 
 func (b *fakeBridge) StartEventStream(string) error { return nil }

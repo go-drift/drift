@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/go-drift/drift/pkg/errors"
 )
@@ -47,19 +46,6 @@ func (r *channelRegistry) getEventChannel(name string) *EventChannel {
 	return ch
 }
 
-// pendingCall represents a method call waiting for a response.
-type pendingCall struct {
-	done   chan struct{}
-	result any
-	err    error
-}
-
-var (
-	pendingCalls   = make(map[int64]*pendingCall)
-	pendingCallsMu sync.Mutex
-	nextCallID     atomic.Int64
-)
-
 // nativeBridge is the interface to native platform code.
 // This is set by the bridge package during initialization.
 var nativeBridge NativeBridge
@@ -79,13 +65,17 @@ func registerBuiltinInit(fn func()) {
 
 // NativeBridge defines the interface for calling native platform code.
 type NativeBridge interface {
-	// InvokeMethod calls a method on the native side.
+	// InvokeMethod starts a native method call and delivers its outcome
+	// through reply exactly once: before returning when native answers in
+	// place, otherwise later, from any thread.
 	//
-	// Cancellation: see [invokeNative]. Bridge implementations may honor ctx
-	// natively but are not required to. CGO bridges typically can't (the
-	// native call is synchronous from Go's perspective); for those, ctx is
-	// enforced at the caller boundary by [invokeNative].
-	InvokeMethod(ctx context.Context, channel, method string, args []byte) ([]byte, error)
+	// It must start the call on the calling goroutine. Native decides where
+	// a handler runs from the thread it is called on: a call from the UI
+	// thread is answered in place (or refused, for a method that replies
+	// asynchronously), since the UI thread cannot wait for a reply that may
+	// need it. Moving the call to another goroutine hides that thread and
+	// deadlocks the app.
+	InvokeMethod(channel, method string, args []byte, reply func(result []byte, err error))
 
 	// StartEventStream tells native to start sending events for a channel.
 	StartEventStream(channel string) error
@@ -132,17 +122,17 @@ func SetNativeBridge(bridge NativeBridge) {
 	}
 }
 
-// invokeNative dispatches a method call to the native bridge.
+// invokeNative calls a native method and waits for its reply.
 //
-// Cancellation contract: when ctx fires, the Go caller is unblocked promptly
-// with ctx.Err(). The underlying native operation continues to completion in
-// the background and its result is discarded. CGO has no abort path; this is
-// what "cancellation" means at this boundary. Native-side resources held by
-// the in-flight call (UI dialogs, file handles, etc.) are released only when
-// native finishes.
+// The bridge starts the call on this goroutine (see
+// [NativeBridge.InvokeMethod]), so a call from the UI thread never waits:
+// native answers it in place. A call from any other goroutine waits for
+// the reply or ctx, whichever comes first. Cancellation unblocks the caller
+// with ctx.Err() but cannot abort native work: the call finishes in the
+// background and its reply is discarded.
 func invokeNative(ctx context.Context, channel, method string, args any) (any, error) {
 	// Snapshot the bridge so a concurrent ResetForTest cannot swap it out
-	// while the goroutine is still in flight on a canceled call.
+	// while a reply is outstanding.
 	bridge := nativeBridge
 	if bridge == nil {
 		return nil, ErrPlatformUnavailable
@@ -155,37 +145,40 @@ func invokeNative(ctx context.Context, channel, method string, args any) (any, e
 		return nil, err
 	}
 
-	// Fast path: a non-cancelable ctx (Background, TODO) cannot fire, so the
-	// goroutine + select would just be overhead. Call directly.
-	if ctx.Done() == nil {
-		resultData, err := bridge.InvokeMethod(ctx, channel, method, argsData)
-		if err != nil {
-			return nil, err
+	replies := make(chan nativeReply, 1)
+	bridge.InvokeMethod(channel, method, argsData, func(data []byte, err error) {
+		select {
+		case replies <- nativeReply{data: data, err: err}:
+		default:
+			panic(fmt.Sprintf("platform: native replied twice to %s.%s", channel, method))
 		}
-		return DefaultCodec.Decode(resultData)
-	}
-
-	// Cancelable path: wrap the synchronous bridge call so ctx unblocks the
-	// caller. See cancellation contract above.
-	type nativeResult struct {
-		data []byte
-		err  error
-	}
-	resultCh := make(chan nativeResult, 1)
-	go func() {
-		data, err := bridge.InvokeMethod(ctx, channel, method, argsData)
-		resultCh <- nativeResult{data: data, err: err}
-	}()
+	})
 
 	select {
-	case r := <-resultCh:
-		if r.err != nil {
-			return nil, r.err
-		}
-		return DefaultCodec.Decode(r.data)
+	case r := <-replies:
+		return r.decode()
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		// A reply that arrived together with cancellation still wins.
+		select {
+		case r := <-replies:
+			return r.decode()
+		default:
+			return nil, ctx.Err()
+		}
 	}
+}
+
+// nativeReply is the outcome of one native method call.
+type nativeReply struct {
+	data []byte
+	err  error
+}
+
+func (r nativeReply) decode() (any, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return DefaultCodec.Decode(r.data)
 }
 
 // startEventStream notifies native to start sending events.

@@ -77,7 +77,12 @@ Adding an op means touching: the struct and its four methods plus the constructo
 | Attach / detach | `DriftViewController` (`detach` from `deinit`) | `MainActivity.onCreate` / `onDestroy`, with the window's decor view as overlay host |
 | Events | `AppDelegate`, `NotificationHandler` | `MainActivity.onNewIntent` |
 
-Channel handlers run on the main thread. `DriftResult` lets a handler reply later; Go waits for the reply. When Go calls from the main thread and the handler has not replied by the time it returns, the host traps instead of deadlocking. Built-in channels keep synchronous handlers on the calling thread. The Android JNI error slot is thread-local.
+Method calls cross as callbacks keyed by call ID. Go starts the call on the calling thread, never a pre-spawned goroutine (`pkg/platform/registry.go` `invokeNative`; the bridge template's `InvokeMethod`), so native sees whether the caller is the main thread. Native answers through `DriftPlatformReply(callID, ...)` exactly once, in place or later from any thread; Go waits for the reply or `ctx.Done()`, and a late reply is discarded.
+
+- Built-in channels: synchronous handlers on the calling thread, answered in place.
+- Plugin channels declare each method's reply kind (`DriftChannel`). `method` returns its reply: in place on the main thread, otherwise posted there. `asyncMethod` replies through `DriftResult`; called on the main thread it fails with `blocks_ui_thread` before running, since Go is blocking the main thread. So Go never waits on the main thread.
+- A `DriftResult` released without a reply answers `reply_dropped` (iOS `deinit`, Android `PhantomReference` reaper). A second reply crashes on both platforms.
+- Native error codes match Go sentinels under `errors.Is` (`ChannelError.Is`, `pkg/platform/codec.go`).
 
 ## Ejected projects
 

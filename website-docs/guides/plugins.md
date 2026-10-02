@@ -304,14 +304,9 @@ public final class HelloPlugin: DriftPlugin {
     public init() {}
 
     public func register(host: DriftPluginHost) {
-        host.registerChannel("example/hello") { method, _, result in
-            switch method {
-            case "greeting":
-                result.success(Bundle.main.object(forInfoDictionaryKey: "HelloGreeting") as? String)
-            default:
-                result.error(NSError(domain: "example.hello", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: "unknown method \(method)",
-                ]))
+        host.registerChannel("example/hello") { channel in
+            channel.method("greeting") { _ in
+                Bundle.main.object(forInfoDictionaryKey: "HelloGreeting") as? String
             }
         }
     }
@@ -330,16 +325,13 @@ import com.drift.runner.DriftPluginHost
 
 class HelloPlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
-        host.registerChannel("example/hello") { method, _, result ->
-            when (method) {
-                "greeting" -> {
-                    // Plugin code cannot see the app's R class; look the
-                    // resource up by name.
-                    val res = host.context.resources
-                    val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
-                    result.success(res.getString(id))
-                }
-                else -> result.error(IllegalArgumentException("unknown method $method"))
+        host.registerChannel("example/hello") {
+            method("greeting") { _ ->
+                // Plugin code cannot see the app's R class; look the
+                // resource up by name.
+                val res = host.context.resources
+                val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
+                res.getString(id)
             }
         }
     }
@@ -369,13 +361,29 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 
 | Method | Purpose |
 |--------|---------|
-| `registerChannel(name, handler)` | Handle method calls from Go |
+| `registerChannel(name) { ... }` | Handle method calls from Go, declaring each method in the block |
 | `sendEvent(channel, data)` | Send an event to Go |
 | `sendEventError(channel, code, message)` / `sendEventDone(channel)` | Report a stream error or end |
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
 | `context` (Android only) | The application `Context` |
 
-A method handler replies through its `DriftResult` exactly once, with `success(value)` or `error(error)`, either before returning or later from any thread (for example, from an SDK callback). A second reply is a programming error and fails loudly. The Go caller waits until the reply arrives.
+Each method declares how it replies:
+
+- `method(name) { args in ... }` (Kotlin: `method(name) { args -> ... }`) replies by returning: the return value is the reply, and a thrown error fails the call. Use it whenever the answer is at hand.
+- `asyncMethod(name) { args, result in ... }` replies later through its `DriftResult`, exactly once, with `success(value)` or `error(error)`, from any thread (for example, from an SDK callback). Use it for work that takes time: a network request, a permission prompt, a picker. A second reply is a programming error and fails loudly; a `DriftResult` released without a reply fails the call with `platform.ErrReplyDropped` (on Android, once the result is garbage-collected).
+
+```swift
+host.registerChannel("acme/push") { channel in
+    channel.method("isRegistered") { _ in UIApplication.shared.isRegisteredForRemoteNotifications }
+    channel.asyncMethod("token") { _, result in
+        Messaging.messaging().token { token, error in
+            if let error { result.error(error) } else { result.success(token) }
+        }
+    }
+}
+```
+
+Calling a method that is not declared fails with `platform.ErrMethodNotFound`.
 
 Values crossing the channel are JSON-like: nil, booleans, numbers, strings, lists and string-keyed maps.
 
@@ -385,7 +393,24 @@ Name channels `<vendor>/<feature>`, such as `acme/camera`; `drift/` is reserved 
 
 Every plugin callback runs on the main thread: lifecycle methods, method handlers and event observers (observers asynchronously, in the order events were sent).
 
-When Go calls a method from the main thread, inside a frame or a widget callback, the handler must reply before returning; otherwise the app traps rather than deadlocks. Go APIs that wait on slow native work (a network request, a permission prompt) must therefore be called from a goroutine. Prefer APIs that cannot block: state the native side pushes as events, and streams.
+Go's UI thread (widget callbacks, `Build`, frame work) is the platform main thread, so it never waits on native: a `method` called from it runs in place, and an `asyncMethod` called from it fails at once with `platform.ErrBlocksUIThread`, every time, before the handler runs. Call an async method from a goroutine and publish its result, for example through a `Signal`:
+
+```go
+token := core.NewSignal("")
+
+go func() {
+	t, err := push.Token(ctx)
+	if err != nil {
+		log.Printf("push token: %v", err)
+		return
+	}
+	token.Set(t)
+}()
+```
+
+From a goroutine, both kinds of method run on the main thread and the call waits for the reply or the context, whichever comes first. A canceled context returns at once; the native work finishes in the background and its reply is discarded.
+
+When a runtime API wraps an async method, say so in its doc comment. Prefer APIs that cannot block where they fit: state the native side pushes as events, and streams.
 
 ### The runtime half
 
@@ -405,8 +430,9 @@ import (
 // (plugin/ios/HelloPlugin.swift, plugin/android/HelloPlugin.kt).
 var channel = platform.NewMethodChannel("example/hello")
 
-// Greeting returns the greeting configured in drift.yaml. It waits for the
-// native side: call it from a goroutine, not from a widget callback.
+// Greeting returns the greeting configured in drift.yaml. The native
+// method replies in place, so any goroutine may call it, including widget
+// callbacks.
 func Greeting(ctx context.Context) (string, error) {
 	res, err := channel.Invoke(ctx, "greeting", nil)
 	if err != nil {
@@ -481,7 +507,7 @@ func TestBuildShipsGreeting(t *testing.T) {
 
 Test the runtime half against a fake native side from `pkg/platform` (the hello plugin's `runtime/hello_test.go` shows the pattern):
 
-- `platform.SetNativeBridge(fake)` with a `platform.NativeBridge` implementation captures method calls and returns canned replies.
+- `platform.SetNativeBridge(fake)` with a `platform.NativeBridge` implementation captures method calls and answers them through the `reply` callback, in place or later from another goroutine (as an async method would).
 - `platform.HandleEvent(channel, data)` delivers an event as native code would; encode `data` with `platform.DefaultCodec.Encode`.
 - Call `platform.ResetForTest()` in `t.Cleanup` to clear subscriptions, sticky values and queues between tests.
 

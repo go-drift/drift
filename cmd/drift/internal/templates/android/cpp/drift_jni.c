@@ -89,6 +89,16 @@ typedef void (*DriftPlatformHandleEventDoneFn)(const char *channel);
 typedef int (*DriftPlatformIsStreamActiveFn)(const char *channel);
 
 /**
+ * Function pointer type for DriftPlatformReply.
+ * Matches the signature exported by Go:
+ *   func DriftPlatformReply(callID C.int64_t, data unsafe.Pointer, dataLen C.int, errorJSON *C.char)
+ *
+ * Replies to a Go->Kotlin method call. errorJSON is NULL on success, else the
+ * JSON error payload. Go copies everything; the caller keeps ownership.
+ */
+typedef void (*DriftPlatformReplyFn)(int64_t callId, const void *data, int dataLen, const char *errorJSON);
+
+/**
  * Function pointer type for DriftPlatformSetNativeHandler.
  * Used to register a callback that Go can use to invoke native methods.
  */
@@ -146,6 +156,7 @@ static DriftPlatformHandleEventErrorFn drift_platform_event_error = NULL;
 static DriftPlatformHandleEventDoneFn drift_platform_event_done = NULL;
 static DriftPlatformIsStreamActiveFn drift_platform_stream_active = NULL;
 static DriftPlatformSetNativeHandlerFn drift_platform_set_handler = NULL;
+static DriftPlatformReplyFn drift_platform_reply = NULL;
 static DriftBackButtonFn drift_back_button = NULL;
 static DriftRequestFrameFn drift_request_frame = NULL;
 static DriftNeedsFrameFn drift_needs_frame = NULL;
@@ -241,21 +252,8 @@ static PFN_vkGetAndroidHardwareBufferPropertiesANDROID g_vk_get_ahb_props = NULL
 static JavaVM *g_jvm = NULL;
 static jclass g_platform_channel_class = NULL;
 static jmethodID g_handle_method_call = NULL;
-static jmethodID g_consume_last_error = NULL;
 static jmethodID g_native_schedule_frame = NULL;
 static int g_native_handler_registered = 0;
-
-static char *json_error(const char *code, const char *message) {
-    const char *safe_code = code ? code : "native_error";
-    const char *safe_message = message ? message : "";
-    size_t len = (size_t)snprintf(NULL, 0, "{\"code\":\"%s\",\"message\":\"%s\"}", safe_code, safe_message);
-    char *buffer = (char *)malloc(len + 1);
-    if (!buffer) {
-        return NULL;
-    }
-    snprintf(buffer, len + 1, "{\"code\":\"%s\",\"message\":\"%s\"}", safe_code, safe_message);
-    return buffer;
-}
 
 /**
  * Schedule-frame callback invoked by Go when it needs a new frame.
@@ -299,21 +297,24 @@ static void schedule_frame_handler(void) {
 /**
  * Native method handler called by Go to invoke Kotlin methods.
  * This is the C callback that bridges Go -> Kotlin.
+ *
+ * Hands the call to PlatformChannelManager.handleMethodCallNative on the
+ * calling thread, so Kotlin sees which thread Go called from. Kotlin replies
+ * exactly once through NativeBridge.platformReply (DriftPlatformReply),
+ * possibly before this returns.
+ *
+ * @return 0 once Kotlin has the call; nonzero if it could not be handed over,
+ *         in which case Kotlin will not reply and Go fails the call.
  */
 static int native_method_handler(
+    int64_t callId,
     const char *channel,
     const char *method,
     const void *argsData,
-    int argsLen,
-    void **resultData,
-    int *resultLen,
-    char **errorMsg
+    int argsLen
 ) {
     if (!g_jvm || !g_platform_channel_class || !g_handle_method_call) {
-        if (errorMsg) {
-            char *payload = json_error("jni_error", "JNI not initialized");
-            *errorMsg = payload ? payload : strdup("JNI not initialized");
-        }
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "%s.%s: JNI not initialized", channel, method);
         return -1;
     }
 
@@ -324,18 +325,12 @@ static int native_method_handler(
     jint result = (*g_jvm)->GetEnv(g_jvm, (void **)&env, JNI_VERSION_1_6);
     if (result == JNI_EDETACHED) {
         if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) != 0) {
-            if (errorMsg) {
-                char *payload = json_error("jni_error", "Failed to attach thread");
-                *errorMsg = payload ? payload : strdup("Failed to attach thread");
-            }
+            __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "%s.%s: failed to attach thread", channel, method);
             return -1;
         }
         needs_detach = 1;
     } else if (result != JNI_OK) {
-        if (errorMsg) {
-            char *payload = json_error("jni_error", "Failed to get JNI env");
-            *errorMsg = payload ? payload : strdup("Failed to get JNI env");
-        }
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "%s.%s: failed to get JNI env", channel, method);
         return -1;
     }
 
@@ -350,51 +345,21 @@ static int native_method_handler(
         (*env)->SetByteArrayRegion(env, jargsData, 0, argsLen, (const jbyte *)argsData);
     }
 
-    /* Call Kotlin: PlatformChannelManager.handleMethodCallNative(channel, method, argsData) */
-    jobject jresult = (*env)->CallStaticObjectMethod(
+    /* Call Kotlin: PlatformChannelManager.handleMethodCallNative(callId, channel, method, argsData) */
+    (*env)->CallStaticVoidMethod(
         env, g_platform_channel_class, g_handle_method_call,
-        jchannel, jmethod, jargsData
+        (jlong)callId, jchannel, jmethod, jargsData
     );
 
     int ret = 0;
 
-    /* Check for exceptions */
+    /* handleMethodCallNative never throws; an exception here is a JNI-level
+     * failure (e.g. OOM), after which Kotlin may not have taken the call. */
     if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
-        if (errorMsg) {
-            char *payload = json_error("kotlin_exception", "Kotlin exception");
-            *errorMsg = payload ? payload : strdup("Kotlin exception");
-        }
+        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "%s.%s: exception escaped handleMethodCallNative", channel, method);
         ret = -1;
-    } else if (jresult != NULL) {
-        /* Extract result byte array */
-        jsize len = (*env)->GetArrayLength(env, (jbyteArray)jresult);
-        if (len > 0) {
-            *resultLen = len;
-            *resultData = malloc(len);
-            (*env)->GetByteArrayRegion(env, (jbyteArray)jresult, 0, len, (jbyte *)*resultData);
-        }
-        (*env)->DeleteLocalRef(env, jresult);
-    } else if (g_consume_last_error) {
-        jstring jerror = (jstring)(*env)->CallStaticObjectMethod(env, g_platform_channel_class, g_consume_last_error);
-        if ((*env)->ExceptionCheck(env)) {
-            (*env)->ExceptionClear(env);
-            if (errorMsg) {
-                char *payload = json_error("kotlin_exception", "Kotlin exception");
-                *errorMsg = payload ? payload : strdup("Kotlin exception");
-            }
-            ret = -1;
-        } else if (jerror != NULL) {
-            const char *errStr = (*env)->GetStringUTFChars(env, jerror, NULL);
-            if (errStr && errorMsg) {
-                *errorMsg = strdup(errStr);
-                ret = -1;
-            }
-            if (errStr) {
-                (*env)->ReleaseStringUTFChars(env, jerror, errStr);
-            }
-            (*env)->DeleteLocalRef(env, jerror);
-        }
     }
 
     /* Cleanup */
@@ -584,6 +549,51 @@ Java_{{.JNIPackage}}_NativeBridge_platformHandleEvent(
         (*env)->ReleaseByteArrayElements(env, data, dataBytes, JNI_ABORT);
     }
     (*env)->ReleaseStringUTFChars(env, channel, channelStr);
+}
+
+/**
+ * JNI implementation for NativeBridge.platformReply().
+ *
+ * Replies to a Go->Kotlin method call, from any thread. Exactly one reply
+ * per call; error is NULL on success, else the JSON error payload.
+ */
+JNIEXPORT void JNICALL
+Java_{{.JNIPackage}}_NativeBridge_platformReply(
+    JNIEnv *env,
+    jclass clazz,
+    jlong callId,
+    jbyteArray data,
+    jstring error
+) {
+    (void)clazz;
+
+    if (resolve_symbol("DriftPlatformReply", (void **)&drift_platform_reply) != 0) {
+        return;
+    }
+
+    const char *errorStr = NULL;
+    if (error != NULL) {
+        errorStr = (*env)->GetStringUTFChars(env, error, NULL);
+        if (!errorStr) return;
+    }
+
+    jbyte *dataBytes = NULL;
+    jsize dataLen = 0;
+    if (data != NULL) {
+        dataLen = (*env)->GetArrayLength(env, data);
+        if (dataLen > 0) {
+            dataBytes = (*env)->GetByteArrayElements(env, data, NULL);
+        }
+    }
+
+    drift_platform_reply((int64_t)callId, dataBytes, (int)dataLen, errorStr);
+
+    if (dataBytes) {
+        (*env)->ReleaseByteArrayElements(env, data, dataBytes, JNI_ABORT);
+    }
+    if (errorStr) {
+        (*env)->ReleaseStringUTFChars(env, error, errorStr);
+    }
 }
 
 /**
@@ -797,27 +807,15 @@ Java_{{.JNIPackage}}_NativeBridge_platformInit(
     g_platform_channel_class = (*env)->NewGlobalRef(env, localClass);
     (*env)->DeleteLocalRef(env, localClass);
 
-    /* Find the static method: handleMethodCallNative(String, String, ByteArray) -> ByteArray */
+    /* Find the static method: handleMethodCallNative(Long, String, String, ByteArray) -> Unit */
     g_handle_method_call = (*env)->GetStaticMethodID(
         env, g_platform_channel_class,
         "handleMethodCallNative",
-        "(Ljava/lang/String;Ljava/lang/String;[B)[B"
+        "(JLjava/lang/String;Ljava/lang/String;[B)V"
     );
 
     if (!g_handle_method_call) {
         __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "handleMethodCallNative method not found");
-        return -1;
-    }
-
-    /* Find the static method: consumeLastError() -> String */
-    g_consume_last_error = (*env)->GetStaticMethodID(
-        env, g_platform_channel_class,
-        "consumeLastError",
-        "()Ljava/lang/String;"
-    );
-
-    if (!g_consume_last_error) {
-        __android_log_print(ANDROID_LOG_ERROR, "DriftJNI", "consumeLastError method not found");
         return -1;
     }
 
