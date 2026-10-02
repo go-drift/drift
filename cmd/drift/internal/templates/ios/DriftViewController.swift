@@ -215,13 +215,8 @@ final class DriftViewController: UIViewController {
     }
 
     func applySystemUIStyle(_ style: SystemUIStyle) {
-        // On iOS, Transparent and BackgroundColor are no-ops since iOS doesn't
-        // have a status bar background color (unlike Android's statusBarColor).
-        // The status bar is always transparent and shows whatever content is
-        // rendered behind it. Apps control this by using SafeArea to inset
-        // content away from the status bar area.
-        //
-        // We only need to update status bar visibility and style (light/dark icons).
+        // The status bar is transparent over Drift's content; apps inset
+        // content with SafeArea. Only visibility and icon style change.
         setNeedsStatusBarAppearanceUpdate()
     }
 

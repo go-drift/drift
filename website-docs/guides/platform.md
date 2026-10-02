@@ -187,18 +187,18 @@ if platform.Lifecycle.IsPaused() {
 
 ## System UI
 
-Customize the status bar and system chrome:
+Drift draws edge to edge on both platforms: content extends behind the status bar and navigation bar, so inset it with `SafeArea`. Choose the status bar's visibility and icon colour to suit the content behind it:
 
 ```go
-// Set system UI style
 platform.SetSystemUI(platform.SystemUIStyle{
     StatusBarHidden: false,
-    StatusBarStyle:  platform.StatusBarStyleLight, // or StatusBarStyleDark
-    TitleBarHidden:  false,        // Android only
-    Transparent:     false,        // Android only
-    BackgroundColor: &colors.Surface, // Android only
+    // StatusBarStyleDefault follows the system theme; StatusBarStyleLight
+    // (light icons) suits dark content, StatusBarStyleDark light content.
+    StatusBarStyle: platform.StatusBarStyleDark,
 })
 ```
+
+The style persists until the next call, including across Android Activity recreation (dark mode or locale changes).
 
 ## Permissions
 
