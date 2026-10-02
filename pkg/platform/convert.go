@@ -129,26 +129,6 @@ func parseBool(value any) bool {
 	}
 }
 
-// parseMap extracts a map[string]any from an any value.
-func parseMap(value any) map[string]any {
-	if value == nil {
-		return nil
-	}
-	if m, ok := value.(map[string]any); ok {
-		return m
-	}
-	if m, ok := value.(map[any]any); ok {
-		converted := make(map[string]any, len(m))
-		for key, val := range m {
-			if keyString, ok := key.(string); ok {
-				converted[keyString] = val
-			}
-		}
-		return converted
-	}
-	return nil
-}
-
 // parseTime extracts a time.Time from a millisecond timestamp value.
 func parseTime(value any) time.Time {
 	millis, ok := toInt64(value)

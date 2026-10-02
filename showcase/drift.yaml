@@ -17,3 +17,4 @@ plugins:
         description: The Permissions demo shows how microphone access is requested.
       photos:
         description: The Permissions demo shows how photo library access is requested.
+  - package: github.com/go-drift/drift/plugins/notifications/plugin

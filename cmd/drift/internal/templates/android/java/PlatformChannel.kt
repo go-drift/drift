@@ -371,11 +371,6 @@ object PlatformChannelManager : DriftPluginHost {
             SystemUIHandler.handle(method, args)
         }
 
-        // Notifications channel
-        register("drift/notifications") { method, args ->
-            NotificationHandler.handle(context, method, args)
-        }
-
         // Deep links channel
         register("drift/deeplinks") { method, args ->
             DeepLinkHandler.handle(method, args)

@@ -3,9 +3,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Notifications -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
     <!-- Camera -->
     <uses-permission android:name="android.permission.CAMERA" />
 
@@ -79,9 +76,5 @@
                 <data android:scheme="{{.URLScheme}}" />
             </intent-filter>
         </activity>
-
-        <receiver
-            android:name=".DriftNotificationReceiver"
-            android:exported="false" />
     </application>
 </manifest>

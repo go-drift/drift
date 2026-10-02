@@ -10,6 +10,7 @@ import (
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
+	notifications "github.com/go-drift/drift/plugins/notifications/runtime"
 )
 
 // notificationsPage is the notifications demo widget.
@@ -48,7 +49,7 @@ func (s *notificationsState) InitState() {
 	}()
 
 	// Listen for notification deliveries
-	deliveriesUnsub := platform.Notifications.Deliveries().Listen(func(event platform.NotificationEvent) {
+	deliveriesUnsub := notifications.Deliveries().Listen(func(event notifications.Notification) {
 		message := "Received: " + event.Title
 		drift.Dispatch(func() {
 			s.receivedText.Set(message)
@@ -56,7 +57,7 @@ func (s *notificationsState) InitState() {
 	})
 
 	// Listen for notification opens
-	opensUnsub := platform.Notifications.Opens().Listen(func(event platform.NotificationOpen) {
+	opensUnsub := notifications.Opens().Listen(func(event notifications.Open) {
 		message := "Opened: " + event.ID
 		drift.Dispatch(func() {
 			s.openedText.Set(message)
@@ -150,7 +151,7 @@ func (s *notificationsState) requestPermissions() {
 }
 
 func (s *notificationsState) scheduleLocal() {
-	request := platform.NotificationRequest{
+	request := notifications.Request{
 		ID:    fmt.Sprintf("demo-%d", time.Now().Unix()),
 		Title: "Drift Notification",
 		Body:  "Hello from Drift!",
@@ -160,7 +161,7 @@ func (s *notificationsState) scheduleLocal() {
 		},
 	}
 
-	if err := platform.Notifications.Schedule(request); err != nil {
+	if err := notifications.Schedule(request); err != nil {
 		s.receivedText.Set("Schedule error: " + err.Error())
 		return
 	}

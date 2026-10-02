@@ -411,11 +411,9 @@ final class PlatformChannelManager: DriftPluginHost {
             return SystemUIHandler.handle(method: method, args: args)
         }
 
-        // Notifications channel
+        // The notification-center delegate, which offers notifications to
+        // plugins
         NotificationHandler.start()
-        register(channel: "drift/notifications") { method, args in
-            return NotificationHandler.handle(method: method, args: args)
-        }
 
         // Deep links channel
         register(channel: "drift/deeplinks") { method, args in
@@ -731,140 +729,20 @@ enum SystemUIHandler {
 
 // MARK: - Notification Handler
 
+/// The app's one UNUserNotificationCenter delegate. Every notification is
+/// offered to plugins, which claim their own (drift.yaml order, on the main
+/// thread, as for every plugin callback): local notifications to the
+/// notifications plugin, push to the Firebase plugin. An unclaimed
+/// notification is not shown in the foreground, as without a delegate.
 final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationHandler()
-    private static let center = UNUserNotificationCenter.current()
     private static var started = false
 
     static func start() {
         guard !started else { return }
         started = true
-        center.delegate = shared
+        UNUserNotificationCenter.current().delegate = shared
     }
-
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "getSettings":
-            return getSettings()
-        case "schedule":
-            return schedule(args: args)
-        case "cancel":
-            return cancel(args: args)
-        case "cancelAll":
-            return cancelAll()
-        case "setBadge":
-            return setBadge(args: args)
-        default:
-            return (nil, NSError(domain: "Notifications", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
-        }
-    }
-
-    private static func getSettings() -> (Any?, Error?) {
-        var result: [String: Any] = ["status": "unknown"]
-        let semaphore = DispatchSemaphore(value: 0)
-        center.getNotificationSettings { settings in
-            result["status"] = authorizationStatus(settings)
-            result["alertsEnabled"] = settings.alertSetting == .enabled
-            result["soundsEnabled"] = settings.soundSetting == .enabled
-            result["badgesEnabled"] = settings.badgeSetting == .enabled
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return (result, nil)
-    }
-
-    private static func schedule(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let id = dict["id"] as? String else {
-            return (nil, NSError(domain: "Notifications", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing id argument"]))
-        }
-
-        let content = UNMutableNotificationContent()
-        content.title = dict["title"] as? String ?? ""
-        content.body = dict["body"] as? String ?? ""
-
-        if let badge = dict["badge"] as? Int {
-            content.badge = NSNumber(value: badge)
-        } else if let badgeNumber = dict["badge"] as? NSNumber {
-            content.badge = badgeNumber
-        }
-
-        if let soundName = dict["sound"] as? String, !soundName.isEmpty {
-            if soundName == "default" {
-                content.sound = .default
-            } else {
-                content.sound = UNNotificationSound(named: UNNotificationSoundName(soundName))
-            }
-        } else {
-            content.sound = .default
-        }
-
-        if let data = dict["data"] as? [String: Any] {
-            content.userInfo = data
-        }
-
-        let repeats = dict["repeats"] as? Bool ?? false
-        var trigger: UNNotificationTrigger
-
-        if let interval = dict["intervalSeconds"] as? NSNumber, interval.doubleValue > 0 {
-            trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval.doubleValue, repeats: repeats)
-        } else if let atMillis = dict["at"] as? NSNumber {
-            let scheduledDate = Date(timeIntervalSince1970: atMillis.doubleValue / 1000.0)
-            let timeInterval = scheduledDate.timeIntervalSinceNow
-            if timeInterval > 0 {
-                trigger = UNTimeIntervalNotificationTrigger(timeInterval: timeInterval, repeats: repeats)
-            } else {
-                trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-            }
-        } else {
-            trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        }
-
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        center.add(request)
-        return (nil, nil)
-    }
-
-    private static func cancel(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let id = dict["id"] as? String else {
-            return (nil, NSError(domain: "Notifications", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing id argument"]))
-        }
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-        center.removeDeliveredNotifications(withIdentifiers: [id])
-        return (nil, nil)
-    }
-
-    private static func cancelAll() -> (Any?, Error?) {
-        center.removeAllPendingNotificationRequests()
-        center.removeAllDeliveredNotifications()
-        return (nil, nil)
-    }
-
-    private static func setBadge(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any] else {
-            return (nil, NSError(domain: "Notifications", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing count argument"]))
-        }
-        let count: Int
-        if let intCount = dict["count"] as? Int {
-            count = intCount
-        } else if let numberCount = dict["count"] as? NSNumber {
-            count = numberCount.intValue
-        } else {
-            return (nil, NSError(domain: "Notifications", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing count argument"]))
-        }
-        DispatchQueue.main.async {
-            UIApplication.shared.applicationIconBadgeNumber = count
-        }
-        return (nil, nil)
-    }
-
-    // MARK: - UNUserNotificationCenterDelegate
-
-    // The app has one notification center delegate, this one. Plugins get
-    // first refusal (drift.yaml order, on the main thread, as for every
-    // plugin callback); Drift handles its own local notifications and
-    // leaves any other unclaimed notification alone.
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -872,16 +750,7 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         DispatchQueue.main.async {
-            if let options = DriftPlugins.shared.willPresentNotification(notification) {
-                completionHandler(options)
-                return
-            }
-            guard NotificationHandler.isLocal(notification) else {
-                completionHandler([])
-                return
-            }
-            NotificationHandler.sendReceived(notification: notification, isForeground: true)
-            completionHandler([.banner, .list, .sound, .badge])
+            completionHandler(DriftPlugins.shared.willPresentNotification(notification) ?? [])
         }
     }
 
@@ -891,59 +760,8 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         DispatchQueue.main.async {
-            defer { completionHandler() }
-            if DriftPlugins.shared.didReceiveNotificationResponse(response) {
-                return
-            }
-            guard NotificationHandler.isLocal(response.notification) else { return }
-            NotificationHandler.sendOpened(notification: response.notification, action: response.actionIdentifier)
-        }
-    }
-
-    /// Whether notification is one Drift scheduled (not a push).
-    private static func isLocal(_ notification: UNNotification) -> Bool {
-        !(notification.request.trigger is UNPushNotificationTrigger)
-    }
-
-    private static func sendReceived(notification: UNNotification, isForeground: Bool) {
-        let content = notification.request.content
-        PlatformChannelManager.shared.sendEvent(channel: "drift/notifications/received", data: [
-            "id": notification.request.identifier,
-            "title": content.title,
-            "body": content.body,
-            "data": content.userInfo as? [String: Any] ?? [:],
-            "timestamp": currentTimestamp(),
-            "isForeground": isForeground
-        ])
-    }
-
-    private static func sendOpened(notification: UNNotification, action: String) {
-        PlatformChannelManager.shared.sendEvent(channel: "drift/notifications/opened", data: [
-            "id": notification.request.identifier,
-            "data": notification.request.content.userInfo as? [String: Any] ?? [:],
-            "action": action,
-            "timestamp": currentTimestamp()
-        ])
-    }
-
-    private static func currentTimestamp() -> Int64 {
-        Int64(Date().timeIntervalSince1970 * 1000)
-    }
-
-    private static func authorizationStatus(_ settings: UNNotificationSettings) -> String {
-        switch settings.authorizationStatus {
-        case .authorized:
-            return "granted"
-        case .provisional:
-            return "provisional"
-        case .denied:
-            return "denied"
-        case .notDetermined:
-            return "not_determined"
-        case .ephemeral:
-            return "provisional"
-        @unknown default:
-            return "unknown"
+            _ = DriftPlugins.shared.didReceiveNotificationResponse(response)
+            completionHandler()
         }
     }
 }

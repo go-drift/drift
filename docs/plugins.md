@@ -65,7 +65,7 @@ Adding an op means touching: the struct and its four methods plus the constructo
 - **Bundle resources** land flat in the bundle root: `Runner/PluginResources/` on xcodeproj (synchronized folder) and `PluginResources/` listed under `xtool.yml` `resources:` on xtool. SwiftPM target resources are avoided because they land in `Runner_Runner.bundle`, which `Bundle.main` cannot see.
 - **Image sets on xtool** become loose `<Name>.png` files, since xtool cannot compile asset catalogs. `FUTURE(xtool#219)` comments mark what changes if [xtool#219](https://github.com/xtool-org/xtool/pull/219) merges.
 - **Entitlements.** `Runner.entitlements` at the project root on both paths (`CODE_SIGN_ENTITLEMENTS`, xtool `entitlementsPath`).
-- **App-level hooks.** `AppDelegate.swift` (also on xtool) forwards launch and remote-notification events to `DriftPlugins`. Drift's `UNUserNotificationCenter` delegate (`NotificationHandler` in `PlatformChannel.swift`) offers foreground notifications and responses to plugins before handling its own local notifications. A remote notification nobody claims completes with `.noData`. Hooks exist only where a plugin needs them.
+- **App-level hooks.** `AppDelegate.swift` (also on xtool) forwards launch and remote-notification events to `DriftPlugins`. Drift's `UNUserNotificationCenter` delegate (`NotificationHandler` in `PlatformChannel.swift`) offers foreground notifications and responses to plugins, which claim their own (local notifications by a userInfo marker, Firebase by `gcm.message_id`); an unclaimed notification is not shown in the foreground, as without a delegate. A remote notification nobody claims completes with `.noData`. Hooks exist only where a plugin needs them.
 
 ## Native host
 

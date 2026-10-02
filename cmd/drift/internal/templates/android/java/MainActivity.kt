@@ -38,7 +38,6 @@ class MainActivity : AppCompatActivity() {
         val newLaunch = savedInstanceState == null &&
             (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
         if (newLaunch) {
-            NotificationHandler.handleNotificationOpen(intent)
             DeepLinkHandler.handleIntent(intent, "launch")
         }
 
@@ -90,7 +89,6 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         Log.i("DriftDeepLink", "onNewIntent action=${intent.action} data=${intent.dataString}")
-        NotificationHandler.handleNotificationOpen(intent)
         if (!DriftPlugins.onNewIntent(intent)) {
             DeepLinkHandler.handleIntent(intent, "open")
         }

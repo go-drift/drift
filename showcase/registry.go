@@ -79,7 +79,7 @@ var demos = []Demo{
 	// System demos
 	{"/permissions", "Other Permissions", "Contacts, calendar, photos", CategorySystem, "icon-shield.svg", buildPermissionsPage},
 	{"/location", "Location", "GPS and location services", CategorySystem, "icon-location.svg", buildLocationPage},
-	{"/notifications", "Notifications", "Push and local notifications", CategorySystem, "icon-bell.svg", buildNotificationsPage},
+	{"/notifications", "Notifications", "Local notifications", CategorySystem, "icon-bell.svg", buildNotificationsPage},
 	{"/storage", "Storage", "File picker and directories", CategorySystem, "icon-folder.svg", buildStoragePage},
 	{"/preferences", "Preferences", "Simple key-value storage", CategorySystem, "icon-settings.svg", buildPreferencesPage},
 	{"/secure-storage", "Secure Storage", "Keychain and encrypted data", CategorySystem, "icon-lock.svg", buildSecureStoragePage},

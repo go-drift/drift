@@ -78,7 +78,7 @@ defer unsubscribe()
 
 ### Notification Permissions
 
-Notifications support iOS-specific options via `RequestWithOptions`:
+Drift provides the notification permission, which the notifications and Firebase plugins share; on Android those plugins declare `POST_NOTIFICATIONS`, and without one of them the permission fails with `platform.ErrPermissionNotDeclared`. It supports iOS-specific options via `RequestWithOptions`:
 
 ```go
 ctx := context.Background()
@@ -281,59 +281,7 @@ Location is a plugin: see [Location](/docs/guides/plugins#location) in the plugi
 
 ## Notifications
 
-Schedule and receive local notifications with the Notifications service. Push notifications come from the Firebase plugin (`plugins/firebase`); the permission below covers both.
-
-```go
-ctx := context.Background()
-
-// Request permission with options
-status, err := platform.Notifications.Permission.RequestWithOptions(ctx,
-    platform.NotificationPermissionOptions{Alert: true, Sound: true, Badge: true},
-)
-
-// Schedule a local notification
-platform.Notifications.Schedule(platform.NotificationRequest{
-    ID:    "reminder-1",
-    Title: "Reminder",
-    Body:  "Meeting in 5 minutes",
-    At:    time.Now().Add(5 * time.Minute),
-    Data:  map[string]any{"meetingId": "123"},
-})
-
-// Cancel a notification
-platform.Notifications.Cancel("reminder-1")
-
-// Cancel all notifications
-platform.Notifications.CancelAll()
-
-// Set app badge count
-platform.Notifications.SetBadge(3)
-
-// Get notification settings
-settings, err := platform.Notifications.Settings()
-```
-
-### Listening for Notifications
-
-```go
-// Listen for delivered notifications
-deliveriesUnsub := platform.Notifications.Deliveries().Listen(func(event platform.NotificationEvent) {
-    drift.Dispatch(func() {
-        handleNotification(event)
-    })
-})
-defer deliveriesUnsub()
-
-// Listen for notification opens (user tapped notification)
-opensUnsub := platform.Notifications.Opens().Listen(func(open platform.NotificationOpen) {
-    drift.Dispatch(func() {
-        navigateToContent(open.Data)
-    })
-})
-defer opensUnsub()
-```
-
-Taps that arrive while nothing listens to `Opens()`, such as the tap that launched the app, are queued and delivered once to the next listener. Subscribe once the app can act on them (for example, after the navigator is ready).
+Local notifications are a plugin: see [Notifications](/docs/guides/plugins#notifications) in the plugins guide; push notifications come from the [Firebase plugin](/docs/guides/plugins#firebase). Both use Drift's [notification permission](#notification-permissions).
 
 ## Share
 

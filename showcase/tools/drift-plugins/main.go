@@ -10,11 +10,13 @@ import (
 
 	location "github.com/go-drift/drift/plugins/location/plugin"
 	permissions "github.com/go-drift/drift/plugins/permissions/plugin"
+	notifications "github.com/go-drift/drift/plugins/notifications/plugin"
 )
 
 func main() {
 	driftplugin.Main(
 		driftplugin.Bind("github.com/go-drift/drift/plugins/location/plugin", location.Plugin),
 		driftplugin.Bind("github.com/go-drift/drift/plugins/permissions/plugin", permissions.Plugin),
+		driftplugin.Bind("github.com/go-drift/drift/plugins/notifications/plugin", notifications.Plugin),
 	)
 }

@@ -22,6 +22,7 @@ First-party plugins live in the Drift repository:
 - [`plugins/firebase`](#firebase): Firebase Core and Cloud Messaging (push notifications).
 - [`plugins/location`](#location): the device's location and the location permissions.
 - [`plugins/permissions`](#permissions): contacts, calendar, microphone and photos permissions.
+- [`plugins/notifications`](#notifications): local notifications and taps on them.
 
 ## Using plugins
 
@@ -273,6 +274,54 @@ go func() {
 ```
 
 `permissions.Contacts`, `Calendar`, `Microphone` and `Photos` are `platform.Permission`s. Selected photos (iOS) and write-only calendar access (iOS 17) read `PermissionLimited`. Supported on iOS, xtool and Android.
+
+### Notifications
+
+Local notifications the app schedules, and taps on them. The plugin takes no config:
+
+```yaml
+plugins:
+  - package: github.com/go-drift/drift/plugins/notifications/plugin
+```
+
+```go
+import notifications "github.com/go-drift/drift/plugins/notifications/runtime"
+
+// Ask once, from a goroutine.
+go platform.Notifications.Permission.Request(ctx)
+
+err := notifications.Schedule(notifications.Request{
+    ID:    "standup",
+    Title: "Stand-up",
+    Body:  "In five minutes",
+    At:    time.Now().Add(55 * time.Minute),
+    Data:  map[string]any{"route": "/meetings"},
+})
+
+// A tap on one of the app's notifications, including the one that launched it.
+notifications.Opens().Listen(func(o notifications.Open) {
+    drift.Dispatch(func() { navigate(o.Data["route"]) })
+})
+```
+
+| Function | Notes |
+|----------|-------|
+| `Schedule(req)` | Scheduling an `ID` again replaces it. `At` is when; without it, after `Interval`. `Repeats` shows it every `Interval` (at least a minute) from now, and cannot be combined with `At` |
+| `Cancel(id)`, `CancelAll()` | Remove scheduled and shown notifications; `CancelAll` leaves other plugins' (push) alone |
+| `SetBadge(n)` | iOS app icon badge; Android launchers show their own |
+| `CurrentSettings(ctx)` | Whether alerts, sounds and badges are on; waits for the platform, so call it from a goroutine |
+| `Deliveries()` | The app's notifications as they are shown while it runs, with `Foreground` set |
+| `Opens()` | Taps, queued until the app listens |
+
+The permission is Drift's own, `platform.Notifications.Permission`, shared with the Firebase plugin. Notifications are shown in the foreground too, on both platforms. Each plugin claims only its own notifications, so this plugin and Firebase work side by side.
+
+Limitations:
+
+- Android schedules with `AlarmManager`: exactly when the user lets the app schedule exact alarms (Settings, Alarms & reminders), otherwise within Android's window for inexact alarms. Scheduled notifications are lost when the device restarts.
+- Android: when the system groups several notifications from the app, tapping the group summary opens the app without an `Opens()` event, as for Firebase.
+- `Deliveries()` reports notifications shown while the app runs; one that fires while the app is closed reaches only `Opens()`, if tapped.
+
+Supported on iOS, xtool and Android.
 
 ## Authoring plugins
 
