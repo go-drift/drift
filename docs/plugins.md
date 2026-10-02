@@ -1,131 +1,92 @@
-# Plugins
+# Plugins: internals
 
-Drift plugins extend an app with native capabilities (SDKs, permissions, native UI, platform hooks) without the app editing generated native projects. This document describes the system as built on the `feat/plugins` branch. The plan for finishing it is in [plugins-v1-plan.md](plugins-v1-plan.md).
+How the plugin system is built. Using and authoring plugins, including the op reference, is in the website guide [website-docs/guides/plugins.md](../website-docs/guides/plugins.md); this document does not repeat it. The plan for finishing the branch is in [plugins-v1-plan.md](plugins-v1-plan.md).
 
 ## Model
 
-A plugin is a Go module with two halves:
+A plugin is a Go module with a build half (`<module>/plugin`, run at build time inside a generated bridge binary, records **ops**), native Swift/Kotlin embedded in the build half, and a runtime half (Go API over platform channels). This combines Expo's prebuild model (declarative changes applied to a managed native project) with Flutter's generated plugin registrant (one generated list of plugin classes the host drives).
 
-| Half | Package convention | Runs | Purpose |
-|------|--------------------|------|---------|
-| Build | `<module>/plugin` | At build time, inside a generated "bridge" binary | Reads typed config from `drift.yaml`, emits declarative **ops** describing native project changes |
-| Runtime | `<module>/runtime` | Inside the app | Go API the app calls; talks to the plugin's native code over platform channels |
+Package layout:
 
-Native code (Swift/Kotlin) ships inside the build half as embedded files and is injected into the generated project by ops.
-
-This combines Expo's prebuild model (declarative project changes applied to a managed native project) with Flutter's generated plugin registrant (one generated entry point that registers every plugin at startup).
-
-## Configuring plugins
-
-```yaml
-# drift.yaml
-plugins:
-  - package: github.com/go-drift/drift/plugins/splash/plugin
-    config:
-      image: assets/splash.png
-      background_color: "#FFFFFF"
-```
-
-The module must be in the app's `go.mod` (`go get`). `drift plugin sync` regenerates the bridge and validates config against the plugin's schema; `drift plugin list` shows configured plugins.
-
-## Authoring a plugin (build half)
-
-```go
-type Config struct {
-    Greeting string `yaml:"greeting" drift:"required"`
-}
-
-type demo struct{}
-
-func (demo) Name() string { return "demo" }
-func (demo) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-    ctx.IOS.Info.SetString("DriftDemoGreeting", cfg.Greeting)
-    ctx.Android.Resources.Strings.Set("drift_demo_greeting", cfg.Greeting)
-    return nil
-}
-
-// The bridge binds this exact variable name.
-var Plugin driftplugin.Plugin[Config] = demo{}
-```
-
-- Config decodes with unknown keys rejected, so `drift.yaml` typos fail the build.
-- `drift:"..."` tags declare config rules, checked recursively through nested structs, lists of structs and `yaml:",inline"` embeds by the same code on `drift plugin sync` and on build:
-  - `required`: the key must be present (an explicit `false` or `""` counts).
-  - `default=<literal>`: used when the key is absent. Scalars only; cannot combine with `required`.
-  - `hex`: a `#RRGGBB` or `#RRGGBBAA` string, alpha last. `ctx.Android.Resources.Colors.Set` takes the same format and Drift writes Android's alpha-first form; a plugin generating its own platform files converts with `driftplugin.ParseColor`.
-  - `asset`: a canonical project-relative path to an existing file.
-  - A malformed tag (unknown validator, unparseable default) panics when the bridge starts.
-- `Build` must not touch disk; it only records ops on `ctx`.
-- Every op validates its input when recorded. Invalid input is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI validates again when decoding the bridge response, so mutators only see valid ops.
-- `ctx.Platform()` is the platform being built (`ios`, `xtool` or `android`); `ctx.AppID()` is drift.yaml's `app.id` (the iOS bundle ID and Android application ID), for checking SDK config files that name the app.
-- `driftplugin.NewTestCtx()` / `NewTestCtxAt(root)` / `NewTestCtxFor(root, platform)` plus `ctx.Ops()` let plugin authors unit test `Build`; test contexts have `AppID() == TestAppID`.
-- Reference plugins: `examples/plugins/demo` (minimal), `plugins/splash` (full, with native code and runtime API), `plugins/firebase` (an SDK: SwiftPM package, Gradle plugin, config files, entitlements, a manifest service).
+| Package | Holds |
+|---------|-------|
+| `pkg/plugin` | Author API: `Plugin[T]`, `BuildCtx` and its recorder scopes, config schema from `drift` tags, test contexts, bridge `Main`/`Bind` |
+| `pkg/plugin/protocol` | The CLI-to-bridge wire contract: envelope, response, op types (`ops.go`), validation (`validate.go`), config schema (`schema.go`), `Color` |
+| `cmd/drift/internal/plugin` | CLI side: drift.yaml parsing (`manifest.go`), deps (`deps.go`), bridge build/run (`bridge.go`), conflicts (`conflict.go`), apply (`apply.go`), registrant and host support files (`registrant.go`), ejected checks (`ejected.go`) and lock (`lock.go`), `sync`/`list` (`sync.go`) |
+| `cmd/drift/internal/plugin/mutate` | One mutator per file kind: plist, AndroidManifest and resource XML, Gradle, sources, bundle resources, the `Drift/Plugins` Swift package, `xtool.yml` |
+| `cmd/drift/internal/templates/plugin-api/ios`, `templates/android/runner` | The native plugin API (`DriftPlugin`, `DriftPluginHost`, bindings, `DriftResult`) |
 
 ## Build pipeline
 
-`workspace.Prepare` (`cmd/drift/internal/workspace/workspace.go`) scaffolds the managed native project (wiped and regenerated every build under `~/.drift/build/...`), then `runPluginPipeline`:
+`workspace.Prepare` (`cmd/drift/internal/workspace/workspace.go`) scaffolds the managed project (regenerated every build under `~/.drift/build/...`), then:
 
-1. **Resolve.** `CheckPluginDeps` runs `go list` for each configured package.
-2. **Bridge.** `EnsureBridge` (`cmd/drift/internal/plugin/bridge.go`) writes `tools/drift-plugins/main.go` (build tag `drift_tool`, committed with the app so `go mod tidy` keeps plugin deps) and builds it. Binaries are cached by a key over CLI version, Go version, `go.sum`, module pins and source; locally replaced plugins bypass the cache.
-3. **Run.** `RunBridge` sends a JSON envelope on stdin (`APIVersion`, platform, config per plugin) and reads a JSON response file of ops.
-4. **Decode and validate.** `DecodeOps` parses and validates each op, then `Validate` (`conflict.go`) checks ops against each other by target and drops exact duplicates.
-5. **Apply.** `Apply` (`apply.go`) files ops by platform and runs mutators (`mutate/`): plist, AndroidManifest XML, resource XML, Gradle, sources, assets, the `Drift/Plugins` Swift package, `xtool.yml`.
-6. **Registrant.** `EnsureRunnerSupport` writes host support files; `WriteRegistrant` generates `DriftPluginRegistrant.swift` / `.kt`.
+1. **`resolvePluginOps`** runs every build half without touching the native project:
+   1. `LoadFromDriftYAML` reads `plugins:` (YAML anchors resolved, an empty list allowed).
+   2. `CheckPluginDeps` runs `go list` per package; a missing one fails with a `go get` hint.
+   3. `EnsureBridge` writes `tools/drift-plugins/main.go` (build tag `drift_tool`, committed by the app so `go mod tidy` keeps plugin deps; keyword-safe import aliases) and builds it.
+   4. `RunBridge` sends the envelope on stdin (`APIVersion`, `cmd`, platform, project root, build dir, `app_id`, config YAML per plugin) and reads ops from a response file.
+   5. `protocol.DecodeOps` decodes and validates each op again; `Validate` (`conflict.go`) checks ops against each other by target and drops exact duplicates.
+2. **`applyPluginOps`** writes them:
+   1. Ejected projects only: `CheckEjectedIOS` / `CheckEjectedAndroid` fail early if the project lacks the template calls plugins need.
+   2. `Apply` files ops by platform (`opAppliesTo`: iOS ops apply to `ios` and `xtool`) and runs the mutators.
+   3. `EnsureRunnerSupport` writes the Drift-owned host files (`DriftPlugins`, plugin API), `WriteRegistrant` the generated `DriftPluginRegistrant` (plugin classes in drift.yaml order).
+   4. Ejected projects only: `SyncEjectedLock` (see [Ejected projects](#ejected-projects)).
 
-With zero plugins, the bridge is skipped but the registrant, sidecar and resource directories are still reset so generated projects always compile.
+With zero plugins the bridge is skipped and `tools/drift-plugins/main.go` deleted, but the registrant, sidecar package and resource directories are still reset so generated projects always compile.
 
-Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files. `CheckEjectedIOS` / `CheckEjectedAndroid` (`ejected.go`) fail early when the project lacks the template calls plugins need. After applying, `SyncEjectedLock` (`lock.go`) compares the ops with `.drift/plugins.lock.json` from the previous build (commit it): files a removed plugin owned are deleted unless the user changed them, and edits it made inside shared files (Info.plist keys, manifest entries, Gradle lines) are listed once in a build error for the user to undo, since Drift cannot remove them safely.
+Watch mode: `Refresh` re-runs `resolvePluginOps` and, when the hash of the op list changed, regenerates the project.
 
-Managed builds regenerate the whole project every build; in watch mode, `Refresh` regenerates it when the plugin op set changes.
+## Bridge
 
-## Ops
+- Built with `-mod=readonly`: the CLI never edits `go.mod`/`go.sum`; a missing entry fails with a `go mod tidy` hint (`drift plugin sync --tidy` runs it).
+- Cache: binaries live under the cache root, keyed by a hash of everything that feeds the build (CLI and protocol versions, `bridgeTemplateVersion`, Go version, GOFLAGS, plugin module pins, bridge source, `go.mod`, `go.sum`, active `go.work`). Builds write a temp name and rename into place.
+- When any source is local (a plugin in the main module, a directory `replace`, including a local `github.com/go-drift/drift`, or a multi-module `go.work`), the key cannot see edits, so the bridge is rebuilt every time into a fixed per-project path; the Go build cache keeps that cheap.
+- The bridge refuses an envelope whose `APIVersion` differs, and the CLI refuses a response whose does. An op type the CLI does not know fails decoding.
+- The bridge panics at start on an invalid `Name()` or a malformed `drift` tag (`Bind`) and on a duplicate plugin name or package (`Main`), so author errors surface on the first build.
 
-Ops are typed structs in `pkg/plugin/protocol/ops.go`, recorded through scopes on `BuildCtx` (`pkg/plugin/buildctx.go`), and serialized as JSON with a `type` discriminator. Package `protocol` holds the whole CLI-to-bridge wire contract (envelope, response, ops, config schema); plugin authors import only `pkg/plugin`, plus `protocol` in tests that inspect `ctx.Ops()`.
+## Ops and conflicts
 
-| Area | Op types |
-|------|----------|
-| Info.plist, entitlements | `ios.plist.set_string`, `set_bool`, `set_string_array`, `append_array_item`, `set_dict` (each names its file: `info` or `entitlements`) |
-| iOS project | `ios.assets.add_image_set`, `ios.storyboards.replace_launch_screen`, `ios.source.add`, `ios.bundle.add_resource`, `ios.spm.add_package` |
-| iOS plugin class | `ios.plugin` |
-| AndroidManifest | `android.manifest.add_permission`, `add_intent_filter`, `set_activity_attr`, `add_meta_data`, `add_service` |
-| Android resources | `android.color.set`, `android.string.set`, `android.style.set`, `android.drawable.write`, `android.resource.write_xml`, `android.app_module.add_file` |
-| Android build | `android.gradle.add_dependency`, `android.gradle.apply_plugin`, `android.source.add` |
-| Android plugin class | `android.plugin` |
+Ops are typed structs in `protocol/ops.go` with `Type`, `Platform`, `Targets` and `Validate`, serialized as JSON with a `type` discriminator. Recorders (`pkg/plugin/buildctx.go`) validate at record time into `ctx.Err()`; the CLI validates again at decode, so mutators only see valid ops.
 
-Each op declares the **targets** it writes (`Targets()`): a key naming a location (`plist:<key>`, `android-res:<type>/<name>`, `ios-bundle:<file>`, `spm:<package>`, ...), optionally a member of a set at that key (a permission, a registrant, a SwiftPM product), and a hash of what it writes there. Conflicts are keyed on targets, not op types, so two different op types writing one plist key or resource are caught:
-- Ops owning the same key must write the same content (they then collapse).
-- Ops adding the same member to a set must agree; different members merge (plugins sharing `firebase-ios-sdk` may each ask for their own products).
-- A key cannot be both owned by one op and added to by another (`set_string_array` vs `append_array_item`).
+Each op declares the **targets** it writes: a key naming a location (`plist:<file>:<key>`, `android-res:<type>/<name>`, `ios-bundle:<file>`, `spm:<package>`, ...), optionally a member of a set at that key, and a hash of the content. `Validate` in `conflict.go`:
 
-Adding an op means touching: the struct and its methods (`Type`, `Targets`, `Validate`, `Platform`) plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), the bag and switch in `apply.go`, and a mutator. `TestOpsCoverAllConstructors` and `TestApplyKnowsEveryOpType` catch omissions.
+- Owners of one key must write the same content; they collapse to one.
+- Members of a set merge; the same member twice must agree.
+- A key cannot be both owned and added to (`set_string_array` vs `append_array_item`).
+
+Some ops claim more than one key: an image set also claims its loose `<Name>.png` bundle name (xtool), a non-values resource XML file also claims the resource its file name defines, a Swift source also claims its basename within the plugin's module.
+
+Adding an op means touching: the struct and its four methods plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), the bag and switch in `apply.go`, a mutator, the guide's op reference, and `describeEdit` (`lock.go`) if it edits a shared file. `TestOpsCoverAllConstructors`, `TestApplyKnowsEveryOpType` and `TestOpReferenceListsEveryOp` catch omissions.
 
 ## iOS specifics
 
-- **Two build paths.** `ios` is xcodeproj on macOS (the shipping path). `xtool` is SwiftPM plus the xtool packer on Linux (dev only).
-- **Plugin modules.** Both paths link the `DriftPlugins` product of a generated, Drift-owned local package at `Drift/Plugins` (`mutate/spm.go`). It holds a `DriftPluginAPI` target (the plugin API, from `templates/plugin-api/ios`) and one `DriftPlugin_<name>` target per plugin, named after `Plugin.Name()`, containing its `IOS.Sources` and depending on `DriftPluginAPI` plus the SwiftPM products it requested. Each plugin is therefore its own Swift module: plugins cannot clash on type or file names, and a plugin imports its SDKs (`import FirebaseCore`) as direct dependencies. Plugin sources must be Swift, and the class named with `IOS.Plugin` must be `public` with a `public init()`; the generated registrant imports each module and creates `DriftPlugin_<name>.<Class>()`. The app imports `DriftPluginAPI`, constructing host-only types through `@_spi(DriftHost)`.
-- **Bundle resources.** Files land flat in the app bundle root: `Runner/PluginResources/` on xcodeproj (synchronized folder) and `PluginResources/` listed under `xtool.yml` `resources:` on xtool. SwiftPM target resources are avoided because they land in `Runner_Runner.bundle`, which `Bundle.main` cannot see.
-- **Image sets on xtool.** xtool cannot compile asset catalogs, so image sets become loose `<Name>.png` files. `UIImage(named:)` resolves both forms. `FUTURE(xtool#219)` comments mark what changes if [xtool#219](https://github.com/xtool-org/xtool/pull/219) (asset catalog compiler, now in [AssetKit](https://github.com/xtool-org/AssetKit)) merges.
-- **App-level hooks.** Plugins receive launch and remote-notification events through `DriftPlugin` methods, forwarded by the app delegate (`AppDelegate.swift`, also on xtool). A remote notification is offered to plugins in drift.yaml order; the first to claim it owns iOS's completion handler, and an unclaimed one completes with `.noData`. Drift's `UNUserNotificationCenter` delegate (`NotificationHandler` in `PlatformChannel.swift`) offers foreground notifications (`willPresentNotification`) and taps (`didReceiveNotificationResponse`) to plugins first, the same way; what none claims is Drift's local notifications'. Hooks exist only where a plugin needs them (splash, Firebase).
+- **Two build paths.** `ios` is xcodeproj on macOS (the shipping path); `xtool` is SwiftPM plus the xtool packer on Linux (development only).
+- **Plugin modules.** Both paths link the `DriftPlugins` product of the Drift-owned local package at `Drift/Plugins` (`mutate/spm.go`). It holds a `DriftPluginAPI` target (from `templates/plugin-api/ios`) and one `DriftPlugin_<name>` target per plugin, containing its sources and depending on `DriftPluginAPI` plus the SwiftPM products it requested. The generated registrant imports each module and creates `DriftPlugin_<name>.<Class>()`. The app imports `DriftPluginAPI` and constructs host-only types through `@_spi(DriftHost)`.
+- **Bundle resources** land flat in the bundle root: `Runner/PluginResources/` on xcodeproj (synchronized folder) and `PluginResources/` listed under `xtool.yml` `resources:` on xtool. SwiftPM target resources are avoided because they land in `Runner_Runner.bundle`, which `Bundle.main` cannot see.
+- **Image sets on xtool** become loose `<Name>.png` files, since xtool cannot compile asset catalogs. `FUTURE(xtool#219)` comments mark what changes if [xtool#219](https://github.com/xtool-org/xtool/pull/219) merges.
+- **Entitlements.** `Runner.entitlements` at the project root on both paths (`CODE_SIGN_ENTITLEMENTS`, xtool `entitlementsPath`).
+- **App-level hooks.** `AppDelegate.swift` (also on xtool) forwards launch and remote-notification events to `DriftPlugins`. Drift's `UNUserNotificationCenter` delegate (`NotificationHandler` in `PlatformChannel.swift`) offers foreground notifications and responses to plugins before handling its own local notifications. A remote notification nobody claims completes with `.noData`. Hooks exist only where a plugin needs them.
 
-## Native plugin lifecycle
+## Native host
 
-A plugin's native half is a class the build half names with `ctx.IOS.Plugin("MyPlugin")` / `ctx.Android.Plugin("com.example.MyPlugin")`. The generated `DriftPluginRegistrant` only lists these classes, in drift.yaml order; the hand-written `DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the instances and drives them on the main thread. Drift's own handling of the same events (deep links, notifications) stays in the app templates. Reference: Flutter's `FlutterPlugin` + `ActivityAware`.
+`DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the plugin instances and drives the lifecycle described in the guide; it is Drift-owned and rewritten every build. Callers:
 
-| | iOS (`DriftPluginAPI` module, `templates/plugin-api/ios`) | Android (`templates/android/runner`, package `com.drift.runner`) |
+| | iOS | Android |
 |---|---|---|
-| Plugin | `DriftPlugin` protocol | `DriftPlugin` interface |
-| Once per process | `register(host:)` then `didFinishLaunching`, from `AppDelegate` | `onRegister(host)`, from the first `MainActivity.onCreate` |
-| Per view / Activity | `attach(DriftViewBinding)` / `detach()` around `DriftViewController` | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity |
-| Overlays | `binding.overlayView`: above Drift's content and platform views, touch-transparent where empty | `binding.overlayView`: the window's decor view, above content |
-| App events | APNs registration hooks; `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse` (claim by returning true / options) | new-intent listener on the binding (return true to claim) |
-| Host | `DriftPluginHost`: `registerChannel` (a `DriftMethodHandler` replying through `DriftResult`), `sendEvent`, `observeEvent` | same shape |
+| Register (once) | `AppDelegate.didFinishLaunching` calls `DriftPlugins.shared.launch` | `MainActivity.onCreate` calls `DriftPlugins.register` (no-op after the first) |
+| Attach / detach | `DriftViewController` (`detach` from `deinit`) | `MainActivity.onCreate` / `onDestroy`, with the window's decor view as overlay host |
+| Events | `AppDelegate`, `NotificationHandler` | `MainActivity.onNewIntent` |
 
-**Threading.** Every plugin callback runs on the main thread: lifecycle methods, method handlers and event observers (observers asynchronously, in event order). A handler replies exactly once through its `DriftResult`, before returning or later from any thread; the Go caller blocks until it does. When Go calls from the main thread (inside a frame or a widget callback) the handler must reply before returning, or the app traps rather than deadlocks, so Go APIs over slow native calls are called from goroutines. Built-in channels keep a synchronous handler on the calling thread.
+Channel handlers run on the main thread. `DriftResult` lets a handler reply later; Go waits for the reply. When Go calls from the main thread and the handler has not replied by the time it returns, the host traps instead of deadlocking. Built-in channels keep synchronous handlers on the calling thread. The Android JNI error slot is thread-local.
 
-Plugin Swift sources compile into the plugin's own module (see Plugin modules); Kotlin sources compile into the app module under the plugin's own package. Ejected projects are checked for the template calls that feed `DriftPlugins` and for the `Drift/Plugins` package reference (`ejected.go`); `DriftPlugins` is Drift-owned and rewritten by `EnsureRunnerSupport`, and the `Drift/Plugins` package is regenerated every build.
+## Ejected projects
+
+Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files.
+
+- `ejected.go` checks the template calls that feed `DriftPlugins` and, on iOS, the `Drift/Plugins` package reference; the error names each missing call.
+- `lock.go`: after applying, `SyncEjectedLock` compares the ops with `.drift/plugins.lock.json` from the previous build (committed by the user). Files a removed plugin owned are deleted unless the user changed them; edits it made inside shared files (plist keys, manifest entries, Gradle lines) are listed once in a build error for the user to undo, since Drift cannot tell them from user edits.
+- Plugin values XML (`values/plugin_*.xml`) and the `Drift/Plugins` package are regenerated every build.
 
 ## Runtime side
 
-Runtime packages use `pkg/platform` method and event channels. Besides plain event channels there are sticky ones (`NewStickyEventChannel`: the last event replays to every new subscriber, for one-shot signals such as `first_frame` from `engine.FrameEvents`) and queued ones (`NewQueuedEventChannel`: events sent while nobody listens wait, in order, for the next subscriber, for events that must each be handled once, such as the notification tap that launched the app).
-
-Prefer APIs that cannot block the main thread: state as a `core.Signal`/`Derived` fed by an event channel, and streams, over methods waiting on native work (see Threading).
+Runtime packages use `pkg/platform` channels: `NewMethodChannel`, `NewEventChannel`, `NewStickyEventChannel` (last event replayed to each new subscriber; `engine.FrameEvents` uses it for `first_frame`), `NewQueuedEventChannel` (events kept until a subscriber takes them, once each), and `NewStream` for typed parsing. The guide covers when to use which.

@@ -8,6 +8,7 @@
 // (envelope, response, op types, config schema) lives in the protocol
 // sub-package.
 //
-// A worked example lives at examples/plugins/demo/plugin; it ships as a
-// sub-module so the parent test suite does not depend on it.
+// The plugin guide (website-docs/guides/plugins.md) covers authoring; the
+// first-party plugins under plugins/ (splash, firebase) are complete
+// references.
 package plugin
