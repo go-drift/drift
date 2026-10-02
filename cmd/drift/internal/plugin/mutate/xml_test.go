@@ -41,6 +41,7 @@ func TestApplyAndroidManifestAddPermission(t *testing.T) {
 	ops := []*protocol.OpAndroidManifestAddPermission{
 		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.CAMERA"},
 		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.INTERNET"}, // dedupe
+		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.READ_EXTERNAL_STORAGE", MaxSDK: 32},
 	}
 	changed, err := ApplyAndroidManifest(path, ManifestOps{Permissions: ops})
 	if err != nil {
@@ -55,6 +56,9 @@ func TestApplyAndroidManifestAddPermission(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "android.permission.CAMERA") {
 		t.Errorf("expected CAMERA permission, body:\n%s", body)
+	}
+	if !strings.Contains(string(body), `android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"`) {
+		t.Errorf("expected READ_EXTERNAL_STORAGE up to API 32, body:\n%s", body)
 	}
 	if !strings.Contains(string(body), "User-added comment") {
 		t.Errorf("comment should be preserved")

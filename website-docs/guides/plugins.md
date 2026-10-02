@@ -629,7 +629,7 @@ Each recorder records one op type, shown here by its wire name. "Same location" 
 
 | Recorder | Op | Writes | Conflicts |
 |----------|----|--------|-----------|
-| `Android.Manifest.AddPermission(name)` | `android.manifest.add_permission` | `<uses-permission>` | Set |
+| `Android.Manifest.AddPermission(name)` / `AddPermissionMaxSDK(name, maxSDK)` | `android.manifest.add_permission` | `<uses-permission>`, optionally with `android:maxSdkVersion` | Set |
 | `Android.Manifest.AddIntentFilter(activity, xml)` | `android.manifest.add_intent_filter` | `<intent-filter>` in an activity | Set |
 | `Android.Manifest.SetActivityAttr(activity, attr, value)` / `SetActivityTheme(activity, theme)` | `android.manifest.set_activity_attr` | Activity attribute, such as `android:theme` | Same location |
 | `Android.Manifest.AddMetaData(parent, name, value)` | `android.manifest.add_meta_data` | `<meta-data>` in `application` or `activity:<name>` | Same location |

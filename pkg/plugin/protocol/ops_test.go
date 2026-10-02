@@ -355,6 +355,7 @@ func invalidOps() []Op {
 		&OpAndroidGradleApplyPlugin{Base: base, ID: ""},
 		&OpIOSAddPackageDependency{Base: base, URL: "http://x/y", Requirement: spmFrom("1.0.0"), Products: []string{"P"}},
 		&OpAndroidManifestAddPermission{Base: base, Name: "not a permission"},
+		&OpAndroidManifestAddPermission{Base: base, Name: "android.permission.READ_EXTERNAL_STORAGE", MaxSDK: -1},
 		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<activity/>"},
 		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android theme", Value: "x"},
 		&OpAndroidManifestAddMetaData{Base: base, Parent: "service", Name: "foo"},

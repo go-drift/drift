@@ -632,14 +632,20 @@ func (o *OpIOSAddBundleResource) Validate() error {
 type OpAndroidManifestAddPermission struct {
 	Base
 	Name string `json:"name"`
+	// MaxSDK, when set, is the last API level the permission is requested
+	// on (android:maxSdkVersion), for permissions newer APIs replaced.
+	MaxSDK int `json:"max_sdk,omitempty"`
 }
 
 func (o *OpAndroidManifestAddPermission) Type() string     { return "android.manifest.add_permission" }
 func (o *OpAndroidManifestAddPermission) Platform() string { return "android" }
 func (o *OpAndroidManifestAddPermission) Targets() []Target {
-	return []Target{member("manifest:uses-permission", o.Name)}
+	return []Target{member("manifest:uses-permission", o.Name, strconv.Itoa(o.MaxSDK))}
 }
 func (o *OpAndroidManifestAddPermission) Validate() error {
+	if o.MaxSDK < 0 {
+		return fmt.Errorf("permission %s: max_sdk must not be negative, got %d", o.Name, o.MaxSDK)
+	}
 	return checkMatch(dottedIdentRe, "permission name", o.Name)
 }
 

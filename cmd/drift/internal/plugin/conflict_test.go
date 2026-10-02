@@ -88,6 +88,14 @@ func TestValidate(t *testing.T) {
 			wantLen: 2,
 		},
 		{
+			name: "one permission with different max SDKs conflicts",
+			ops: []protocol.Op{
+				&protocol.OpAndroidManifestAddPermission{Base: mkBase("a"), Name: "android.permission.READ_EXTERNAL_STORAGE", MaxSDK: 32},
+				&protocol.OpAndroidManifestAddPermission{Base: mkBase("b"), Name: "android.permission.READ_EXTERNAL_STORAGE"},
+			},
+			wantConflict: "manifest:uses-permission",
+		},
+		{
 			name: "identical launch screens collapse",
 			ops: []protocol.Op{
 				&protocol.OpIOSReplaceLaunchScreen{Base: mkBase("a"), Content: "<document/>"},

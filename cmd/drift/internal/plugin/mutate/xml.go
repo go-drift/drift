@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
@@ -41,7 +42,7 @@ func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	}
 
 	for _, op := range ops.Permissions {
-		ensurePermission(manifest, op.Name)
+		ensurePermission(manifest, op.Name, op.MaxSDK)
 	}
 
 	app := manifest.SelectElement("application")
@@ -98,7 +99,9 @@ func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	return true, nil
 }
 
-func ensurePermission(manifest *etree.Element, name string) {
+// ensurePermission declares name, up to API level maxSDK when it is set.
+// An existing declaration is kept as is.
+func ensurePermission(manifest *etree.Element, name string, maxSDK int) {
 	for _, el := range manifest.SelectElements("uses-permission") {
 		if attr := el.SelectAttr("android:name"); attr != nil && attr.Value == name {
 			return
@@ -106,6 +109,9 @@ func ensurePermission(manifest *etree.Element, name string) {
 	}
 	perm := etree.NewElement("uses-permission")
 	perm.CreateAttr("android:name", name)
+	if maxSDK > 0 {
+		perm.CreateAttr("android:maxSdkVersion", strconv.Itoa(maxSDK))
+	}
 	// Place at the end of the permissions block (immediately before <application>)
 	// or at the end of <manifest> if there's no <application>.
 	app := manifest.SelectElement("application")

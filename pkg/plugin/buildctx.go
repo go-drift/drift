@@ -397,6 +397,17 @@ func (s *AndroidManifestScope) AddPermission(name string) {
 	})
 }
 
+// AddPermissionMaxSDK declares a permission requested only up to API level
+// maxSDK (android:maxSdkVersion), such as READ_EXTERNAL_STORAGE, which
+// READ_MEDIA_IMAGES replaced in API 33.
+func (s *AndroidManifestScope) AddPermissionMaxSDK(name string, maxSDK int) {
+	s.b.push(&protocol.OpAndroidManifestAddPermission{
+		Base:   newBase(s.b),
+		Name:   name,
+		MaxSDK: maxSDK,
+	})
+}
+
 func (s *AndroidManifestScope) AddIntentFilter(activity string, xml string) {
 	s.b.push(&protocol.OpAndroidManifestAddIntentFilter{
 		Base:     newBase(s.b),

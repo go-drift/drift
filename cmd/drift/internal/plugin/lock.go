@@ -175,6 +175,9 @@ func describeEdit(op protocol.Op, platform string) string {
 	case *protocol.OpIOSReplaceLaunchScreen:
 		return fmt.Sprintf("%s: replaced; restore your own launch screen", launch)
 	case *protocol.OpAndroidManifestAddPermission:
+		if v.MaxSDK > 0 {
+			return fmt.Sprintf("%s: <uses-permission android:name=%q android:maxSdkVersion=\"%d\">", manifest, v.Name, v.MaxSDK)
+		}
 		return fmt.Sprintf("%s: <uses-permission android:name=%q>", manifest, v.Name)
 	case *protocol.OpAndroidManifestAddIntentFilter:
 		return fmt.Sprintf("%s: an <intent-filter> on activity %s", manifest, v.Activity)
