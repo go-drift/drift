@@ -96,7 +96,7 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 
 **Verified (Linux):** `go vet`/`go test` in every module; `drift build android` and `drift build xtool` of splash-demo; `drift build android` of firebase-demo with placeholder config (google-services 4.5.0 runs on AGP 9; manifest service, permission and dependency merge); **FCM on the API 36 emulator, real Firebase project** (`fir-demo-71e74`, sent with `fcmsend`): token delivered to Go; foreground notification and data messages reach `Messages()` with nothing shown; in the background the notification is shown and the data message reaches `Messages()` (`foreground=false`); tapping opens the app and reaches `Opens()`, both with the process alive and after it was killed (the tap that launched it is queued until the app listens); dark-mode Activity recreation replays no tap. **Mac (reported 2026-10-02):** `drift build ios` of splash-demo and firebase-demo; splash on the Simulator; firebase-demo on the Simulator with `xcrun simctl push` payloads carrying `gcm.message_id`: foreground message reaches `Messages()` with no banner, background banner tap and cold-start tap reach `Opens()`. **Not yet:** a real Android device; real iOS delivery through FCM (needs the APNs `.p8` uploaded; config only, no code).
 
-**Phase 3 decisions:** local notifications and the notification permission stay core until a notifications plugin exists (Phase 5); core keeps the one `UNUserNotificationCenterDelegate` and offers notifications to plugins first. Firebase on xtool is an error (push needs `aps-environment`). Foreground FCM notifications are not shown on either platform; the app gets them in `Messages()`. Firebase Go API has no blocking calls. Android pins `firebase-messaging` without the BOM (one artifact).
+**Phase 3 decisions:** local notifications and the notification permission stay core until a notifications plugin exists (Phase 5); core keeps the one `UNUserNotificationCenterDelegate` and offers notifications to plugins first. ~~Firebase on xtool is an error~~ (reversed in Phase 4: plugins must build on xtool; see Phase 4 decisions). Foreground FCM notifications are not shown on either platform; the app gets them in `Messages()`. Firebase Go API has no blocking calls. Android pins `firebase-messaging` without the BOM (one artifact).
 
 **Phase 4 code and docs are done** (`c5d464d`..`36c37c8`):
 
@@ -113,7 +113,7 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 
 **Verified (Linux, Phase 4):** `go vet`/`go test` in the root and plugin modules; Docusaurus build (no broken links from the new pages); edge-to-edge on the API 36 emulator (showcase: icons follow the app theme, and an explicit style survives dark-mode recreation); `drift build xtool` of splash-demo (shared Swift compiles); plugin removal leaves a compiling project: managed Android, watch mode on the emulator (one rebuild), ejected Android (owned files deleted, the theme edit listed once, compiles after undoing it), managed xtool.
 
-**Phase 4 decisions:** follow-ups that land before merge are the ones this branch caused (edge-to-edge from targetSdk 36, dead API checks from minSdk 31) plus the one-line cold-start tap fix; the rest are post-merge (see Known follow-ups). `go test -race ./pkg/engine` fails the same way on `master`, so it is a separate fix.
+**Phase 4 decisions:** follow-ups that land before merge are the ones this branch caused (edge-to-edge from targetSdk 36, dead API checks from minSdk 31) plus the one-line cold-start tap fix; the rest are post-merge (see Known follow-ups). `go test -race ./pkg/engine` fails the same way on `master`, so it is a separate fix. **Plugins never reject xtool**: it is how iOS apps are developed on Linux, so blocking it blocks development of any app using the plugin; what cannot work there is documented instead (release builds use Xcode). Firebase therefore builds on xtool (verified: firebase-ios-sdk compiles and links, the bundle carries `GoogleService-Info.plist` and the signature `aps-environment`); push needs a paid team, as with Xcode. This settles unresolved question 3.
 
 **Deviations from the Phase 3 plan:** no background-modes op (`append_array_item` does it); build half and native/runtime halves landed in one commit (the build half embeds the native sources); `core.Watchable` does not exist, so `Token()` returns a read-only `*core.Derived[string]`.
 
@@ -290,7 +290,7 @@ Cells give status; "pending" cells gate the merge. Re-run anything marked done b
 | `go vet ./...`, `go test ./...` (root and `plugins/*`) | done (Linux, CI) | done (Linux, CI) | done |
 | Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | done on iPhone (Phase 2); re-run on final branch | pending (emulator done) | build only |
 | Splash survives background/foreground during launch, dark-mode toggle | done on iPhone (Phase 2); re-run on final branch | pending (emulator done) | n/a |
-| Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | pending: real FCM push (Simulator done with `simctl push`) | pending (emulator done) | n/a (unsupported) |
+| Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | pending: real FCM push (Simulator done with `simctl push`) | pending (emulator done) | build done; device run optional (needs a paid team) |
 | Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | pending (managed, ejected) | done on emulator: managed, watch, ejected | done: managed |
 | Two plugins touching the same plist key / resource file report a conflict | unit test | unit test | |
 
@@ -314,5 +314,5 @@ Cells give status; "pending" cells gate the merge. Re-run anything marked done b
 
 1. ~~Per-plugin SwiftPM targets / Gradle modules, or loose sources?~~ iOS: per-plugin SwiftPM targets (shipped). Android: loose sources for v1.
 2. ~~Do local notifications stay core until a `notifications` plugin exists, or move with push?~~ Stay core until Phase 5 (see Phase 3 decisions).
-3. Keep the xcodeproj/xtool dual path for plugins that need SwiftPM products on xtool, or declare some plugins xcodeproj-only?
+3. ~~Keep the xcodeproj/xtool dual path, or declare some plugins xcodeproj-only?~~ Dual path; no plugin is xcodeproj-only (Phase 4 decisions).
 4. Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew (today `APIVersion` stays `1`)?

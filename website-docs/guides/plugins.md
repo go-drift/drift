@@ -180,7 +180,7 @@ Nothing here blocks. Messages and taps that arrive before the app listens are qu
 
 Limitations:
 
-- xtool builds fail: push needs the `aps-environment` entitlement. Build iOS with Xcode (`drift build ios`).
+- Push on iOS needs a paid Apple Developer team, on xtool as with Xcode. With a free team the app still runs, but Apple grants no push capability, so no token or message arrives.
 - Android: data messages and token refreshes that arrive while no Activity has started in the process are dropped; the token is fetched again at the next launch.
 - Android: when the system groups several notifications from the app, tapping the group summary opens the app without an `Opens()` event. Tapping an individual notification works.
 
@@ -249,7 +249,8 @@ var Plugin driftplugin.Plugin[Config] = myPlugin{}
 - `Name()` is a short lowercase identifier, unique among the app's plugins. It names the plugin's iOS Swift module (`DriftPlugin_myplugin`).
 - `var Plugin` must have the typed form `driftplugin.Plugin[Config]`.
 - `Build` only records ops on `ctx`; it must not write files. Drift validates the full op list from every plugin before touching the project.
-- Record ops for every platform unconditionally; Drift applies the ones for the platform being built. `ctx.Platform()` (`"ios"`, `"xtool"` or `"android"`) is for the rare plugin that must differ, such as one that does not support a platform: return an error from `Build` naming the alternative, as the Firebase plugin does on xtool.
+- Record ops for every platform unconditionally; Drift applies the ones for the platform being built. `ctx.Platform()` (`"ios"`, `"xtool"` or `"android"`) is for the rare plugin whose ops must differ between them.
+- Support xtool. It is how iOS apps are developed on Linux, so a plugin that rejects it blocks development of every app that uses it. If something cannot work there (for example, a capability xtool cannot sign), build anyway and document what is missing.
 
 ### Config
 

@@ -4,7 +4,7 @@ app:
   orientation: portrait
 
 plugins:
-  # iOS (Xcode 16+) and Android. See plugins/firebase/plugin/plugin.go.
+  # iOS (Xcode 16+), xtool and Android. See plugins/firebase/plugin/plugin.go.
   # The config files are not committed: see README.md to get them.
   - package: github.com/go-drift/drift/plugins/firebase/plugin
     config:
