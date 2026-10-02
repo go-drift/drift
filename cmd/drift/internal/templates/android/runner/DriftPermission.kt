@@ -49,9 +49,10 @@ interface DriftPermission {
     /**
      * Prompts the user if that can change the status, then calls
      * [completion] exactly once, on the main thread, with the resulting
-     * status. Drift calls it only when [status] is not GRANTED,
-     * PERMANENTLY_DENIED or RESTRICTED. [options] are the kind-specific
-     * options Go passed (empty for most kinds).
+     * status. Drift calls it whenever [status] is not GRANTED: Android's
+     * "don't ask again" is inferred, so the system decides whether to
+     * prompt (a request it refuses returns at once). [options] are the
+     * kind-specific options Go passed (empty for most kinds).
      */
     fun request(
         activity: FragmentActivity,
@@ -88,10 +89,16 @@ open class DriftRuntimePermission(
         return when {
             granted == permissions.size -> DriftPermissionStatus.GRANTED
             granted > 0 -> DriftPermissionStatus.LIMITED
-            // Android only says "don't ask again" through the rationale flag
-            // after a request, so remember whether one was made.
-            !asked(context) -> DriftPermissionStatus.NOT_DETERMINED
-            activity == null || shouldShowRationale(activity) -> DriftPermissionStatus.DENIED
+            // Android raises the rationale flag after the user's first
+            // denial and lowers it again after the last one it will prompt
+            // for. A dismissed dialog changes neither, so it is not a
+            // denial: only a lowered flag after a raised one is permanent.
+            activity != null && shouldShowRationale(activity) -> {
+                markDeniedOnce(context)
+                DriftPermissionStatus.DENIED
+            }
+            !deniedOnce(context) -> DriftPermissionStatus.NOT_DETERMINED
+            activity == null -> DriftPermissionStatus.DENIED
             else -> DriftPermissionStatus.PERMANENTLY_DENIED
         }
     }
@@ -110,7 +117,6 @@ open class DriftRuntimePermission(
             finished = true
             launcher.unregister()
             activity.lifecycle.removeObserver(observer)
-            markAsked(activity)
             completion(status(activity, activity))
         }
         // The result goes to the Activity that launched the prompt; if it is
@@ -140,13 +146,13 @@ open class DriftRuntimePermission(
         }
     }
 
-    private val askedKey = "asked:" + permissions.sorted().joinToString(",")
+    private val deniedOnceKey = "denied-once:" + permissions.sorted().joinToString(",")
 
-    private fun asked(context: Context): Boolean =
-        prefs(context).getBoolean(askedKey, false)
+    private fun deniedOnce(context: Context): Boolean =
+        prefs(context).getBoolean(deniedOnceKey, false)
 
-    private fun markAsked(context: Context) {
-        prefs(context).edit().putBoolean(askedKey, true).apply()
+    private fun markDeniedOnce(context: Context) {
+        prefs(context).edit().putBoolean(deniedOnceKey, true).apply()
     }
 
     companion object {

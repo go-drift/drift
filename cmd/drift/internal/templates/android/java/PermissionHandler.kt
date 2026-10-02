@@ -47,15 +47,12 @@ object PermissionHandler {
             asyncMethod("request") { args, result ->
                 val (kind, permission) = lookup(args)
                 val current = permission.status(context, foreground())
-                when (current) {
-                    // No prompt can change these.
-                    DriftPermissionStatus.GRANTED,
-                    DriftPermissionStatus.PERMANENTLY_DENIED,
-                    DriftPermissionStatus.RESTRICTED -> {
-                        result.success(mapOf("status" to current.wire))
-                        return@asyncMethod
-                    }
-                    else -> {}
+                // Only a grant is certain; "permanently denied" is inferred,
+                // so Android decides whether to prompt (it answers at once
+                // when it will not).
+                if (current == DriftPermissionStatus.GRANTED) {
+                    result.success(mapOf("status" to current.wire))
+                    return@asyncMethod
                 }
                 val activity = foreground() as? FragmentActivity
                     ?: throw DriftCallError("platform_unavailable", "no foreground Activity to show the $kind permission prompt")
@@ -128,7 +125,11 @@ private object NotificationsPermission : DriftPermission {
         options: Map<String, Any?>,
         completion: (DriftPermissionStatus) -> Unit,
     ) {
-        // Below Android 13, status() is never one that reaches here.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            // Nothing to ask: the user turns notifications on in Settings.
+            completion(status(activity, activity))
+            return
+        }
         runtime.request(activity, options, completion)
     }
 
