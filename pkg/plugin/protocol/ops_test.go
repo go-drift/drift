@@ -460,3 +460,14 @@ func TestAddServiceTargetsName(t *testing.T) {
 		t.Error("different services share a target")
 	}
 }
+
+// An integer and a float of equal value are different plist values
+// (<integer> vs <real>), so two plugins writing them conflict.
+func TestSetDictTargetDistinguishesIntFromFloat(t *testing.T) {
+	op := func(v any) *OpPlistSetDict {
+		return &OpPlistSetDict{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{"n": v}}
+	}
+	if reflect.DeepEqual(op(2).Targets(), op(2.0).Targets()) {
+		t.Error("SetDict {n: 2} and {n: 2.0} have the same target content")
+	}
+}

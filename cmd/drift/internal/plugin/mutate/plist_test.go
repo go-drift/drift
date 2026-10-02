@@ -151,3 +151,36 @@ func TestApplyPlistAppendToNonArrayFails(t *testing.T) {
 		t.Errorf("plist changed despite the error: %s", body)
 	}
 }
+
+// A dict crosses the bridge as JSON, which writes float64(2) as 2; the
+// plist must still get <integer> for ints and <real> for floats.
+func TestApplyPlistSetDictKeepsNumberKinds(t *testing.T) {
+	sent := &protocol.OpPlistSetDict{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("Limits"), Value: map[string]any{
+		"count": 2,
+		"ratio": 2.0,
+		"list":  []any{3, 1.5},
+	}}
+	raw, err := protocol.MarshalOp(sent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op, err := protocol.UnmarshalOp(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := writePlist(t)
+	if _, err := ApplyPlist(path, []protocol.PlistOp{op.(protocol.PlistOp)}); err != nil {
+		t.Fatalf("ApplyPlist: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	flat := strings.Join(strings.Fields(string(body)), "")
+	for _, want := range []string{
+		"<key>count</key><integer>2</integer>",
+		"<key>ratio</key><real>2</real>",
+		"<array><integer>3</integer><real>1.5</real></array>",
+	} {
+		if !strings.Contains(flat, want) {
+			t.Errorf("plist lacks %s:\n%s", want, body)
+		}
+	}
+}

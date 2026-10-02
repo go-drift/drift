@@ -177,8 +177,13 @@ func TestValidate(t *testing.T) {
 			wantLen: 2,
 		},
 		{
-			name:    "identical SwiftPM requests collapse",
+			name:    "same SwiftPM product in two plugins' modules",
 			ops:     []protocol.Op{spmOp("a", "11.0.0", "FirebaseCore"), spmOp("b", "11.0.0", "FirebaseCore")},
+			wantLen: 2,
+		},
+		{
+			name:    "identical SwiftPM requests from one plugin collapse",
+			ops:     []protocol.Op{spmOp("a", "11.0.0", "FirebaseCore"), spmOp("a", "11.0.0", "FirebaseCore")},
 			wantLen: 1,
 		},
 		{
