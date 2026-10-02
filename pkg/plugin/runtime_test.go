@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -206,6 +207,53 @@ func TestBindBuildDecodesTypedConfig(t *testing.T) {
 	}
 	if got != "#abc" {
 		t.Errorf("got %q, want %q", got, "#abc")
+	}
+}
+
+// Config reaches typed fields exactly as written in drift.yaml: a string
+// field takes the scalar's text, not its YAML number reading, and defaults
+// fill only absent keys (including inside merged and nested mappings).
+func TestBindBuildKeepsScalarsAsWritten(t *testing.T) {
+	type inner struct {
+		Name  string `yaml:"name"`
+		Color string `yaml:"color" drift:"default=#FFFFFF"`
+	}
+	type cfg struct {
+		Version string  `yaml:"version"`
+		Code    string  `yaml:"code"`
+		Fade    int     `yaml:"fade" drift:"default=300"`
+		Scale   float64 `yaml:"scale" drift:"default=1.5"`
+		Dark    inner   `yaml:"dark"`
+		Items   []inner `yaml:"items"`
+	}
+	var got cfg
+	p := pluginFn[cfg]{name: "test", build: func(_ *BuildCtx, c cfg) error { got = c; return nil }}
+	b := Bind[cfg]("github.com/test/p", p)
+	ctx := newBuildCtx(b.Package, b.Name, protocol.Envelope{Platform: "all", ProjectRoot: "/", BuildDir: "/", AppID: TestAppID})
+	config := `version: 1.10
+code: 0123
+dark:
+  <<: {color: "#000000"}
+  name: night
+items:
+  - &first
+    name: a
+  - <<: *first
+    color: "#111111"
+`
+	if err := b.Build(ctx, []byte(config)); err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	want := cfg{
+		Version: "1.10",
+		Code:    "0123",
+		Fade:    300,
+		Scale:   1.5,
+		Dark:    inner{Name: "night", Color: "#000000"},
+		Items:   []inner{{Name: "a", Color: "#FFFFFF"}, {Name: "a", Color: "#111111"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("config = %+v\nwant     %+v", got, want)
 	}
 }
 

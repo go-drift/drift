@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/go-drift/drift/pkg/plugin/protocol"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -85,17 +87,16 @@ func ParseManifest(data []byte) ([]ConfiguredPlugin, error) {
 	return out, nil
 }
 
-// ConfigYAML returns the plugin's config as canonical YAML text for the
-// bridge. Anchors and merge keys (`<<: *base`) are resolved first, since
-// the config block is sent on its own and an alias to an anchor defined
-// elsewhere in drift.yaml would dangle. Empty config encodes as "".
+// ConfigYAML returns the plugin's config as standalone YAML text for the
+// bridge (see protocol.ResolveYAML): anchors and merge keys resolved,
+// scalars exactly as written. Empty config encodes as "".
 func (p ConfiguredPlugin) ConfigYAML() (string, error) {
 	if p.Config.Kind == 0 {
 		return "", nil
 	}
-	var resolved any
-	if err := p.Config.Decode(&resolved); err != nil {
-		return "", fmt.Errorf("decode config for %s: %w", p.Package, err)
+	resolved, err := protocol.ResolveYAML(&p.Config)
+	if err != nil {
+		return "", fmt.Errorf("config for %s: %w", p.Package, err)
 	}
 	data, err := yaml.Marshal(resolved)
 	if err != nil {
