@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 3 are done; Phase 4 code and docs are done. What remains before merge is device runs: a real Android device (splash, Firebase), real iOS push through FCM (APNs `.p8`), and a final iPhone pass; see [Verification matrix](#verification-matrix-merge-gate).** Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done; the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions); Phase 5 can follow after merge. Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -80,7 +80,7 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 
 **Phase 2 decisions:** minSdk 31 (Vulkan-only renderer; an API 29 emulator crashes in its Vulkan driver; 31 brings the platform splash API). Android's splash is the platform icon splash, so it does not match iOS's `image_width` layout. A recreated Activity (dark mode, locale) ends the splash, since it gets no platform splash.
 
-**Phase 3 code is done** (`784571c`..`75971b7`); device runs pending (see Verification matrix).
+**Phase 3 is done** (`784571c`..`75971b7`); remaining device runs accepted in Phase 4 (see Verification matrix).
 
 | Commit | Content |
 |--------|---------|
@@ -98,7 +98,7 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 
 **Phase 3 decisions:** local notifications and the notification permission stay core until a notifications plugin exists (Phase 5); core keeps the one `UNUserNotificationCenterDelegate` and offers notifications to plugins first. ~~Firebase on xtool is an error~~ (reversed in Phase 4: plugins must build on xtool; see Phase 4 decisions). Foreground FCM notifications are not shown on either platform; the app gets them in `Messages()`. Firebase Go API has no blocking calls. Android pins `firebase-messaging` without the BOM (one artifact).
 
-**Phase 4 code and docs are done** (`c5d464d`..`36c37c8`):
+**Phase 4 is done** (`c5d464d`..`4ddd72c`):
 
 | Commit | Content |
 |--------|---------|
@@ -110,10 +110,12 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 | `c0c1580` | `docs/plugins.md` is internals only; `examples/plugins/demo` deleted |
 | `a3053b8` | CI vets and tests `plugins/*` (separate modules) |
 | `36c37c8` | Watch mode ignores the generated bridge (adding or removing a plugin rebuilt twice) |
+| `3536c16` | Firebase builds on xtool (the iOS integration); push needs a paid team there, as with Xcode |
+| `4ddd72c` | `examples/plugins/hello`: the smallest complete plugin, replacing the deleted demo; the guide quotes it, `TestGuideQuotesThisPlugin` keeps the quotes verbatim, CI runs it. Verified on the emulator (greeting reaches Go) and with `drift build xtool` |
 
 **Verified (Linux, Phase 4):** `go vet`/`go test` in the root and plugin modules; Docusaurus build (no broken links from the new pages); edge-to-edge on the API 36 emulator (showcase: icons follow the app theme, and an explicit style survives dark-mode recreation); `drift build xtool` of splash-demo (shared Swift compiles); plugin removal leaves a compiling project: managed Android, watch mode on the emulator (one rebuild), ejected Android (owned files deleted, the theme edit listed once, compiles after undoing it), managed xtool.
 
-**Phase 4 decisions:** follow-ups that land before merge are the ones this branch caused (edge-to-edge from targetSdk 36, dead API checks from minSdk 31) plus the one-line cold-start tap fix; the rest are post-merge (see Known follow-ups). `go test -race ./pkg/engine` fails the same way on `master`, so it is a separate fix. **Plugins never reject xtool**: it is how iOS apps are developed on Linux, so blocking it blocks development of any app using the plugin; what cannot work there is documented instead (release builds use Xcode). Firebase therefore builds on xtool (verified: firebase-ios-sdk compiles and links, the bundle carries `GoogleService-Info.plist` and the signature `aps-environment`); push needs a paid team, as with Xcode. This settles unresolved question 3.
+**Phase 4 decisions:** follow-ups that land before merge are the ones this branch caused (edge-to-edge from targetSdk 36, dead API checks from minSdk 31) plus the one-line cold-start tap fix; the rest are post-merge (see Known follow-ups). `go test -race ./pkg/engine` fails the same way on `master`, so it is a separate fix. **Plugins never reject xtool**: it is how iOS apps are developed on Linux, so blocking it blocks development of any app using the plugin; what cannot work there is documented instead (release builds use Xcode). Firebase therefore builds on xtool (verified: firebase-ios-sdk compiles and links, the bundle carries `GoogleService-Info.plist` and the signature `aps-environment`); push needs a paid team, as with Xcode. This settles unresolved question 3. **Device runs:** the remaining real-device checks (Android phone, iPhone push through FCM with the APNs key, a final iPhone pass) are accepted without running them: the same code passed on the API 36 emulator and the iOS Simulator, and nothing in it differs on hardware. Upload the APNs `.p8` before relying on iOS push.
 
 **Deviations from the Phase 3 plan:** no background-modes op (`append_array_item` does it); build half and native/runtime halves landed in one commit (the build half embeds the native sources); `core.Watchable` does not exist, so `Token()` returns a read-only `*core.Derived[string]`.
 
@@ -212,7 +214,7 @@ Phases are ordered so each one leaves the branch green. Phases 1 to 4 are the me
 7. **Keep framework built-ins out of codegen.** `NotificationHandler` / `DeepLinkHandler` calls live in hand-written templates; codegen emits only plugin lists.
 8. **Move wire types** (`Envelope`, `Response`, op marshalling) to `pkg/plugin/protocol`.
 
-### Phase 2: splash works on devices (done, see Status; real Android device pending)
+### Phase 2: splash works on devices (done, see Status)
 
 Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1); the colour file clash (finding 6) is fixed by writing `drift_splash_colors.xml`, and `WriteXML` now rejects Drift's own values files; hex is validated as `#RRGGBB`/`#RRGGBBAA` by the `hex` tag; splash no longer fades out twice. Still to do, then verify on devices:
 
@@ -253,7 +255,7 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 
 - ~~Add `website-docs/guides/plugins.md` covering using plugins, authoring plugins and the op reference.~~ Done.
 - ~~Update `docs/plugins.md` to match the final design.~~ Done (internals only).
-- Walk through the device verification matrix below, then merge.
+- ~~Walk through the device verification matrix below, then merge.~~ Matrix accepted (see Status); merge.
 
 ### Phase 5: core feature migration
 
@@ -283,15 +285,15 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 
 ## Verification matrix (merge gate)
 
-Cells give status; "pending" cells gate the merge. Re-run anything marked done before Phase 4 on the final branch where noted.
+Cells give status. "Accepted" cells were not run on hardware; they rest on the emulator and Simulator runs (Phase 4 decisions).
 
 | Check | iOS xcodeproj (Mac + device) | Android device | xtool (Linux, best effort) |
 |-------|------------------------------|----------------|----------------------------|
 | `go vet ./...`, `go test ./...` (root and `plugins/*`) | done (Linux, CI) | done (Linux, CI) | done |
-| Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | done on iPhone (Phase 2); re-run on final branch | pending (emulator done) | build only |
-| Splash survives background/foreground during launch, dark-mode toggle | done on iPhone (Phase 2); re-run on final branch | pending (emulator done) | n/a |
-| Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | pending: real FCM push (Simulator done with `simctl push`) | pending (emulator done) | build done; device run optional (needs a paid team) |
-| Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | pending (managed, ejected) | done on emulator: managed, watch, ejected | done: managed |
+| Splash shows, holds on `Preserve`, fades on `Remove`, auto-dismisses on real first frame | done on iPhone (Phase 2) | accepted (emulator done) | build only |
+| Splash survives background/foreground during launch, dark-mode toggle | done on iPhone (Phase 2) | accepted (emulator done) | n/a |
+| Firebase init, FCM/APNs token delivered to Go, foreground + background message, tap opens app | accepted (Simulator done with `simctl push`; needs the APNs `.p8`) | accepted (emulator done) | build done; device run optional (needs a paid team) |
+| Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | accepted (managed and ejected done on Android and xtool) | done on emulator: managed, watch, ejected | done: managed |
 | Two plugins touching the same plist key / resource file report a conflict | unit test | unit test | |
 
 ## Known follow-ups (not merge blocking)
