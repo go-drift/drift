@@ -26,6 +26,22 @@ package's stable error sentinels (`ErrCanceled` / `ErrTimeout` for permissions,
 `ctx.Err()` for camera/storage). The native operation continues to completion
 in the background and its result is discarded — CGO has no abort path.
 
+These calls wait for the user, and the reply needs the platform main thread.
+Go's UI thread (widget callbacks, `Build`, `InitState`) **is** that main
+thread, so calling them from it freezes the app. Call them from a goroutine
+and publish the result with `drift.Dispatch` or a `Signal`:
+
+```go
+go func() {
+    result, err := platform.Camera.Permission.Request(ctx)
+    drift.Dispatch(func() { s.cameraAllowed = err == nil && result == platform.PermissionGranted })
+}()
+```
+
+The same applies to the date and time pickers. Plugin methods that reply
+later fail fast with `platform.ErrBlocksUIThread` when called from the UI
+thread; these built-ins gain that guard as they move to plugins.
+
 ## Clipboard
 
 Copy and paste text:
@@ -831,7 +847,7 @@ Secure storage works on every platform Drift supports: the Keychain on iOS, Encr
 
 ## Thread Safety
 
-Platform services are safe to call from any goroutine. However, when updating UI state from platform callbacks, use `drift.Dispatch`:
+Platform services are safe to call from any goroutine, but calls that wait for the user must not run on the UI thread (see [Context conventions](#context-conventions)). When updating UI state from platform callbacks, use `drift.Dispatch`:
 
 ```go
 unsubscribe := platform.Location.Updates().Listen(func(update platform.LocationUpdate) {

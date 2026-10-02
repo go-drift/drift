@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done; the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions); Phase 5 can follow after merge. Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the branch is ready to merge once the new method-call transport has run on the iOS Simulator (see Second review).** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is next. Open work is tracked in [Known follow-ups](#known-follow-ups), split into what must land before the first release that ships plugins and what can wait. Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -118,6 +118,21 @@ A plugin system that cannot support Firebase is not worth merging. Firebase is t
 **Phase 4 decisions:** follow-ups that land before merge are the ones this branch caused (edge-to-edge from targetSdk 36, dead API checks from minSdk 31) plus the one-line cold-start tap fix; the rest are post-merge (see Known follow-ups). `go test -race ./pkg/engine` fails the same way on `master`, so it is a separate fix. **Plugins never reject xtool**: it is how iOS apps are developed on Linux, so blocking it blocks development of any app using the plugin; what cannot work there is documented instead (release builds use Xcode). Firebase therefore builds on xtool (verified: firebase-ios-sdk compiles and links, the bundle carries `GoogleService-Info.plist` and the signature `aps-environment`); push needs a paid team, as with Xcode. This settles unresolved question 3. **Device runs:** the remaining real-device checks (Android phone, iPhone push through FCM with the APNs key, a final iPhone pass) are accepted without running them: the same code passed on the API 36 emulator and the iOS Simulator, and nothing in it differs on hardware. Upload the APNs `.p8` before relying on iOS push.
 
 **Deviations from the Phase 3 plan:** no background-modes op (`append_array_item` does it); build half and native/runtime halves landed in one commit (the build half embeds the native sources); `core.Watchable` does not exist, so `Token()` returns a read-only `*core.Derived[string]`.
+
+### Second review (2026-10-02)
+
+A second three-part review (design, pipeline correctness, native runtime) checked the code rather than this Status table. It confirmed every structural finding from the first review is resolved, and found five pre-merge problems, fixed in `619ccce`..`c62b3cb`:
+
+| Commit | Content |
+|--------|---------|
+| `619ccce` | `drift eject ios` wrote a pbxproj naming `Runner.entitlements` but not the file, so every freshly ejected iOS project failed to build. Eject and the managed scaffold now share `scaffold.WriteIOSProject`; a test checks every `CODE_SIGN_ENTITLEMENTS` file is written |
+| `c03320e` | Plugin config passed through `map[string]any`, so unquoted values changed (`1.10` became `"1.1"`, `0123` became `"83"`). `protocol.ResolveYAML` resolves anchors and merge keys and keeps values as written; defaults are applied to the YAML; decoding into the typed config is strict |
+| `aed86e2` | A second plugin asking for the same SwiftPM product was dropped as a duplicate, so its `import` failed. Products are tracked per plugin. `SetDict` keeps integers and floats distinct (`<integer>` vs `<real>`) |
+| `c62b3cb` | Method-call transport. A cancelable context moved a native call onto another goroutine, hiding the UI thread from native, which then waited on the main thread while the main thread waited on Go (a frozen UI). Go now starts every call on the calling thread with a call ID; native replies once through `DriftPlatformReply`, in place or later from any thread; Go waits for the reply or `ctx`. Plugins declare each method as `method` (replies by returning) or `asyncMethod` (replies through `DriftResult`); an async method called from the UI thread fails with `ErrBlocksUIThread` before it runs; a dropped `DriftResult` fails with `ErrReplyDropped`; a second reply crashes on both platforms; unknown methods fail with `ErrMethodNotFound`. Native error codes match Go sentinels under `errors.Is` |
+
+**Verified:** `go vet`/`go test` in the root and plugin modules; on the API 36 emulator with a scratch plugin: a UI-thread call with `context.WithTimeout` returns at once, `1.10` arrives as `1.10`, an async method from the UI thread gets `ErrBlocksUIThread` and from a goroutine replies, an unknown method gets `ErrMethodNotFound`, a dropped result gets `ErrReplyDropped` after GC. **Not yet:** the new transport on iOS was compiled and linked (`drift build xtool`) but not run. Run `examples/plugins/hello` and `examples/firebase-demo` on the Simulator before merge.
+
+**Behaviour to know:** built-in channels still run synchronously on the calling thread, so `ErrBlocksUIThread` only protects plugin methods. Built-ins that wait for the user (permission requests, camera, pickers) still freeze the app if called from the UI thread; they get the guard by moving to plugins with `asyncMethod` in Phase 5. On Android a dropped result is detected only after garbage collection.
 
 ## Review findings driving this plan
 
@@ -265,7 +280,7 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 
 | Feature | Move? | What it adds to every app today | Go API (`pkg/platform`) | Native (templates) |
 |---------|-------|---------------------------------|-------------------------|--------------------|
-| Push notifications | **Phase 3** (Firebase plugin) | Firebase BOM + messaging, `POST_NOTIFICATIONS`, `DriftNotificationReceiver`, `remote-notification` background mode | `notifications.go`, `notification_permission.go` | `NotificationHandler` (iOS in `PlatformChannel.swift`, Android `NotificationHandler.kt`, `NotificationBridge.kt`, `DriftNotificationReceiver.kt`) |
+| Push notifications | **Done in Phase 3** (Firebase plugin) | Firebase BOM + messaging, `POST_NOTIFICATIONS`, `DriftNotificationReceiver`, `remote-notification` background mode | `notifications.go`, `notification_permission.go` | `NotificationHandler` (iOS in `PlatformChannel.swift`, Android `NotificationHandler.kt`, `NotificationBridge.kt`, `DriftNotificationReceiver.kt`) |
 | Local notifications | Yes (`notifications` plugin) | `POST_NOTIFICATIONS`, notification auth | `notifications.go` | same as above |
 | Location | Yes, first after merge (Play policy) | `play-services-location`, fine/coarse/**background** location, `NSLocationAlwaysAndWhenInUse...` | `location.go` | `LocationHandler.swift/.kt` |
 | Camera, photos, microphone | Yes (`camera`, `image_picker`) | `CAMERA`, `RECORD_AUDIO`, `READ_MEDIA_*`, legacy storage permissions, `FileProvider`, 4 iOS usage strings | `camera.go`, `photos.go`, `microphone.go` | `CameraHandler.swift/.kt` |
@@ -280,7 +295,9 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 **Migration notes:**
 - `PermissionHandler` (iOS 456 lines, Android 242) knows every permission type. Split it so core keeps the request mechanism and each plugin registers its own permission kinds (`permissions.go`, `permission_interface.go`).
 - Each migrated plugin moves its manifest permissions, usage strings, Gradle deps and background modes from the templates into its `Build`. Templates end up declaring only `INTERNET` and `ACCESS_NETWORK_STATE`.
-- Plugins needing `<service>`/`<receiver>`/`<provider>` or background modes depend on phase 3's new ops (or phase 1's per-plugin Gradle modules).
+- `android.manifest.add_service` exists; `<receiver>` and `<provider>` ops do not yet (local notifications need a receiver, camera needs the `FileProvider`). Background modes go through `ios.plist.append_array_item`.
+- Built-ins that wait for the user (`Permission.Request`, `Camera.CapturePhoto`/`PickFromGallery`, `Storage.PickFile`/`PickDirectory`/`SaveFile`, the date and time pickers) use a request ID plus a result event channel (`pkg/platform/camera.go`, `permissions.go`) and block the UI thread if called from it. As plugins they become one `asyncMethod` each: delete the request-ID and event plumbing, and the UI-thread guard comes for free.
+- Android plugins register from `MainActivity.onCreate` today. A migrated feature that runs without an Activity (background tasks, notification receivers, boot) needs process-level registration first (see Known follow-ups).
 - Showcase (`showcase/`) uses many of these APIs; update it as each feature moves.
 
 ## Verification matrix (merge gate)
@@ -296,21 +313,73 @@ Cells give status. "Accepted" cells were not run on hardware; they rest on the e
 | Removing a plugin from `drift.yaml` leaves a compiling project (managed, watch mode, ejected) | accepted (managed and ejected done on Android and xtool) | done on emulator: managed, watch, ejected | done: managed |
 | Two plugins touching the same plist key / resource file report a conflict | unit test | unit test | |
 
-## Known follow-ups (not merge blocking)
+## Known follow-ups
 
-- **xtool may create two windows (unverified).** `SceneDelegate.swift` is copied into xtool (`scaffold/xtool.go:52-57`) and named in `xtool/Info.plist.tmpl` next to a SwiftUI `WindowGroup`. The `xtool/AppDelegate.swift` comment claims there is no SceneDelegate.
-- **xtool launch storyboard.** It is uncompiled and sits in the SwiftPM resource bundle, while `UILaunchStoryboardName` looks in the main bundle.
+Not merge blocking. File references are from `c62b3cb`.
+
+### Before the first release that ships plugins
+
+**Plugin lifecycle (Android)**
+- **Process-level registration.** Plugins register from `MainActivity.onCreate` (`MainActivity.kt`), so FCM data messages and token refreshes that start the process without an Activity are dropped (`DriftFirebaseMessagingService.kt`); the token is fetched again at the next start. Every future service, receiver or boot plugin hits the same wall. Register from an `Application` subclass or an `androidx.startup` initializer.
+- **Fresh-launch detection is duplicated.** Plugins guess "first attach in this process" themselves (`DriftFirebasePlugin.kt`, `DriftSplashPlugin.kt`), while `MainActivity` uses `savedInstanceState` / `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`. When the process lives but `MainActivity` was finished (back from a task rooted by a deep link, "Don't keep activities", `finish()`), a later FCM tap cold-creates the Activity and `Opens()` never fires. `MainActivity` should compute it once and expose it on `DriftActivityBinding`.
+
+**Splash (iOS)**
+- **Timeout counts from process launch.** `DriftSplashPlugin.swift` arms the timer in `register` (`didFinishLaunching`). Firebase adds the `remote-notification` mode, so a silent push can launch the process in the background; if the user opens the app after `max_duration_ms`, Preserve is ignored and the splash hides at the first content frame. Start the timer on first attach.
+- **A missed `first_frame` leaves the splash up forever** (both platforms). Dismissal requires `contentShown` and the timeout never overrides it; `first_frame` is one-shot and needs the content frame to pass every guard (`nextDrawable`, `renderSync`; `slotIndex >= 0` on Android). Re-arm on a later frame, or add a hard ceiling that ignores `contentShown`.
+
+**iOS detach and leaks**
+- **Detach never runs on scene disconnect.** `CADisplayLink(target: self)` (`DriftViewController.swift`) holds the view controller strongly until `viewDidDisappear`, `SceneDelegate` has no `sceneDidDisconnect`, and detach depends on `deinit`. Plugins stay attached to a dead controller and the controller, Metal view and display link leak, even when no plugin retains the binding (`DriftViewBinding` also holds the controller strongly). Detach explicitly in `sceneDidDisconnect` and give the display link a weak proxy target.
+
+**Ejected projects (`.drift/plugins.lock.json`, `cmd/drift/internal/plugin/lock.go`)**
+- **A plugin upgrade looks like a removal.** Lock keys include target content (for example the Gradle coordinate with its version), so a version bump fails the next ejected build once with "plugins removed ... left these edits" and leaves the old line next to the new one. Key the lock on the target without content.
+- **The lock can delete a file the same build just wrote.** If a CLI upgrade renames an op type or changes its targets, the old key disappears while the hash still matches, so `SyncEjectedLock` deletes the path after `Apply` wrote it (reproduced with `app/google-services.json`; the next build recovers). Never delete a path a current op owns.
+- **Plugins can overwrite user files.** `Apply` writes owned files unconditionally and `WriteXML` only reserves Drift's `plugin_*` values files, so a plugin can replace `drawable/launch_background.xml`, `values/styles.xml`, a user's image set or a Kotlin file in `com.drift.runner`; the lock then records Drift's hash and a later removal deletes it. In ejected mode, refuse to overwrite an existing file that is not in the previous lock and differs; reserve template resource paths and the `com.drift.runner` package.
+- **The lock file is written non-atomically** (`lock.go`), so a crash mid-write fails every later build; paths read from it are not confined to the project.
+- **Template-declared entries are blamed on plugins.** Firebase adds `POST_NOTIFICATIONS`, which the template already declares, so removing it from an ejected project asks the user to delete a permission core still needs.
+
+**Distribution and versioning**
+- **Plugin modules require `github.com/go-drift/drift v0.0.0` with `replace => ../..`** (`plugins/*/go.mod`), and `scripts/release.sh` tags only the root. Plugins declare no minimum drift version and nothing checks skew between a plugin's native code and the CLI's `DriftPluginAPI` templates (Unresolved question 4). Tag `plugins/<name>/vX`, require a real drift version, and have the bridge report its `pkg/plugin` version so the CLI fails on skew.
+
+**Author experience**
+- **No local-development workflow in the guide.** It does not explain the app `go.mod` `replace` needed to try an unpublished plugin, and `examples/plugins/hello` uses a repo-relative replace plus `v0.0.0`, so copying it outside the repo breaks.
+- **No example app consumes `hello`**, so an author cannot run it without writing an app first.
+- **Missing hooks, undocumented:** Android activity-result and permission-result listeners; iOS open-URL and user-activity hooks (deleted in `329c431`), so a deep-link or OAuth plugin can only be written for Android.
+
+### Later
+
+**Correctness, low severity**
+- **`theme` vs `android:theme` do not conflict.** `SetActivityAttr.Targets()` uses the raw attribute name, while `setNSAttr` adds the `android:` prefix; normalise in `Targets()`.
+- **Bitmap target key names the wrong directory.** It claims `drawable/<stem>` but writes `drawable-nodpi/`, missing a real clash and reporting a false one. `WriteXML` into `values*/` claims only the file, so duplicate resource names inside it surface only in Gradle.
+- **Android string values are not escaped** (`mutate/xml.go`), so an apostrophe fails aapt.
+- **`drift plugin sync` does not type-check scalars** (`n: notanint` for an int field passes sync, fails build); a null optional struct is reported as "must be a mapping".
+- **Intent-filter dedup ignores the filter's own attributes** (`canonicalIntent`), so `autoVerify` is lost if an equivalent filter exists.
+- **The same package listed twice in drift.yaml** gives a duplicate-import Go error instead of a clear message.
+- **`walkEmbedFS` with root `"."`** flattens subdirectories.
+- **Envelope `AppID` always comes from drift.yaml**, even for ejected projects whose id may differ (Firebase checks against it).
+- **Old Drift-owned support files are never pruned from ejected projects** (`EnsureRunnerSupport`), so projects ejected before this branch keep `MethodHandler.kt`, `DriftOverlayHost.kt` and similar.
+- **`first_frame` fires per view, not per process** (the guard lives on each `SkiaHostView` / `DriftRenderer`), so Activity recreation or scene reconnect emits it again, contradicting `frame_events.go`.
+
+**Runtime semantics**
 - **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen).
-- **FCM with no running app**: Android data messages and token refreshes that start the process without an Activity are dropped (plugins register from `MainActivity.onCreate`); the token is fetched again at the next start.
-- **Emulator Play services**: the `pixel_8` google_apis image warns its Play services (25.26) is older than firebase-messaging 25.1.3 asks for (26.12); FCM works anyway.
-- **Android auto-grouped notifications**: tapping the system's group summary (several notifications from the app) opens the app without FCM extras, so no `Opens()` event; tapping an individual notification works. Setting a notification group per message, or handling the summary, is follow-up work.
-- **Bridge cache entries** under the cache root are never garbage-collected.
-- **iOS detach** relies on `DriftViewController.deinit`; a plugin that retains its `DriftViewBinding` keeps the view controller alive.
-
-- **System dark mode.** Neither platform reports the system appearance to Go, so apps cannot follow it.
+- **The first subscriber to a queued channel drains it**, so an analytics listener on `Opens()` that subscribes first steals the launch tap from the router. `Subscription.Cancel` sets its flag before removing the subscription, so a dispatch in that window loses an event instead of queueing it; an app that never subscribes to `Messages()` gets a report for every message after 32.
+- **iOS silent push completes immediately** (`DriftFirebasePlugin.swift` calls `completion(.newData)` at once), so Go cannot finish background work before suspension; no scene connects, so no app Go code runs.
+- **Preserve after the splash timeout** returns success and has no effect, with no log.
 - **Deep links replay on Android recreation.** `MainActivity.onCreate` passes the launch intent to `DeepLinkHandler` again after dark-mode recreation or a Recents relaunch (notification taps no longer do).
+- **Android auto-grouped notifications**: tapping the system's group summary opens the app without FCM extras, so no `Opens()` event; tapping an individual notification works.
+
+**xtool**
+- **xtool may create two windows (unverified).** `SceneDelegate.swift` is copied into xtool (`scaffold/xtool.go`) and named in `xtool/Info.plist.tmpl` next to a SwiftUI `WindowGroup`; the `xtool/AppDelegate.swift` comment claims there is no SceneDelegate.
+- **xtool launch storyboard.** It is uncompiled and sits in the SwiftPM resource bundle, while `UILaunchStoryboardName` looks in the main bundle.
+
+**Platform and tooling**
+- **System dark mode.** Neither platform reports the system appearance to Go, so apps cannot follow it.
 - **Splash dark mode.** Needs appearance-aware image set and colour set ops on iOS (not on xtool before xtool#219), and a night colour on Android.
+- **Ejected-project file hygiene.** The whole `Info.plist` is re-marshalled (comments stripped), the manifest re-indented, Gradle brace counting ignores strings and comments, and dependency dedup matches exact lines.
+- **Bridge cache entries** under the cache root are never garbage-collected. The bridge log lands in `platform/<p>/logs/plugin-bridge.log` on ejected projects and is missing from eject's `.gitignore` suggestions.
+- **The `drift/` channel prefix** is documented as reserved but not enforced. Android's `internal constructor` on host types protects nothing (plugin sources compile into the app module), and `@_spi(DriftHost)` is cosmetic on iOS.
+- **Emulator Play services**: the `pixel_8` google_apis image warns its Play services (25.26) is older than firebase-messaging 25.1.3 asks for (26.12); FCM works anyway.
 - **Engine test races.** `go test -race ./pkg/engine` fails in older `init_test.go` tests (also on `master`): leaked OnInit goroutines dispatch to the global `app` after `swapApp` restores it.
+- **Stale comments and files:** `init/gitignore.tmpl` still mentions `Empty.swift` and `tools/drift-plugins/bridge`; `DriftPlugins.swift` says plugins can use `PlatformChannelManager`; `DriftPluginHost.swift` says the module depends only on Foundation and UIKit; `protocol/ops.go` mentions the deleted pre-activity hook; `ejected.go` has a stale hint.
 
 ## Unresolved questions
 
