@@ -183,7 +183,6 @@ Nothing here blocks. Messages and taps that arrive before the app listens are qu
 Limitations:
 
 - Push on iOS needs a paid Apple Developer team, on xtool as with Xcode. With a free team the app still runs, but Apple grants no push capability, so no token or message arrives.
-- Android: data messages and token refreshes that arrive while no Activity has started in the process are dropped; the token is fetched again at the next launch.
 - Android: when the system groups several notifications from the app, tapping the group summary opens the app without an `Opens()` event. Tapping an individual notification works.
 
 ### Location
@@ -437,10 +436,10 @@ The app creates one instance of each plugin class per process, in `drift.yaml` o
 
 | | iOS (`DriftPlugin` protocol) | Android (`DriftPlugin` interface) |
 |---|---|---|
-| Once per process | `register(host:)`, then `didFinishLaunching(_:options:)` | `onRegister(host)`, from the first Activity's `onCreate` |
+| Once per process | `register(host:)`, then `didFinishLaunching(_:options:)` | `onRegister(host)`, when the process starts (`Application.onCreate`), before any Activity, service or receiver; a process may start without an Activity, for a push message or an alarm |
 | View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity (recreation detaches and attaches again) |
 | Overlays | `binding.overlayView`: above Drift's content and platform views; touches pass through where it is empty | `binding.overlayView`: the window's decor view |
-| App events | `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse` | `binding.addOnNewIntentListener`; the launch intent is `binding.activity.intent` |
+| App events | `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse` | `binding.addOnNewIntentListener`; the launch intent is `binding.activity.intent`, to act on only when `binding.isNewLaunch` (false for a recreated Activity or one relaunched from Recents) |
 
 Register channels and observers once, in the registration method. Keep view state (overlays, view references) between attach and detach, and never keep a binding past detach.
 

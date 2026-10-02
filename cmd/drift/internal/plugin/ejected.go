@@ -20,7 +20,8 @@ import (
 // Kotlin and pbxproj files is too fragile.
 type wiringCall struct {
 	// File is the path relative to the ejected project root. For Android,
-	// "MainActivity.kt" is looked up under app/src/main/java.
+	// a bare Kotlin file name ("MainActivity.kt") is in MainActivity's
+	// package directory under app/src/main/java.
 	File string
 	// Call is text that must appear in File.
 	Call string
@@ -41,7 +42,9 @@ var iosWiring = []wiringCall{
 }
 
 var androidWiring = []wiringCall{
-	{"MainActivity.kt", "DriftPlugins.register(", "plugins are created and registered once per process"},
+	{"app/src/main/AndroidManifest.xml", `android:name=".DriftApplication"`, "DriftApplication runs when the process starts"},
+	{"DriftApplication.kt", "PlatformChannelManager.init(", "Drift's channels exist before any Activity, service or receiver runs"},
+	{"DriftApplication.kt", "DriftPlugins.register(", "plugins are registered once per process, including processes started without an Activity"},
 	{"MainActivity.kt", "DriftPlugins.attach(", "plugins attach to the Activity"},
 	{"MainActivity.kt", "DriftPlugins.detach(", "plugins detach when the Activity is destroyed"},
 	{"MainActivity.kt", "DriftPlugins.onNewIntent(", "plugins receive new intents"},
@@ -88,7 +91,12 @@ func CheckEjectedAndroid(projectDir string, ops []protocol.Op) error {
 	if err != nil {
 		return err
 	}
-	problems := checkWiring(projectDir, androidWiring, func(string) string { return mainActivity })
+	problems := checkWiring(projectDir, androidWiring, func(name string) string {
+		if strings.Contains(name, "/") {
+			return filepath.Join(projectDir, filepath.FromSlash(name))
+		}
+		return filepath.Join(filepath.Dir(mainActivity), name)
+	})
 	editsGradle := slices.ContainsFunc(ops, func(op protocol.Op) bool {
 		switch op.(type) {
 		case *protocol.OpAndroidGradleAddDependency, *protocol.OpAndroidGradleApplyPlugin:

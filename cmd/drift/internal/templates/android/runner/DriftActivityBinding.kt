@@ -7,8 +7,8 @@
  * DriftPlugin.onAttach until onDetach; listeners are dropped on detach, and
  * a plugin must not keep the binding past it.
  *
- * The Intent that launched the Activity is `activity.intent`; the listener
- * below covers later deliveries.
+ * The Intent that launched the Activity is `activity.intent` (act on it
+ * only when isNewLaunch); the listener below covers later deliveries.
  *
  * IMPORTANT: shipped verbatim by Drift's scaffold; must not depend on the
  * user's app package.
@@ -31,6 +31,13 @@ class DriftActivityBinding(
      * platform views.
      */
     val overlayView: ViewGroup,
+    /**
+     * Whether activity.intent is a new launch to act on (a notification
+     * tap, a deep link). False when the Activity was recreated
+     * (configuration change, process restore) or relaunched from Recents:
+     * its intent is the one an earlier Activity already handled.
+     */
+    val isNewLaunch: Boolean,
 ) {
     private val newIntentListeners = mutableListOf<(Intent) -> Boolean>()
 

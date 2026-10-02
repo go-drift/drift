@@ -24,11 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var orchestrator: UnifiedFrameOrchestrator
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Channels and plugins register once per process (later calls are
-        // no-ops).
-        PlatformChannelManager.init(applicationContext)
-        DriftPlugins.register(PlatformChannelManager)
-
+        // Channels and plugins registered in DriftApplication.
         setTheme(R.style.AppTheme)
         super.onCreate(savedInstanceState)
         // Drift draws behind the system bars on every API level (Android 15+
@@ -38,13 +34,13 @@ class MainActivity : AppCompatActivity() {
 
         Log.i("DriftDeepLink", "onCreate intent action=${intent?.action} data=${intent?.dataString}")
         // A recreated Activity (dark mode, locale) or one relaunched from
-        // Recents carries the launch intent again; its tap was handled.
-        val relaunched = savedInstanceState != null ||
-            (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
-        if (!relaunched) {
+        // Recents carries the launch intent again; it was handled.
+        val newLaunch = savedInstanceState == null &&
+            (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
+        if (newLaunch) {
             NotificationHandler.handleNotificationOpen(intent)
+            DeepLinkHandler.handleIntent(intent, "launch")
         }
-        DeepLinkHandler.handleIntent(intent, "launch")
 
         container = DriftContainer(this)
         setContentView(container)
@@ -87,7 +83,7 @@ class MainActivity : AppCompatActivity() {
 
         // Plugins attach once the views exist; the window's root view hosts
         // their overlays above Drift's content.
-        DriftPlugins.attach(this, window.decorView as ViewGroup)
+        DriftPlugins.attach(this, window.decorView as ViewGroup, newLaunch)
     }
 
     override fun onNewIntent(intent: Intent) {

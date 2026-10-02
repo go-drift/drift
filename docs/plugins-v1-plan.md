@@ -145,7 +145,8 @@ Branch `feat/core-plugins`, from `feat/plugins` (`83a177b`; rebase onto `master`
 | `1015b64` | Background tasks deleted: the Go API, both handlers, `work-runtime` (whose manifest brought `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`, `FOREGROUND_SERVICE`), those three template permissions, the `fetch`/`processing` modes and `BGTaskSchedulerPermittedIdentifiers`. See the background-tasks follow-up |
 | `96555a0` | `android.manifest.add_permission` takes an optional `max_sdk` (`AddPermissionMaxSDK`), written as `android:maxSdkVersion`; plugins disagreeing on it conflict |
 | `c76d52c` | `plugins/permissions`: contacts, calendar, microphone and photos, each enabled by a config section (generated `PermissionsConfig` lists the kinds to register). Core loses the four Go services and kinds, `RECORD_AUDIO`, `READ_MEDIA_*`, both external-storage permissions, `READ_CONTACTS`, `READ_CALENDAR`, and five usage strings (`NSPhotoLibraryAddUsageDescription` was used by nothing). Calendar gains the iOS 17 `NSCalendarsFullAccessUsageDescription` |
-| (this commit) | `android.manifest.add_receiver` (`Manifest.AddReceiver`), sharing validation and the mutator with `add_service` |
+| `a0a48be` | `android.manifest.add_receiver` (`Manifest.AddReceiver`), sharing validation and the mutator with `add_service` |
+| (this commit) | Android process-level registration: `DriftApplication` (manifest `android:name`) registers channels and plugins in `Application.onCreate`, so a process started for a service or receiver has them; a second `init`/`register` crashes. `MainActivity` decides `isNewLaunch` once (`DriftActivityBinding.isNewLaunch`); Firebase uses it, and FCM data messages and token refreshes without an Activity reach Go. Launch deep links no longer replay on recreation. Ejected checks cover the Application. Verified on the emulator: a data message sent to a killed app starts the process for the FCM broadcast (no Activity, no crash) and reaches `Messages()` when the app opens; a tap with the process alive and the Activity finished reaches `Opens()`; dark-mode recreation keeps one registration |
 
 **Verified:** step 1 on the API 36 emulator (approximate reads `limited`, upgrade to precise, two denials read `permanently_denied`, notification grant) and `drift build xtool`; step 2 on the emulator (denied before grant, fix, update stream with `geo fix`, Always through Settings), merged APK manifest, `drift build xtool` (Info.plist carries only the plugin's strings).
 
@@ -334,10 +335,6 @@ Not merge blocking. File references are from `c62b3cb`.
 
 ### Before the first release that ships plugins
 
-**Plugin lifecycle (Android)**
-- **Process-level registration.** Plugins register from `MainActivity.onCreate` (`MainActivity.kt`), so FCM data messages and token refreshes that start the process without an Activity are dropped (`DriftFirebaseMessagingService.kt`); the token is fetched again at the next start. Every future service, receiver or boot plugin hits the same wall. Register from an `Application` subclass or an `androidx.startup` initializer.
-- **Fresh-launch detection is duplicated.** Plugins guess "first attach in this process" themselves (`DriftFirebasePlugin.kt`, `DriftSplashPlugin.kt`), while `MainActivity` uses `savedInstanceState` / `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`. When the process lives but `MainActivity` was finished (back from a task rooted by a deep link, "Don't keep activities", `finish()`), a later FCM tap cold-creates the Activity and `Opens()` never fires. `MainActivity` should compute it once and expose it on `DriftActivityBinding`.
-
 **Splash (iOS)**
 - **Timeout counts from process launch.** `DriftSplashPlugin.swift` arms the timer in `register` (`didFinishLaunching`). Firebase adds the `remote-notification` mode, so a silent push can launch the process in the background; if the user opens the app after `max_duration_ms`, Preserve is ignored and the splash hides at the first content frame. Start the timer on first attach.
 - **A missed `first_frame` leaves the splash up forever** (both platforms). Dismissal requires `contentShown` and the timeout never overrides it; `first_frame` is one-shot and needs the content frame to pass every guard (`nextDrawable`, `renderSync`; `slotIndex >= 0` on Android). Re-arm on a later frame, or add a hard ceiling that ignores `contentShown`.
@@ -384,7 +381,6 @@ Not merge blocking. File references are from `c62b3cb`.
 - **The first subscriber to a queued channel drains it**, so an analytics listener on `Opens()` that subscribes first steals the launch tap from the router. `Subscription.Cancel` sets its flag before removing the subscription, so a dispatch in that window loses an event instead of queueing it; an app that never subscribes to `Messages()` gets a report for every message after 32.
 - **iOS silent push completes immediately** (`DriftFirebasePlugin.swift` calls `completion(.newData)` at once), so Go cannot finish background work before suspension; no scene connects, so no app Go code runs.
 - **Preserve after the splash timeout** returns success and has no effect, with no log.
-- **Deep links replay on Android recreation.** `MainActivity.onCreate` passes the launch intent to `DeepLinkHandler` again after dark-mode recreation or a Recents relaunch (notification taps no longer do).
 - **Android auto-grouped notifications**: tapping the system's group summary opens the app without FCM extras, so no `Opens()` event; tapping an individual notification works.
 
 **xtool**

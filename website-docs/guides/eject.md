@@ -47,6 +47,7 @@ myapp/
         │   └── src/main/
         │       ├── AndroidManifest.xml
         │       ├── java/com/example/myapp/
+        │       │   ├── DriftApplication.kt  # Registers channels and plugins at process start
         │       │   └── MainActivity.kt
         │       └── res/
         │           ├── drawable/           # Launch screen background

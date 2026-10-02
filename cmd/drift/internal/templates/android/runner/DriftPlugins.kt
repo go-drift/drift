@@ -1,8 +1,9 @@
 /**
  * DriftPlugins.kt
  *
- * Owns the app's plugin instances and drives their lifecycle. MainActivity
- * calls in; the generated DriftPluginRegistrant only lists the plugins.
+ * Owns the app's plugin instances and drives their lifecycle.
+ * DriftApplication registers them and MainActivity attaches them; the
+ * generated DriftPluginRegistrant only lists the plugins.
  * Drift's own handling of the same Activity events (deep links,
  * notifications) stays in MainActivity.
  *
@@ -24,13 +25,12 @@ object DriftPlugins {
     private var binding: DriftActivityBinding? = null
 
     /**
-     * Creates the plugins and registers each with host, once per process.
-     * Later calls (every Activity creation) are no-ops, so channels and
-     * observers are never registered twice.
+     * Creates the plugins and registers each with host, once per process,
+     * from Application.onCreate. A second call is a wiring bug.
      */
     fun register(host: DriftPluginHost) {
         checkMainThread()
-        if (plugins != null) return
+        check(plugins == null) { "drift: DriftPlugins.register called twice; call it once, from DriftApplication.onCreate" }
         val created = DriftPluginRegistrant.makePlugins()
         plugins = created
         created.forEach { it.onRegister(host) }
@@ -38,12 +38,13 @@ object DriftPlugins {
 
     /**
      * Attaches every plugin to activity, detaching from a previous Activity
-     * first. overlayView hosts plugin overlays (DriftActivityBinding).
+     * first. overlayView hosts plugin overlays; isNewLaunch says whether
+     * activity.intent is a new launch (DriftActivityBinding).
      */
-    fun attach(activity: FragmentActivity, overlayView: ViewGroup) {
+    fun attach(activity: FragmentActivity, overlayView: ViewGroup, isNewLaunch: Boolean) {
         val all = requirePlugins()
         binding?.let { detachAll(it) }
-        val b = DriftActivityBinding(activity, overlayView)
+        val b = DriftActivityBinding(activity, overlayView, isNewLaunch)
         binding = b
         all.forEach { it.onAttach(b) }
     }
@@ -71,7 +72,7 @@ object DriftPlugins {
     private fun requirePlugins(): List<DriftPlugin> {
         checkMainThread()
         return checkNotNull(plugins) {
-            "drift: DriftPlugins.register must run first (MainActivity.onCreate)"
+            "drift: DriftPlugins.register must run first (DriftApplication.onCreate)"
         }
     }
 

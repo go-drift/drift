@@ -12,8 +12,8 @@
  *      DriftFirebaseMessagingService and go to Go as `message`.
  *   3. Notification messages in the background are shown by the system;
  *      tapping one starts MainActivity with the message in its extras,
- *      sent to Go as `opened`: from the launch intent on the process's
- *      first attach, from new intents after.
+ *      sent to Go as `opened`: from the launch intent when it is a new
+ *      launch, from new intents after.
  * Mirrors the iOS plugin.
  */
 package com.drift.plugin.firebase
@@ -30,8 +30,6 @@ import com.google.firebase.messaging.RemoteMessage
 
 class DriftFirebasePlugin : DriftPlugin {
     private lateinit var host: DriftPluginHost
-    /** Whether an Activity has attached in this process. */
-    private var attachedBefore = false
 
     override fun onRegister(host: DriftPluginHost) {
         this.host = host
@@ -46,13 +44,10 @@ class DriftFirebasePlugin : DriftPlugin {
     }
 
     override fun onAttach(binding: DriftActivityBinding) {
-        val first = !attachedBefore
-        attachedBefore = true
-        val launch = binding.activity.intent
-        // A recreated Activity, or one relaunched from Recents, carries the
-        // same launch intent again; only the process's first launch counts.
-        if (first && launch != null && launch.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) {
-            opened(launch)
+        // A recreated Activity, or one relaunched from Recents, carries a
+        // launch intent an earlier Activity already handled.
+        if (binding.isNewLaunch) {
+            binding.activity.intent?.let { opened(it) }
         }
         binding.addOnNewIntentListener { opened(it) }
     }
@@ -100,9 +95,9 @@ class DriftFirebasePlugin : DriftPlugin {
         private const val OPENED_CHANNEL = "drift/firebase/messaging/opened"
 
         /**
-         * The registered plugin, for DriftFirebaseMessagingService. Null
-         * while no Activity has started in this process (the service can
-         * run without one); main thread only.
+         * The registered plugin, for DriftFirebaseMessagingService. Plugins
+         * register in Application.onCreate, before the service starts;
+         * main thread only.
          */
         internal var registered: DriftFirebasePlugin? = null
             private set

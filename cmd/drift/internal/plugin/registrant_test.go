@@ -193,7 +193,12 @@ func TestTemplatesSatisfyEjectedWiring(t *testing.T) {
 		}
 	}
 	check(iosWiring, func(f string) []string { return iosTemplates[f] })
-	check(androidWiring, func(string) []string { return []string{"android/java/MainActivity.kt"} })
+	androidTemplates := map[string][]string{
+		"app/src/main/AndroidManifest.xml": {"android/AndroidManifest.xml.tmpl"},
+		"DriftApplication.kt":              {"android/java/DriftApplication.kt"},
+		"MainActivity.kt":                  {"android/java/MainActivity.kt"},
+	}
+	check(androidWiring, func(f string) []string { return androidTemplates[f] })
 }
 
 func writeTree(t *testing.T, dir string, files map[string]string) {
@@ -267,15 +272,17 @@ func TestCheckEjectedAndroid(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected wiring error")
 	}
-	for _, want := range []string{"MainActivity.kt", "DriftPlugins.register(", "DriftPlugins.attach(", "app/build.gradle"} {
+	for _, want := range []string{"MainActivity.kt", "DriftApplication.kt", "DriftPlugins.register(", "DriftPlugins.attach(", ".DriftApplication", "app/build.gradle"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should mention %q:\n%v", want, err)
 		}
 	}
 
 	writeTree(t, dir, map[string]string{
-		mainActivity:       templateText(t, "android/java/MainActivity.kt"),
-		"app/build.gradle": "android {}\n",
+		mainActivity: templateText(t, "android/java/MainActivity.kt"),
+		"app/src/main/java/com/example/app/DriftApplication.kt": templateText(t, "android/java/DriftApplication.kt"),
+		"app/src/main/AndroidManifest.xml":                      templateText(t, "android/AndroidManifest.xml.tmpl"),
+		"app/build.gradle":                                      "android {}\n",
 	})
 	if err := CheckEjectedAndroid(dir, gradleOp); err != nil {
 		t.Errorf("template-wired project should pass: %v", err)

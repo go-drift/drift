@@ -81,16 +81,11 @@ object PlatformChannelManager : DriftPluginHost {
 
     /**
      * Initializes the platform channel manager with the application context
-     * and registers Drift's built-in channels, once per process.
-     *
-     * MainActivity.onCreate calls this on every Activity creation
-     * (configuration changes, process-death restoration); the object
-     * outlives Activities, so later calls are no-ops. Registration never
-     * repeats, and the Application-scoped lifecycle observer is installed
-     * exactly once.
+     * and registers Drift's built-in channels. DriftApplication.onCreate
+     * calls it once per process; a second call is a wiring bug.
      */
     fun init(context: Context) {
-        if (initialized) return
+        check(!initialized) { "drift: PlatformChannelManager.init called twice; call it once, from DriftApplication.onCreate" }
         this.context = context.applicationContext
         registerBuiltInChannels()
         setupLifecycleObserver()
