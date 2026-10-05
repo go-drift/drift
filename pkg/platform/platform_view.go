@@ -2,11 +2,10 @@ package platform
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"maps"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/go-drift/drift/pkg/graphics"
 )
@@ -35,6 +34,13 @@ type PlatformView interface {
 
 	// Dispose cleans up the native view.
 	Dispose()
+
+	// HandleEvent receives an event or call the native view sent on
+	// drift/platform_views (other than creation and disposal), with its
+	// arguments, viewId included. It returns ErrMethodNotFound for a
+	// method it does not know, and an error for malformed arguments;
+	// either is reported through Drift's error handling.
+	HandleEvent(method string, args map[string]any) error
 }
 
 // PlatformViewFactory creates platform views of a specific type.
@@ -122,34 +128,11 @@ func (r *PlatformViewRegistry) handleEvent(data any) {
 		return
 	}
 
-	switch method {
-	case "onViewCreated":
+	if method == "onViewCreated" {
 		r.handleViewCreated(args)
-	case "onTextChanged":
-		r.handleTextChanged(args)
-	case "onAction":
-		r.handleAction(args)
-	case "onFocusChanged":
-		r.handleFocusChanged(args)
-	case "onSwitchChanged":
-		r.handleSwitchChanged(args)
-	case "onPlaybackStateChanged":
-		r.handleVideoPlaybackStateChanged(args)
-	case "onPositionChanged":
-		r.handleVideoPositionChanged(args)
-	case "onVideoError":
-		r.handleVideoError(args)
-	case "onPageStarted":
-		r.handleWebViewPageStarted(args)
-	case "onPageFinished":
-		r.handleWebViewPageFinished(args)
-	case "onWebViewError":
-		r.handleWebViewError(args)
-	default:
-		reportPlatformViewArg(op, &argError{
-			Op: op, Key: "method", Want: "known event method", Got: method,
-		})
+		return
 	}
+	_ = r.routeViewEvent(method, args)
 }
 
 // RegisterFactory registers a factory for a platform view type.
@@ -399,29 +382,34 @@ func (r *PlatformViewRegistry) handleMethodCall(method string, args any) (any, e
 		return nil, nil
 	case "onViewCreated":
 		return r.handleViewCreated(args)
-	case "onTextChanged":
-		return r.handleTextChanged(args)
-	case "onAction":
-		return r.handleAction(args)
-	case "onFocusChanged":
-		return r.handleFocusChanged(args)
-	case "onSwitchChanged":
-		return r.handleSwitchChanged(args)
-	case "onPlaybackStateChanged":
-		return r.handleVideoPlaybackStateChanged(args)
-	case "onPositionChanged":
-		return r.handleVideoPositionChanged(args)
-	case "onVideoError":
-		return r.handleVideoError(args)
-	case "onPageStarted":
-		return r.handleWebViewPageStarted(args)
-	case "onPageFinished":
-		return r.handleWebViewPageFinished(args)
-	case "onWebViewError":
-		return r.handleWebViewError(args)
 	default:
-		return nil, ErrMethodNotFound
+		return nil, r.routeViewEvent(method, args)
 	}
+}
+
+// routeViewEvent delivers method, an event or call from a native view, to
+// the Go view its viewId names. An unknown view is tolerated: native can
+// send after Go disposed the view. Errors are reported, then returned.
+func (r *PlatformViewRegistry) routeViewEvent(method string, raw any) error {
+	op := method
+	args, err := requireMap(op, raw)
+	if err != nil {
+		return reportPlatformViewArg(op, err)
+	}
+	viewID, err := requireInt64(op, args, "viewId")
+	if err != nil {
+		return reportPlatformViewArg(op, err)
+	}
+	r.mu.RLock()
+	view := r.views[viewID]
+	r.mu.RUnlock()
+	if view == nil {
+		return nil
+	}
+	if err := view.HandleEvent(method, args); err != nil {
+		return reportPlatformViewArg(op, fmt.Errorf("view %d (%s): %w", viewID, view.ViewType(), err))
+	}
+	return nil
 }
 
 // Invariant for all handle* below: any error returned has already been
@@ -442,308 +430,29 @@ func (r *PlatformViewRegistry) handleViewCreated(raw any) (any, error) {
 	return nil, nil
 }
 
-func (r *PlatformViewRegistry) handleTextChanged(raw any) (any, error) {
-	const op = "handleTextChanged"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	text, err := requireString(op, args, "text")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	selBase, err := requireInt(op, args, "selectionBase")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	selExt, err := requireInt(op, args, "selectionExtent")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*TextInputView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handleTextChanged(text, selBase, selExt)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleAction(raw any) (any, error) {
-	const op = "handleAction"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	action, err := requireInt(op, args, "action")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*TextInputView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handleAction(TextInputAction(action))
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleFocusChanged(raw any) (any, error) {
-	const op = "handleFocusChanged"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	focused, err := requireBool(op, args, "focused")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*TextInputView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handleFocusChanged(focused)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleSwitchChanged(raw any) (any, error) {
-	const op = "handleSwitchChanged"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	value, err := requireBool(op, args, "value")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*SwitchView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handleValueChanged(value)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleVideoPlaybackStateChanged(raw any) (any, error) {
-	const op = "handleVideoPlaybackStateChanged"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	stateInt, err := requireInt(op, args, "state")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*videoPlayerView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handlePlaybackStateChanged(PlaybackState(stateInt))
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleVideoPositionChanged(raw any) (any, error) {
-	const op = "handleVideoPositionChanged"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	positionMs, err := requireInt64(op, args, "positionMs")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	durationMs, err := requireInt64(op, args, "durationMs")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	bufferedMs, err := requireInt64(op, args, "bufferedMs")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*videoPlayerView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handlePositionChanged(
-		time.Duration(positionMs)*time.Millisecond,
-		time.Duration(durationMs)*time.Millisecond,
-		time.Duration(bufferedMs)*time.Millisecond,
-	)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleVideoError(raw any) (any, error) {
-	const op = "handleVideoError"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	code, err := requireString(op, args, "code")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	message, err := requireString(op, args, "message")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*videoPlayerView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handleError(code, message)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleWebViewPageStarted(raw any) (any, error) {
-	const op = "handleWebViewPageStarted"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	url, err := requireString(op, args, "url")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*nativeWebView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handlePageStarted(url)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleWebViewPageFinished(raw any) (any, error) {
-	const op = "handleWebViewPageFinished"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	url, err := requireString(op, args, "url")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*nativeWebView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handlePageFinished(url)
-	return nil, nil
-}
-
-func (r *PlatformViewRegistry) handleWebViewError(raw any) (any, error) {
-	const op = "handleWebViewError"
-	args, err := requireMap(op, raw)
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	viewID, err := requireInt64(op, args, "viewId")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	code, err := requireString(op, args, "code")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-	message, err := requireString(op, args, "message")
-	if err != nil {
-		return nil, reportPlatformViewArg(op, err)
-	}
-
-	view, err := lookupView[*nativeWebView](r, viewID)
-	if err != nil {
-		if errors.Is(err, errViewNotFound) {
-			return nil, nil
-		}
-		return nil, reportPlatformViewArg(op, err)
-	}
-	view.handleError(code, message)
-	return nil, nil
-}
-
-// basePlatformView provides common implementation for platform views.
-type basePlatformView struct {
+// PlatformViewBase implements a platform view's identity: embed it in a
+// PlatformView (a plugin's too) and set it from the factory's viewID.
+type PlatformViewBase struct {
 	viewID   int64
 	viewType string
 }
 
-func (v *basePlatformView) ViewID() int64 {
+// NewPlatformViewBase returns the identity of view viewID of viewType.
+func NewPlatformViewBase(viewID int64, viewType string) PlatformViewBase {
+	return PlatformViewBase{viewID: viewID, viewType: viewType}
+}
+
+// ViewID returns the view's unique identifier.
+func (v *PlatformViewBase) ViewID() int64 {
 	return v.viewID
 }
 
-func (v *basePlatformView) ViewType() string {
+// ViewType returns the view's type identifier.
+func (v *PlatformViewBase) ViewType() string {
 	return v.viewType
 }
 
-func (v *basePlatformView) SetEnabled(enabled bool) {
+// SetEnabled enables or disables touch input on the native view.
+func (v *PlatformViewBase) SetEnabled(enabled bool) {
 	GetPlatformViewRegistry().SetViewEnabled(v.viewID, enabled)
 }

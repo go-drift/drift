@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -14,7 +15,7 @@ import (
 // ensure no events are missed. Cached state is also available via
 // [videoPlayerView.State], [videoPlayerView.Position], etc.
 type videoPlayerView struct {
-	basePlatformView
+	PlatformViewBase
 	mu sync.RWMutex
 
 	// Cached playback state
@@ -45,10 +46,7 @@ type videoPlayerView struct {
 // view ID. Set the callback fields to receive playback events.
 func newVideoPlayerView(viewID int64) *videoPlayerView {
 	return &videoPlayerView{
-		basePlatformView: basePlatformView{
-			viewID:   viewID,
-			viewType: "video_player",
-		},
+		PlatformViewBase: NewPlatformViewBase(viewID, "video_player"),
 	}
 }
 
@@ -217,4 +215,44 @@ func (f *videoPlayerViewFactory) Create(viewID int64, params map[string]any) (Pl
 
 func init() {
 	GetPlatformViewRegistry().RegisterFactory(&videoPlayerViewFactory{})
+}
+
+// HandleEvent implements PlatformView: playback state, position and
+// errors from the native player.
+func (v *videoPlayerView) HandleEvent(method string, args map[string]any) error {
+	switch method {
+	case "onPlaybackStateChanged":
+		state, err := requireInt(method, args, "state")
+		if err != nil {
+			return err
+		}
+		v.handlePlaybackStateChanged(PlaybackState(state))
+	case "onPositionChanged":
+		var ms [3]int64
+		for i, key := range []string{"positionMs", "durationMs", "bufferedMs"} {
+			value, err := requireInt64(method, args, key)
+			if err != nil {
+				return err
+			}
+			ms[i] = value
+		}
+		v.handlePositionChanged(
+			time.Duration(ms[0])*time.Millisecond,
+			time.Duration(ms[1])*time.Millisecond,
+			time.Duration(ms[2])*time.Millisecond,
+		)
+	case "onVideoError":
+		code, err := requireString(method, args, "code")
+		if err != nil {
+			return err
+		}
+		message, err := requireString(method, args, "message")
+		if err != nil {
+			return err
+		}
+		v.handleError(code, message)
+	default:
+		return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
+	}
+	return nil
 }

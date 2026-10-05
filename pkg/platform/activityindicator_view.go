@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -30,7 +31,7 @@ type ActivityIndicatorViewConfig struct {
 
 // ActivityIndicatorView is a platform view for native activity indicator.
 type ActivityIndicatorView struct {
-	basePlatformView
+	PlatformViewBase
 	config    ActivityIndicatorViewConfig
 	animating bool
 	mu        sync.RWMutex
@@ -39,12 +40,9 @@ type ActivityIndicatorView struct {
 // NewActivityIndicatorView creates a new activity indicator platform view.
 func NewActivityIndicatorView(viewID int64, config ActivityIndicatorViewConfig) *ActivityIndicatorView {
 	return &ActivityIndicatorView{
-		basePlatformView: basePlatformView{
-			viewID:   viewID,
-			viewType: "activity_indicator",
-		},
-		config:    config,
-		animating: config.Animating,
+		PlatformViewBase: NewPlatformViewBase(viewID, "activity_indicator"),
+		config:           config,
+		animating:        config.Animating,
 	}
 }
 
@@ -124,4 +122,10 @@ func RegisterActivityIndicatorViewFactory() {
 
 func init() {
 	RegisterActivityIndicatorViewFactory()
+}
+
+// HandleEvent implements PlatformView; the native indicator sends no
+// events.
+func (v *ActivityIndicatorView) HandleEvent(method string, _ map[string]any) error {
+	return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
 }

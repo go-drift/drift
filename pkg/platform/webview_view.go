@@ -1,6 +1,9 @@
 package platform
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 type nativeWebViewFactory struct{}
 
@@ -10,15 +13,12 @@ func (nativeWebViewFactory) ViewType() string {
 
 func (nativeWebViewFactory) Create(viewID int64, params map[string]any) (PlatformView, error) {
 	return &nativeWebView{
-		basePlatformView: basePlatformView{
-			viewID:   viewID,
-			viewType: "native_webview",
-		},
+		PlatformViewBase: NewPlatformViewBase(viewID, "native_webview"),
 	}, nil
 }
 
 type nativeWebView struct {
-	basePlatformView
+	PlatformViewBase
 	mu sync.RWMutex
 
 	// OnPageStarted is called when a page starts loading.
@@ -82,4 +82,34 @@ func (v *nativeWebView) handleError(code, message string) {
 
 func init() {
 	GetPlatformViewRegistry().RegisterFactory(nativeWebViewFactory{})
+}
+
+// HandleEvent implements PlatformView: page loads and errors from the
+// native web view.
+func (v *nativeWebView) HandleEvent(method string, args map[string]any) error {
+	switch method {
+	case "onPageStarted", "onPageFinished":
+		url, err := requireString(method, args, "url")
+		if err != nil {
+			return err
+		}
+		if method == "onPageStarted" {
+			v.handlePageStarted(url)
+		} else {
+			v.handlePageFinished(url)
+		}
+	case "onWebViewError":
+		code, err := requireString(method, args, "code")
+		if err != nil {
+			return err
+		}
+		message, err := requireString(method, args, "message")
+		if err != nil {
+			return err
+		}
+		v.handleError(code, message)
+	default:
+		return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
+	}
+	return nil
 }

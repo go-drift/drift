@@ -3,6 +3,7 @@ package platform
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -64,6 +65,9 @@ func (v *stubView) ViewID() int64                      { return v.id }
 func (v *stubView) ViewType() string                   { return "test" }
 func (v *stubView) Create(params map[string]any) error { return nil }
 func (v *stubView) Dispose()                           {}
+func (v *stubView) HandleEvent(method string, _ map[string]any) error {
+	return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
+}
 
 func newTestRegistry(viewIDs ...int64) *PlatformViewRegistry {
 	r := &PlatformViewRegistry{
@@ -187,7 +191,7 @@ func TestHandleTextChanged(t *testing.T) {
 	defer installImmediateDispatch(t)()
 
 	const viewID int64 = 7
-	const op = "platform_view.handleTextChanged"
+	const op = "platform_view.onTextChanged"
 
 	t.Run("happy", func(t *testing.T) {
 		reg := newTestRegistry()
@@ -195,7 +199,7 @@ func TestHandleTextChanged(t *testing.T) {
 		view := NewTextInputView(viewID, TextInputViewConfig{}, client)
 		registerView(reg, view)
 
-		_, err := reg.handleTextChanged(validTextChangedArgs(viewID))
+		_, err := reg.handleMethodCall("onTextChanged", validTextChangedArgs(viewID))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -207,7 +211,7 @@ func TestHandleTextChanged(t *testing.T) {
 	t.Run("args not map", func(t *testing.T) {
 		reg := newTestRegistry()
 		h := captureErrorReports(t)
-		_, err := reg.handleTextChanged("garbage")
+		_, err := reg.handleMethodCall("onTextChanged", "garbage")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -223,7 +227,7 @@ func TestHandleTextChanged(t *testing.T) {
 		h := captureErrorReports(t)
 		args := validTextChangedArgs(viewID)
 		delete(args, "viewId")
-		_, err := reg.handleTextChanged(args)
+		_, err := reg.handleMethodCall("onTextChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -235,7 +239,7 @@ func TestHandleTextChanged(t *testing.T) {
 		h := captureErrorReports(t)
 		args := validTextChangedArgs(viewID)
 		args["viewId"] = 1.5
-		_, err := reg.handleTextChanged(args)
+		_, err := reg.handleMethodCall("onTextChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -244,10 +248,11 @@ func TestHandleTextChanged(t *testing.T) {
 
 	t.Run("wrong-type text", func(t *testing.T) {
 		reg := newTestRegistry()
+		registerView(reg, NewTextInputView(viewID, TextInputViewConfig{}, &fakeTextInputClient{}))
 		h := captureErrorReports(t)
 		args := validTextChangedArgs(viewID)
 		args["text"] = 42
-		_, err := reg.handleTextChanged(args)
+		_, err := reg.handleMethodCall("onTextChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -258,7 +263,7 @@ func TestHandleTextChanged(t *testing.T) {
 		reg := newTestRegistry()
 		h := captureErrorReports(t)
 		// No view registered. Should be a silent no-op (dispose race).
-		_, err := reg.handleTextChanged(validTextChangedArgs(viewID))
+		_, err := reg.handleMethodCall("onTextChanged", validTextChangedArgs(viewID))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -267,26 +272,22 @@ func TestHandleTextChanged(t *testing.T) {
 		}
 	})
 
-	t.Run("wrong view type", func(t *testing.T) {
+	t.Run("view does not handle the event", func(t *testing.T) {
 		reg := newTestRegistry(viewID) // registers stubView, not TextInputView
 		h := captureErrorReports(t)
-		_, err := reg.handleTextChanged(validTextChangedArgs(viewID))
-		if err == nil {
-			t.Fatal("expected error")
+		_, err := reg.handleMethodCall("onTextChanged", validTextChangedArgs(viewID))
+		if !errors.Is(err, ErrMethodNotFound) {
+			t.Fatalf("expected ErrMethodNotFound, got %v", err)
 		}
-		if !errors.Is(err, errViewTypeMismatch) {
-			t.Fatalf("expected errViewTypeMismatch, got %v", err)
-		}
-		// Type mismatch is reported (not an argError, just the wrapped sentinel).
 		found := false
 		for _, e := range h.snapshot() {
-			if e.Op == op && e.Channel == platformViewsChannel && errors.Is(e.Err, errViewTypeMismatch) {
+			if e.Op == op && e.Channel == platformViewsChannel && errors.Is(e.Err, ErrMethodNotFound) {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Fatalf("expected type-mismatch report, got %+v", h.snapshot())
+			t.Fatalf("expected a report, got %+v", h.snapshot())
 		}
 	})
 }
@@ -305,7 +306,7 @@ func TestHandleSwitchChanged(t *testing.T) {
 			"viewId": float64(viewID),
 			"value":  true,
 		}
-		_, err := reg.handleSwitchChanged(args)
+		_, err := reg.handleMethodCall("onSwitchChanged", args)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -316,24 +317,26 @@ func TestHandleSwitchChanged(t *testing.T) {
 
 	t.Run("missing value", func(t *testing.T) {
 		reg := newTestRegistry()
+		registerView(reg, NewSwitchView(viewID, SwitchViewConfig{}, &fakeSwitchClient{}))
 		h := captureErrorReports(t)
 		args := map[string]any{"viewId": float64(viewID)}
-		_, err := reg.handleSwitchChanged(args)
+		_, err := reg.handleMethodCall("onSwitchChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
-		assertArgErrorReport(t, h, "platform_view.handleSwitchChanged", platformViewsChannel)
+		assertArgErrorReport(t, h, "platform_view.onSwitchChanged", platformViewsChannel)
 	})
 
 	t.Run("wrong-type value (string 'true' rejected)", func(t *testing.T) {
 		reg := newTestRegistry()
+		registerView(reg, NewSwitchView(viewID, SwitchViewConfig{}, &fakeSwitchClient{}))
 		h := captureErrorReports(t)
 		args := map[string]any{"viewId": float64(viewID), "value": "true"}
-		_, err := reg.handleSwitchChanged(args)
+		_, err := reg.handleMethodCall("onSwitchChanged", args)
 		if err == nil {
 			t.Fatal("expected error for non-bool value")
 		}
-		assertArgErrorReport(t, h, "platform_view.handleSwitchChanged", platformViewsChannel)
+		assertArgErrorReport(t, h, "platform_view.onSwitchChanged", platformViewsChannel)
 	})
 }
 
@@ -341,7 +344,8 @@ func TestHandleEvent_UnknownMethodReported(t *testing.T) {
 	reg := newTestRegistry()
 	h := captureErrorReports(t)
 	reg.handleEvent(map[string]any{"method": "onSomethingNobodyKnows"})
-	assertArgErrorReport(t, h, "platform_view.handleEvent", platformViewsChannel)
+	// Without a viewId it cannot reach a view.
+	assertArgErrorReport(t, h, "platform_view.onSomethingNobodyKnows", platformViewsChannel)
 }
 
 func TestHandleEvent_BadMethodTypeReported(t *testing.T) {
@@ -371,8 +375,8 @@ func TestHandleMethodCall_OnViewDisposedNoArgs(t *testing.T) {
 }
 
 func TestHandleMethodCall_UnknownMethodReturnsNotFound(t *testing.T) {
-	reg := newTestRegistry()
-	_, err := reg.handleMethodCall("noSuchMethod", map[string]any{})
+	reg := newTestRegistry(3)
+	_, err := reg.handleMethodCall("noSuchMethod", map[string]any{"viewId": float64(3)})
 	if !errors.Is(err, ErrMethodNotFound) {
 		t.Fatalf("expected ErrMethodNotFound, got %v", err)
 	}

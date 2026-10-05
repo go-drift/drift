@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -47,7 +48,7 @@ type TextInputViewClient interface {
 
 // TextInputView is a platform view for text input.
 type TextInputView struct {
-	basePlatformView
+	PlatformViewBase
 	config  TextInputViewConfig
 	client  TextInputViewClient
 	text    string
@@ -60,14 +61,11 @@ type TextInputView struct {
 // NewTextInputView creates a new text input platform view.
 func NewTextInputView(viewID int64, config TextInputViewConfig, client TextInputViewClient) *TextInputView {
 	return &TextInputView{
-		basePlatformView: basePlatformView{
-			viewID:   viewID,
-			viewType: "textinput",
-		},
-		config:  config,
-		client:  client,
-		selBase: 0,
-		selExt:  0,
+		PlatformViewBase: NewPlatformViewBase(viewID, "textinput"),
+		config:           config,
+		client:           client,
+		selBase:          0,
+		selExt:           0,
 	}
 }
 
@@ -305,4 +303,40 @@ func RegisterTextInputViewFactory() {
 
 func init() {
 	RegisterTextInputViewFactory()
+}
+
+// HandleEvent implements PlatformView: text, action and focus changes from
+// the native field.
+func (v *TextInputView) HandleEvent(method string, args map[string]any) error {
+	switch method {
+	case "onTextChanged":
+		text, err := requireString(method, args, "text")
+		if err != nil {
+			return err
+		}
+		selBase, err := requireInt(method, args, "selectionBase")
+		if err != nil {
+			return err
+		}
+		selExt, err := requireInt(method, args, "selectionExtent")
+		if err != nil {
+			return err
+		}
+		v.handleTextChanged(text, selBase, selExt)
+	case "onAction":
+		action, err := requireInt(method, args, "action")
+		if err != nil {
+			return err
+		}
+		v.handleAction(TextInputAction(action))
+	case "onFocusChanged":
+		focused, err := requireBool(method, args, "focused")
+		if err != nil {
+			return err
+		}
+		v.handleFocusChanged(focused)
+	default:
+		return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
+	}
+	return nil
 }

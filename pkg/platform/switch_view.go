@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -21,7 +22,7 @@ type SwitchViewClient interface {
 
 // SwitchView is a platform view for native switch control.
 type SwitchView struct {
-	basePlatformView
+	PlatformViewBase
 	config SwitchViewConfig
 	client SwitchViewClient
 	value  bool
@@ -31,12 +32,9 @@ type SwitchView struct {
 // NewSwitchView creates a new switch platform view.
 func NewSwitchView(viewID int64, config SwitchViewConfig, client SwitchViewClient) *SwitchView {
 	return &SwitchView{
-		basePlatformView: basePlatformView{
-			viewID:   viewID,
-			viewType: "switch",
-		},
-		config: config,
-		client: client,
+		PlatformViewBase: NewPlatformViewBase(viewID, "switch"),
+		config:           config,
+		client:           client,
 	}
 }
 
@@ -135,4 +133,18 @@ func RegisterSwitchViewFactory() {
 
 func init() {
 	RegisterSwitchViewFactory()
+}
+
+// HandleEvent implements PlatformView: value changes from the native
+// switch.
+func (v *SwitchView) HandleEvent(method string, args map[string]any) error {
+	if method != "onSwitchChanged" {
+		return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
+	}
+	value, err := requireBool(method, args, "value")
+	if err != nil {
+		return err
+	}
+	v.handleValueChanged(value)
+	return nil
 }
