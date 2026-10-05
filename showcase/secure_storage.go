@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
@@ -8,6 +10,7 @@ import (
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
+	securestorage "github.com/go-drift/drift/plugins/securestorage/runtime"
 )
 
 // secureStoragePage is the secure storage demo widget.
@@ -39,42 +42,15 @@ func (s *secureStorageState) InitState() {
 
 	// Check biometric availability on init
 	go func() {
-		available, err := platform.SecureStorage.IsBiometricAvailable()
-		if err != nil {
-			drift.Dispatch(func() {
-				s.biometricStatus.Set("Error checking biometrics: " + err.Error())
-			})
-			return
-		}
-
-		biometricType, _ := platform.SecureStorage.GetBiometricType()
-		var message string
-		if available {
-			message = "Biometric available: " + string(biometricType)
-		} else {
+		biometric, err := securestorage.AvailableBiometric(context.Background())
+		message := "Biometric available: " + string(biometric)
+		switch {
+		case err != nil:
+			message = "Error checking biometrics: " + err.Error()
+		case biometric == securestorage.BiometricNone:
 			message = "Biometric not available"
 		}
-		drift.Dispatch(func() {
-			s.biometricStatus.Set(message)
-		})
-	}()
-
-	// Listen for async biometric auth results
-	go func() {
-		for event := range platform.SecureStorage.Listen() {
-			drift.Dispatch(func() {
-				if event.Success {
-					if event.Value != "" {
-						s.storedValue.Set(event.Value)
-						s.statusText.Set("Retrieved value with biometric auth")
-					} else {
-						s.statusText.Set("Operation completed with biometric auth")
-					}
-				} else {
-					s.statusText.Set("Auth failed: " + event.Error)
-				}
-			})
-		}
+		drift.Dispatch(func() { s.biometricStatus.Set(message) })
 	}()
 }
 
@@ -94,17 +70,19 @@ func (s *secureStorageState) Build(ctx core.BuildContext) core.Widget {
 			WithLabel("Value").
 			WithPlaceholder("Enter secret value"),
 		widgets.VSpace(12),
-		widgets.Row{
-			MainAxisAlignment: widgets.MainAxisAlignmentStart,
+		widgets.Wrap{
+			Spacing:    8,
+			RunSpacing: 8,
 			Children: []core.Widget{
 				theme.ButtonOf(ctx, "Save", func() {
-					s.saveValue()
+					s.saveValue(false)
 				}),
-				widgets.HSpace(8),
+				theme.ButtonOf(ctx, "Save (biometric)", func() {
+					s.saveValue(true)
+				}),
 				theme.ButtonOf(ctx, "Get", func() {
 					s.getValue()
 				}).WithColor(colors.Secondary, colors.OnSecondary),
-				widgets.HSpace(8),
 				theme.ButtonOf(ctx, "Delete", func() {
 					s.deleteValue()
 				}).WithColor(colors.Error, colors.OnError),
@@ -118,69 +96,68 @@ func (s *secureStorageState) Build(ctx core.BuildContext) core.Widget {
 	)
 }
 
-func (s *secureStorageState) saveValue() {
+func (s *secureStorageState) saveValue(biometric bool) {
 	key := s.keyController.Text()
 	value := s.valueController.Text()
-
 	if key == "" || value == "" {
 		s.statusText.Set("Please enter both key and value")
 		return
 	}
-
-	err := platform.SecureStorage.Set(key, value, nil)
-	if err != nil {
-		s.statusText.Set("Error saving: " + err.Error())
-		return
-	}
-
-	s.statusText.Set("Value saved securely for key: " + key)
+	go func() {
+		err := securestorage.Set(context.Background(), key, value, &securestorage.Options{RequireBiometric: biometric})
+		drift.Dispatch(func() {
+			if err != nil {
+				s.statusText.Set("Error saving: " + err.Error())
+				return
+			}
+			s.statusText.Set("Value saved securely for key: " + key)
+		})
+	}()
 }
 
 func (s *secureStorageState) getValue() {
 	key := s.keyController.Text()
-
 	if key == "" {
 		s.statusText.Set("Please enter a key name")
 		return
 	}
-
-	value, err := platform.SecureStorage.Get(key, nil)
-	if err == platform.ErrAuthPending {
-		s.statusText.Set("Authenticating...")
-		return
-	}
-	if err != nil {
-		s.statusText.Set("Error retrieving: " + err.Error())
-		s.storedValue.Set("")
-		return
-	}
-
-	if value == "" {
-		s.statusText.Set("No value found for key: " + key)
-		s.storedValue.Set("")
-		return
-	}
-
-	s.storedValue.Set(value)
-	s.statusText.Set("Retrieved value for key: " + key)
+	s.statusText.Set("Reading...")
+	go func() {
+		value, found, err := securestorage.Get(context.Background(), key,
+			&securestorage.Options{BiometricPrompt: "Read the demo secret"})
+		drift.Dispatch(func() {
+			switch {
+			case err != nil:
+				s.statusText.Set("Error retrieving: " + err.Error())
+				s.storedValue.Set("")
+			case !found:
+				s.statusText.Set("No value found for key: " + key)
+				s.storedValue.Set("")
+			default:
+				s.storedValue.Set(value)
+				s.statusText.Set("Retrieved value for key: " + key)
+			}
+		})
+	}()
 }
 
 func (s *secureStorageState) deleteValue() {
 	key := s.keyController.Text()
-
 	if key == "" {
 		s.statusText.Set("Please enter a key name")
 		return
 	}
-
-	err := platform.SecureStorage.Delete(key, nil)
-	if err != nil {
-		s.statusText.Set("Error deleting: " + err.Error())
-		return
-	}
-
-	s.storedValue.Set("")
-	s.statusText.Set("Deleted key: " + key)
+	go func() {
+		err := securestorage.Delete(context.Background(), key, nil)
+		drift.Dispatch(func() {
+			if err != nil {
+				s.statusText.Set("Error deleting: " + err.Error())
+				return
+			}
+			s.storedValue.Set("")
+			s.statusText.Set("Deleted key: " + key)
+		})
+	}()
 }
 
 func retrievedValueCard(value string, colors theme.ColorScheme) core.Widget {

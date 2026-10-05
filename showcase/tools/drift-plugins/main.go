@@ -12,6 +12,7 @@ import (
 	location "github.com/go-drift/drift/plugins/location/plugin"
 	notifications "github.com/go-drift/drift/plugins/notifications/plugin"
 	permissions "github.com/go-drift/drift/plugins/permissions/plugin"
+	securestorage "github.com/go-drift/drift/plugins/securestorage/plugin"
 )
 
 func main() {
@@ -20,5 +21,6 @@ func main() {
 		driftplugin.Bind("github.com/go-drift/drift/plugins/permissions/plugin", permissions.Plugin),
 		driftplugin.Bind("github.com/go-drift/drift/plugins/notifications/plugin", notifications.Plugin),
 		driftplugin.Bind("github.com/go-drift/drift/plugins/imagepicker/plugin", imagepicker.Plugin),
+		driftplugin.Bind("github.com/go-drift/drift/plugins/securestorage/plugin", securestorage.Plugin),
 	)
 }

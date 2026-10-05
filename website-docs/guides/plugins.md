@@ -24,6 +24,7 @@ First-party plugins live in the Drift repository:
 - [`plugins/permissions`](#permissions): contacts, calendar, microphone and photos permissions.
 - [`plugins/notifications`](#notifications): local notifications and taps on them.
 - [`plugins/imagepicker`](#image-picker): a photo from the camera, or images from the photo library.
+- [`plugins/securestorage`](#secure-storage): encrypted key-value storage, optionally behind biometrics.
 
 ## Using plugins
 
@@ -355,6 +356,43 @@ photo, err := imagepicker.Capture(ctx, imagepicker.CaptureOptions{}) // nil if c
 `Capture` and `Pick` wait for the user, so call them from a goroutine. Each `Image` is a file in the app's cache directory (`Path`, `MimeType`, `Width`, `Height`, `Size`); move it to keep it. Failures match `imagepicker.ErrBusy` (a picker is open), `ErrCameraUnavailable` (no camera, such as the iOS Simulator), `ErrCameraNotConfigured` (iOS without `camera:`) and `ErrPermissionDenied` under `errors.Is`.
 
 On Android the camera writes through Drift's `FileProvider`. If another plugin declares `CAMERA`, Android requires that permission for the camera app too, so `Capture` asks for it first. `FrontCamera` is a hint some Android camera apps ignore. Supported on iOS, xtool and Android.
+
+### Secure storage
+
+String values encrypted at rest (the iOS Keychain, Android `EncryptedSharedPreferences`), optionally readable only after biometric authentication.
+
+```yaml
+plugins:
+  - package: github.com/go-drift/drift/plugins/securestorage/plugin
+    config:
+      biometrics:                   # optional: RequireBiometric
+        face_id_description: Unlocks your saved passwords.
+```
+
+`biometrics.face_id_description` is the text iOS shows when asking to use Face ID. Without the section, the app carries no biometric code (Android's `androidx.biometric` and its `USE_BIOMETRIC`), and `RequireBiometric` fails with `securestorage.ErrBiometricsNotConfigured`.
+
+```go
+import securestorage "github.com/go-drift/drift/plugins/securestorage/runtime"
+
+go func() {
+    err := securestorage.Set(ctx, "refresh_token", token, &securestorage.Options{RequireBiometric: true})
+    ...
+    token, found, err := securestorage.Get(ctx, "refresh_token", &securestorage.Options{
+        BiometricPrompt: "Sign in to your account",
+    })
+}()
+```
+
+| Function | Notes |
+|----------|-------|
+| `Set(ctx, key, value, opts)` | Replaces any value under `key`; never prompts |
+| `Get(ctx, key, opts)` | Value and whether there is one; prompts for a `RequireBiometric` value |
+| `Delete`, `DeleteAll`, `Contains`, `Keys` | Never prompt |
+| `AvailableBiometric(ctx)` | `BiometricFaceID`, `BiometricTouchID`, `BiometricOpticID`, `BiometricFingerprint`, `BiometricFace` or `BiometricNone` |
+
+`Options` sets the `Service` (a namespace), iOS `Accessibility` (when a value can be read, such as `AfterFirstUnlock` for background work), `RequireBiometric` and the `BiometricPrompt` text. Every call waits for the platform, so call them from a goroutine. Failures match `ErrAuthCanceled`, `ErrAuthFailed`, `ErrBiometricsUnavailable` (no hardware or nothing enrolled), `ErrBiometricsNotConfigured` and `ErrLocked` under `errors.Is`.
+
+Biometric protection guards reading a value. On iOS the Keychain enforces it; on Android the plugin does, before it decrypts the value (BiometricPrompt without a CryptoObject), so it stops another person using the unlocked device, not code running as the app. Supported on iOS, xtool and Android.
 
 ## Authoring plugins
 

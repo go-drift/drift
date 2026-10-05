@@ -443,11 +443,6 @@ final class PlatformChannelManager: DriftPluginHost {
             return PreferencesHandler.handle(method: method, args: args)
         }
 
-        // Secure Storage channel
-        register(channel: "drift/secure_storage") { method, args in
-            return SecureStorageHandler.handle(method: method, args: args)
-        }
-
         // Date Picker channel
         register(channel: "drift/date_picker") { method, args in
             return DatePickerHandler.handle(method: method, args: args)

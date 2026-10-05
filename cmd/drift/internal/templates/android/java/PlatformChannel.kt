@@ -399,11 +399,6 @@ object PlatformChannelManager : DriftPluginHost {
             PreferencesHandler.handle(context, method, args)
         }
 
-        // Secure Storage channel
-        register("drift/secure_storage") { method, args ->
-            SecureStorageHandler.handle(context, method, args)
-        }
-
         // Date Picker channel
         register("drift/date_picker") { method, args ->
             DatePickerHandler.handle(method, args)

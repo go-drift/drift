@@ -22,3 +22,7 @@ plugins:
     config:
       camera:
         description: The Camera demo takes a photo to show it.
+  - package: github.com/go-drift/drift/plugins/securestorage/plugin
+    config:
+      biometrics:
+        face_id_description: The Secure Storage demo reads protected values with Face ID.
