@@ -13,18 +13,20 @@ Drift provides access to native platform capabilities through the `platform` pac
 Most platform methods are simple native invocations or native-owned waits where
 Drift does not expose cancellation.
 
-`ctx` is reserved for APIs that wait for the user, so ctx cancellation
-unblocks the Go caller:
+`ctx` is reserved for APIs that wait for the user or for file I/O, so ctx
+cancellation unblocks the Go caller:
 
 - `Permission.Request(ctx)` and `NotificationPermission.RequestWithOptions(ctx)`
 - `Storage.PickFile(ctx, ...)`, `Storage.PickDirectory(ctx)`, `Storage.SaveFile(ctx, ...)`
+- `Storage.ReadFile`, `WriteFile`, `DeleteFile` and `GetFileInfo`
+- `ShowDatePicker(ctx, ...)` and `ShowTimePicker(ctx, ...)`
 
 When ctx fires on these methods, the Go caller is unblocked promptly with the
 package's stable error sentinels (`ErrCanceled` / `ErrTimeout` for permissions,
-`ctx.Err()` for storage). The native operation continues to completion
+`ctx.Err()` for the others). The native operation continues to completion
 in the background and its result is discarded.
 
-These calls wait for the user, and the reply needs the platform main thread.
+These calls wait, and the reply needs the platform main thread.
 Go's UI thread (widget callbacks, `Build`, `InitState`) **is** that main
 thread, so call them from a goroutine and publish the result with
 `drift.Dispatch` or a `Signal`:
@@ -36,10 +38,9 @@ go func() {
 }()
 ```
 
-From the UI thread, `Request` and `RequestWithOptions` fail at once with
-`platform.ErrBlocksUIThread`, as plugin methods that reply later do. The
-storage pickers and the date and time pickers still freeze the app when
-called from the UI thread.
+From the UI thread they fail at once with `platform.ErrBlocksUIThread`, as
+plugin methods that reply later do. The `DatePicker` and `TimePicker`
+widgets call their pickers from a goroutine for you.
 
 ## Permissions
 
@@ -166,32 +167,38 @@ Both platform templates include `http`, `https`, `mailto`, `tel`, and `sms` by d
 
 ## File Storage
 
-Access files and directories:
+Access files and directories. Paths may be content URIs on Android (what the
+pickers return). Every call except `GetAppDirectory` waits for file I/O off
+the main thread, so call them from a goroutine:
 
 ```go
-// Read a file
-data, err := platform.Storage.ReadFile("/path/to/file.txt")
+go func() {
+    // Read a file
+    data, err := platform.Storage.ReadFile(ctx, "/path/to/file.txt")
 
-// Write a file
-err := platform.Storage.WriteFile("/path/to/file.txt", []byte("content"))
+    // Write a file
+    err = platform.Storage.WriteFile(ctx, "/path/to/file.txt", []byte("content"))
 
-// Delete a file
-err := platform.Storage.DeleteFile("/path/to/file.txt")
+    // Delete a file
+    err = platform.Storage.DeleteFile(ctx, "/path/to/file.txt")
 
-// Get file info
-info, err := platform.Storage.GetFileInfo("/path/to/file.txt")
+    // Get file info
+    info, err := platform.Storage.GetFileInfo(ctx, "/path/to/file.txt")
+}()
 
-// Get app directory
+// Get app directory (does not wait; any thread)
 docsPath, err := platform.Storage.GetAppDirectory(platform.AppDirectoryDocuments)
 cachePath, err := platform.Storage.GetAppDirectory(platform.AppDirectoryCache)
 ```
 
 ### File Picker
 
+The pickers return nothing (no files, an empty path, no error) when the user
+cancels, and `platform.ErrStorageBusy` if a picker is already open.
+
 ```go
-// Open file picker (runs synchronously, call from a goroutine)
 go func() {
-    result, err := platform.Storage.PickFile(context.Background(), platform.PickFileOptions{
+    files, err := platform.Storage.PickFile(context.Background(), platform.PickFileOptions{
         AllowMultiple: false,
         AllowedTypes:  []string{"image/*", "application/pdf"},
     })
@@ -200,15 +207,15 @@ go func() {
             handleError(err)
             return
         }
-        if result.Cancelled {
-            return
-        }
-        for _, file := range result.Files {
+        for _, file := range files { // none if canceled
             handleSelectedFile(file)
         }
     })
 }()
 ```
+
+`PickDirectory(ctx)` returns the chosen directory and `SaveFile(ctx, data, opts)`
+the saved file, each `""` if canceled.
 
 ## Preferences
 

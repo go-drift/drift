@@ -97,12 +97,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        StorageHandler.onActivityResult(requestCode, resultCode, data, this)
-    }
-
     override fun onResume() {
         super.onResume()
         container.skiaView.notifyResume()

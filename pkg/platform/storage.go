@@ -2,15 +2,12 @@ package platform
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
-
-	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
 
-// ErrStorageBusy is returned when a storage picker operation is already in progress.
+// ErrStorageBusy is returned when a storage picker is already open.
 var ErrStorageBusy = errors.New("storage picker operation already in progress")
 
 // PickedFile represents a file selected by the user.
@@ -30,16 +27,6 @@ type FileInfo struct {
 	MimeType     string
 	IsDirectory  bool
 	LastModified int64
-}
-
-// StorageResult represents a result from storage picker operations.
-type StorageResult struct {
-	requestID string
-	Type      string       // "pickFile", "pickDirectory", or "saveFile"
-	Files     []PickedFile // For pickFile results
-	Path      string       // For pickDirectory or saveFile results
-	Cancelled bool
-	Error     string
 }
 
 // PickFileOptions configures file picker behavior.
@@ -69,53 +56,45 @@ const (
 )
 
 // StorageService provides file picking, saving, and file system access.
+//
+// Every method except GetAppDirectory waits for the platform (a picker, or
+// file I/O off the main thread), so call it from a goroutine: from the UI
+// thread it fails with [ErrBlocksUIThread]. File contents cross the
+// channel as base64.
 type StorageService struct {
-	state *storageServiceState
-	mu    sync.Mutex // serializes picker operations
+	channel *MethodChannel
 }
 
 // Storage is the singleton storage service.
-var Storage *StorageService
+var Storage = &StorageService{channel: NewMethodChannel("drift/storage")}
 
-func init() {
-	Storage = &StorageService{
-		state: newStorageService(),
-	}
-}
-
-type storageServiceState struct {
-	channel *MethodChannel
-	results *EventChannel
-}
-
-func newStorageService() *storageServiceState {
-	return &storageServiceState{
-		channel: NewMethodChannel("drift/storage"),
-		results: NewEventChannel("drift/storage/result"),
-	}
-}
-
-// PickFile opens a file picker dialog and blocks until the user selects files or cancels.
-// Returns ErrStorageBusy if another picker operation is already in progress.
-func (s *StorageService) PickFile(ctx context.Context, opts PickFileOptions) (StorageResult, error) {
-	return s.invokePicker(ctx, "pickFile", map[string]any{
+// PickFile opens the system file picker and returns the chosen files, or
+// none if the user canceled. Returns [ErrStorageBusy] if a picker is open.
+func (s *StorageService) PickFile(ctx context.Context, opts PickFileOptions) ([]PickedFile, error) {
+	result, err := s.channel.Invoke(ctx, "pickFile", map[string]any{
 		"allowMultiple": opts.AllowMultiple,
 		"allowedTypes":  opts.AllowedTypes,
 		"initialDir":    opts.InitialDir,
 		"dialogTitle":   opts.DialogTitle,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return parsePickedFiles(result)
 }
 
-// PickDirectory opens a directory picker dialog and blocks until the user selects a directory or cancels.
-// Returns ErrStorageBusy if another picker operation is already in progress.
-func (s *StorageService) PickDirectory(ctx context.Context) (StorageResult, error) {
-	return s.invokePicker(ctx, "pickDirectory", nil)
+// PickDirectory opens the system directory picker and returns the chosen
+// directory's path (a content URI on Android), or "" if the user canceled.
+// Returns [ErrStorageBusy] if a picker is open.
+func (s *StorageService) PickDirectory(ctx context.Context) (string, error) {
+	return s.invokePath(ctx, "pickDirectory", nil)
 }
 
-// SaveFile saves data to a file chosen by the user and blocks until complete.
-// Returns ErrStorageBusy if another picker operation is already in progress.
-func (s *StorageService) SaveFile(ctx context.Context, data []byte, opts SaveFileOptions) (StorageResult, error) {
-	return s.invokePicker(ctx, "saveFile", map[string]any{
+// SaveFile asks the user where to save data and writes it there, returning
+// the saved file's path (a content URI on Android), or "" if the user
+// canceled. Returns [ErrStorageBusy] if a picker is open.
+func (s *StorageService) SaveFile(ctx context.Context, data []byte, opts SaveFileOptions) (string, error) {
+	return s.invokePath(ctx, "saveFile", map[string]any{
 		"data":          data,
 		"suggestedName": opts.SuggestedName,
 		"mimeType":      opts.MimeType,
@@ -124,176 +103,103 @@ func (s *StorageService) SaveFile(ctx context.Context, data []byte, opts SaveFil
 	})
 }
 
-// invokePicker serializes picker operations, subscribes to the result event
-// channel filtered by a generated request ID, invokes the native method,
-// and blocks until a matching result arrives or the context is canceled.
-func (s *StorageService) invokePicker(ctx context.Context, method string, args map[string]any) (StorageResult, error) {
-	if !s.mu.TryLock() {
-		return StorageResult{}, ErrStorageBusy
-	}
-	defer s.mu.Unlock()
-
-	requestID := generateRequestID()
-
-	resultChan := make(chan StorageResult, 1)
-	errChan := make(chan error, 1)
-	sub := s.state.results.Listen(EventHandler{
-		OnEvent: func(data any) {
-			result, err := parseStorageResultWithID(data)
-			if err != nil {
-				drifterrors.Report(&drifterrors.DriftError{
-					Op:      "storage.parse",
-					Kind:    drifterrors.KindParsing,
-					Channel: "drift/storage/result",
-					Err:     err,
-				})
-				return
-			}
-			if result.requestID == requestID {
-				select {
-				case resultChan <- result:
-				default:
-				}
-			}
-		},
-		OnError: func(err error) {
-			select {
-			case errChan <- err:
-			default:
-			}
-		},
-	})
-	defer sub.Cancel()
-
-	if args == nil {
-		args = make(map[string]any)
-	}
-	args["requestId"] = requestID
-
-	_, err := s.state.channel.Invoke(ctx, method, args)
-	if err != nil {
-		return StorageResult{}, err
-	}
-
-	select {
-	case result := <-resultChan:
-		if result.Error != "" {
-			return result, errors.New(result.Error)
-		}
-		return result, nil
-	case err := <-errChan:
-		return StorageResult{}, err
-	case <-ctx.Done():
-		return StorageResult{}, ctx.Err()
-	}
-}
-
-// ReadFile reads the contents of a file.
-func (s *StorageService) ReadFile(pathOrURI string) ([]byte, error) {
-	result, err := s.state.channel.Invoke(context.Background(), "readFile", map[string]any{
-		"path": pathOrURI,
-	})
+// ReadFile reads the contents of a file path or content URI.
+func (s *StorageService) ReadFile(ctx context.Context, pathOrURI string) ([]byte, error) {
+	result, err := s.channel.Invoke(ctx, "readFile", map[string]any{"path": pathOrURI})
 	if err != nil {
 		return nil, err
 	}
-	if m, ok := result.(map[string]any); ok {
-		if data, ok := m["data"].([]byte); ok {
-			return data, nil
-		}
-		if data, ok := m["data"].(string); ok {
-			return []byte(data), nil
-		}
+	m, _ := result.(map[string]any)
+	encoded, ok := m["data"].(string)
+	if !ok {
+		return nil, fmt.Errorf("storage readFile: want base64 data, got %v", result)
 	}
-	return nil, nil
+	return base64.StdEncoding.DecodeString(encoded)
 }
 
-// WriteFile writes data to a file.
-func (s *StorageService) WriteFile(pathOrURI string, data []byte) error {
-	_, err := s.state.channel.Invoke(context.Background(), "writeFile", map[string]any{
-		"path": pathOrURI,
-		"data": data,
-	})
+// WriteFile writes data to a file path or content URI, replacing its
+// contents.
+func (s *StorageService) WriteFile(ctx context.Context, pathOrURI string, data []byte) error {
+	_, err := s.channel.Invoke(ctx, "writeFile", map[string]any{"path": pathOrURI, "data": data})
 	return err
 }
 
-// DeleteFile deletes a file.
-func (s *StorageService) DeleteFile(pathOrURI string) error {
-	_, err := s.state.channel.Invoke(context.Background(), "deleteFile", map[string]any{
-		"path": pathOrURI,
-	})
+// DeleteFile deletes a file path or content URI.
+func (s *StorageService) DeleteFile(ctx context.Context, pathOrURI string) error {
+	_, err := s.channel.Invoke(ctx, "deleteFile", map[string]any{"path": pathOrURI})
 	return err
 }
 
-// GetFileInfo returns metadata about a file.
-func (s *StorageService) GetFileInfo(pathOrURI string) (*FileInfo, error) {
-	result, err := s.state.channel.Invoke(context.Background(), "getFileInfo", map[string]any{
-		"path": pathOrURI,
-	})
+// GetFileInfo returns metadata about a file path or content URI.
+func (s *StorageService) GetFileInfo(ctx context.Context, pathOrURI string) (FileInfo, error) {
+	result, err := s.channel.Invoke(ctx, "getFileInfo", map[string]any{"path": pathOrURI})
 	if err != nil {
-		return nil, err
+		return FileInfo{}, err
 	}
-	if info, ok := parseFileInfo(result); ok {
-		return &info, nil
+	info, ok := parseFileInfo(result)
+	if !ok {
+		return FileInfo{}, fmt.Errorf("storage getFileInfo: want a map, got %v", result)
 	}
-	return nil, nil
+	return info, nil
 }
 
-// GetAppDirectory returns the path to a standard app directory.
+// GetAppDirectory returns the path to a standard app directory. It does
+// not wait, so the UI thread may call it.
 func (s *StorageService) GetAppDirectory(dir AppDirectory) (string, error) {
-	result, err := s.state.channel.Invoke(context.Background(), "getAppDirectory", map[string]any{
+	result, err := s.channel.Invoke(context.Background(), "getAppDirectory", map[string]any{
 		"directory": string(dir),
 	})
 	if err != nil {
 		return "", err
 	}
-	if m, ok := result.(map[string]any); ok {
-		return parseString(m["path"]), nil
+	m, _ := result.(map[string]any)
+	path := parseString(m["path"])
+	if path == "" {
+		return "", fmt.Errorf("storage getAppDirectory: no %s directory", dir)
 	}
-	return "", nil
+	return path, nil
 }
 
-func parseStorageResultWithID(data any) (StorageResult, error) {
-	m, ok := data.(map[string]any)
+// invokePath calls a picker that replies with {"path": ...}, or nil when
+// the user canceled.
+func (s *StorageService) invokePath(ctx context.Context, method string, args map[string]any) (string, error) {
+	result, err := s.channel.Invoke(ctx, method, args)
+	if err != nil || result == nil {
+		return "", err
+	}
+	m, ok := result.(map[string]any)
 	if !ok {
-		return StorageResult{}, &drifterrors.ParseError{
-			Channel:  "drift/storage/result",
-			DataType: "StorageResult",
-			Got:      data,
+		return "", fmt.Errorf("storage %s: want a map, got %v", method, result)
+	}
+	return parseString(m["path"]), nil
+}
+
+// parsePickedFiles parses pickFile's reply: {"files": [...]}, or nil when
+// the user canceled.
+func parsePickedFiles(result any) ([]PickedFile, error) {
+	if result == nil {
+		return nil, nil
+	}
+	m, _ := result.(map[string]any)
+	list, ok := m["files"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("storage pickFile: want a file list, got %v", result)
+	}
+	files := make([]PickedFile, 0, len(list))
+	for _, f := range list {
+		fm, ok := f.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("storage pickFile: want a file, got %v", f)
 		}
+		files = append(files, PickedFile{
+			Name:     parseString(fm["name"]),
+			Path:     parseString(fm["path"]),
+			URI:      parseString(fm["uri"]),
+			MimeType: parseString(fm["mimeType"]),
+			Size:     parseInt64(fm["size"]),
+		})
 	}
-
-	requestID := parseString(m["requestId"])
-	if requestID == "" {
-		return StorageResult{}, &drifterrors.ParseError{
-			Channel:  "drift/storage/result",
-			DataType: "StorageResult",
-			Got:      data,
-		}
-	}
-
-	result := StorageResult{
-		requestID: requestID,
-		Type:      parseString(m["type"]),
-		Path:      parseString(m["path"]),
-		Cancelled: parseBool(m["cancelled"]),
-		Error:     parseString(m["error"]),
-	}
-
-	if files, ok := m["files"].([]any); ok {
-		for _, f := range files {
-			if fm, ok := f.(map[string]any); ok {
-				result.Files = append(result.Files, PickedFile{
-					Name:     parseString(fm["name"]),
-					Path:     parseString(fm["path"]),
-					URI:      parseString(fm["uri"]),
-					MimeType: parseString(fm["mimeType"]),
-					Size:     parseInt64(fm["size"]),
-				})
-			}
-		}
-	}
-
-	return result, nil
+	return files, nil
 }
 
 func parseFileInfo(result any) (FileInfo, bool) {
@@ -326,9 +232,4 @@ func parseInt64(value any) int64 {
 	default:
 		return 0
 	}
-}
-
-// generateRequestID creates a unique ID for request correlation.
-func generateRequestID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

@@ -628,7 +628,9 @@ Calling a method that is not declared fails with `platform.ErrMethodNotFound`.
 
 To fail a call with an error Go can match, give it a code: on iOS an `NSError` whose domain is the code, on Android a `DriftCallError(code, message)` (thrown, or passed to `result.error`). Go receives a `*platform.ChannelError` with that `Code`; the runtime half maps codes to its own sentinel errors.
 
-Values crossing the channel are JSON-like: nil, booleans, numbers, strings, lists and string-keyed maps.
+Values crossing the channel are JSON-like: nil, booleans, numbers, strings, lists and string-keyed maps. Send bytes as base64 strings (a Go `[]byte` argument already arrives as one).
+
+On Android, start an Activity for its result (a system picker, a camera app) with `launchForResult(activity, contract, input) { output -> ... }` from `com.drift.runner`, passing the binding's `FragmentActivity`. It calls back once: with the output, or with `null` if the Activity is destroyed first, so an `asyncMethod` waiting on it always replies.
 
 Name channels `<vendor>/<feature>`, such as `acme/camera`; `drift/` is reserved for Drift and its first-party plugins. Registering a channel name twice traps at startup.
 

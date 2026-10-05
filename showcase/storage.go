@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"maps"
 
 	"github.com/go-drift/drift/pkg/core"
@@ -239,24 +240,26 @@ func (s *storageState) pickFile() {
 	s.statusText.Set("Opening file picker...")
 
 	go func() {
-		result, err := platform.Storage.PickFile(context.Background(), platform.PickFileOptions{
+		files, err := platform.Storage.PickFile(context.Background(), platform.PickFileOptions{
 			AllowMultiple: false,
 		})
+		var contents []byte
+		if err == nil && len(files) > 0 {
+			contents, err = platform.Storage.ReadFile(context.Background(), files[0].Path)
+		}
 		drift.Dispatch(func() {
 			if err != nil {
 				s.statusText.Set("Error: " + err.Error())
 				return
 			}
-			if result.Cancelled {
+			if len(files) == 0 {
 				s.statusText.Set("Operation cancelled")
 				return
 			}
-			if len(result.Files) > 0 {
-				file := result.Files[0]
-				s.selectedFile.Set(&file)
-				s.selectedPath.Set("")
-				s.statusText.Set("File selected: " + file.Name)
-			}
+			file := files[0]
+			s.selectedFile.Set(&file)
+			s.selectedPath.Set("")
+			s.statusText.Set(fmt.Sprintf("File selected: %s (read %d bytes)", file.Name, len(contents)))
 		})
 	}()
 }
@@ -265,18 +268,18 @@ func (s *storageState) pickDirectory() {
 	s.statusText.Set("Opening directory picker...")
 
 	go func() {
-		result, err := platform.Storage.PickDirectory(context.Background())
+		path, err := platform.Storage.PickDirectory(context.Background())
 		drift.Dispatch(func() {
 			if err != nil {
 				s.statusText.Set("Error: " + err.Error())
 				return
 			}
-			if result.Cancelled {
+			if path == "" {
 				s.statusText.Set("Operation cancelled")
 				return
 			}
 			s.selectedFile.Set(nil)
-			s.selectedPath.Set(result.Path)
+			s.selectedPath.Set(path)
 			s.statusText.Set("Directory selected")
 		})
 	}()
@@ -287,7 +290,7 @@ func (s *storageState) saveFile() {
 
 	go func() {
 		data := []byte("Hello from Drift!\n\nThis file was saved using the Storage API.")
-		result, err := platform.Storage.SaveFile(context.Background(), data, platform.SaveFileOptions{
+		path, err := platform.Storage.SaveFile(context.Background(), data, platform.SaveFileOptions{
 			SuggestedName: "drift-demo.txt",
 			MimeType:      "text/plain",
 		})
@@ -296,11 +299,11 @@ func (s *storageState) saveFile() {
 				s.statusText.Set("Error: " + err.Error())
 				return
 			}
-			if result.Cancelled {
+			if path == "" {
 				s.statusText.Set("Operation cancelled")
 				return
 			}
-			s.selectedPath.Set(result.Path)
+			s.selectedPath.Set(path)
 			s.statusText.Set("File saved")
 		})
 	}()

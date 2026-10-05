@@ -1,97 +1,58 @@
 /**
  * DatePickerChannel.kt
- * Provides native date picker dialog for Drift.
+ * The drift/date_picker channel: `show` replies when the user picks a date
+ * ({"year", "month" 1-12, "day"}) or cancels (null). Dates cross the
+ * channel as calendar days, so no time zone shifts them.
  */
 package {{.PackageName}}
 
 import android.app.DatePickerDialog
+import com.drift.runner.DriftCallError
+import com.drift.runner.DriftPluginHost
 import java.util.Calendar
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
-/**
- * Handles date picker channel methods from Go.
- */
 object DatePickerHandler {
-    fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
-        if (method != "show") {
-            return Pair(null, IllegalArgumentException("Unknown method: $method"))
-        }
-
-        val params = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-
-        // Parse initial date
-        val initialTimestamp = (params["initialDate"] as? Number)?.toLong()
-            ?: (System.currentTimeMillis() / 1000)
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = initialTimestamp * 1000
-
-        // Parse min/max dates
-        val minTimestamp = (params["minDate"] as? Number)?.toLong()
-        val maxTimestamp = (params["maxDate"] as? Number)?.toLong()
-
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(null, IllegalStateException("No active activity"))
-
-        // Show picker on main thread and wait for result
-        var result: Long? = null
-        val latch = CountDownLatch(1)
-
-        activity.runOnUiThread {
-            val year = calendar.get(Calendar.YEAR)
-            val month = calendar.get(Calendar.MONTH)
-            val day = calendar.get(Calendar.DAY_OF_MONTH)
-
-            val dialog = DatePickerDialog(
-                activity,
-                { _, selectedYear, selectedMonth, selectedDay ->
-                    val selectedCalendar = Calendar.getInstance()
-                    selectedCalendar.set(selectedYear, selectedMonth, selectedDay, 0, 0, 0)
-                    selectedCalendar.set(Calendar.MILLISECOND, 0)
-                    result = selectedCalendar.timeInMillis / 1000
-                    latch.countDown()
-                },
-                year,
-                month,
-                day
-            )
-
-            // Set min/max dates if provided
-            minTimestamp?.let {
-                dialog.datePicker.minDate = it * 1000
-            }
-            maxTimestamp?.let {
-                dialog.datePicker.maxDate = it * 1000
-            }
-
-            // Handle cancel
-            dialog.setOnCancelListener {
-                latch.countDown()
-            }
-
-            // Handle dismiss without selection
-            dialog.setOnDismissListener {
-                // Only countdown if not already done (selection or cancel)
-                if (latch.count > 0) {
-                    latch.countDown()
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/date_picker") {
+            asyncMethod("show") { args, result ->
+                val params = args as? Map<*, *> ?: emptyMap<String, Any?>()
+                val activity = PlatformChannelManager.currentActivity()
+                    ?: throw DriftCallError("platform_unavailable", "no screen to show the date picker over")
+                val initial = calendarDay(params["initialDate"]) ?: Calendar.getInstance()
+                var replied = false
+                val dialog = DatePickerDialog(
+                    activity,
+                    { _, year, month, day ->
+                        replied = true
+                        result.success(mapOf("year" to year, "month" to month + 1, "day" to day))
+                    },
+                    initial.get(Calendar.YEAR),
+                    initial.get(Calendar.MONTH),
+                    initial.get(Calendar.DAY_OF_MONTH),
+                )
+                calendarDay(params["minDate"])?.let { dialog.datePicker.minDate = it.timeInMillis }
+                calendarDay(params["maxDate"])?.let { dialog.datePicker.maxDate = it.timeInMillis }
+                // Dismissal follows a pick too; anything else is a cancel.
+                dialog.setOnDismissListener {
+                    if (!replied) {
+                        replied = true
+                        result.success(null)
+                    }
                 }
+                dialog.show()
             }
-
-            dialog.show()
         }
+    }
 
-        // Wait for user selection (with timeout)
-        val completed = latch.await(300, TimeUnit.SECONDS)
-        if (!completed) {
-            return Pair(null, Exception("Picker timeout"))
-        }
-
-        // Return result (null means cancelled)
-        return if (result != null) {
-            Pair(mapOf("timestamp" to result), null)
-        } else {
-            Pair(null, null)
+    /** Local midnight of a wire calendar day ({year, month 1-12, day}). */
+    private fun calendarDay(value: Any?): Calendar? {
+        val day = value as? Map<*, *> ?: return null
+        val year = (day["year"] as? Number)?.toInt() ?: return null
+        val month = (day["month"] as? Number)?.toInt() ?: return null
+        val dayOfMonth = (day["day"] as? Number)?.toInt() ?: return null
+        return Calendar.getInstance().apply {
+            clear()
+            set(year, month - 1, dayOfMonth)
         }
     }
 }

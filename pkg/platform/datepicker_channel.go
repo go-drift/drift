@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -23,55 +24,39 @@ type DatePickerConfig struct {
 
 var datePickerChannel = NewMethodChannel("drift/date_picker")
 
-// ShowDatePicker shows the native date picker modal.
-// Returns the selected date or error if cancelled.
-func ShowDatePicker(config DatePickerConfig) (time.Time, error) {
-	args := map[string]any{
-		"initialDate": config.InitialDate.Unix(),
-	}
-
+// ShowDatePicker shows the native date picker and returns the chosen date,
+// at midnight in [time.Local], or [ErrPickerCancelled]. Dates cross the
+// channel as calendar days (year, month, day in each time's own location),
+// so no time zone shifts them. It waits for the user, so call it from a
+// goroutine: from the UI thread it fails with [ErrBlocksUIThread].
+func ShowDatePicker(ctx context.Context, config DatePickerConfig) (time.Time, error) {
+	args := map[string]any{"initialDate": calendarDay(config.InitialDate)}
 	if config.MinDate != nil {
-		args["minDate"] = config.MinDate.Unix()
+		args["minDate"] = calendarDay(*config.MinDate)
 	}
 	if config.MaxDate != nil {
-		args["maxDate"] = config.MaxDate.Unix()
+		args["maxDate"] = calendarDay(*config.MaxDate)
 	}
 
-	result, err := datePickerChannel.Invoke(context.Background(), "show", args)
+	result, err := datePickerChannel.Invoke(ctx, "show", args)
 	if err != nil {
 		return time.Time{}, err
 	}
-
-	// nil result means cancelled
 	if result == nil {
 		return time.Time{}, ErrPickerCancelled
 	}
-
-	// Parse result - native returns {"timestamp": int64}
-	var timestamp int64
-	var ok bool
-
-	// Try to get from map first (expected format)
-	if resultMap, isMap := result.(map[string]any); isMap {
-		timestamp, ok = toInt64(resultMap["timestamp"])
+	m, _ := result.(map[string]any)
+	year, yearOK := toInt(m["year"])
+	month, monthOK := toInt(m["month"])
+	day, dayOK := toInt(m["day"])
+	if !yearOK || !monthOK || !dayOK {
+		return time.Time{}, fmt.Errorf("date picker: want {year, month, day}, got %v", result)
 	}
-
-	// Fallback: try direct int64 (legacy format)
-	if !ok {
-		timestamp, ok = toInt64(result)
-	}
-
-	if !ok {
-		return time.Time{}, errors.New("invalid date picker result")
-	}
-
-	return time.Unix(timestamp, 0), nil
+	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local), nil
 }
 
-func init() {
-	// Register the channel handler (for any incoming calls from native)
-	datePickerChannel.SetHandler(func(method string, args any) (any, error) {
-		// Currently no methods are called from native to Go for date picker
-		return nil, ErrMethodNotFound
-	})
+// calendarDay is t's date on the wire: month 1 to 12.
+func calendarDay(t time.Time) map[string]any {
+	year, month, day := t.Date()
+	return map[string]any{"year": year, "month": int(month), "day": day}
 }

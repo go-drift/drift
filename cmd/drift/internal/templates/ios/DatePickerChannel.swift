@@ -1,63 +1,47 @@
 /// DatePickerChannel.swift
 /// Provides native date picker modal for Drift.
 
+import DriftPluginAPI
 import UIKit
 
 // MARK: - Date Picker Handler
 
-/// Handles date picker channel methods from Go.
+/// The drift/date_picker channel: `show` replies when the user picks a
+/// date ({"year", "month" 1-12, "day"}) or cancels (nil). Dates cross the
+/// channel as calendar days, so no time zone shifts them.
 enum DatePickerHandler {
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        guard method == "show" else {
-            return (nil, NSError(domain: "DatePicker", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
-        }
-
-        guard let params = args as? [String: Any] else {
-            return (nil, NSError(domain: "DatePicker", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
-        }
-
-        // Parse initial date
-        let initialTimestamp = (params["initialDate"] as? NSNumber)?.int64Value ?? Int64(Date().timeIntervalSince1970)
-        let initialDate = Date(timeIntervalSince1970: TimeInterval(initialTimestamp))
-
-        // Parse min/max dates
-        var minDate: Date? = nil
-        var maxDate: Date? = nil
-        if let minTimestamp = (params["minDate"] as? NSNumber)?.int64Value {
-            minDate = Date(timeIntervalSince1970: TimeInterval(minTimestamp))
-        }
-        if let maxTimestamp = (params["maxDate"] as? NSNumber)?.int64Value {
-            maxDate = Date(timeIntervalSince1970: TimeInterval(maxTimestamp))
-        }
-
-        // Show picker on main thread and wait for result
-        var result: Int64? = nil
-        let semaphore = DispatchSemaphore(value: 0)
-
-        DispatchQueue.main.async {
-            showDatePickerModal(
-                initialDate: initialDate,
-                minDate: minDate,
-                maxDate: maxDate
-            ) { selectedDate in
-                if let date = selectedDate {
-                    result = Int64(date.timeIntervalSince1970)
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/date_picker") { channel in
+            channel.asyncMethod("show") { args, result in
+                let params = args as? [String: Any] ?? [:]
+                let shown = showDatePickerModal(
+                    initialDate: calendarDay(params["initialDate"]) ?? Date(),
+                    minDate: calendarDay(params["minDate"]),
+                    maxDate: calendarDay(params["maxDate"])
+                ) { selectedDate in
+                    result.success(selectedDate.map { date -> [String: Int] in
+                        let day = Calendar.current.dateComponents([.year, .month, .day], from: date)
+                        return ["year": day.year ?? 0, "month": day.month ?? 0, "day": day.day ?? 0]
+                    })
                 }
-                semaphore.signal()
+                if !shown {
+                    result.error(NSError(domain: "platform_unavailable", code: 0, userInfo: [
+                        NSLocalizedDescriptionKey: "no screen to show the date picker over",
+                    ]))
+                }
             }
         }
+    }
 
-        // Wait for user selection (with timeout)
-        let waitResult = semaphore.wait(timeout: .now() + .seconds(300))
-        if waitResult == .timedOut {
-            return (nil, NSError(domain: "DatePicker", code: 408, userInfo: [NSLocalizedDescriptionKey: "Picker timeout"]))
+    /// Local midnight of a wire calendar day ({year, month 1-12, day}).
+    private static func calendarDay(_ value: Any?) -> Date? {
+        guard let day = value as? [String: Any],
+              let year = (day["year"] as? NSNumber)?.intValue,
+              let month = (day["month"] as? NSNumber)?.intValue,
+              let dayOfMonth = (day["day"] as? NSNumber)?.intValue else {
+            return nil
         }
-
-        // Return result (nil means cancelled)
-        if let timestamp = result {
-            return (["timestamp": timestamp], nil)
-        }
-        return (nil, nil)
+        return Calendar.current.date(from: DateComponents(year: year, month: month, day: dayOfMonth))
     }
 
     private static func showDatePickerModal(
@@ -65,11 +49,10 @@ enum DatePickerHandler {
         minDate: Date?,
         maxDate: Date?,
         completion: @escaping (Date?) -> Void
-    ) {
+    ) -> Bool {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootVC = windowScene.windows.first?.rootViewController else {
-            completion(nil)
-            return
+            return false
         }
 
         // Find topmost presented controller
@@ -129,5 +112,6 @@ enum DatePickerHandler {
         }
 
         topVC.present(alertController, animated: true)
+        return true
     }
 }

@@ -1,227 +1,175 @@
 /**
  * StorageHandler.kt
- * Handles file system access and document picking for the Drift platform channel.
+ * The drift/storage channel: document pickers and file system access.
+ *
+ * The pickers reply when the user finishes ({"files": [...]} or
+ * {"path": ...}) or cancels (null); one picker at a time, a second fails
+ * with `storage_busy`. Paths may be content URIs. File I/O runs off the
+ * main thread. File contents cross the channel as base64.
  */
 package {{.PackageName}}
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
-import android.webkit.MimeTypeMap
-import java.io.File
 import android.util.Base64
+import android.webkit.MimeTypeMap
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
+import com.drift.runner.DriftCallError
+import com.drift.runner.DriftPluginHost
+import com.drift.runner.DriftResult
+import com.drift.runner.launchForResult
+import java.io.File
+import java.util.concurrent.Executors
 
 object StorageHandler {
-    private const val PICK_FILE_REQUEST = 9002
-    private const val PICK_DIRECTORY_REQUEST = 9003
-    private const val SAVE_FILE_REQUEST = 9004
+    private val io = Executors.newSingleThreadExecutor { Thread(it, "drift-storage-io") }
 
-    private var pendingSaveData: ByteArray? = null
-    private var pendingRequestType: String? = null
-    private var pendingRequestId: String? = null
+    /** Whether a picker is open. Main thread only. */
+    private var picking = false
 
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "pickFile" -> pickFile(context, args)
-            "pickDirectory" -> pickDirectory(context, args)
-            "saveFile" -> saveFile(context, args)
-            "readFile" -> readFile(context, args)
-            "writeFile" -> writeFile(context, args)
-            "deleteFile" -> deleteFile(context, args)
-            "getFileInfo" -> getFileInfo(context, args)
-            "getAppDirectory" -> getAppDirectory(context, args)
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
-        }
-    }
-
-    private fun pickFile(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(null, IllegalStateException("No activity available"))
-
-        val argsMap = args as? Map<*, *> ?: emptyMap<String, Any>()
-        val allowMultiple = argsMap["allowMultiple"] as? Boolean ?: false
-        @Suppress("UNCHECKED_CAST")
-        val allowedTypes = argsMap["allowedTypes"] as? List<String> ?: listOf("*/*")
-
-        pendingRequestType = "pickFile"
-        pendingRequestId = argsMap["requestId"] as? String
-
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = if (allowedTypes.size == 1) allowedTypes[0] else "*/*"
-            if (allowedTypes.size > 1) {
-                putExtra(Intent.EXTRA_MIME_TYPES, allowedTypes.toTypedArray())
+    fun start(host: DriftPluginHost) {
+        val context = host.context
+        host.registerChannel("drift/storage") {
+            asyncMethod("pickFile") { args, result -> pickFile(context, args, result) }
+            asyncMethod("pickDirectory") { _, result ->
+                pick(result, ActivityResultContracts.OpenDocumentTree(), null) { uri ->
+                    uri?.let { mapOf("path" to it.toString()) }
+                }
             }
-            if (allowMultiple) {
-                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            asyncMethod("saveFile") { args, result -> saveFile(context, args, result) }
+            asyncMethod("readFile") { args, result ->
+                background(result) {
+                    val path = path(args)
+                    val bytes = if (isContentUri(path)) {
+                        context.contentResolver.openInputStream(Uri.parse(path))?.use { it.readBytes() }
+                            ?: throw DriftCallError("io_error", "cannot open $path")
+                    } else {
+                        File(path).readBytes()
+                    }
+                    mapOf("data" to Base64.encodeToString(bytes, Base64.NO_WRAP))
+                }
+            }
+            asyncMethod("writeFile") { args, result ->
+                background(result) {
+                    val path = path(args)
+                    val bytes = data(args)
+                    if (isContentUri(path)) {
+                        context.contentResolver.openOutputStream(Uri.parse(path), "wt")?.use { it.write(bytes) }
+                            ?: throw DriftCallError("io_error", "cannot open $path")
+                    } else {
+                        File(path).writeBytes(bytes)
+                    }
+                    null
+                }
+            }
+            asyncMethod("deleteFile") { args, result ->
+                background(result) {
+                    val path = path(args)
+                    val deleted = if (isContentUri(path)) {
+                        DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(path))
+                    } else {
+                        File(path).delete()
+                    }
+                    if (!deleted) throw DriftCallError("io_error", "cannot delete $path")
+                    null
+                }
+            }
+            asyncMethod("getFileInfo") { args, result ->
+                background(result) {
+                    val path = path(args)
+                    if (isContentUri(path)) contentInfo(context, Uri.parse(path)) else fileInfo(path)
+                }
+            }
+            method("getAppDirectory") { args ->
+                val path = when ((args as? Map<*, *>)?.get("directory")) {
+                    "documents" -> context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)?.absolutePath
+                    "cache" -> context.cacheDir.absolutePath
+                    "temp" -> File(context.cacheDir, "temp").apply { mkdirs() }.absolutePath
+                    "support" -> context.filesDir.absolutePath
+                    else -> throw IllegalArgumentException("drift/storage: missing or unknown directory")
+                }
+                mapOf("path" to path)
             }
         }
-
-        activity.startActivityForResult(intent, PICK_FILE_REQUEST)
-        // Result will be delivered via drift/storage/result event channel
-        return Pair(mapOf("pending" to true), null)
     }
 
-    private fun pickDirectory(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(null, IllegalStateException("No activity available"))
-
-        val argsMap = args as? Map<*, *> ?: emptyMap<String, Any>()
-        pendingRequestType = "pickDirectory"
-        pendingRequestId = argsMap["requestId"] as? String
-
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-        activity.startActivityForResult(intent, PICK_DIRECTORY_REQUEST)
-        // Result will be delivered via drift/storage/result event channel
-        return Pair(mapOf("pending" to true), null)
-    }
-
-    private fun saveFile(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val activity = PlatformChannelManager.currentActivity()
-            ?: return Pair(null, IllegalStateException("No activity available"))
-
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-
-        val suggestedName = argsMap["suggestedName"] as? String ?: "file"
-        val mimeType = argsMap["mimeType"] as? String ?: "*/*"
-
-        @Suppress("UNCHECKED_CAST")
-        val data = when (val dataArg = argsMap["data"]) {
-            is ByteArray -> dataArg
-            is String -> Base64.decode(dataArg, Base64.DEFAULT)
-            is List<*> -> (dataArg as List<Number>).map { it.toByte() }.toByteArray()
-            else -> null
+    private fun pickFile(context: Context, args: Any?, result: DriftResult) {
+        val params = args as? Map<*, *> ?: emptyMap<String, Any?>()
+        val types = (params["allowedTypes"] as? List<*>)?.filterIsInstance<String>()
+            ?.takeIf { it.isNotEmpty() }?.toTypedArray() ?: arrayOf("*/*")
+        val reply = { uris: List<Uri>? ->
+            uris?.let { picked -> mapOf("files" to picked.map { contentInfo(context, it) }) }
         }
-
-        if (data == null) {
-            return Pair(null, IllegalArgumentException("Missing data"))
-        }
-
-        pendingSaveData = data
-        pendingRequestType = "saveFile"
-        pendingRequestId = argsMap["requestId"] as? String
-
-        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = mimeType
-            putExtra(Intent.EXTRA_TITLE, suggestedName)
-        }
-
-        activity.startActivityForResult(intent, SAVE_FILE_REQUEST)
-        // Result will be delivered via drift/storage/result event channel
-        return Pair(mapOf("pending" to true), null)
-    }
-
-    private fun readFile(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val path = argsMap["path"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing path"))
-
-        return try {
-            val data = if (path.startsWith("content://")) {
-                val uri = Uri.parse(path)
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            } else {
-                File(path).readBytes()
+        if (params["allowMultiple"] == true) {
+            pick(result, ActivityResultContracts.OpenMultipleDocuments(), types) { uris ->
+                reply(uris?.takeIf { it.isNotEmpty() })
             }
-            Pair(mapOf("data" to data), null)
+        } else {
+            pick(result, ActivityResultContracts.OpenDocument(), types) { uri -> reply(uri?.let { listOf(it) }) }
+        }
+    }
+
+    private fun saveFile(context: Context, args: Any?, result: DriftResult) {
+        val params = args as? Map<*, *> ?: emptyMap<String, Any?>()
+        val bytes = data(args)
+        val mimeType = (params["mimeType"] as? String)?.takeIf { it.isNotEmpty() } ?: "application/octet-stream"
+        val name = (params["suggestedName"] as? String)?.takeIf { it.isNotEmpty() } ?: "file"
+        pick(result, ActivityResultContracts.CreateDocument(mimeType), name, offMain = true) { uri ->
+            uri?.let {
+                context.contentResolver.openOutputStream(it, "wt")?.use { out -> out.write(bytes) }
+                    ?: throw DriftCallError("io_error", "cannot open $it")
+                mapOf("path" to it.toString())
+            }
+        }
+    }
+
+    /**
+     * Launches a picker, unless one is open, and replies with [reply]'s
+     * value for its output (null when the user canceled), computed on the
+     * I/O thread when [offMain].
+     */
+    private fun <I, O> pick(
+        result: DriftResult,
+        contract: ActivityResultContract<I, O>,
+        input: I,
+        offMain: Boolean = false,
+        reply: (O?) -> Any?,
+    ) {
+        if (picking) throw DriftCallError("storage_busy", "a storage picker is already open")
+        val activity = PlatformChannelManager.currentActivity() as? FragmentActivity
+            ?: throw DriftCallError("platform_unavailable", "no screen to show the picker over")
+        picking = true
+        try {
+            launchForResult(activity, contract, input) { output ->
+                picking = false
+                if (offMain) background(result) { reply(output) } else respond(result) { reply(output) }
+            }
         } catch (e: Exception) {
-            Pair(null, e)
+            picking = false
+            throw e
         }
     }
 
-    private fun writeFile(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val path = argsMap["path"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing path"))
+    private fun background(result: DriftResult, work: () -> Any?) {
+        io.execute { respond(result, work) }
+    }
 
-        @Suppress("UNCHECKED_CAST")
-        val data = when (val dataArg = argsMap["data"]) {
-            is ByteArray -> dataArg
-            is String -> Base64.decode(dataArg, Base64.DEFAULT)
-            is List<*> -> (dataArg as List<Number>).map { it.toByte() }.toByteArray()
-            else -> null
-        } ?: return Pair(null, IllegalArgumentException("Missing data"))
-
-        return try {
-            if (path.startsWith("content://")) {
-                val uri = Uri.parse(path)
-                context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
-            } else {
-                File(path).writeBytes(data)
-            }
-            Pair(null, null)
+    private fun respond(result: DriftResult, work: () -> Any?) {
+        try {
+            result.success(work())
         } catch (e: Exception) {
-            Pair(null, e)
+            result.error(e)
         }
     }
 
-    private fun deleteFile(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val path = argsMap["path"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing path"))
-
-        return try {
-            if (path.startsWith("content://")) {
-                val uri = Uri.parse(path)
-                DocumentsContract.deleteDocument(context.contentResolver, uri)
-            } else {
-                File(path).delete()
-            }
-            Pair(null, null)
-        } catch (e: Exception) {
-            Pair(null, e)
-        }
-    }
-
-    private fun getFileInfo(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val path = argsMap["path"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing path"))
-
-        return try {
-            val info = if (path.startsWith("content://")) {
-                getContentUriInfo(context, Uri.parse(path))
-            } else {
-                getFilePathInfo(path)
-            }
-            Pair(info, null)
-        } catch (e: Exception) {
-            Pair(null, e)
-        }
-    }
-
-    private fun getAppDirectory(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val directory = argsMap["directory"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing directory"))
-
-        val path = when (directory) {
-            "documents" -> context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)?.absolutePath
-            "cache" -> context.cacheDir.absolutePath
-            "temp" -> context.cacheDir.absolutePath + "/temp"
-            "support" -> context.filesDir.absolutePath
-            else -> context.filesDir.absolutePath
-        }
-
-        return Pair(mapOf("path" to path), null)
-    }
-
-    private fun getContentUriInfo(context: Context, uri: Uri): Map<String, Any?> {
+    private fun contentInfo(context: Context, uri: Uri): Map<String, Any?> {
         var name = ""
         var size = 0L
-        var mimeType = context.contentResolver.getType(uri) ?: ""
-
         context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -230,132 +178,40 @@ object StorageHandler {
                 if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
             }
         }
-
         return mapOf(
             "name" to name,
             "path" to uri.toString(),
             "uri" to uri.toString(),
             "size" to size,
-            "mimeType" to mimeType,
+            "mimeType" to (context.contentResolver.getType(uri) ?: ""),
             "isDirectory" to false,
-            "lastModified" to 0L
+            "lastModified" to 0L,
         )
     }
 
-    private fun getFilePathInfo(path: String): Map<String, Any?> {
+    private fun fileInfo(path: String): Map<String, Any?> {
         val file = File(path)
-        val mimeType = MimeTypeMap.getSingleton()
-            .getMimeTypeFromExtension(file.extension) ?: ""
-
+        if (!file.exists()) throw DriftCallError("io_error", "no file at $path")
         return mapOf(
             "name" to file.name,
             "path" to file.absolutePath,
             "size" to file.length(),
-            "mimeType" to mimeType,
+            "mimeType" to (MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension) ?: ""),
             "isDirectory" to file.isDirectory,
-            "lastModified" to file.lastModified()
+            "lastModified" to file.lastModified(),
         )
     }
 
-    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?, context: Context) {
-        when (requestCode) {
-            PICK_FILE_REQUEST -> {
-                if (resultCode == Activity.RESULT_OK) {
-                    val files = mutableListOf<Map<String, Any?>>()
-                    data?.clipData?.let { clipData ->
-                        for (i in 0 until clipData.itemCount) {
-                            clipData.getItemAt(i).uri?.let { uri ->
-                                files.add(getContentUriInfo(context, uri))
-                            }
-                        }
-                    } ?: data?.data?.let { uri ->
-                        files.add(getContentUriInfo(context, uri))
-                    }
-                    sendPickFileResult(files)
-                } else {
-                    sendCancelled("pickFile")
-                }
-                pendingRequestType = null
-            }
-            PICK_DIRECTORY_REQUEST -> {
-                if (resultCode == Activity.RESULT_OK) {
-                    val path = data?.data?.toString()
-                    sendPickDirectoryResult(path)
-                } else {
-                    sendCancelled("pickDirectory")
-                }
-                pendingRequestType = null
-            }
-            SAVE_FILE_REQUEST -> {
-                if (resultCode == Activity.RESULT_OK) {
-                    data?.data?.let { uri ->
-                        pendingSaveData?.let { saveData ->
-                            try {
-                                context.contentResolver.openOutputStream(uri)?.use {
-                                    it.write(saveData)
-                                }
-                                sendSaveFileResult(uri.toString())
-                            } catch (e: Exception) {
-                                sendError("saveFile", e.message ?: "Failed to save file")
-                            }
-                        } ?: sendError("saveFile", "No data to save")
-                    } ?: sendCancelled("saveFile")
-                } else {
-                    sendCancelled("saveFile")
-                }
-                pendingSaveData = null
-                pendingRequestType = null
-            }
-        }
-    }
+    private fun isContentUri(path: String) = path.startsWith("content://")
 
-    private fun sendPickFileResult(files: List<Map<String, Any?>>) {
-        val event = mutableMapOf<String, Any?>(
-            "type" to "pickFile",
-            "files" to files
-        )
-        pendingRequestId?.let { event["requestId"] = it }
-        PlatformChannelManager.sendEvent("drift/storage/result", event)
-        pendingRequestId = null
-    }
+    private fun path(args: Any?): String =
+        (args as? Map<*, *>)?.get("path") as? String
+            ?: throw IllegalArgumentException("drift/storage: missing path")
 
-    private fun sendPickDirectoryResult(path: String?) {
-        val event = mutableMapOf<String, Any?>(
-            "type" to "pickDirectory",
-            "path" to path
-        )
-        pendingRequestId?.let { event["requestId"] = it }
-        PlatformChannelManager.sendEvent("drift/storage/result", event)
-        pendingRequestId = null
-    }
-
-    private fun sendSaveFileResult(path: String) {
-        val event = mutableMapOf<String, Any?>(
-            "type" to "saveFile",
-            "path" to path
-        )
-        pendingRequestId?.let { event["requestId"] = it }
-        PlatformChannelManager.sendEvent("drift/storage/result", event)
-        pendingRequestId = null
-    }
-
-    private fun sendCancelled(requestType: String) {
-        val event = mutableMapOf<String, Any?>(
-            "type" to requestType,
-            "cancelled" to true
-        )
-        pendingRequestId?.let { event["requestId"] = it }
-        PlatformChannelManager.sendEvent("drift/storage/result", event)
-        pendingRequestId = null
-    }
-
-    private fun sendError(requestType: String, message: String) {
-        val event = mutableMapOf<String, Any?>(
-            "type" to requestType,
-            "error" to message
-        )
-        pendingRequestId?.let { event["requestId"] = it }
-        PlatformChannelManager.sendEvent("drift/storage/result", event)
-        pendingRequestId = null
+    /** The base64 `data` argument. */
+    private fun data(args: Any?): ByteArray {
+        val encoded = (args as? Map<*, *>)?.get("data") as? String
+            ?: throw IllegalArgumentException("drift/storage: missing data")
+        return Base64.decode(encoded, Base64.DEFAULT)
     }
 }

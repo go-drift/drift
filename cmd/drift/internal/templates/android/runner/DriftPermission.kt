@@ -18,14 +18,10 @@ package com.drift.runner
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import java.util.concurrent.atomic.AtomicLong
 
 /** A permission status, as Go's platform.PermissionResult names it. */
 enum class DriftPermissionStatus(val wire: String) {
@@ -109,28 +105,11 @@ open class DriftRuntimePermission(
         completion: (DriftPermissionStatus) -> Unit,
     ) {
         requireDeclared(activity)
-        var finished = false
-        lateinit var launcher: ActivityResultLauncher<Array<String>>
-        lateinit var observer: LifecycleEventObserver
-        fun finish() {
-            if (finished) return
-            finished = true
-            launcher.unregister()
-            activity.lifecycle.removeObserver(observer)
+        // If the Activity is destroyed first (recreated behind the dialog),
+        // answer with the status as it stands rather than never.
+        launchForResult(activity, ActivityResultContracts.RequestMultiplePermissions(), permissions) {
             completion(status(activity, activity))
         }
-        // The result goes to the Activity that launched the prompt; if it is
-        // destroyed first (recreated behind the dialog), answer with the
-        // status as it stands rather than never.
-        observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_DESTROY) finish()
-        }
-        launcher = activity.activityResultRegistry.register(
-            "drift.permission.${requests.incrementAndGet()}",
-            ActivityResultContracts.RequestMultiplePermissions(),
-        ) { finish() }
-        activity.lifecycle.addObserver(observer)
-        launcher.launch(permissions)
     }
 
     override fun shouldShowRationale(activity: Activity): Boolean =
@@ -159,8 +138,6 @@ open class DriftRuntimePermission(
         /** Whether the merged manifest declares [permission]. */
         fun isDeclared(context: Context, permission: String): Boolean =
             permission in declaredPermissions(context)
-
-        private val requests = AtomicLong()
 
         @Volatile
         private var declared: Set<String>? = null

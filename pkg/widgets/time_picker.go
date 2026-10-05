@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"context"
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/platform"
@@ -112,7 +113,7 @@ func (s *timePickerState) showPicker() {
 
 	// Show the native picker
 	go func() {
-		hour, minute, err := platform.ShowTimePicker(platform.TimePickerConfig{
+		hour, minute, err := platform.ShowTimePicker(context.Background(), platform.TimePickerConfig{
 			Hour:     w.Hour,
 			Minute:   w.Minute,
 			Is24Hour: w.Is24Hour,

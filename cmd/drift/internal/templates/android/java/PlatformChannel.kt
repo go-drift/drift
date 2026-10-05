@@ -392,10 +392,7 @@ object PlatformChannelManager : DriftPluginHost {
         // Permissions channel and Drift's own permission kinds
         PermissionHandler.start(this)
 
-        // Storage channel
-        register("drift/storage") { method, args ->
-            StorageHandler.handle(context, method, args)
-        }
+        StorageHandler.start(this)
 
         // Accessibility channel
         register("drift/accessibility") { method, args ->
@@ -407,15 +404,8 @@ object PlatformChannelManager : DriftPluginHost {
             PreferencesHandler.handle(context, method, args)
         }
 
-        // Date Picker channel
-        register("drift/date_picker") { method, args ->
-            DatePickerHandler.handle(method, args)
-        }
-
-        // Time Picker channel
-        register("drift/time_picker") { method, args ->
-            TimePickerHandler.handle(method, args)
-        }
+        DatePickerHandler.start(this)
+        TimePickerHandler.start(this)
 
         // URL Launcher channel
         register("drift/url_launcher") { method, args ->

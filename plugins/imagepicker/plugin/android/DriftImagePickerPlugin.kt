@@ -24,22 +24,19 @@ import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import com.drift.runner.DriftActivityBinding
 import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlugin
 import com.drift.runner.DriftPluginHost
 import com.drift.runner.DriftResult
 import com.drift.runner.DriftRuntimePermission
+import com.drift.runner.launchForResult
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 class DriftImagePickerPlugin : DriftPlugin {
@@ -96,7 +93,7 @@ class DriftImagePickerPlugin : DriftPlugin {
         val needsGrant = DriftRuntimePermission.isDeclared(context, Manifest.permission.CAMERA) &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
         if (needsGrant) {
-            launch(activity, ActivityResultContracts.RequestPermission(), Manifest.permission.CAMERA) { granted ->
+            launchForResult(activity, ActivityResultContracts.RequestPermission(), Manifest.permission.CAMERA) { granted ->
                 if (granted == true) {
                     takePicture(activity, front)
                 } else {
@@ -122,7 +119,7 @@ class DriftImagePickerPlugin : DriftPlugin {
             }
         }
         try {
-            launch(activity, contract, uri) { saved ->
+            launchForResult(activity, contract, uri) { saved ->
                 finish { result ->
                     if (saved == true && file.length() > 0) {
                         result.success(mapOf("image" to describe(file, "image/jpeg")))
@@ -140,11 +137,11 @@ class DriftImagePickerPlugin : DriftPlugin {
     private fun pick(activity: FragmentActivity, multiple: Boolean) {
         val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
         if (multiple) {
-            launch(activity, ActivityResultContracts.PickMultipleVisualMedia(), request) { uris ->
+            launchForResult(activity, ActivityResultContracts.PickMultipleVisualMedia(), request) { uris ->
                 copyPicked(uris.orEmpty())
             }
         } else {
-            launch(activity, ActivityResultContracts.PickVisualMedia(), request) { uri ->
+            launchForResult(activity, ActivityResultContracts.PickVisualMedia(), request) { uri ->
                 copyPicked(listOfNotNull(uri))
             }
         }
@@ -171,44 +168,6 @@ class DriftImagePickerPlugin : DriftPlugin {
         }
     }
 
-    /**
-     * Starts contract with input on activity's result registry and calls
-     * onResult with its output, or with null if the Activity is destroyed
-     * first (recreated behind the picker), so the call is never left
-     * waiting.
-     */
-    private fun <I, O> launch(
-        activity: FragmentActivity,
-        contract: ActivityResultContract<I, O>,
-        input: I,
-        onResult: (O?) -> Unit,
-    ) {
-        var done = false
-        lateinit var observer: LifecycleEventObserver
-        val launcher = activity.activityResultRegistry.register("drift.imagepicker.${launches.incrementAndGet()}", contract) { output ->
-            if (done) return@register
-            done = true
-            activity.lifecycle.removeObserver(observer)
-            onResult(output)
-        }
-        observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_DESTROY && !done) {
-                done = true
-                launcher.unregister()
-                onResult(null)
-            }
-        }
-        activity.lifecycle.addObserver(observer)
-        try {
-            launcher.launch(input)
-        } catch (e: Exception) {
-            done = true
-            activity.lifecycle.removeObserver(observer)
-            launcher.unregister()
-            throw e
-        }
-    }
-
     private fun newCacheFile(extension: String): File {
         val dir = File(context.cacheDir, "drift_images").apply { mkdirs() }
         return File(dir, "${UUID.randomUUID()}.$extension")
@@ -228,6 +187,5 @@ class DriftImagePickerPlugin : DriftPlugin {
 
     private companion object {
         const val CHANNEL = "drift/imagepicker"
-        val launches = AtomicLong()
     }
 }

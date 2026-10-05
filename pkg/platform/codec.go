@@ -106,6 +106,8 @@ var channelErrorCodes = map[error]string{
 
 	ErrPermissionNotRegistered: "permission_not_registered",
 	ErrPermissionNotDeclared:   "permission_not_declared",
+
+	ErrStorageBusy: "storage_busy",
 }
 
 // AsChannelError converts a Go error to the ChannelError sent to native:

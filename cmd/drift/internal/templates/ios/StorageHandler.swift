@@ -1,334 +1,226 @@
 /// StorageHandler.swift
-/// Handles file system access and document picking for the Drift platform channel.
+/// The drift/storage channel: document pickers and file system access.
+///
+/// The pickers reply when the user finishes ({"files": [...]} or
+/// {"path": ...}) or cancels (nil); one picker at a time, a second fails
+/// with `storage_busy`. File I/O runs off the main thread. File contents
+/// cross the channel as base64.
 
+import DriftPluginAPI
 import UIKit
 import UniformTypeIdentifiers
 
 final class StorageHandler: NSObject {
     static let shared = StorageHandler()
 
-    private var pendingSaveData: Data?
-    private var pendingRequestType: String = "pickFile"
-    private var pendingRequestId: String?
+    /// The open picker's reply; nil when none is open. Main thread only.
+    private var pending: DriftResult?
+    private var pendingIsDirectory = false
 
-    private override init() {
-        super.init()
-    }
+    private let io = DispatchQueue(label: "drift.storage.io", qos: .userInitiated)
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "pickFile":
-            return shared.pickFile(args: args)
-        case "pickDirectory":
-            return shared.pickDirectory(args: args)
-        case "saveFile":
-            return shared.saveFile(args: args)
-        case "readFile":
-            return readFile(args: args)
-        case "writeFile":
-            return writeFile(args: args)
-        case "deleteFile":
-            return deleteFile(args: args)
-        case "getFileInfo":
-            return getFileInfo(args: args)
-        case "getAppDirectory":
-            return getAppDirectory(args: args)
-        default:
-            return (nil, NSError(domain: "Storage", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
-        }
-    }
-
-    private func pickFile(args: Any?) -> (Any?, Error?) {
-        let dict = args as? [String: Any] ?? [:]
-        let allowMultiple = dict["allowMultiple"] as? Bool ?? false
-        let allowedTypes = dict["allowedTypes"] as? [String] ?? ["public.item"]
-
-        pendingRequestType = "pickFile"
-        pendingRequestId = dict["requestId"] as? String
-
-        DispatchQueue.main.async {
-            self.presentDocumentPicker(allowMultiple: allowMultiple, allowedTypes: allowedTypes)
-        }
-
-        // Result will be delivered via drift/storage/result event channel
-        return (["pending": true], nil)
-    }
-
-    private func presentDocumentPicker(allowMultiple: Bool, allowedTypes: [String]) {
-        var contentTypes: [UTType] = []
-        for typeString in allowedTypes {
-            if let type = UTType(typeString) {
-                contentTypes.append(type)
-            } else if let type = UTType(mimeType: typeString) {
-                contentTypes.append(type)
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/storage") { channel in
+            channel.asyncMethod("pickFile") { args, result in shared.pickFile(args, result) }
+            channel.asyncMethod("pickDirectory") { _, result in shared.pickDirectory(result) }
+            channel.asyncMethod("saveFile") { args, result in shared.saveFile(args, result) }
+            channel.asyncMethod("readFile") { args, result in
+                shared.background(result) { ["data": try Data(contentsOf: URL(fileURLWithPath: try path(args))).base64EncodedString()] }
+            }
+            channel.asyncMethod("writeFile") { args, result in
+                shared.background(result) {
+                    try data(args).write(to: URL(fileURLWithPath: try path(args)))
+                    return nil
+                }
+            }
+            channel.asyncMethod("deleteFile") { args, result in
+                shared.background(result) {
+                    try FileManager.default.removeItem(atPath: try path(args))
+                    return nil
+                }
+            }
+            channel.asyncMethod("getFileInfo") { args, result in
+                shared.background(result) { try fileInfo(path(args)) }
+            }
+            channel.method("getAppDirectory") { args in
+                guard let directory = (args as? [String: Any])?["directory"] as? String,
+                      let path = appDirectory(directory) else {
+                    throw invalid("missing or unknown directory")
+                }
+                return ["path": path]
             }
         }
+    }
 
+    // MARK: - Pickers
+
+    private func pickFile(_ args: Any?, _ result: DriftResult) {
+        let dict = args as? [String: Any] ?? [:]
+        let allowMultiple = dict["allowMultiple"] as? Bool ?? false
+        let allowedTypes = dict["allowedTypes"] as? [String] ?? []
+        var contentTypes = allowedTypes.compactMap { UTType($0) ?? UTType(mimeType: $0) }
         if contentTypes.isEmpty {
             contentTypes = [.item]
         }
-
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: contentTypes, asCopy: true)
         picker.allowsMultipleSelection = allowMultiple
+        present(picker, isDirectory: false, result)
+    }
+
+    private func pickDirectory(_ result: DriftResult) {
+        present(UIDocumentPickerViewController(forOpeningContentTypes: [.folder]), isDirectory: true, result)
+    }
+
+    private func present(_ picker: UIDocumentPickerViewController, isDirectory: Bool, _ result: DriftResult) {
+        guard begin(result) else { return }
+        guard let top = Self.topViewController() else {
+            finish()?.error(Self.noScreen())
+            return
+        }
+        pendingIsDirectory = isDirectory
         picker.delegate = self
-
-        presentPicker(picker)
+        top.present(picker, animated: true)
     }
 
-    private func pickDirectory(args: Any?) -> (Any?, Error?) {
+    private func saveFile(_ args: Any?, _ result: DriftResult) {
         let dict = args as? [String: Any] ?? [:]
-        pendingRequestType = "pickDirectory"
-        pendingRequestId = dict["requestId"] as? String
-
-        DispatchQueue.main.async {
-            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
-            picker.delegate = self
-            self.presentPicker(picker)
-        }
-
-        // Result will be delivered via drift/storage/result event channel
-        return (["pending": true], nil)
-    }
-
-    private func saveFile(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any] else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
-        }
-
-        let suggestedName = dict["suggestedName"] as? String ?? "file"
-
-        guard let data = StorageHandler.extractData(from: dict["data"]) else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing data"]))
-        }
-
-        pendingRequestId = dict["requestId"] as? String
-
-        // Save to temp file first, then present export picker
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(suggestedName)
-
+        let bytes: Data
         do {
-            try data.write(to: tempURL)
-            pendingSaveData = data
-
-            DispatchQueue.main.async {
-                let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
-                activityVC.completionWithItemsHandler = { _, completed, _, error in
-                    if completed {
-                        self.sendSaveFileResult(tempURL.path)
-                    } else if let error = error {
-                        self.sendError("saveFile", message: error.localizedDescription)
-                    } else {
-                        self.sendCancelled("saveFile")
-                    }
-                    self.pendingSaveData = nil
-                }
-
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootVC = windowScene.windows.first?.rootViewController {
-                    var topVC = rootVC
-                    while let presented = topVC.presentedViewController {
-                        topVC = presented
-                    }
-
-                    if let popover = activityVC.popoverPresentationController {
-                        popover.sourceView = topVC.view
-                        popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                    }
-
-                    topVC.present(activityVC, animated: true)
-                }
+            bytes = try Self.data(args)
+        } catch {
+            result.error(error)
+            return
+        }
+        guard begin(result) else { return }
+        guard let top = Self.topViewController() else {
+            finish()?.error(Self.noScreen())
+            return
+        }
+        let suggestedName = (dict["suggestedName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "file"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(suggestedName)
+        do {
+            try bytes.write(to: url)
+        } catch {
+            finish()?.error(error)
+            return
+        }
+        let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        share.completionWithItemsHandler = { [weak self] _, completed, _, error in
+            guard let reply = self?.finish() else { return }
+            if let error {
+                reply.error(error)
+            } else {
+                reply.success(completed ? ["path": url.path] : nil)
             }
+        }
+        if let popover = share.popoverPresentationController {
+            popover.sourceView = top.view
+            popover.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+        }
+        top.present(share, animated: true)
+    }
 
-            // Result will be delivered via event channel
-            return (["pending": true], nil)
-        } catch {
-            return (nil, error)
+    /// Claims the picker slot for result; false (and result fails) if a
+    /// picker is open.
+    private func begin(_ result: DriftResult) -> Bool {
+        guard pending == nil else {
+            result.error(NSError(domain: "storage_busy", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "a storage picker is already open",
+            ]))
+            return false
+        }
+        pending = result
+        return true
+    }
+
+    /// Releases the picker slot, returning its reply.
+    private func finish() -> DriftResult? {
+        defer { pending = nil }
+        return pending
+    }
+
+    private static func topViewController() -> UIViewController? {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              var top = scene.windows.first?.rootViewController else {
+            return nil
+        }
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return top
+    }
+
+    // MARK: - File system
+
+    /// Runs work on the I/O queue and replies with its value or error.
+    private func background(_ result: DriftResult, _ work: @escaping () throws -> Any?) {
+        io.async {
+            do {
+                result.success(try work())
+            } catch {
+                result.error(error)
+            }
         }
     }
 
-    private static func readFile(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let path = dict["path"] as? String else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing path"]))
-        }
-
-        do {
-            let url = URL(fileURLWithPath: path)
-            let data = try Data(contentsOf: url)
-            return (["data": [UInt8](data)], nil)
-        } catch {
-            return (nil, error)
-        }
-    }
-
-    private static func writeFile(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let path = dict["path"] as? String else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing path"]))
-        }
-
-        guard let data = extractData(from: dict["data"]) else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing data"]))
-        }
-
-        do {
-            let url = URL(fileURLWithPath: path)
-            try data.write(to: url)
-            return (nil, nil)
-        } catch {
-            return (nil, error)
-        }
-    }
-
-    private static func deleteFile(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let path = dict["path"] as? String else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing path"]))
-        }
-
-        do {
-            let url = URL(fileURLWithPath: path)
-            try FileManager.default.removeItem(at: url)
-            return (nil, nil)
-        } catch {
-            return (nil, error)
-        }
-    }
-
-    private static func getFileInfo(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let path = dict["path"] as? String else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing path"]))
-        }
-
+    private static func fileInfo(_ path: String) throws -> [String: Any] {
         let url = URL(fileURLWithPath: path)
-
-        do {
-            let attrs = try FileManager.default.attributesOfItem(atPath: path)
-            let isDirectory = (attrs[.type] as? FileAttributeType) == .typeDirectory
-            let size = attrs[.size] as? Int64 ?? 0
-            let modificationDate = attrs[.modificationDate] as? Date
-
-            var mimeType = ""
-            if let uti = UTType(filenameExtension: url.pathExtension) {
-                mimeType = uti.preferredMIMEType ?? ""
-            }
-
-            return ([
-                "name": url.lastPathComponent,
-                "path": path,
-                "size": size,
-                "mimeType": mimeType,
-                "isDirectory": isDirectory,
-                "lastModified": Int64((modificationDate?.timeIntervalSince1970 ?? 0) * 1000)
-            ], nil)
-        } catch {
-            return (nil, error)
-        }
+        let attrs = try FileManager.default.attributesOfItem(atPath: path)
+        let modified = attrs[.modificationDate] as? Date
+        return [
+            "name": url.lastPathComponent,
+            "path": path,
+            "size": (attrs[.size] as? NSNumber)?.int64Value ?? 0,
+            "mimeType": mimeType(url),
+            "isDirectory": (attrs[.type] as? FileAttributeType) == .typeDirectory,
+            "lastModified": Int64((modified?.timeIntervalSince1970 ?? 0) * 1000),
+        ]
     }
 
-    private static func getAppDirectory(args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any],
-              let directory = dict["directory"] as? String else {
-            return (nil, NSError(domain: "Storage", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing directory"]))
-        }
-
+    private static func appDirectory(_ directory: String) -> String? {
         let fileManager = FileManager.default
-        let path: String?
-
         switch directory {
         case "documents":
-            path = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first?.path
+            return fileManager.urls(for: .documentDirectory, in: .userDomainMask).first?.path
         case "cache":
-            path = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first?.path
+            return fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first?.path
         case "temp":
-            path = NSTemporaryDirectory()
+            return NSTemporaryDirectory()
         case "support":
-            path = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.path
+            return fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.path
         default:
-            path = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first?.path
-        }
-
-        return (["path": path], nil)
-    }
-
-    private static func extractData(from value: Any?) -> Data? {
-        if let data = value as? Data {
-            return data
-        }
-        if let bytes = value as? [UInt8] {
-            return Data(bytes)
-        }
-        if let bytes = value as? [Int] {
-            return Data(bytes.map { UInt8(truncatingIfNeeded: $0) })
-        }
-        if let string = value as? String {
-            return Data(base64Encoded: string)
-        }
-        return nil
-    }
-
-    private func presentPicker(_ picker: UIViewController) {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController {
-                topVC = presented
-            }
-            topVC.present(picker, animated: true)
+            return nil
         }
     }
 
-    // MARK: - Event Sending
-
-    private func sendPickFileResult(_ files: [[String: Any]]) {
-        var event: [String: Any] = [
-            "type": "pickFile",
-            "files": files
-        ]
-        if let reqId = pendingRequestId { event["requestId"] = reqId }
-        PlatformChannelManager.shared.sendEvent(channel: "drift/storage/result", data: event)
-        pendingRequestId = nil
+    private static func mimeType(_ url: URL) -> String {
+        UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? ""
     }
 
-    private func sendPickDirectoryResult(_ path: String?) {
-        var event: [String: Any] = [
-            "type": "pickDirectory",
-            "path": path as Any
-        ]
-        if let reqId = pendingRequestId { event["requestId"] = reqId }
-        PlatformChannelManager.shared.sendEvent(channel: "drift/storage/result", data: event)
-        pendingRequestId = nil
+    private static func path(_ args: Any?) throws -> String {
+        guard let path = (args as? [String: Any])?["path"] as? String else {
+            throw invalid("missing path")
+        }
+        return path
     }
 
-    private func sendSaveFileResult(_ path: String) {
-        var event: [String: Any] = [
-            "type": "saveFile",
-            "path": path
-        ]
-        if let reqId = pendingRequestId { event["requestId"] = reqId }
-        PlatformChannelManager.shared.sendEvent(channel: "drift/storage/result", data: event)
-        pendingRequestId = nil
+    /// The base64 `data` argument.
+    private static func data(_ args: Any?) throws -> Data {
+        guard let encoded = (args as? [String: Any])?["data"] as? String,
+              let data = Data(base64Encoded: encoded) else {
+            throw invalid("missing or non-base64 data")
+        }
+        return data
     }
 
-    private func sendCancelled(_ requestType: String) {
-        var event: [String: Any] = [
-            "type": requestType,
-            "cancelled": true
-        ]
-        if let reqId = pendingRequestId { event["requestId"] = reqId }
-        PlatformChannelManager.shared.sendEvent(channel: "drift/storage/result", data: event)
-        pendingRequestId = nil
+    private static func invalid(_ message: String) -> NSError {
+        NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "drift/storage: \(message)"])
     }
 
-    private func sendError(_ requestType: String, message: String) {
-        var event: [String: Any] = [
-            "type": requestType,
-            "error": message
-        ]
-        if let reqId = pendingRequestId { event["requestId"] = reqId }
-        PlatformChannelManager.shared.sendEvent(channel: "drift/storage/result", data: event)
-        pendingRequestId = nil
+    private static func noScreen() -> NSError {
+        NSError(domain: "platform_unavailable", code: 0, userInfo: [
+            NSLocalizedDescriptionKey: "no screen to show the picker over",
+        ])
     }
 }
 
@@ -336,49 +228,32 @@ final class StorageHandler: NSObject {
 
 extension StorageHandler: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let reply = finish() else { return }
+        if pendingIsDirectory {
+            reply.success(urls.first.map { ["path": $0.path] })
+            return
+        }
         var files: [[String: Any]] = []
-
         for url in urls {
-            // Start accessing security-scoped resource
             let accessing = url.startAccessingSecurityScopedResource()
             defer {
                 if accessing {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-
-            do {
-                let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-                let isDirectory = (attrs[.type] as? FileAttributeType) == .typeDirectory
-                let size = attrs[.size] as? Int64 ?? 0
-
-                var mimeType = ""
-                if let uti = UTType(filenameExtension: url.pathExtension) {
-                    mimeType = uti.preferredMIMEType ?? ""
-                }
-
-                files.append([
-                    "name": url.lastPathComponent,
-                    "path": url.path,
-                    "uri": url.absoluteString,
-                    "mimeType": mimeType,
-                    "size": size,
-                    "isDirectory": isDirectory
-                ])
-            } catch {
-                // Skip files we can't read
-            }
+            let size = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+            files.append([
+                "name": url.lastPathComponent,
+                "path": url.path,
+                "uri": url.absoluteString,
+                "mimeType": Self.mimeType(url),
+                "size": size,
+            ])
         }
-
-        // Check if this was a directory picker (single folder selection)
-        if files.count == 1, let file = files.first, file["isDirectory"] as? Bool == true {
-            sendPickDirectoryResult(file["path"] as? String)
-        } else {
-            sendPickFileResult(files)
-        }
+        reply.success(["files": files])
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        sendCancelled(pendingRequestType)
+        finish()?.success(nil)
     }
 }

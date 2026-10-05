@@ -1,74 +1,46 @@
 /// TimePickerChannel.swift
 /// Provides native time picker modal for Drift.
 
+import DriftPluginAPI
 import UIKit
 
 // MARK: - Time Picker Handler
 
-/// Handles time picker channel methods from Go.
+/// The drift/time_picker channel: `show` replies when the user picks a
+/// time ({"hour", "minute"}) or cancels (nil).
 enum TimePickerHandler {
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        guard method == "show" else {
-            return (nil, NSError(domain: "TimePicker", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
-        }
-
-        guard let params = args as? [String: Any] else {
-            return (nil, NSError(domain: "TimePicker", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
-        }
-
-        // Parse initial time
-        let hour = (params["hour"] as? NSNumber)?.intValue ?? 0
-        let minute = (params["minute"] as? NSNumber)?.intValue ?? 0
-
-        // Parse is24Hour preference (nil = system default)
-        let is24Hour: Bool? = params["is24Hour"] as? Bool
-
-        // Create date from hour/minute using today as base
-        let initialDate = Calendar.current.date(
-            bySettingHour: hour,
-            minute: minute,
-            second: 0,
-            of: Date()
-        ) ?? Date()
-
-        // Show picker on main thread and wait for result
-        var resultHour: Int? = nil
-        var resultMinute: Int? = nil
-        let semaphore = DispatchSemaphore(value: 0)
-
-        DispatchQueue.main.async {
-            showTimePickerModal(initialDate: initialDate, is24Hour: is24Hour) { selectedDate in
-                if let date = selectedDate {
-                    let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-                    resultHour = components.hour
-                    resultMinute = components.minute
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/time_picker") { channel in
+            channel.asyncMethod("show") { args, result in
+                let params = args as? [String: Any] ?? [:]
+                let hour = (params["hour"] as? NSNumber)?.intValue ?? 0
+                let minute = (params["minute"] as? NSNumber)?.intValue ?? 0
+                // nil: the system's 12/24-hour preference
+                let is24Hour = params["is24Hour"] as? Bool
+                let initialDate = Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) ?? Date()
+                let shown = showTimePickerModal(initialDate: initialDate, is24Hour: is24Hour) { selectedDate in
+                    result.success(selectedDate.map { date -> [String: Int] in
+                        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                        return ["hour": components.hour ?? 0, "minute": components.minute ?? 0]
+                    })
                 }
-                semaphore.signal()
+                if !shown {
+                    result.error(NSError(domain: "platform_unavailable", code: 0, userInfo: [
+                        NSLocalizedDescriptionKey: "no screen to show the time picker over",
+                    ]))
+                }
             }
         }
-
-        // Wait for user selection (with timeout)
-        let waitResult = semaphore.wait(timeout: .now() + .seconds(300))
-        if waitResult == .timedOut {
-            return (nil, NSError(domain: "TimePicker", code: 408, userInfo: [NSLocalizedDescriptionKey: "Picker timeout"]))
-        }
-
-        // Return result (nil means cancelled)
-        if let hour = resultHour, let minute = resultMinute {
-            return (["hour": hour, "minute": minute], nil)
-        }
-        return (nil, nil)
     }
 
     private static func showTimePickerModal(
         initialDate: Date,
         is24Hour: Bool?,
         completion: @escaping (Date?) -> Void
-    ) {
+    ) -> Bool {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootVC = windowScene.windows.first?.rootViewController else {
-            completion(nil)
-            return
+            return false
         }
 
         // Find topmost presented controller
@@ -129,5 +101,6 @@ enum TimePickerHandler {
         }
 
         topVC.present(alertController, animated: true)
+        return true
     }
 }

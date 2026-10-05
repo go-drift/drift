@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"context"
 	"time"
 
 	"github.com/go-drift/drift/pkg/core"
@@ -168,7 +169,7 @@ func (s *datePickerState) showPicker() {
 
 	// Show the native picker
 	go func() {
-		selectedDate, err := platform.ShowDatePicker(platform.DatePickerConfig{
+		selectedDate, err := platform.ShowDatePicker(context.Background(), platform.DatePickerConfig{
 			InitialDate: initialDate,
 			MinDate:     w.MinDate,
 			MaxDate:     w.MaxDate,
