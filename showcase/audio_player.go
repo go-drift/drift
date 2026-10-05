@@ -7,9 +7,9 @@ import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
+	media "github.com/go-drift/drift/plugins/media/runtime"
 )
 
 const audioURL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
@@ -25,7 +25,7 @@ type audioPlayerState struct {
 	core.StateBase
 	audioStatus     *core.Signal[string]
 	audioStateLabel string
-	audioController *platform.AudioPlayerController
+	audioController *media.AudioPlayerController
 	audioLooping    bool
 	audioMuted      bool
 }
@@ -34,21 +34,28 @@ func (s *audioPlayerState) InitState() {
 	s.audioStatus = core.NewSignal("Idle")
 	s.audioStateLabel = "Idle"
 
-	s.audioController = platform.NewAudioPlayerController()
+	s.audioController = media.NewAudioPlayerController()
 	core.UseDisposable(s, s.audioController)
 	core.UseListenable(s, s.audioStatus)
 
-	s.audioController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
+	// After an error the player goes idle; keep the error on screen.
+	failed := false
+	s.audioController.OnPlaybackStateChanged = func(state media.PlaybackState) {
 		s.audioStateLabel = state.String()
-		s.audioStatus.Set(s.audioStateLabel)
+		if !failed {
+			s.audioStatus.Set(s.audioStateLabel)
+		}
 	}
 	s.audioController.OnPositionChanged = func(position, duration, buffered time.Duration) {
+		if failed {
+			return
+		}
 		pos := formatDuration(position)
 		dur := formatDuration(duration)
 		s.audioStatus.Set(s.audioStateLabel + " \u00b7 " + pos + " / " + dur)
 	}
 	s.audioController.OnError = func(code, message string) {
-		s.audioStateLabel = "Error"
+		failed = true
 		s.audioStatus.Set("Error (" + code + "): " + message)
 	}
 

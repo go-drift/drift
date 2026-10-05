@@ -394,6 +394,35 @@ go func() {
 
 Biometric protection guards reading a value. On iOS the Keychain enforces it; on Android the plugin does, before it decrypts the value (BiometricPrompt without a CryptoObject), so it stops another person using the unlocked device, not code running as the app. Supported on iOS, xtool and Android.
 
+### Media
+
+Video in the widget tree, with the platform's own controls, and audio players without a view. Android plays through media3 ExoPlayer and iOS through AVPlayer.
+
+```yaml
+plugins:
+  - package: github.com/go-drift/drift/plugins/media/plugin
+    config:
+      android:                      # optional
+        dash: true                  # DASH streams on Android
+```
+
+HLS is always supported. `android.dash` adds media3's DASH module; iOS has no DASH support. Playback needs no permission.
+
+```go
+import media "github.com/go-drift/drift/plugins/media/runtime"
+
+// In InitState:
+s.video = media.NewVideoPlayerController()
+core.UseDisposable(s, s.video)
+s.video.OnPlaybackStateChanged = func(state media.PlaybackState) { ... }
+s.video.Load(url)
+
+// In Build:
+media.VideoPlayer{Controller: s.video, Height: 225}
+```
+
+`media.NewAudioPlayerController()` has the same methods and callbacks without a view; several can play at once. The [Media Player](/docs/guides/media-player) guide covers both. Playback stops when the app goes to the background. Supported on iOS, xtool and Android.
+
 ## Authoring plugins
 
 Start from [`examples/plugins/hello`](https://github.com/go-drift/drift/tree/master/examples/plugins/hello), the smallest complete plugin: it takes a greeting from `drift.yaml` and ships native code that returns it to Go. The code on this page is that plugin's. The splash and Firebase plugins are full references: splash for native UI and lifecycle, Firebase for an SDK with a SwiftPM package, a Gradle plugin, config files, entitlements and a manifest service.
@@ -679,6 +708,8 @@ host.registerPlatformView("acme/map") { context, viewId, params, events ->
 ```
 
 A `DriftPlatformView` has its `view`, `handle(method, args)` for calls from Go, `dispose()`, and (Android) `supportsRegionMask`: true for TextureView-backed views, which Drift can clip by a path when Drift UI overlaps them. Go does not wait for view methods, so `handle` reports failures by throwing (they are logged) and results as events: `events.send(method, data)`.
+
+Drift creates and drops a throwaway WebView at launch so the first real one opens without a stall. A view whose framework is slow to load can do the same: observe the warm-up event (`host.observeEvent(driftPlatformViewWarmUpEvent)` on iOS, `DRIFT_PLATFORM_VIEW_WARM_UP_EVENT` on Android), which Drift posts once at launch unless the app called `engine.DisableViewWarmUp`.
 
 In Go, implement `platform.PlatformView` (embed `platform.PlatformViewBase` for its ID and type), register a `platform.PlatformViewFactory` for the same type, and call the view with `GetPlatformViewRegistry().InvokeViewMethod`. Events arrive in the view's `HandleEvent(method, args)`; return `platform.ErrMethodNotFound` for one it does not know. A widget embeds the view by implementing `layout.PlatformViewOwner` and calling `ctx.EmbedPlatformView` while painting; [`plugins/media`](#media) is a complete example.
 

@@ -1,10 +1,9 @@
-package widgets
+package runtime
 
 import (
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
-	"github.com/go-drift/drift/pkg/platform"
 )
 
 // VideoPlayer embeds a native video player view with built-in platform controls.
@@ -12,23 +11,23 @@ import (
 // The native player provides standard controls (play/pause, seek bar, time display)
 // on both platforms. No Drift overlay is needed.
 //
-// Create a [platform.VideoPlayerController] with [core.UseDisposable] and pass
-// it to this widget:
+// Create a [VideoPlayerController] with core.UseDisposable and pass it to
+// this widget:
 //
-//	s.video = platform.NewVideoPlayerController()
+//	s.video = media.NewVideoPlayerController()
 //	core.UseDisposable(s, s.video)
-//	s.video.OnPlaybackStateChanged = func(state platform.PlaybackState) { ... }
+//	s.video.OnPlaybackStateChanged = func(state media.PlaybackState) { ... }
 //	s.video.Load(url)
 //
 //	// in Build:
-//	widgets.VideoPlayer{Controller: s.video, Height: 225}
+//	media.VideoPlayer{Controller: s.video, Height: 225}
 //
-// Width and Height set explicit dimensions. Use layout widgets such as [Expanded]
-// to fill available space.
+// Width and Height set explicit dimensions. Use layout widgets such as
+// widgets.Expanded to fill available space.
 type VideoPlayer struct {
 	core.RenderObjectBase
 	// Controller provides the native video player surface and playback control.
-	Controller *platform.VideoPlayerController
+	Controller *VideoPlayerController
 
 	// Width of the video player in logical pixels.
 	Width float64
@@ -60,14 +59,15 @@ func (v VideoPlayer) CreateRenderObject(ctx core.BuildContext) layout.RenderObje
 // UpdateRenderObject updates the render object with new widget properties.
 func (v VideoPlayer) UpdateRenderObject(ctx core.BuildContext, renderObject layout.RenderObject) {
 	if r, ok := renderObject.(*renderVideoPlayer); ok {
+		// A new controller starts with controls shown.
+		changed := v.Controller != r.controller && v.HideControls ||
+			v.Controller == r.controller && v.HideControls != r.hideControls
 		r.controller = v.Controller
 		r.width = v.Width
 		r.height = v.Height
-		if v.HideControls != r.hideControls {
-			r.hideControls = v.HideControls
-			if v.Controller != nil {
-				v.Controller.SetShowControls(!v.HideControls)
-			}
+		r.hideControls = v.HideControls
+		if changed && v.Controller != nil {
+			v.Controller.SetShowControls(!v.HideControls)
 		}
 		r.MarkNeedsLayout()
 		r.MarkNeedsPaint()
@@ -78,7 +78,7 @@ var _ layout.PlatformViewOwner = (*renderVideoPlayer)(nil)
 
 type renderVideoPlayer struct {
 	layout.RenderBoxBase
-	controller   *platform.VideoPlayerController
+	controller   *VideoPlayerController
 	width        float64
 	height       float64
 	hideControls bool

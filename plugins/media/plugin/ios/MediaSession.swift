@@ -1,13 +1,13 @@
-/// DriftMediaSession.swift
+/// MediaSession.swift
 /// Shared AVAudioSession lifecycle management for audio and video players.
 ///
-/// Both NativeAudioPlayer and NativeVideoPlayer call activate() on init
+/// Both audio players and video views call activate() on init
 /// and deactivate() on dispose. The underlying AVAudioSession is only
 /// deactivated when no media players remain active.
 
 import AVFoundation
 
-enum DriftMediaSession {
+enum MediaSession {
     private static var activeCount = 0
 
     /// Activates the audio session if not already active.

@@ -1,10 +1,15 @@
 /**
- * NativeVideoPlayer.kt
- * Provides native ExoPlayer video playback embedded in Drift UI.
+ * VideoPlayerView.kt
+ *
+ * The `drift/media/video` platform view: ExoPlayer playback in a media3
+ * PlayerView, with its native controls. Events go to the Go view
+ * (runtime/video.go).
  */
-package {{.PackageName}}
+package com.drift.plugin.media
 
 import com.drift.runner.DriftPlatformView
+import com.drift.runner.DriftCallError
+import com.drift.runner.DriftPlatformViewEvents
 import android.content.Context
 import android.view.TextureView
 import android.view.View
@@ -26,10 +31,10 @@ import androidx.media3.ui.PlayerView
  * (View.clipBounds) and avoids z-ordering issues and black flashes on resize
  * that SurfaceView causes in a platform view context.
  */
-class NativeVideoPlayerContainer(
+class VideoPlayerView(
     context: Context,
-    val viewId: Int,
-    params: Map<String, Any?>
+    params: Map<String, Any?>,
+    private val events: DriftPlatformViewEvents,
 ) : DriftPlatformView {
 
     override val view: View
@@ -53,7 +58,7 @@ class NativeVideoPlayerContainer(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
-            this.player = this@NativeVideoPlayerContainer.player
+            this.player = this@VideoPlayerView.player
             controllerAutoShow = true
         }
 
@@ -86,41 +91,22 @@ class NativeVideoPlayerContainer(
                 if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
                     stopPositionUpdates()
                 }
-                PlatformChannelManager.sendEvent(
-                    "drift/platform_views",
-                    mapOf(
-                        "method" to "onPlaybackStateChanged",
-                        "viewId" to viewId,
-                        "state" to state
-                    )
-                )
+                events.send("onPlaybackStateChanged", mapOf("state" to state))
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (player.playbackState == Player.STATE_READY) {
                     val state = if (isPlaying) 2 else 4 // Playing or Paused
-                    PlatformChannelManager.sendEvent(
-                        "drift/platform_views",
-                        mapOf(
-                            "method" to "onPlaybackStateChanged",
-                            "viewId" to viewId,
-                            "state" to state
-                        )
-                    )
+                    events.send("onPlaybackStateChanged", mapOf("state" to state))
                     if (isPlaying) startPositionUpdates() else stopPositionUpdates()
                 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                PlatformChannelManager.sendEvent(
-                    "drift/platform_views",
-                    mapOf(
-                        "method" to "onVideoError",
-                        "viewId" to viewId,
-                        "code" to mediaErrorCodeString(error.errorCode),
-                        "message" to (error.message ?: "Unknown playback error")
-                    )
-                )
+                events.send("onVideoError", mapOf(
+                    "code" to mediaErrorCodeString(error.errorCode),
+                    "message" to (error.message ?: "Unknown playback error"),
+                ))
             }
         })
 
@@ -182,16 +168,11 @@ class NativeVideoPlayerContainer(
         positionRunnable = object : Runnable {
             override fun run() {
                 if (player.playbackState != Player.STATE_IDLE) {
-                    PlatformChannelManager.sendEvent(
-                        "drift/platform_views",
-                        mapOf(
-                            "method" to "onPositionChanged",
-                            "viewId" to viewId,
-                            "positionMs" to player.currentPosition,
-                            "durationMs" to player.duration.coerceAtLeast(0),
-                            "bufferedMs" to player.bufferedPosition
-                        )
-                    )
+                    events.send("onPositionChanged", mapOf(
+                        "positionMs" to player.currentPosition,
+                        "durationMs" to player.duration.coerceAtLeast(0),
+                        "bufferedMs" to player.bufferedPosition,
+                    ))
                 }
                 playerView.postDelayed(this, 250)
             }
@@ -215,7 +196,7 @@ class NativeVideoPlayerContainer(
             "setPlaybackSpeed" -> setPlaybackSpeed((args["rate"] as? Number)?.toFloat() ?: 1.0f)
             "setShowControls" -> setShowControls(args["show"] as? Boolean ?: true)
             "load" -> (args["url"] as? String)?.let { load(it) }
-            else -> throw unknownViewMethod(method)
+            else -> throw DriftCallError("method_not_found", "unknown video method $method")
         }
     }
 
@@ -238,14 +219,7 @@ class NativeVideoPlayerContainer(
     fun stop() {
         player.stop()
         player.seekTo(0)
-        PlatformChannelManager.sendEvent(
-            "drift/platform_views",
-            mapOf(
-                "method" to "onPlaybackStateChanged",
-                "viewId" to viewId,
-                "state" to 0 // Idle with position reset to zero
-            )
-        )
+        events.send("onPlaybackStateChanged", mapOf("state" to 0)) // Idle, position reset to zero
     }
 
     fun seekTo(positionMs: Long) {

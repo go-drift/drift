@@ -1,7 +1,6 @@
 /// PlatformView.swift
 /// Provides platform view management for embedding native views in Drift UI.
 
-import AVFoundation
 @_spi(DriftHost) import DriftPluginAPI
 import UIKit
 
@@ -305,15 +304,16 @@ enum PlatformViewHandler {
         self.overlayView = overlayView
     }
 
-    /// Pre-warms expensive platform view classes by creating throwaway instances.
-    /// Forces WebKit process spawning and media framework class loading early
-    /// so the cost is absorbed before the user navigates to pages using them.
+    /// Pre-warms expensive platform view classes by creating throwaway
+    /// instances, forcing WebKit process spawning early so the cost is
+    /// absorbed before the user navigates to pages using them. Plugins warm
+    /// their own views on `driftPlatformViewWarmUpEvent`.
     ///
     /// Must be called on the main thread.
     static func warmUp() {
         _ = WKWebView(frame: .zero)
-        _ = AVPlayer()
         _ = UITextField()
+        PlatformChannelManager.shared.notifyEventObservers(channel: driftPlatformViewWarmUpEvent, data: nil)
         DriftLog.platform.log("Platform view warmup complete")
     }
 
@@ -372,7 +372,6 @@ enum PlatformViewHandler {
         host.registerPlatformView("textinput") { id, params, _ in NativeTextInputContainer(viewId: id, params: params) }
         host.registerPlatformView("switch") { id, params, _ in NativeSwitchContainer(viewId: id, params: params) }
         host.registerPlatformView("activity_indicator") { id, params, _ in NativeActivityIndicatorContainer(viewId: id, params: params) }
-        host.registerPlatformView("video_player") { id, params, _ in NativeVideoPlayerContainer(viewId: id, params: params) }
     }
 
     static func handle(method: String, args: Any?) -> (Any?, Error?) {

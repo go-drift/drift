@@ -4,10 +4,13 @@ import (
 	"time"
 
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
+	media "github.com/go-drift/drift/plugins/media/runtime"
 )
+
+// videoURL is Apple's HLS sample stream.
+const videoURL = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"
 
 // videoPlayerPage is the video player demo widget.
 type videoPlayerPage struct{ core.StatefulBase }
@@ -20,7 +23,7 @@ type videoPlayerState struct {
 	core.StateBase
 	videoStatus         *core.Signal[string]
 	videoStateLabel     string
-	videoController     *platform.VideoPlayerController
+	videoController     *media.VideoPlayerController
 	videoLooping        bool
 	videoMuted          bool
 	videoControlsHidden bool
@@ -30,25 +33,32 @@ func (s *videoPlayerState) InitState() {
 	s.videoStatus = core.NewSignal("Idle")
 	s.videoStateLabel = "Idle"
 
-	s.videoController = platform.NewVideoPlayerController()
+	s.videoController = media.NewVideoPlayerController()
 	core.UseDisposable(s, s.videoController)
 	core.UseListenable(s, s.videoStatus)
 
-	s.videoController.OnPlaybackStateChanged = func(state platform.PlaybackState) {
+	// After an error the player goes idle; keep the error on screen.
+	failed := false
+	s.videoController.OnPlaybackStateChanged = func(state media.PlaybackState) {
 		s.videoStateLabel = state.String()
-		s.videoStatus.Set(s.videoStateLabel)
+		if !failed {
+			s.videoStatus.Set(s.videoStateLabel)
+		}
 	}
 	s.videoController.OnPositionChanged = func(position, duration, buffered time.Duration) {
+		if failed {
+			return
+		}
 		pos := formatDuration(position)
 		dur := formatDuration(duration)
 		s.videoStatus.Set(s.videoStateLabel + " \u00b7 " + pos + " / " + dur)
 	}
 	s.videoController.OnError = func(code, message string) {
-		s.videoStateLabel = "Error"
+		failed = true
 		s.videoStatus.Set("Error (" + code + "): " + message)
 	}
 
-	s.videoController.Load("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
+	s.videoController.Load(videoURL)
 }
 
 func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
@@ -64,7 +74,7 @@ func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 			MainAxisSize: widgets.MainAxisSizeMax,
 			Children: []core.Widget{
 				widgets.Expanded{
-					Child: widgets.VideoPlayer{
+					Child: media.VideoPlayer{
 						Controller:   s.videoController,
 						Height:       220,
 						HideControls: s.videoControlsHidden,

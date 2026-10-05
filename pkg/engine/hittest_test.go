@@ -32,7 +32,7 @@ func (p *pointerHandlerEntry) HitTest(pos graphics.Offset, r *layout.HitTestResu
 func (p *pointerHandlerEntry) HandlePointer(event gestures.PointerEvent) {}
 
 // platformViewEntry implements PlatformViewOwner but not PointerHandler
-// (like renderVideoPlayer and renderNativeWebView).
+// (like renderNativeWebView).
 type platformViewEntry struct {
 	layout.RenderBoxBase
 	viewID int64

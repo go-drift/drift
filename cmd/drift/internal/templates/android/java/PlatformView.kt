@@ -15,6 +15,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.os.Handler
 import android.os.Looper
+import com.drift.runner.DRIFT_PLATFORM_VIEW_WARM_UP_EVENT
 import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlatformView
 import com.drift.runner.DriftPlatformViewEvents
@@ -61,14 +62,14 @@ object PlatformViewHandler {
         host.registerPlatformView("textinput") { ctx, id, params, _ -> NativeTextInputContainer(ctx, id, params) }
         host.registerPlatformView("switch") { ctx, id, params, _ -> NativeSwitchContainer(ctx, id, params) }
         host.registerPlatformView("activity_indicator") { ctx, id, params, _ -> NativeActivityIndicatorContainer(ctx, id, params) }
-        host.registerPlatformView("video_player") { ctx, id, params, _ -> NativeVideoPlayerContainer(ctx, id, params) }
     }
 
     /**
      * Pre-warms expensive platform view classes by creating and immediately
      * destroying throwaway instances. This forces the classloader to load
-     * heavy native dependencies (Chromium WebView, ExoPlayer) early so
-     * the cost is absorbed before the user navigates to pages using them.
+     * Chromium WebView early so the cost is absorbed before the user
+     * navigates to pages using it. Plugins warm their own views on
+     * DRIFT_PLATFORM_VIEW_WARM_UP_EVENT.
      *
      * Must be called on the main thread.
      */
@@ -79,15 +80,11 @@ object PlatformViewHandler {
             Log.w("DriftWarmUp", "WebView warmup failed: ${e.message}")
         }
         try {
-            androidx.media3.exoplayer.ExoPlayer.Builder(context).build().release()
-        } catch (e: Exception) {
-            Log.w("DriftWarmUp", "ExoPlayer warmup failed: ${e.message}")
-        }
-        try {
             EditText(context)
         } catch (e: Exception) {
             Log.w("DriftWarmUp", "EditText warmup failed: ${e.message}")
         }
+        PlatformChannelManager.notifyEventObservers(DRIFT_PLATFORM_VIEW_WARM_UP_EVENT, null)
         Log.i("DriftWarmUp", "Platform view warmup complete")
     }
 

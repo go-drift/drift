@@ -1,16 +1,16 @@
-/// NativeVideoPlayer.swift
-/// Provides native AVPlayer video playback embedded in Drift UI.
+/// VideoPlayerView.swift
+///
+/// The `drift/media/video` platform view: AVPlayer playback in an
+/// AVPlayerViewController's view, with its native controls (play/pause,
+/// seek, AirPlay, PiP, playback speed). Events go to the Go view
+/// (runtime/video.go).
 
+import AVKit
 import DriftPluginAPI
 import UIKit
-import AVKit
 
-// MARK: - Native Video Player Container
-
-/// Platform view container for native video player using AVPlayerViewController.
-/// Provides full native controls (play/pause, seek, AirPlay, PiP, playback speed).
-class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
-    let viewId: Int
+final class VideoPlayerView: NSObject, DriftPlatformView {
+    private let events: DriftPlatformViewEvents
     let view: UIView
     private let playerVC: AVPlayerViewController
     private let player: AVQueuePlayer
@@ -24,10 +24,10 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
     private var hasReachedEnd: Bool = false
     private var isStopped: Bool = false
 
-    init(viewId: Int, params: [String: Any]) {
-        self.viewId = viewId
+    init(params: [String: Any], events: DriftPlatformViewEvents) {
+        self.events = events
 
-        DriftMediaSession.activate()
+        MediaSession.activate()
 
         let player = AVQueuePlayer()
         self.player = player
@@ -75,14 +75,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
                 state = 0 // Idle
                 self.stopPositionUpdates()
             }
-            PlatformChannelManager.shared.sendEvent(
-                channel: "drift/platform_views",
-                data: [
-                    "method": "onPlaybackStateChanged",
-                    "viewId": self.viewId,
-                    "state": state
-                ]
-            )
+            self.events.send("onPlaybackStateChanged", ["state": state])
         }
 
         // Load media if URL provided
@@ -114,16 +107,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
                 }
             }
 
-            PlatformChannelManager.shared.sendEvent(
-                channel: "drift/platform_views",
-                data: [
-                    "method": "onPositionChanged",
-                    "viewId": self.viewId,
-                    "positionMs": positionMs,
-                    "durationMs": max(durationMs, 0),
-                    "bufferedMs": bufferedMs
-                ]
-            )
+            self.events.send("onPositionChanged", ["positionMs": positionMs, "durationMs": max(durationMs, 0), "bufferedMs": bufferedMs])
         }
     }
 
@@ -158,15 +142,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
             guard let self = self else { return }
             if item.status == .failed {
                 let error = item.error
-                PlatformChannelManager.shared.sendEvent(
-                    channel: "drift/platform_views",
-                    data: [
-                        "method": "onVideoError",
-                        "viewId": self.viewId,
-                        "code": mediaErrorCode(for: error),
-                        "message": error?.localizedDescription ?? "Unknown playback error"
-                    ]
-                )
+                self.events.send("onVideoError", ["code": mediaErrorCode(for: error), "message": error?.localizedDescription ?? "Unknown playback error"])
             }
         }
 
@@ -180,14 +156,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
         ) { [weak self] _ in
             guard let self = self else { return }
             self.hasReachedEnd = true
-            PlatformChannelManager.shared.sendEvent(
-                channel: "drift/platform_views",
-                data: [
-                    "method": "onPlaybackStateChanged",
-                    "viewId": self.viewId,
-                    "state": 3 // Completed
-                ]
-            )
+            self.events.send("onPlaybackStateChanged", ["state": 3]) // Completed
         }
 
         // Create looper if looping is active
@@ -212,7 +181,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
         player.replaceCurrentItem(with: nil)
         view.removeFromSuperview()
 
-        DriftMediaSession.deactivate()
+        MediaSession.deactivate()
     }
 
     func play() {
@@ -234,14 +203,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
         player.pause()
         player.seek(to: .zero) { [weak self] _ in
             guard let self = self else { return }
-            PlatformChannelManager.shared.sendEvent(
-                channel: "drift/platform_views",
-                data: [
-                    "method": "onPlaybackStateChanged",
-                    "viewId": self.viewId,
-                    "state": 0 // Idle with position reset to zero
-                ]
-            )
+            self.events.send("onPlaybackStateChanged", ["state": 0]) // Idle, position reset to zero
         }
     }
 
@@ -284,7 +246,7 @@ class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
     }
 }
 
-extension NativeVideoPlayerContainer {
+extension VideoPlayerView {
     func handle(_ method: String, _ args: [String: Any]) throws {
         switch method {
         case "play": play()
@@ -314,7 +276,7 @@ extension NativeVideoPlayerContainer {
             if let url = args["url"] as? String {
                 load(url)
             }
-        default: throw unknownViewMethod(method)
+        default: throw mediaError("method_not_found", "unknown video method \(method)")
         }
     }
 }

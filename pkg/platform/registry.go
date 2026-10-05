@@ -358,13 +358,6 @@ func ResetForTest() {
 	dispatchFunc = nil
 	dispatchMu.Unlock()
 
-	// Reset audio player registry
-	audioRegistryMu.Lock()
-	audioRegistry = map[int64]*AudioPlayerController{}
-	audioRegistryMu.Unlock()
-	audioServiceOnce = sync.Once{}
-	audioService = nil
-
 	// Reset platform view registry (views, IDs, geometry cache)
 	if platformViewRegistry != nil {
 		platformViewRegistry.mu.Lock()

@@ -303,9 +303,10 @@ object PlatformChannelManager : DriftPluginHost {
 
     /**
      * Delivers data to the channel's observers on the main thread, skipping
-     * any cancelled before delivery.
+     * any cancelled before delivery. Called directly for native-only
+     * events, which Go never sees.
      */
-    private fun notifyEventObservers(channel: String, data: Any?) {
+    internal fun notifyEventObservers(channel: String, data: Any?) {
         val ids = synchronized(eventObserversLock) {
             eventObservers[channel]?.keys?.toList()
         } ?: return
@@ -414,11 +415,6 @@ object PlatformChannelManager : DriftPluginHost {
         // Time Picker channel
         register("drift/time_picker") { method, args ->
             TimePickerHandler.handle(method, args)
-        }
-
-        // Audio Player channel
-        register("drift/audio_player") { method, args ->
-            AudioPlayerHandler.handle(context, method, args)
         }
 
         // URL Launcher channel

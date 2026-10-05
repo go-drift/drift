@@ -26,3 +26,4 @@ plugins:
     config:
       biometrics:
         face_id_description: The Secure Storage demo reads protected values with Face ID.
+  - package: github.com/go-drift/drift/plugins/media/plugin

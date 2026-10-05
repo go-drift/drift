@@ -53,6 +53,14 @@ class DriftPlatformViewEvents internal constructor(
     }
 }
 
+/**
+ * The observeEvent channel Drift posts on once at launch, on the main
+ * thread, unless the app called engine.DisableViewWarmUp. A plugin whose
+ * view loads a heavy library creates and drops a throwaway instance so the
+ * first real view opens without a stall. Native only: Go never sees it.
+ */
+const val DRIFT_PLATFORM_VIEW_WARM_UP_EVENT = "drift/platform_views/warm_up"
+
 /** Creates views of one type. */
 fun interface DriftPlatformViewFactory {
     /**

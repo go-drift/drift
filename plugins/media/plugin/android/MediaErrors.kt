@@ -1,8 +1,8 @@
 /**
- * MediaErrorCode.kt
+ * MediaErrors.kt
  * Shared ExoPlayer error-code mapping used by both audio and video players.
  */
-package {{.PackageName}}
+package com.drift.plugin.media
 
 /**
  * Maps an ExoPlayer error code to a canonical Drift error code string.

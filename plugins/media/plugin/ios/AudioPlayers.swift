@@ -1,15 +1,20 @@
-/// NativeAudioPlayer.swift
-/// Provides audio-only playback using AVPlayer via a standalone platform channel.
-/// Supports multiple concurrent player instances, each identified by a playerId.
+/// AudioPlayers.swift
+///
+/// Audio-only AVPlayer playback for the `drift/media/audio` channel:
+/// several players at once, each identified by the playerId Go assigns
+/// (runtime/audio.go). Main thread only.
 
 import AVFoundation
+import DriftPluginAPI
 
 // MARK: - Audio Player Instance
 
 /// Per-instance audio player state.
-private class AudioPlayerInstance {
+private final class AudioPlayerInstance {
     let id: Int
     let player: AVQueuePlayer
+    /// Sends an event to Go on channel.
+    private let send: (_ channel: String, _ data: [String: Any]) -> Void
     private var timeObserver: Any?
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
@@ -20,10 +25,11 @@ private class AudioPlayerInstance {
     private var hasReachedEnd: Bool = false
     private var isStopped: Bool = false
 
-    init(id: Int) {
+    init(id: Int, send: @escaping (_ channel: String, _ data: [String: Any]) -> Void) {
         self.id = id
+        self.send = send
 
-        DriftMediaSession.activate()
+        MediaSession.activate()
 
         self.player = AVQueuePlayer()
 
@@ -74,16 +80,13 @@ private class AudioPlayerInstance {
                 }
             }
 
-            PlatformChannelManager.shared.sendEvent(
-                channel: "drift/audio_player/events",
-                data: [
-                    "playerId": self.id,
-                    "playbackState": 2, // Playing
-                    "positionMs": positionMs,
-                    "durationMs": max(durationMs, 0),
-                    "bufferedMs": bufferedMs
-                ]
-            )
+            self.send(AudioPlayers.eventsChannel, [
+                "playerId": self.id,
+                "playbackState": 2, // Playing
+                "positionMs": positionMs,
+                "durationMs": max(durationMs, 0),
+                "bufferedMs": bufferedMs
+            ])
         }
     }
 
@@ -110,16 +113,13 @@ private class AudioPlayerInstance {
             }
         }
 
-        PlatformChannelManager.shared.sendEvent(
-            channel: "drift/audio_player/events",
-            data: [
-                "playerId": id,
-                "playbackState": state,
-                "positionMs": positionMs,
-                "durationMs": max(durationMs, 0),
-                "bufferedMs": bufferedMs
-            ]
-        )
+        send(AudioPlayers.eventsChannel, [
+            "playerId": id,
+            "playbackState": state,
+            "positionMs": positionMs,
+            "durationMs": max(durationMs, 0),
+            "bufferedMs": bufferedMs
+        ])
     }
 
     func load(url: URL) {
@@ -144,14 +144,11 @@ private class AudioPlayerInstance {
         itemStatusObservation = item.observe(\.status) { [weak self] item, _ in
             guard let self = self else { return }
             if item.status == .failed {
-                PlatformChannelManager.shared.sendEvent(
-                    channel: "drift/audio_player/errors",
-                    data: [
-                        "playerId": self.id,
-                        "code": mediaErrorCode(for: item.error),
-                        "message": item.error?.localizedDescription ?? "Unknown playback error"
-                    ]
-                )
+                self.send(AudioPlayers.errorsChannel, [
+                    "playerId": self.id,
+                    "code": mediaErrorCode(for: item.error),
+                    "message": item.error?.localizedDescription ?? "Unknown playback error"
+                ])
             }
         }
 
@@ -247,102 +244,74 @@ private class AudioPlayerInstance {
     }
 }
 
-// MARK: - Audio Player Handler
+// MARK: - Players
 
-/// Handles audio player platform channel methods from Go.
-/// Manages multiple player instances keyed by playerId.
-enum AudioPlayerHandler {
-    private static var players: [Int: AudioPlayerInstance] = [:]
+/// The `drift/media/audio` channel's players, keyed by playerId.
+final class AudioPlayers {
+    static let channel = "drift/media/audio"
+    static let eventsChannel = "drift/media/audio/events"
+    static let errorsChannel = "drift/media/audio/errors"
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        let argsMap = args as? [String: Any]
-        let playerId = (argsMap?["playerId"] as? NSNumber)?.intValue ?? 0
+    private var players: [Int: AudioPlayerInstance] = [:]
+    private let send: (_ channel: String, _ data: [String: Any]) -> Void
 
-        switch method {
-        case "load":
-            return load(playerId: playerId, args: argsMap)
-        case "play":
-            return play(playerId: playerId)
-        case "pause":
-            return pause(playerId: playerId)
-        case "stop":
-            return stop(playerId: playerId)
-        case "seekTo":
-            return seekTo(playerId: playerId, args: argsMap)
-        case "setVolume":
-            return setVolume(playerId: playerId, args: argsMap)
-        case "setLooping":
-            return setLooping(playerId: playerId, args: argsMap)
-        case "setPlaybackSpeed":
-            return setPlaybackSpeed(playerId: playerId, args: argsMap)
-        case "dispose":
-            return dispose(playerId: playerId)
-        default:
-            return (nil, NSError(domain: "AudioPlayer", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+    init(send: @escaping (_ channel: String, _ data: [String: Any]) -> Void) {
+        self.send = send
+    }
+
+    /// Declares the channel's methods.
+    func declare(_ channel: DriftChannel) {
+        channel.method("load") { [self] args in
+            let args = args as? [String: Any] ?? [:]
+            guard let url = (args["url"] as? String).flatMap(URL.init(string:)) else {
+                throw mediaError("invalid_arguments", "load needs a url")
+            }
+            player(args, create: true)?.load(url: url)
+            return nil
+        }
+        channel.method("play") { [self] args in player(args, create: true)?.play(); return nil }
+        channel.method("pause") { [self] args in player(args)?.pause(); return nil }
+        channel.method("stop") { [self] args in player(args)?.stop(); return nil }
+        channel.method("seekTo") { [self] args in
+            let positionMs = ((args as? [String: Any])?["positionMs"] as? NSNumber)?.int64Value ?? 0
+            player(args)?.seekTo(positionMs: positionMs)
+            return nil
+        }
+        channel.method("setVolume") { [self] args in
+            player(args)?.setVolume(((args as? [String: Any])?["volume"] as? NSNumber)?.floatValue ?? 1.0)
+            return nil
+        }
+        channel.method("setLooping") { [self] args in
+            player(args)?.setLooping((args as? [String: Any])?["looping"] as? Bool ?? false)
+            return nil
+        }
+        channel.method("setPlaybackSpeed") { [self] args in
+            player(args)?.setPlaybackSpeed(((args as? [String: Any])?["rate"] as? NSNumber)?.floatValue ?? 1.0)
+            return nil
+        }
+        channel.method("dispose") { [self] args in
+            let id = playerId(args)
+            if let instance = players.removeValue(forKey: id) {
+                instance.dispose()
+                MediaSession.deactivate()
+            }
+            return nil
         }
     }
 
-    private static func ensurePlayer(playerId: Int) -> AudioPlayerInstance {
-        if let existing = players[playerId] {
+    private func playerId(_ args: Any?) -> Int {
+        ((args as? [String: Any])?["playerId"] as? NSNumber)?.intValue ?? 0
+    }
+
+    /// The player args' playerId names, created on first use when create.
+    private func player(_ args: Any?, create: Bool = false) -> AudioPlayerInstance? {
+        let id = playerId(args)
+        if let existing = players[id] {
             return existing
         }
-        let instance = AudioPlayerInstance(id: playerId)
-        players[playerId] = instance
+        guard create else { return nil }
+        let instance = AudioPlayerInstance(id: id, send: send)
+        players[id] = instance
         return instance
-    }
-
-    private static func load(playerId: Int, args: [String: Any]?) -> (Any?, Error?) {
-        guard let url = args?["url"] as? String,
-              let mediaURL = URL(string: url) else {
-            return (nil, NSError(domain: "AudioPlayer", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing url"]))
-        }
-
-        ensurePlayer(playerId: playerId).load(url: mediaURL)
-        return (nil, nil)
-    }
-
-    private static func play(playerId: Int) -> (Any?, Error?) {
-        ensurePlayer(playerId: playerId).play()
-        return (nil, nil)
-    }
-
-    private static func pause(playerId: Int) -> (Any?, Error?) {
-        players[playerId]?.pause()
-        return (nil, nil)
-    }
-
-    private static func stop(playerId: Int) -> (Any?, Error?) {
-        players[playerId]?.stop()
-        return (nil, nil)
-    }
-
-    private static func seekTo(playerId: Int, args: [String: Any]?) -> (Any?, Error?) {
-        let positionMs = args?["positionMs"] as? Int64 ?? 0
-        players[playerId]?.seekTo(positionMs: positionMs)
-        return (nil, nil)
-    }
-
-    private static func setVolume(playerId: Int, args: [String: Any]?) -> (Any?, Error?) {
-        let volume = (args?["volume"] as? NSNumber)?.floatValue ?? 1.0
-        players[playerId]?.setVolume(volume)
-        return (nil, nil)
-    }
-
-    private static func setLooping(playerId: Int, args: [String: Any]?) -> (Any?, Error?) {
-        let looping = args?["looping"] as? Bool ?? false
-        players[playerId]?.setLooping(looping)
-        return (nil, nil)
-    }
-
-    private static func setPlaybackSpeed(playerId: Int, args: [String: Any]?) -> (Any?, Error?) {
-        let rate = (args?["rate"] as? NSNumber)?.floatValue ?? 1.0
-        players[playerId]?.setPlaybackSpeed(rate)
-        return (nil, nil)
-    }
-
-    private static func dispose(playerId: Int) -> (Any?, Error?) {
-        players.removeValue(forKey: playerId)?.dispose()
-        DriftMediaSession.deactivate()
-        return (nil, nil)
     }
 }
