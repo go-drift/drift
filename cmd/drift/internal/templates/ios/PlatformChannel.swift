@@ -216,6 +216,11 @@ final class PlatformChannelManager: DriftPluginHost {
         channels[name] = channel
     }
 
+    /// `DriftPluginHost`: register a platform view type.
+    func registerPlatformView(_ type: String, _ factory: @escaping DriftPlatformViewFactory) {
+        PlatformViewHandler.register(type, factory)
+    }
+
     /// `DriftPluginHost`: register a permission kind.
     func registerPermission(_ kind: String, _ permission: DriftPermission) {
         PermissionHandler.register(kind, permission)
@@ -424,6 +429,7 @@ final class PlatformChannelManager: DriftPluginHost {
         register(channel: "drift/platform_views") { method, args in
             return PlatformViewHandler.handle(method: method, args: args)
         }
+        PlatformViewHandler.registerBuiltIns(host: self)
 
         // Permissions channel and Drift's own permission kinds
         PermissionHandler.start(host: self)

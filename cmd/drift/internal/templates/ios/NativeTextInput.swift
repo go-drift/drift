@@ -1,6 +1,7 @@
 /// NativeTextInput.swift
 /// Provides native text input views embedded in Drift UI with Skia chrome.
 
+import DriftPluginAPI
 import UIKit
 
 // MARK: - Padded Text Field
@@ -89,7 +90,7 @@ class PaddedTextView: UITextView {
 // MARK: - Native Text Input Container
 
 /// Platform view container for native text input.
-class NativeTextInputContainer: NSObject, PlatformViewContainer, UITextFieldDelegate, UITextViewDelegate {
+class NativeTextInputContainer: NSObject, DriftPlatformView, UITextFieldDelegate, UITextViewDelegate {
     let viewId: Int
     let view: UIView
 
@@ -500,5 +501,27 @@ extension UIColor {
         let green = CGFloat((argb >> 8) & 0xFF) / 255.0
         let blue = CGFloat(argb & 0xFF) / 255.0
         self.init(red: red, green: green, blue: blue, alpha: alpha)
+    }
+}
+
+extension NativeTextInputContainer {
+    func handle(_ method: String, _ args: [String: Any]) throws {
+        switch method {
+        case "setText":
+            if let text = args["text"] as? String {
+                setText(text)
+            }
+        case "setSelection":
+            setSelection(base: args["selectionBase"] as? Int ?? 0, extent: args["selectionExtent"] as? Int ?? 0)
+        case "setValue":
+            let text = args["text"] as? String ?? ""
+            setValue(text: text,
+                     selectionBase: args["selectionBase"] as? Int ?? text.count,
+                     selectionExtent: args["selectionExtent"] as? Int ?? text.count)
+        case "focus": focus()
+        case "blur": blur()
+        case "updateConfig": updateConfig(args)
+        default: throw unknownViewMethod(method)
+        }
     }
 }

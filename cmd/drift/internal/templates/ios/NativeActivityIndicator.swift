@@ -1,12 +1,13 @@
 /// NativeActivityIndicator.swift
 /// Provides native UIActivityIndicatorView embedded in Drift UI.
 
+import DriftPluginAPI
 import UIKit
 
 // MARK: - Native Activity Indicator Container
 
 /// Platform view container for native activity indicator.
-class NativeActivityIndicatorContainer: NSObject, PlatformViewContainer {
+class NativeActivityIndicatorContainer: NSObject, DriftPlatformView {
     let viewId: Int
     let view: UIView
     private let indicator: UIActivityIndicatorView
@@ -82,5 +83,18 @@ class NativeActivityIndicatorContainer: NSObject, PlatformViewContainer {
 
         // Note: Changing size requires recreating the indicator, which we don't support
         // for simplicity. Size should be set at creation time.
+    }
+}
+
+extension NativeActivityIndicatorContainer {
+    func handle(_ method: String, _ args: [String: Any]) throws {
+        switch method {
+        case "setAnimating":
+            if let animating = args["animating"] as? Bool {
+                setAnimating(animating)
+            }
+        case "updateConfig": updateConfig(args)
+        default: throw unknownViewMethod(method)
+        }
     }
 }

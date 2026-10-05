@@ -29,6 +29,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.drift.runner.DriftCallError
 import com.drift.runner.DriftChannel
 import com.drift.runner.DriftPermission
+import com.drift.runner.DriftPlatformViewFactory
 import com.drift.runner.DriftPluginHost
 import com.drift.runner.DriftResult
 import com.drift.runner.DriftSubscription
@@ -118,6 +119,11 @@ object PlatformChannelManager : DriftPluginHost {
     /** Registers a built-in channel handler. */
     fun register(channel: String, handler: MethodHandler) {
         add(channel, Channel.BuiltIn(handler))
+    }
+
+    /** DriftPluginHost: register a platform view type. */
+    override fun registerPlatformView(type: String, factory: DriftPlatformViewFactory) {
+        PlatformViewHandler.register(type, factory)
     }
 
     /** DriftPluginHost: register a permission kind. */
@@ -380,6 +386,7 @@ object PlatformChannelManager : DriftPluginHost {
         register("drift/platform_views") { method, args ->
             PlatformViewHandler.handle(method, args)
         }
+        PlatformViewHandler.registerBuiltIns(this)
 
         // Permissions channel and Drift's own permission kinds
         PermissionHandler.start(this)

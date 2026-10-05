@@ -13,30 +13,55 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.os.Handler
+import android.os.Looper
+import com.drift.runner.DriftCallError
+import com.drift.runner.DriftPlatformView
+import com.drift.runner.DriftPlatformViewEvents
+import com.drift.runner.DriftPlatformViewFactory
+import com.drift.runner.DriftPluginHost
+import com.drift.runner.driftCrash
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Handles platform view channel methods from Go.
  */
 object PlatformViewHandler {
-    private val views = mutableMapOf<Int, PlatformViewContainer>()
+    /** View factories by type, registered at launch (Drift's and plugins'). */
+    private val factories = ConcurrentHashMap<String, DriftPlatformViewFactory>()
+
+    // Main thread only: every operation on a view runs there, in the order
+    // Go made the calls.
+    private val views = mutableMapOf<Int, DriftPlatformView>()
+    private val viewTypes = mutableMapOf<Int, String>()
     private val interceptors = mutableMapOf<Int, TouchInterceptorView>()
     private var context: Context? = null
     private var hostView: ViewGroup? = null
     private var surfaceView: View? = null
     private var overlayController: InputOverlayController? = null
-
-    // Supported methods for each view type
-    private val webViewMethods = setOf("load", "goBack", "goForward", "reload")
-    private val textInputMethods = setOf("setText", "setSelection", "setValue", "focus", "blur", "updateConfig")
-    private val switchMethods = setOf("setValue", "updateConfig")
-    private val activityIndicatorMethods = setOf("setAnimating", "updateConfig")
-    private val videoPlayerMethods = setOf("play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "setShowControls", "load")
+    private val main = Handler(Looper.getMainLooper())
 
     fun init(context: Context, hostView: ViewGroup, surfaceView: View, overlayController: InputOverlayController) {
         this.context = context
         this.hostView = hostView
         this.surfaceView = surfaceView
         this.overlayController = overlayController
+    }
+
+    /** Registers the view type [type]; a second registration crashes. */
+    fun register(type: String, factory: DriftPlatformViewFactory) {
+        if (factories.putIfAbsent(type, factory) != null) {
+            driftCrash("drift: platform view type \"$type\" is already registered")
+        }
+    }
+
+    /** Registers Drift's own view types. */
+    fun registerBuiltIns(host: DriftPluginHost) {
+        host.registerPlatformView("native_webview") { ctx, id, params, _ -> NativeWebViewContainer(ctx, id, params) }
+        host.registerPlatformView("textinput") { ctx, id, params, _ -> NativeTextInputContainer(ctx, id, params) }
+        host.registerPlatformView("switch") { ctx, id, params, _ -> NativeSwitchContainer(ctx, id, params) }
+        host.registerPlatformView("activity_indicator") { ctx, id, params, _ -> NativeActivityIndicatorContainer(ctx, id, params) }
+        host.registerPlatformView("video_player") { ctx, id, params, _ -> NativeVideoPlayerContainer(ctx, id, params) }
     }
 
     /**
@@ -72,137 +97,66 @@ object PlatformViewHandler {
 
         return when (method) {
             "create" -> create(argsMap)
-            "dispose" -> dispose(argsMap)
-            "setVisible" -> setVisible(argsMap)
-            "setEnabled" -> setEnabled(argsMap)
-            "invokeViewMethod" -> invokeViewMethod(argsMap)
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            "dispose" -> onView(argsMap) { viewId, container ->
+                views.remove(viewId)
+                viewTypes.remove(viewId)
+                container.dispose()
+                overlayController?.removeView(viewId.toLong())
+                val host = hostView
+                val interceptor = interceptors.remove(viewId)
+                if (interceptor != null) {
+                    (host as? InputOverlayLayout)?.removeOverlayView(viewId) ?: host?.removeView(interceptor)
+                } else {
+                    host?.removeView(container.view)
+                }
+            }
+            "setVisible" -> {
+                val visible = argsMap["visible"] as? Boolean ?: true
+                onView(argsMap) { viewId, container ->
+                    (interceptors[viewId] ?: container.view).visibility = if (visible) View.VISIBLE else View.GONE
+                }
+            }
+            "setEnabled" -> {
+                val enabled = argsMap["enabled"] as? Boolean ?: true
+                onView(argsMap) { _, container ->
+                    // The inner view, not the interceptor wrapper.
+                    container.view.isEnabled = enabled
+                    container.view.alpha = if (enabled) 1.0f else 0.5f
+                }
+            }
+            "invokeViewMethod" -> {
+                val viewMethod = argsMap["method"] as? String
+                    ?: return Pair(null, IllegalArgumentException("Missing method"))
+                @Suppress("UNCHECKED_CAST")
+                val viewArgs = argsMap as Map<String, Any?>
+                onView(argsMap) { viewId, container ->
+                    try {
+                        container.handle(viewMethod, viewArgs)
+                    } catch (e: Exception) {
+                        Log.e("DriftPlatformView", "platform view $viewId (${viewTypes[viewId]}): $viewMethod: ${e.message}")
+                    }
+                    if (viewTypes[viewId] == "textinput" && viewMethod == "updateConfig") {
+                        val multiline = viewArgs["multiline"] as? Boolean ?: false
+                        interceptors[viewId]?.enableUnfocusedTextScrollForwarding = !multiline
+                    }
+                }
+            }
+            else -> Pair(null, DriftCallError("method_not_found", "Unknown method: $method"))
         }
     }
 
-    private fun invokeViewMethod(args: Map<*, *>): Pair<Any?, Exception?> {
+    /**
+     * Runs [body] on the main thread, after earlier calls, with the view
+     * args' viewId names; a view already disposed is skipped (Go may call it
+     * after disposing).
+     */
+    private fun onView(args: Map<*, *>, body: (Int, DriftPlatformView) -> Unit): Pair<Any?, Exception?> {
         val viewId = (args["viewId"] as? Number)?.toInt()
             ?: return Pair(null, IllegalArgumentException("Missing viewId"))
-        val method = args["method"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing method"))
-        val host = hostView ?: return Pair(null, IllegalStateException("Host view not initialized"))
-
-        // Post the entire lookup + dispatch to the UI thread so it is ordered
-        // after the create() post that populates views[viewId].
-        host.post {
+        main.post {
             val container = views[viewId] ?: return@post
-
-            val supported = when (container) {
-                is NativeWebViewContainer -> method in webViewMethods
-                is NativeTextInputContainer -> method in textInputMethods
-                is NativeSwitchContainer -> method in switchMethods
-                is NativeActivityIndicatorContainer -> method in activityIndicatorMethods
-                is NativeVideoPlayerContainer -> method in videoPlayerMethods
-                else -> false
-            }
-            if (!supported) return@post
-
-            when (container) {
-                is NativeWebViewContainer -> {
-                    when (method) {
-                        "load" -> {
-                            val url = args["url"] as? String
-                            if (url != null) {
-                                container.view.loadUrl(url)
-                            }
-                        }
-                        "goBack" -> container.view.goBack()
-                        "goForward" -> container.view.goForward()
-                        "reload" -> container.view.reload()
-                    }
-                }
-                is NativeTextInputContainer -> {
-                    when (method) {
-                        "setText" -> {
-                            val text = args["text"] as? String ?: ""
-                            container.setText(text)
-                        }
-                        "setSelection" -> {
-                            val base = (args["selectionBase"] as? Number)?.toInt() ?: 0
-                            val extent = (args["selectionExtent"] as? Number)?.toInt() ?: 0
-                            container.setSelection(base, extent)
-                        }
-                        "setValue" -> {
-                            val text = args["text"] as? String ?: ""
-                            val base = (args["selectionBase"] as? Number)?.toInt() ?: text.length
-                            val extent = (args["selectionExtent"] as? Number)?.toInt() ?: text.length
-                            container.setValue(text, base, extent)
-                        }
-                        "focus" -> container.focus()
-                        "blur" -> container.blur()
-                        "updateConfig" -> {
-                            @Suppress("UNCHECKED_CAST")
-                            container.updateConfig(args as Map<String, Any?>)
-                            val multiline = args["multiline"] as? Boolean ?: false
-                            interceptors[viewId]?.enableUnfocusedTextScrollForwarding = !multiline
-                        }
-                    }
-                }
-                is NativeSwitchContainer -> {
-                    when (method) {
-                        "setValue" -> {
-                            val value = args["value"] as? Boolean ?: false
-                            container.setValue(value)
-                        }
-                        "updateConfig" -> {
-                            @Suppress("UNCHECKED_CAST")
-                            container.updateConfig(args as Map<String, Any?>)
-                        }
-                    }
-                }
-                is NativeActivityIndicatorContainer -> {
-                    when (method) {
-                        "setAnimating" -> {
-                            val animating = args["animating"] as? Boolean ?: true
-                            container.setAnimating(animating)
-                        }
-                        "updateConfig" -> {
-                            @Suppress("UNCHECKED_CAST")
-                            container.updateConfig(args as Map<String, Any?>)
-                        }
-                    }
-                }
-                is NativeVideoPlayerContainer -> {
-                    when (method) {
-                        "play" -> container.play()
-                        "pause" -> container.pause()
-                        "stop" -> container.stop()
-                        "seekTo" -> {
-                            val positionMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
-                            container.seekTo(positionMs)
-                        }
-                        "setVolume" -> {
-                            val volume = (args["volume"] as? Number)?.toFloat() ?: 1.0f
-                            container.setVolume(volume)
-                        }
-                        "setLooping" -> {
-                            val looping = args["looping"] as? Boolean ?: false
-                            container.setLooping(looping)
-                        }
-                        "setPlaybackSpeed" -> {
-                            val rate = (args["rate"] as? Number)?.toFloat() ?: 1.0f
-                            container.setPlaybackSpeed(rate)
-                        }
-                        "setShowControls" -> {
-                            val show = args["show"] as? Boolean ?: true
-                            container.setShowControls(show)
-                        }
-                        "load" -> {
-                            val url = args["url"] as? String
-                            if (url != null) {
-                                container.load(url)
-                            }
-                        }
-                    }
-                }
-            }
+            body(viewId, container)
         }
-
         return Pair(null, null)
     }
 
@@ -211,30 +165,28 @@ object PlatformViewHandler {
             ?: return Pair(null, IllegalArgumentException("Missing viewId"))
         val viewType = args["viewType"] as? String
             ?: return Pair(null, IllegalArgumentException("Missing viewType"))
-
         @Suppress("UNCHECKED_CAST")
         val params = args["params"] as? Map<String, Any?> ?: emptyMap()
+        val factory = factories[viewType] ?: return Pair(null, DriftCallError(
+            "view_type_not_found",
+            "no native platform view type \"$viewType\"; add the plugin that provides it to drift.yaml",
+        ))
 
-        val ctx = context ?: return Pair(null, IllegalStateException("Context not initialized"))
-        val host = hostView ?: return Pair(null, IllegalStateException("Host view not initialized"))
-
-        val creator: (() -> PlatformViewContainer)? = when (viewType) {
-            "native_webview" -> { { NativeWebViewContainer(ctx, viewId, params) } }
-            "textinput" -> { { NativeTextInputContainer(ctx, viewId, params) } }
-            "switch" -> { { NativeSwitchContainer(ctx, viewId, params) } }
-            "activity_indicator" -> { { NativeActivityIndicatorContainer(ctx, viewId, params) } }
-            "video_player" -> { { NativeVideoPlayerContainer(ctx, viewId, params) } }
-            else -> null
-        }
-
-        if (creator == null) {
-            return Pair(null, IllegalArgumentException("Unknown view type: $viewType"))
-        }
-
-        // Add to host view on main thread, wrapped in a TouchInterceptorView
-        host.post {
-            val container = creator()
+        // Created on the main thread, after earlier calls. Go is notified
+        // once the view is in the hierarchy, so resendGeometry targets it.
+        main.post {
+            val ctx = context
+            val host = hostView
+            if (ctx == null || host == null) {
+                Log.e("DriftPlatformView", "platform view $viewId created before the host view")
+                return@post
+            }
+            val events = DriftPlatformViewEvents(viewId) { event ->
+                PlatformChannelManager.sendEvent("drift/platform_views", event)
+            }
+            val container = factory.create(ctx, viewId, params, events)
             views[viewId] = container
+            viewTypes[viewId] = viewType
 
             val interceptor = TouchInterceptorView(ctx, viewId)
             interceptor.supportsRegionMask = container.supportsRegionMask
@@ -248,79 +200,15 @@ object PlatformViewHandler {
             interceptors[viewId] = interceptor
             (host as? InputOverlayLayout)?.addOverlayView(viewId, interceptor) ?: host.addView(interceptor)
 
-            // Notify Go that view is created
-            PlatformChannelManager.sendEvent(
-                "drift/platform_views",
-                mapOf(
-                    "method" to "onViewCreated",
-                    "viewId" to viewId
-                )
-            )
+            events.send("onViewCreated")
         }
 
         return Pair(mapOf("created" to true), null)
     }
-
-    private fun dispose(args: Map<*, *>): Pair<Any?, Exception?> {
-        val viewId = (args["viewId"] as? Number)?.toInt() ?: return Pair(null, null)
-        val host = hostView ?: return Pair(null, null)
-
-        host.post {
-            val container = views.remove(viewId) ?: return@post
-            container.dispose()
-            overlayController?.removeView(viewId.toLong())
-            val interceptor = interceptors.remove(viewId)
-            if (interceptor != null) {
-                (host as? InputOverlayLayout)?.removeOverlayView(viewId) ?: host.removeView(interceptor)
-            } else {
-                host.removeView(container.view)
-            }
-        }
-
-        return Pair(null, null)
-    }
-
-    private fun setVisible(args: Map<*, *>): Pair<Any?, Exception?> {
-        val viewId = (args["viewId"] as? Number)?.toInt() ?: return Pair(null, null)
-        val visible = args["visible"] as? Boolean ?: true
-        val host = hostView ?: return Pair(null, null)
-
-        host.post {
-            val container = views[viewId] ?: return@post
-            val targetView = interceptors[viewId] ?: container.view
-            targetView.visibility = if (visible) View.VISIBLE else View.GONE
-        }
-
-        return Pair(null, null)
-    }
-
-    private fun setEnabled(args: Map<*, *>): Pair<Any?, Exception?> {
-        val viewId = (args["viewId"] as? Number)?.toInt() ?: return Pair(null, null)
-        val enabled = args["enabled"] as? Boolean ?: true
-        val host = hostView ?: return Pair(null, null)
-
-        host.post {
-            val container = views[viewId] ?: return@post
-            // Apply enabled/alpha to the inner view, not the interceptor wrapper
-            container.view.isEnabled = enabled
-            container.view.alpha = if (enabled) 1.0f else 0.5f
-        }
-
-        return Pair(null, null)
-    }
 }
 
-/**
- * Interface for platform view containers.
- */
-interface PlatformViewContainer {
-    val viewId: Int
-    val view: View
-    /** Whether this view supports region masking (Path-based clip for partial occlusion).
-     *  TextureView-backed views return true; SurfaceView-backed views return false. */
-    val supportsRegionMask: Boolean get() = false
-    fun dispose()
-}
+/** The exception a view's handle throws for a method it does not know. */
+internal fun unknownViewMethod(method: String) = DriftCallError("method_not_found", "unknown view method $method")
 
 /**
  * Native web view container.
@@ -328,9 +216,9 @@ interface PlatformViewContainer {
 @SuppressLint("SetJavaScriptEnabled")
 class NativeWebViewContainer(
     context: Context,
-    override val viewId: Int,
+    val viewId: Int,
     params: Map<String, Any?>
-) : PlatformViewContainer {
+) : DriftPlatformView {
 
     override val view: WebView = WebView(context).apply {
         layoutParams = FrameLayout.LayoutParams(
@@ -390,6 +278,16 @@ class NativeWebViewContainer(
         // Load initial URL if provided
         (params["initialUrl"] as? String)?.let { url ->
             loadUrl(url)
+        }
+    }
+
+    override fun handle(method: String, args: Map<String, Any?>) {
+        when (method) {
+            "load" -> (args["url"] as? String)?.let { view.loadUrl(it) }
+            "goBack" -> view.goBack()
+            "goForward" -> view.goForward()
+            "reload" -> view.reload()
+            else -> throw unknownViewMethod(method)
         }
     }
 

@@ -2,6 +2,7 @@
 /// Provides platform view management for embedding native views in Drift UI.
 
 import AVFoundation
+@_spi(DriftHost) import DriftPluginAPI
 import UIKit
 
 /// FFI declaration for DriftHitTestPlatformView.
@@ -282,7 +283,14 @@ enum PlatformViewHandler {
     /// Used by DriftMetalView to enable synchronized presentation.
     static var hasPlatformViews: Bool { !views.isEmpty }
 
-    private static var views: [Int: PlatformViewContainer] = [:]
+    /// View factories by type, registered at launch (Drift's and plugins').
+    private static var factories: [String: DriftPlatformViewFactory] = [:]
+    private static let factoriesLock = NSLock()
+
+    // Main thread only: every operation on a view runs there, in the order
+    // Go made the calls.
+    private static var views: [Int: DriftPlatformView] = [:]
+    private static var viewTypes: [Int: String] = [:]
     private static var interceptors: [Int: TouchInterceptorView] = [:]
     private static var maskLayers: [Int: CAShapeLayer] = [:]
     private static weak var hostView: UIView?
@@ -348,6 +356,25 @@ enum PlatformViewHandler {
         }
     }
 
+    /// Registers the view type `type`; a second registration traps.
+    static func register(_ type: String, _ factory: @escaping DriftPlatformViewFactory) {
+        factoriesLock.lock()
+        defer { factoriesLock.unlock() }
+        if factories[type] != nil {
+            fatalError("drift: platform view type \"\(type)\" is already registered")
+        }
+        factories[type] = factory
+    }
+
+    /// Registers Drift's own view types.
+    static func registerBuiltIns(host: DriftPluginHost) {
+        host.registerPlatformView("native_webview") { id, params, _ in NativeWebViewContainer(viewId: id, params: params) }
+        host.registerPlatformView("textinput") { id, params, _ in NativeTextInputContainer(viewId: id, params: params) }
+        host.registerPlatformView("switch") { id, params, _ in NativeSwitchContainer(viewId: id, params: params) }
+        host.registerPlatformView("activity_indicator") { id, params, _ in NativeActivityIndicatorContainer(viewId: id, params: params) }
+        host.registerPlatformView("video_player") { id, params, _ in NativeVideoPlayerContainer(viewId: id, params: params) }
+    }
+
     static func handle(method: String, args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any] else {
             return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
@@ -357,247 +384,107 @@ enum PlatformViewHandler {
         case "create":
             return create(args: dict)
         case "dispose":
-            return dispose(args: dict)
+            return onView(dict) { viewId, container in
+                let interceptor = interceptors.removeValue(forKey: viewId)
+                maskLayers.removeValue(forKey: viewId)
+                views.removeValue(forKey: viewId)
+                viewTypes.removeValue(forKey: viewId)
+                container.dispose()
+                interceptor?.removeFromSuperview()
+            }
         case "setVisible":
-            return setVisible(args: dict)
+            let visible = dict["visible"] as? Bool ?? true
+            return onView(dict) { viewId, container in
+                (interceptors[viewId] ?? container.view).isHidden = !visible
+            }
         case "setEnabled":
-            return setEnabled(args: dict)
+            let enabled = dict["enabled"] as? Bool ?? true
+            return onView(dict) { _, container in
+                container.view.isUserInteractionEnabled = enabled
+                container.view.alpha = enabled ? 1.0 : 0.5
+            }
         case "invokeViewMethod":
-            return invokeViewMethod(args: dict)
+            guard let viewMethod = dict["method"] as? String else {
+                return (nil, NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing method"]))
+            }
+            return onView(dict) { viewId, container in
+                do {
+                    try container.handle(viewMethod, dict)
+                } catch {
+                    DriftLog.platform.error("platform view \(viewId) (\(viewTypes[viewId] ?? "?")): \(viewMethod): \(error.localizedDescription)")
+                }
+                if viewTypes[viewId] == "textinput", viewMethod == "updateConfig" {
+                    let multiline = dict["multiline"] as? Bool ?? false
+                    interceptors[viewId]?.enableUnfocusedTextScrollForwarding = !multiline
+                }
+            }
         default:
-            return (nil, NSError(domain: "PlatformView", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, NSError(domain: "method_not_found", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
         }
     }
 
-    private static func invokeViewMethod(args: [String: Any]) -> (Any?, Error?) {
+    /// Runs body on the main thread, after earlier calls, with the view
+    /// args' viewId names; a view already disposed is skipped (Go may call
+    /// it after disposing).
+    private static func onView(_ args: [String: Any], _ body: @escaping (Int, DriftPlatformView) -> Void) -> (Any?, Error?) {
         guard let viewId = args["viewId"] as? Int else {
-            return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing viewId"]))
+            return (nil, NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing viewId"]))
         }
-        guard let method = args["method"] as? String else {
-            return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing method"]))
+        DispatchQueue.main.async {
+            guard let container = views[viewId] else { return }
+            body(viewId, container)
         }
-        guard let container = views[viewId] else {
-            return (nil, NSError(domain: "PlatformView", code: 404, userInfo: [NSLocalizedDescriptionKey: "View not found: \(viewId)"]))
-        }
-
-        // Validate method is supported
-        let supportedMethods: Set<String>
-        if container is NativeWebViewContainer {
-            supportedMethods = ["load", "goBack", "goForward", "reload"]
-        } else if container is NativeTextInputContainer {
-            supportedMethods = ["setText", "setSelection", "setValue", "focus", "blur", "updateConfig"]
-        } else if container is NativeSwitchContainer {
-            supportedMethods = ["setValue", "updateConfig"]
-        } else if container is NativeActivityIndicatorContainer {
-            supportedMethods = ["setAnimating", "updateConfig"]
-        } else if container is NativeVideoPlayerContainer {
-            supportedMethods = ["play", "pause", "stop", "seekTo", "setVolume", "setLooping", "setPlaybackSpeed", "setShowControls", "load"]
-        } else {
-            supportedMethods = []
-        }
-
-        guard supportedMethods.contains(method) else {
-            return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Unknown method '\(method)' for view type"]))
-        }
-
-        if let webViewContainer = container as? NativeWebViewContainer {
-            DispatchQueue.main.async {
-                switch method {
-                case "load":
-                    if let urlString = args["url"] as? String,
-                       let url = URL(string: urlString) {
-                        webViewContainer.loadURL(url)
-                    }
-                case "goBack":
-                    webViewContainer.goBack()
-                case "goForward":
-                    webViewContainer.goForward()
-                case "reload":
-                    webViewContainer.reload()
-                default:
-                    break
-                }
-            }
-        } else if let textInputContainer = container as? NativeTextInputContainer {
-            DispatchQueue.main.async {
-                switch method {
-                case "setText":
-                    if let text = args["text"] as? String {
-                        textInputContainer.setText(text)
-                    }
-                case "setSelection":
-                    let base = args["selectionBase"] as? Int ?? 0
-                    let extent = args["selectionExtent"] as? Int ?? 0
-                    textInputContainer.setSelection(base: base, extent: extent)
-                case "setValue":
-                    let text = args["text"] as? String ?? ""
-                    let base = args["selectionBase"] as? Int ?? text.count
-                    let extent = args["selectionExtent"] as? Int ?? text.count
-                    textInputContainer.setValue(text: text, selectionBase: base, selectionExtent: extent)
-                case "focus":
-                    textInputContainer.focus()
-                case "blur":
-                    textInputContainer.blur()
-                case "updateConfig":
-                    textInputContainer.updateConfig(args)
-                    let multiline = args["multiline"] as? Bool ?? false
-                    interceptors[viewId]?.enableUnfocusedTextScrollForwarding = !multiline
-                default:
-                    break
-                }
-            }
-        } else if let switchContainer = container as? NativeSwitchContainer {
-            DispatchQueue.main.async {
-                switch method {
-                case "setValue":
-                    if let value = args["value"] as? Bool {
-                        switchContainer.setValue(value)
-                    }
-                case "updateConfig":
-                    switchContainer.updateConfig(args)
-                default:
-                    break
-                }
-            }
-        } else if let indicatorContainer = container as? NativeActivityIndicatorContainer {
-            DispatchQueue.main.async {
-                switch method {
-                case "setAnimating":
-                    if let animating = args["animating"] as? Bool {
-                        indicatorContainer.setAnimating(animating)
-                    }
-                case "updateConfig":
-                    indicatorContainer.updateConfig(args)
-                default:
-                    break
-                }
-            }
-        } else if let videoContainer = container as? NativeVideoPlayerContainer {
-            DispatchQueue.main.async {
-                switch method {
-                case "play":
-                    videoContainer.play()
-                case "pause":
-                    videoContainer.pause()
-                case "stop":
-                    videoContainer.stop()
-                case "seekTo":
-                    if let positionMs = (args["positionMs"] as? NSNumber)?.int64Value {
-                        videoContainer.seekTo(positionMs: positionMs)
-                    }
-                case "setVolume":
-                    if let volume = (args["volume"] as? NSNumber)?.floatValue {
-                        videoContainer.setVolume(volume)
-                    }
-                case "setLooping":
-                    if let looping = args["looping"] as? Bool {
-                        videoContainer.setLooping(looping)
-                    }
-                case "setPlaybackSpeed":
-                    if let rate = (args["rate"] as? NSNumber)?.floatValue {
-                        videoContainer.setPlaybackSpeed(rate)
-                    }
-                case "setShowControls":
-                    if let show = args["show"] as? Bool {
-                        videoContainer.setShowControls(show)
-                    }
-                case "load":
-                    if let urlString = args["url"] as? String {
-                        videoContainer.load(urlString)
-                    }
-                default:
-                    break
-                }
-            }
-        }
-
         return (nil, nil)
     }
 
     private static func create(args: [String: Any]) -> (Any?, Error?) {
         guard let viewId = args["viewId"] as? Int,
               let viewType = args["viewType"] as? String else {
-            return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing viewId or viewType"]))
+            return (nil, NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing viewId or viewType"]))
         }
-
         let params = args["params"] as? [String: Any] ?? [:]
 
-        // Create the platform view based on type
-        let container: PlatformViewContainer?
-
-        switch viewType {
-        case "native_webview":
-            container = createNativeWebView(viewId: viewId, params: params)
-        case "textinput":
-            container = NativeTextInputContainer(viewId: viewId, params: params)
-        case "switch":
-            container = NativeSwitchContainer(viewId: viewId, params: params)
-        case "activity_indicator":
-            container = NativeActivityIndicatorContainer(viewId: viewId, params: params)
-        case "video_player":
-            container = NativeVideoPlayerContainer(viewId: viewId, params: params)
-        default:
-            return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Unknown view type: \(viewType)"]))
+        factoriesLock.lock()
+        let factory = factories[viewType]
+        factoriesLock.unlock()
+        guard let factory else {
+            return (nil, NSError(domain: "view_type_not_found", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "no native platform view type \"\(viewType)\"; add the plugin that provides it to drift.yaml",
+            ]))
         }
 
-        guard let view = container else {
-            return (nil, NSError(domain: "PlatformView", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to create view"]))
-        }
-
-        views[viewId] = view
-
-        // Add to host view on main thread, wrapped in a TouchInterceptorView.
-        // Notify Go only after the interceptor is attached so resendGeometry
-        // targets the actual host view (not the unattached child).
+        // Created on the main thread, after earlier calls. Go is notified
+        // once the view is in the hierarchy, so resendGeometry targets it.
         DispatchQueue.main.async {
+            let events = DriftPlatformViewEvents(viewId: viewId) { event in
+                PlatformChannelManager.shared.sendEvent(channel: "drift/platform_views", data: event)
+            }
+            let container = factory(viewId, params, events)
+            views[viewId] = container
+            viewTypes[viewId] = viewType
             if let host = hostView, let overlay = overlayView {
                 let interceptor = TouchInterceptorView(viewId: viewId)
                 if viewType == "textinput" {
                     let multiline = params["multiline"] as? Bool ?? false
                     interceptor.enableUnfocusedTextScrollForwarding = !multiline
                 }
-                interceptor.addSubview(view.view)
+                interceptor.addSubview(container.view)
                 // Child fills interceptor
-                view.view.translatesAutoresizingMaskIntoConstraints = false
+                container.view.translatesAutoresizingMaskIntoConstraints = false
                 NSLayoutConstraint.activate([
-                    view.view.topAnchor.constraint(equalTo: interceptor.topAnchor),
-                    view.view.leadingAnchor.constraint(equalTo: interceptor.leadingAnchor),
-                    view.view.trailingAnchor.constraint(equalTo: interceptor.trailingAnchor),
-                    view.view.bottomAnchor.constraint(equalTo: interceptor.bottomAnchor)
+                    container.view.topAnchor.constraint(equalTo: interceptor.topAnchor),
+                    container.view.leadingAnchor.constraint(equalTo: interceptor.leadingAnchor),
+                    container.view.trailingAnchor.constraint(equalTo: interceptor.trailingAnchor),
+                    container.view.bottomAnchor.constraint(equalTo: interceptor.bottomAnchor)
                 ])
                 interceptor.isHidden = true // Hidden until positioned
                 interceptors[viewId] = interceptor
                 host.insertSubview(interceptor, belowSubview: overlay)
             }
-
-            PlatformChannelManager.shared.sendEvent(
-                channel: "drift/platform_views",
-                data: [
-                    "method": "onViewCreated",
-                    "viewId": viewId
-                ]
-            )
+            events.send("onViewCreated")
         }
 
         return (["created": true], nil)
-    }
-
-    private static func dispose(args: [String: Any]) -> (Any?, Error?) {
-        guard let viewId = args["viewId"] as? Int else {
-            return (nil, nil)
-        }
-
-        if let container = views[viewId] {
-            let interceptor = interceptors.removeValue(forKey: viewId)
-            maskLayers.removeValue(forKey: viewId)
-            DispatchQueue.main.async {
-                container.dispose()
-                interceptor?.removeFromSuperview()
-            }
-            views.removeValue(forKey: viewId)
-        }
-
-        return (nil, nil)
     }
 
     /// Apply visibility masking to a platform view using visibleRect and occlusion masks.
@@ -663,62 +550,18 @@ enum PlatformViewHandler {
         view.layer.mask = maskLayer
         view.isHidden = false
     }
-
-    private static func setVisible(args: [String: Any]) -> (Any?, Error?) {
-        guard let viewId = args["viewId"] as? Int,
-              let visible = args["visible"] as? Bool,
-              let container = views[viewId] else {
-            return (nil, nil)
-        }
-
-        DispatchQueue.main.async {
-            let targetView = interceptors[viewId] ?? container.view
-            targetView.isHidden = !visible
-        }
-
-        return (nil, nil)
-    }
-
-    private static func setEnabled(args: [String: Any]) -> (Any?, Error?) {
-        guard let viewId = args["viewId"] as? Int,
-              let enabled = args["enabled"] as? Bool,
-              let container = views[viewId] else {
-            return (nil, nil)
-        }
-
-        DispatchQueue.main.async {
-            container.view.isUserInteractionEnabled = enabled
-            container.view.alpha = enabled ? 1.0 : 0.5
-        }
-
-        return (nil, nil)
-    }
-
-    // MARK: - View Factories
-
-    private static func createNativeWebView(viewId: Int, params: [String: Any]) -> PlatformViewContainer? {
-        return NativeWebViewContainer(viewId: viewId, params: params)
-    }
 }
 
-// MARK: - Platform View Protocol
-
-protocol PlatformViewContainer {
-    var viewId: Int { get }
-    var view: UIView { get }
-    func dispose()
-    func onGeometryChanged()
-}
-
-extension PlatformViewContainer {
-    func onGeometryChanged() {}
+/// The error a view's handle(_:_:) throws for a method it does not know.
+func unknownViewMethod(_ method: String) -> NSError {
+    NSError(domain: "method_not_found", code: 0, userInfo: [NSLocalizedDescriptionKey: "unknown view method \(method)"])
 }
 
 // MARK: - Native Web View Container
 
 import WebKit
 
-class NativeWebViewContainer: NSObject, PlatformViewContainer, WKNavigationDelegate {
+class NativeWebViewContainer: NSObject, DriftPlatformView, WKNavigationDelegate {
     let viewId: Int
     let view: UIView
     private let webView: WKWebView
@@ -747,6 +590,19 @@ class NativeWebViewContainer: NSObject, PlatformViewContainer, WKNavigationDeleg
     func dispose() {
         webView.stopLoading()
         view.removeFromSuperview()
+    }
+
+    func handle(_ method: String, _ args: [String: Any]) throws {
+        switch method {
+        case "load":
+            if let urlString = args["url"] as? String, let url = URL(string: urlString) {
+                loadURL(url)
+            }
+        case "goBack": goBack()
+        case "goForward": goForward()
+        case "reload": reload()
+        default: throw unknownViewMethod(method)
+        }
     }
 
     // MARK: - Navigation Methods

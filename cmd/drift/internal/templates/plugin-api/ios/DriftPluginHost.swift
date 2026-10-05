@@ -174,4 +174,10 @@ public protocol DriftPluginHost: AnyObject {
     /// Register each kind once, from `register(host:)`, together with the
     /// Info.plist usage string it needs; registering a kind twice traps.
     func registerPermission(_ kind: String, _ permission: DriftPermission)
+
+    /// Registers the platform view type `type`, created by `factory`. Go
+    /// creates views of it through a `platform.PlatformViewFactory` with
+    /// the same type. Register each type once, from `register(host:)`;
+    /// registering a type twice traps.
+    func registerPlatformView(_ type: String, _ factory: @escaping DriftPlatformViewFactory)
 }

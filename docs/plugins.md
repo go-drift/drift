@@ -94,6 +94,10 @@ Drift owns the request mechanism; permission kinds come from plugins. `Permissio
 - Android kinds implement `DriftPermission` (`templates/android/runner/DriftPermission.kt`); most use `DriftRuntimePermission(manifestPermissions...)`, which requests through the Activity's `activityResultRegistry` (no request codes), infers "permanently denied" from the rationale flag having been raised (by a first denial) and lowered again (a dismissed dialog changes neither), reads LIMITED when only some of its permissions are granted, and fails with `permission_not_declared` (`platform.ErrPermissionNotDeclared`) when the merged manifest lacks one.
 - Drift registers one kind itself: `notifications`, shared by every plugin that shows notifications. Those plugins declare `POST_NOTIFICATIONS`.
 
+## Platform views
+
+`PlatformViewHandler` (iOS `templates/ios/PlatformView.swift`, Android `templates/android/java/PlatformView.kt`) keeps a factory per view type, registered at launch through `DriftPluginHost.registerPlatformView`; Drift registers its own (text input, switch, activity indicator, web view) the same way. On the `drift/platform_views` channel, `create` checks the type on the calling thread (the factory map is written only at launch) and fails with `view_type_not_found`; creating the view and every later operation on it (`invokeViewMethod`, `setVisible`, `setEnabled`, `dispose`) run asynchronously on the main thread in call order, so views and their dictionaries are main-thread only. A view's `handle` errors are logged. Events go to Go on the `drift/platform_views` event channel with `method` and `viewId`; the Go registry handles `onViewCreated` and routes everything else to the view's `HandleEvent`.
+
 ## Ejected projects
 
 Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files.

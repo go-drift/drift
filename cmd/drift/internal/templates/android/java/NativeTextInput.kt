@@ -4,6 +4,7 @@
  */
 package {{.PackageName}}
 
+import com.drift.runner.DriftPlatformView
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
@@ -23,9 +24,9 @@ import android.widget.FrameLayout
  */
 class NativeTextInputContainer(
     context: Context,
-    override val viewId: Int,
+    val viewId: Int,
     params: Map<String, Any?>
-) : PlatformViewContainer {
+) : DriftPlatformView {
 
     override val view: View
     private val editText: EditText
@@ -94,6 +95,28 @@ class NativeTextInputContainer(
 
         // Apply initial text if provided
         (params["text"] as? String)?.let { setText(it) }
+    }
+
+    override fun handle(method: String, args: Map<String, Any?>) {
+        when (method) {
+            "setText" -> setText(args["text"] as? String ?: "")
+            "setSelection" -> setSelection(
+                (args["selectionBase"] as? Number)?.toInt() ?: 0,
+                (args["selectionExtent"] as? Number)?.toInt() ?: 0,
+            )
+            "setValue" -> {
+                val text = args["text"] as? String ?: ""
+                setValue(
+                    text,
+                    (args["selectionBase"] as? Number)?.toInt() ?: text.length,
+                    (args["selectionExtent"] as? Number)?.toInt() ?: text.length,
+                )
+            }
+            "focus" -> focus()
+            "blur" -> blur()
+            "updateConfig" -> updateConfig(args)
+            else -> throw unknownViewMethod(method)
+        }
     }
 
     override fun dispose() {

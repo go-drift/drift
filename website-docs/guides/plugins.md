@@ -576,6 +576,7 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 | `sendEventError(channel, code, message)` / `sendEventDone(channel)` | Report a stream error or end |
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
 | `registerPermission(kind, permission)` | Provide a runtime permission kind (see [Providing permissions](#providing-permissions)) |
+| `registerPlatformView(type, factory)` | Provide a native view type to embed in widgets (see [Platform views](#platform-views)) |
 | `context` (Android only) | The application `Context` |
 
 Each method declares how it replies:
@@ -658,6 +659,28 @@ host.registerPermission("contacts", DriftRuntimePermission(Manifest.permission.R
 ```
 
 Drift requests only when a prompt can change the status, reports each result on `Listen`, and fails calls on a kind nobody registered with `platform.ErrPermissionNotRegistered`. On Android, a kind whose manifest permission is missing fails with `platform.ErrPermissionNotDeclared`. `Request` waits for the user, so it fails with `platform.ErrBlocksUIThread` on the UI thread.
+
+### Platform views
+
+A plugin can embed native views (a map, a video, an ad) in Drift's widget tree. Drift positions, clips and shows them each frame; the plugin provides the view and its Go side.
+
+Natively, register a view type with a factory. Drift calls the factory and the view on the main thread, in the order Go made the calls:
+
+```swift
+host.registerPlatformView("acme/map") { viewId, params, events in
+    MapView(params: params, events: events) // conforms to DriftPlatformView
+}
+```
+
+```kotlin
+host.registerPlatformView("acme/map") { context, viewId, params, events ->
+    MapView(context, params, events) // implements DriftPlatformView
+}
+```
+
+A `DriftPlatformView` has its `view`, `handle(method, args)` for calls from Go, `dispose()`, and (Android) `supportsRegionMask`: true for TextureView-backed views, which Drift can clip by a path when Drift UI overlaps them. Go does not wait for view methods, so `handle` reports failures by throwing (they are logged) and results as events: `events.send(method, data)`.
+
+In Go, implement `platform.PlatformView` (embed `platform.PlatformViewBase` for its ID and type), register a `platform.PlatformViewFactory` for the same type, and call the view with `GetPlatformViewRegistry().InvokeViewMethod`. Events arrive in the view's `HandleEvent(method, args)`; return `platform.ErrMethodNotFound` for one it does not know. A widget embeds the view by implementing `layout.PlatformViewOwner` and calling `ctx.EmbedPlatformView` while painting; [`plugins/media`](#media) is a complete example.
 
 ### The runtime half
 

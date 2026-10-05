@@ -82,4 +82,12 @@ interface DriftPluginHost {
      * permissions in the plugin's Build; registering a kind twice crashes.
      */
     fun registerPermission(kind: String, permission: DriftPermission)
+
+    /**
+     * Registers the platform view type [type], created by [factory]. Go
+     * creates views of it through a platform.PlatformViewFactory with the
+     * same type. Register each type once, from onRegister; registering a
+     * type twice crashes.
+     */
+    fun registerPlatformView(type: String, factory: DriftPlatformViewFactory)
 }

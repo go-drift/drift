@@ -18,9 +18,9 @@ func TestIOSPlatformView_OnViewCreatedSentAfterInterceptorAttach(t *testing.T) {
 		t.Fatal("expected host.insertSubview(interceptor, belowSubview: overlay) in ios/PlatformView.swift")
 	}
 
-	onCreatedIdx := strings.Index(src, `"method": "onViewCreated"`)
+	onCreatedIdx := strings.Index(src, `events.send("onViewCreated")`)
 	if onCreatedIdx == -1 {
-		t.Fatal(`expected "method": "onViewCreated" in ios/PlatformView.swift`)
+		t.Fatal(`expected events.send("onViewCreated") in ios/PlatformView.swift`)
 	}
 
 	if onCreatedIdx < attachIdx {

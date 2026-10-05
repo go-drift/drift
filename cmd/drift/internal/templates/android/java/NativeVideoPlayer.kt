@@ -4,6 +4,7 @@
  */
 package {{.PackageName}}
 
+import com.drift.runner.DriftPlatformView
 import android.content.Context
 import android.view.TextureView
 import android.view.View
@@ -27,9 +28,9 @@ import androidx.media3.ui.PlayerView
  */
 class NativeVideoPlayerContainer(
     context: Context,
-    override val viewId: Int,
+    val viewId: Int,
     params: Map<String, Any?>
-) : PlatformViewContainer {
+) : DriftPlatformView {
 
     override val view: View
     override val supportsRegionMask: Boolean get() = true
@@ -201,6 +202,21 @@ class NativeVideoPlayerContainer(
     private fun stopPositionUpdates() {
         positionRunnable?.let { playerView.removeCallbacks(it) }
         positionRunnable = null
+    }
+
+    override fun handle(method: String, args: Map<String, Any?>) {
+        when (method) {
+            "play" -> play()
+            "pause" -> pause()
+            "stop" -> stop()
+            "seekTo" -> seekTo((args["positionMs"] as? Number)?.toLong() ?: 0L)
+            "setVolume" -> setVolume((args["volume"] as? Number)?.toFloat() ?: 1.0f)
+            "setLooping" -> setLooping(args["looping"] as? Boolean ?: false)
+            "setPlaybackSpeed" -> setPlaybackSpeed((args["rate"] as? Number)?.toFloat() ?: 1.0f)
+            "setShowControls" -> setShowControls(args["show"] as? Boolean ?: true)
+            "load" -> (args["url"] as? String)?.let { load(it) }
+            else -> throw unknownViewMethod(method)
+        }
     }
 
     override fun dispose() {

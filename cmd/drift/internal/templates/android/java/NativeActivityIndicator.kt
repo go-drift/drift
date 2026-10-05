@@ -4,6 +4,7 @@
  */
 package {{.PackageName}}
 
+import com.drift.runner.DriftPlatformView
 import android.content.Context
 import android.content.res.ColorStateList
 import android.view.View
@@ -15,9 +16,9 @@ import android.widget.ProgressBar
  */
 class NativeActivityIndicatorContainer(
     context: Context,
-    override val viewId: Int,
+    val viewId: Int,
     params: Map<String, Any?>
-) : PlatformViewContainer {
+) : DriftPlatformView {
 
     override val view: View
     private val progressBar: ProgressBar
@@ -52,6 +53,14 @@ class NativeActivityIndicatorContainer(
         }
 
         view = progressBar
+    }
+
+    override fun handle(method: String, args: Map<String, Any?>) {
+        when (method) {
+            "setAnimating" -> setAnimating(args["animating"] as? Boolean ?: true)
+            "updateConfig" -> updateConfig(args)
+            else -> throw unknownViewMethod(method)
+        }
     }
 
     override fun dispose() {

@@ -1,12 +1,13 @@
 /// NativeSwitch.swift
 /// Provides native UISwitch embedded in Drift UI.
 
+import DriftPluginAPI
 import UIKit
 
 // MARK: - Native Switch Container
 
 /// Platform view container for native switch.
-class NativeSwitchContainer: NSObject, PlatformViewContainer {
+class NativeSwitchContainer: NSObject, DriftPlatformView {
     let viewId: Int
     let view: UIView
     private let switchControl: UISwitch
@@ -61,6 +62,19 @@ class NativeSwitchContainer: NSObject, PlatformViewContainer {
         }
         if let thumbTint = params["thumbTintColor"] as? UInt32 {
             switchControl.thumbTintColor = UIColor(argb: thumbTint)
+        }
+    }
+}
+
+extension NativeSwitchContainer {
+    func handle(_ method: String, _ args: [String: Any]) throws {
+        switch method {
+        case "setValue":
+            if let value = args["value"] as? Bool {
+                setValue(value)
+            }
+        case "updateConfig": updateConfig(args)
+        default: throw unknownViewMethod(method)
         }
     }
 }

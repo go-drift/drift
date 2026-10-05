@@ -1,6 +1,7 @@
 /// NativeVideoPlayer.swift
 /// Provides native AVPlayer video playback embedded in Drift UI.
 
+import DriftPluginAPI
 import UIKit
 import AVKit
 
@@ -8,7 +9,7 @@ import AVKit
 
 /// Platform view container for native video player using AVPlayerViewController.
 /// Provides full native controls (play/pause, seek, AirPlay, PiP, playback speed).
-class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
+class NativeVideoPlayerContainer: NSObject, DriftPlatformView {
     let viewId: Int
     let view: UIView
     private let playerVC: AVPlayerViewController
@@ -280,5 +281,40 @@ class NativeVideoPlayerContainer: NSObject, PlatformViewContainer {
     func load(_ urlString: String) {
         guard let url = URL(string: urlString) else { return }
         loadItem(url: url)
+    }
+}
+
+extension NativeVideoPlayerContainer {
+    func handle(_ method: String, _ args: [String: Any]) throws {
+        switch method {
+        case "play": play()
+        case "pause": pause()
+        case "stop": stop()
+        case "seekTo":
+            if let positionMs = (args["positionMs"] as? NSNumber)?.int64Value {
+                seekTo(positionMs: positionMs)
+            }
+        case "setVolume":
+            if let volume = (args["volume"] as? NSNumber)?.floatValue {
+                setVolume(volume)
+            }
+        case "setLooping":
+            if let looping = args["looping"] as? Bool {
+                setLooping(looping)
+            }
+        case "setPlaybackSpeed":
+            if let rate = (args["rate"] as? NSNumber)?.floatValue {
+                setPlaybackSpeed(rate)
+            }
+        case "setShowControls":
+            if let show = args["show"] as? Bool {
+                setShowControls(show)
+            }
+        case "load":
+            if let url = args["url"] as? String {
+                load(url)
+            }
+        default: throw unknownViewMethod(method)
+        }
     }
 }
