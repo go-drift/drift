@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the branch is ready to merge once the new method-call transport has run on the iOS Simulator (see Second review).** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` (see Phase 5 status), pending its iOS Simulator runs. Open work is tracked in [Known follow-ups](#known-follow-ups), split into what must land before the first release that ships plugins and what can wait. Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the branch is ready to merge once the new method-call transport has run on the iOS Simulator (see Second review).** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` (see Phase 5 status), pending its iOS Simulator runs. Then follow the [Merge sequence](#merge-sequence) and start [Phase 6](#phase-6-release-readiness) (release readiness), which gates the first release that ships plugins. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -321,6 +321,50 @@ Already done in phase 1: the overlay installs in `attach`/`onAttach` (findings 1
 
 What the migration built in core: the permission registry (plugins register kinds), the platform-view plugin API, Android process-level registration (`DriftApplication`) with `isNewLaunch`, the `add_receiver` op and `add_permission` `max_sdk`, and `launchForResult` for Android activity results. Waiting calls are `asyncMethod`s throughout, so the UI-thread guard covers them and the request-ID / result-event plumbing is gone. The template guard test keeps the templates at `INTERNET` and `ACCESS_NETWORK_STATE`.
 
+### Merge sequence
+
+1. On the Mac: run `examples/plugins/hello` and `examples/firebase-demo` on the iOS Simulator from `feat/plugins` (the call-ID transport, see Second review), and the Phase 5 plugins from `feat/core-plugins` (see Phase 5 status).
+2. Merge `feat/plugins` into `master`.
+3. Rebase `feat/core-plugins` onto `master`, rerun `go vet`/`go test` in the root and every `plugins/*` module, and merge.
+4. Start Phase 6.
+
+### Phase 6: release readiness
+
+Starts after both branches merge (see [Merge sequence](#merge-sequence)). Phases 1 to 5 make plugins work; Phase 6 makes them shippable: installable outside this repo, safe in ejected projects, and free of known iOS lifecycle bugs. When it is done, the first Drift release that ships plugins can be tagged. Each item below came from the second review (2026-10-02); file references are from `c62b3cb` and may drift.
+
+**Order:** distribution first (the only hard blocker: without it nobody outside the repo can install a plugin), then ejected projects (data loss), then iOS, then author docs (which describe the distribution workflow, so they come last).
+
+#### 6.1 Distribution and versioning (hard blocker)
+
+- **Plugin modules require `github.com/go-drift/drift v0.0.0` with `replace => ../..`** (`plugins/*/go.mod`), and `scripts/release.sh` tags only the root. Plugins declare no minimum drift version and nothing checks skew between a plugin's native code and the CLI's `DriftPluginAPI` templates (Unresolved question 4).
+- **Do:** tag each plugin module as `plugins/<name>/vX.Y.Z` from the release script; require a real drift version in each plugin's `go.mod` (keep the `replace` for in-repo development through a `go.work` instead); have the bridge report the `pkg/plugin` version it was built with and the CLI fail with a clear message on a mismatch that the `DriftPluginAPI` templates cannot serve. Decide whether plugins version in lockstep with drift (simplest) or independently.
+- **Done when:** an app outside the repo can `go get github.com/go-drift/drift/plugins/splash@<tag>` with a released drift and build on Android and xtool; a deliberately mismatched plugin fails the build with a message naming both versions.
+
+#### 6.2 Ejected projects
+
+- **A plugin upgrade looks like a removal.** Lock keys include target content (for example the Gradle coordinate with its version), so a version bump fails the next ejected build once with "plugins removed ... left these edits" and leaves the old line next to the new one. Key the lock on the target without content.
+- **The lock can delete a file the same build just wrote.** If a CLI upgrade renames an op type or changes its targets, the old key disappears while the hash still matches, so `SyncEjectedLock` deletes the path after `Apply` wrote it (reproduced with `app/google-services.json`; the next build recovers). Never delete a path a current op owns.
+- **Plugins can overwrite user files.** `Apply` writes owned files unconditionally and `WriteXML` only reserves Drift's `plugin_*` values files, so a plugin can replace `drawable/launch_background.xml`, `values/styles.xml`, a user's image set or a Kotlin file in `com.drift.runner`; the lock then records Drift's hash and a later removal deletes it. In ejected mode, refuse to overwrite an existing file that is not in the previous lock and differs; reserve template resource paths and the `com.drift.runner` package.
+- **The lock file is written non-atomically** (`lock.go`), so a crash mid-write fails every later build; paths read from it are not confined to the project.
+- **Done when:** a test ejects a project, upgrades a plugin version (lock unchanged, no "removed" error), renames an op type between two runs (nothing deleted), plants a user file at a plugin's path (build refuses with the path named), and interrupts a lock write (next build recovers).
+
+#### 6.3 iOS lifecycle
+
+**Splash**
+- **Timeout counts from process launch.** `DriftSplashPlugin.swift` arms the timer in `register` (`didFinishLaunching`). Firebase adds the `remote-notification` mode, so a silent push can launch the process in the background; if the user opens the app after `max_duration_ms`, Preserve is ignored and the splash hides at the first content frame. Start the timer on first attach.
+- **A missed `first_frame` leaves the splash up forever** (both platforms). Dismissal requires `contentShown` and the timeout never overrides it; `first_frame` is one-shot and needs the content frame to pass every guard (`nextDrawable`, `renderSync`; `slotIndex >= 0` on Android). Re-arm on a later frame, or add a hard ceiling that ignores `contentShown`.
+
+**iOS detach and leaks**
+- **Detach never runs on scene disconnect.** `CADisplayLink(target: self)` (`DriftViewController.swift`) holds the view controller strongly until `viewDidDisappear`, `SceneDelegate` has no `sceneDidDisconnect`, and detach depends on `deinit`. Plugins stay attached to a dead controller and the controller, Metal view and display link leak, even when no plugin retains the binding (`DriftViewBinding` also holds the controller strongly). Detach explicitly in `sceneDidDisconnect` and give the display link a weak proxy target.
+- **Done when:** on the Simulator, a background launch followed by opening the app after `max_duration_ms` still honours Preserve; a forced `first_frame` miss dismisses at the ceiling; disconnecting the scene (App Switcher, or multiple windows on iPad) calls `detach` and Instruments shows no leaked `DriftViewController`.
+
+#### 6.4 Author experience
+
+- **No local-development workflow in the guide.** It does not explain the app `go.mod` `replace` needed to try an unpublished plugin, and `examples/plugins/hello` uses a repo-relative replace plus `v0.0.0`, so copying it outside the repo breaks.
+- **No example app consumes `hello`**, so an author cannot run it without writing an app first.
+- **No iOS open-URL or user-activity hook.** Android plugins claim intents (`onNewIntent`), start Activities for results (`launchForResult`) and provide permissions (`registerPermission`), all documented since Phase 5. iOS lost its URL and user-activity hooks in `329c431`, so a deep-link or OAuth plugin can only be written for Android. Add them to `DriftPlugin` (first claim wins, unclaimed URLs reach `DeepLinkHandler`), routed from `SceneDelegate` and the xtool `DriftApp`.
+- **Done when:** following the guide from an empty directory produces a plugin, an app that uses it, and a run on the emulator and xtool, without reading Drift's source.
+
 ## Verification matrix (merge gate)
 
 Cells give status. "Accepted" cells were not run on hardware; they rest on the emulator and Simulator runs (Phase 4 decisions).
@@ -336,34 +380,13 @@ Cells give status. "Accepted" cells were not run on hardware; they rest on the e
 
 ## Known follow-ups
 
-Not merge blocking. File references are from `c62b3cb`.
+Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-readiness). File references are from `c62b3cb`.
 
-### Before the first release that ships plugins
-
-**Splash (iOS)**
-- **Timeout counts from process launch.** `DriftSplashPlugin.swift` arms the timer in `register` (`didFinishLaunching`). Firebase adds the `remote-notification` mode, so a silent push can launch the process in the background; if the user opens the app after `max_duration_ms`, Preserve is ignored and the splash hides at the first content frame. Start the timer on first attach.
-- **A missed `first_frame` leaves the splash up forever** (both platforms). Dismissal requires `contentShown` and the timeout never overrides it; `first_frame` is one-shot and needs the content frame to pass every guard (`nextDrawable`, `renderSync`; `slotIndex >= 0` on Android). Re-arm on a later frame, or add a hard ceiling that ignores `contentShown`.
-
-**iOS detach and leaks**
-- **Detach never runs on scene disconnect.** `CADisplayLink(target: self)` (`DriftViewController.swift`) holds the view controller strongly until `viewDidDisappear`, `SceneDelegate` has no `sceneDidDisconnect`, and detach depends on `deinit`. Plugins stay attached to a dead controller and the controller, Metal view and display link leak, even when no plugin retains the binding (`DriftViewBinding` also holds the controller strongly). Detach explicitly in `sceneDidDisconnect` and give the display link a weak proxy target.
-
-**Ejected projects (`.drift/plugins.lock.json`, `cmd/drift/internal/plugin/lock.go`)**
-- **A plugin upgrade looks like a removal.** Lock keys include target content (for example the Gradle coordinate with its version), so a version bump fails the next ejected build once with "plugins removed ... left these edits" and leaves the old line next to the new one. Key the lock on the target without content.
-- **The lock can delete a file the same build just wrote.** If a CLI upgrade renames an op type or changes its targets, the old key disappears while the hash still matches, so `SyncEjectedLock` deletes the path after `Apply` wrote it (reproduced with `app/google-services.json`; the next build recovers). Never delete a path a current op owns.
-- **Plugins can overwrite user files.** `Apply` writes owned files unconditionally and `WriteXML` only reserves Drift's `plugin_*` values files, so a plugin can replace `drawable/launch_background.xml`, `values/styles.xml`, a user's image set or a Kotlin file in `com.drift.runner`; the lock then records Drift's hash and a later removal deletes it. In ejected mode, refuse to overwrite an existing file that is not in the previous lock and differs; reserve template resource paths and the `com.drift.runner` package.
-- **The lock file is written non-atomically** (`lock.go`), so a crash mid-write fails every later build; paths read from it are not confined to the project.
-
-**Distribution and versioning**
-- **Plugin modules require `github.com/go-drift/drift v0.0.0` with `replace => ../..`** (`plugins/*/go.mod`), and `scripts/release.sh` tags only the root. Plugins declare no minimum drift version and nothing checks skew between a plugin's native code and the CLI's `DriftPluginAPI` templates (Unresolved question 4). Tag `plugins/<name>/vX`, require a real drift version, and have the bridge report its `pkg/plugin` version so the CLI fails on skew.
-
-**Author experience**
-- **No local-development workflow in the guide.** It does not explain the app `go.mod` `replace` needed to try an unpublished plugin, and `examples/plugins/hello` uses a repo-relative replace plus `v0.0.0`, so copying it outside the repo breaks.
-- **No example app consumes `hello`**, so an author cannot run it without writing an app first.
-- **Missing hooks, undocumented:** Android activity-result and permission-result listeners; iOS open-URL and user-activity hooks (deleted in `329c431`), so a deep-link or OAuth plugin can only be written for Android.
-
-### Later
+### Backlog (after Phase 6)
 
 **After Phase 5**
+- **Per-plugin Gradle modules on Android.** Plugin Kotlin compiles into the app module (the v1 decision), so `internal` protects nothing, a plugin can write into `com.drift.runner`, and there is no manifest merge (each component needs an op). One Gradle library module per plugin would give scoping and manifest merge, mirroring the per-plugin SwiftPM targets on iOS. Do it if loose sources cause a real conflict.
+- **Asset catalogs on xtool.** If xtool#219 (AssetKit) merges, follow the `FUTURE(xtool#219)` markers: image sets and the app icon move into one Drift-owned `Assets.xcassets` listed under `assetCatalogs:`, which also unlocks splash dark mode on xtool.
 - **Background tasks plugin.** Deleted from core in Phase 5: it never ran app code. Go starts only with a view (`SkiaHostView.initEngine`, `DriftRenderer.init`), the Android worker reported completion at once and iOS after a hard-coded second, iOS registered `BGTaskScheduler` handlers after launch, and events went to a live channel nobody listened to. A plugin needs a headless Go start on both platforms (OnInit without a view), a way for Go to hold the task until it completes within the OS budget, and launch-time `BGTaskScheduler` registration (the plugin `register(host:)` hook runs at the right moment). Declares `fetch`/`processing` and `BGTaskSchedulerPermittedIdentifiers` (`ctx.AppID()` prefix) through `append_array_item`, and WorkManager on Android.
 - **Android 14 partial photo access.** "Allow limited access" grants `READ_MEDIA_VISUAL_USER_SELECTED`, which the permissions plugin neither declares nor reads, so `permissions.Photos` reads denied; declare it and map it to `PermissionLimited`.
 - **`androidx.security:security-crypto` is a deprecated alpha.** The secure storage plugin still encrypts with `EncryptedSharedPreferences`; move to the Android Keystore directly (AES-GCM keys, optionally with a biometric-bound `CryptoObject`, which would make Android's protection cryptographic like iOS's).
@@ -412,4 +435,4 @@ Not merge blocking. File references are from `c62b3cb`.
 1. ~~Per-plugin SwiftPM targets / Gradle modules, or loose sources?~~ iOS: per-plugin SwiftPM targets (shipped). Android: loose sources for v1.
 2. ~~Do local notifications stay core until a `notifications` plugin exists, or move with push?~~ Stay core until Phase 5 (see Phase 3 decisions).
 3. ~~Keep the xcodeproj/xtool dual path, or declare some plugins xcodeproj-only?~~ Dual path; no plugin is xcodeproj-only (Phase 4 decisions).
-4. Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew (today `APIVersion` stays `1`)?
+4. Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew (today `APIVersion` stays `1`)? Answer in Phase 6.1, together with lockstep vs independent plugin versions.
