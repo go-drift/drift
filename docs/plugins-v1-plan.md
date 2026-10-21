@@ -160,6 +160,16 @@ Branch `feat/core-plugins`, from `feat/plugins` (`83a177b`; rebase onto `master`
 
 **Verified:** step 1 on the API 36 emulator (approximate reads `limited`, upgrade to precise, two denials read `permanently_denied`, notification grant) and `drift build xtool`; step 2 on the emulator (denied before grant, fix, update stream with `geo fix`, Always through Settings), merged APK manifest, `drift build xtool` (Info.plist carries only the plugin's strings).
 
+**iOS Simulator** (2026-10-21, `8b8e0ed`, Xcode 26.5, iPhone 17 / iOS 26.5, `drift run ios`): every Phase 5 feature.
+- Location: the when-in-use prompt carries the plugin's string, `granted`, current location, the update stream follows `simctl location set`, Always upgrades.
+- Permissions: contacts denied reads `permanently_denied`, calendar (iOS 17 full-access prompt) and microphone `granted`, photos "Limit Access" reads `limited`.
+- Notifications: permission, foreground banner and `Deliveries()`, banner tap reaches `Opens()`, and a tap on a notification delivered to a killed app is queued until the page listens.
+- Image picker: gallery pick (3000x2002); the camera cancels cleanly. The Simulator's camera previews but cannot capture.
+- Secure storage: save and get, `face_id` reported, a biometric save without enrollment fails as unavailable. The keychain does not enforce `.biometryCurrentSet` on the Simulator (no prompt, item readable after unenrolling), so the prompt needs a device run.
+- Platform views: WebView loads and reports pages, native switch both ways, HLS video plays, seeks and hides controls; audio plays, seeks, stops and plays again after re-entering the page.
+- Storage: save (share sheet, 61 bytes), pick and read back 61 bytes, folder picker cancel.
+- Date and time pickers: picked day round-trips exactly, reopen preselects it, tapping outside cancels, picked time returns.
+
 ## Review findings driving this plan
 
 These come from a three-part branch review (design, pipeline correctness, native runtime). Items marked *(device)* are code-level findings that need confirming on hardware.
@@ -394,6 +404,9 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 - **Android persisted URI grants.** Picked documents and folders are content URIs whose grants end with the Activity; `takePersistableUriPermission` would let an app reopen them after a restart.
 - **Background audio.** The media plugin stops playback in the background on both platforms; background playback needs the iOS `audio` mode (through config) and an Android `MediaSessionService` with a media-playback foreground service.
 - **WebView as a plugin**, if an app ever needs to drop it: it adds no permission or dependency, so it stays core for now.
+- **Go's `time.Local` is UTC on iOS and Android**, so times formatted in Go show UTC (the location page's timestamp reads an hour behind under BST). Set `time.Local` from the platform's zone at startup.
+- **iOS `SaveFile` returns the temporary copy's path**, not where the user saved it (the share sheet does not report the destination). Use `UIDocumentPickerViewController(forExporting:)` to get the destination, or document that the path is not the saved file.
+- **Secure storage biometric prompt on a device.** Untested: the Simulator does not enforce keychain biometric access control.
 - **Optional hardware features.** Google Play infers required features from permissions (location permissions imply `android.hardware.location`; `RECORD_AUDIO` implies `android.hardware.microphone`), which hides the app from devices without them. A plugin cannot mark them optional: add an `android.manifest.add_uses_feature` op when one needs it.
 
 **Correctness, low severity**
