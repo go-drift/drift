@@ -80,9 +80,7 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 		return err
 	}
 
-	if err := exec.Command("open", "-a", "Simulator").Run(); err != nil {
-		return fmt.Errorf("failed to open Simulator app: %w", err)
-	}
+	showSimulator()
 
 	if _, err := os.Stat(filepath.Join(ws.IOSDir, "Runner.xcodeproj")); os.IsNotExist(err) {
 		return fmt.Errorf("xcode project not found in workspace - create one in %s", ws.IOSDir)
@@ -249,6 +247,25 @@ func bootSimulator(name string) error {
 		}
 	}
 	return nil
+}
+
+// simulatorViewerBundleIDs lists the apps that display booted simulators,
+// newest first: Xcode 27 replaced Simulator.app with Device Hub.
+var simulatorViewerBundleIDs = []string{
+	"com.apple.dt.Devices",      // Device Hub (Xcode 27+)
+	"com.apple.iphonesimulator", // Simulator.app (Xcode 26 and earlier)
+}
+
+// showSimulator brings the simulator window to the front. The window is a
+// convenience: simctl installs and launches without it, so failing to open
+// it is a warning, not an error.
+func showSimulator() {
+	for _, id := range simulatorViewerBundleIDs {
+		if exec.Command("open", "-b", id).Run() == nil {
+			return
+		}
+	}
+	fmt.Println("  Warning: could not open Device Hub or Simulator; continuing without a simulator window")
 }
 
 // xcodebuildForSimulator runs xcodebuild targeting the named iOS Simulator.
