@@ -281,13 +281,23 @@ go func() {
     drift.Dispatch(func() { showOnMap(fix) })
 }()
 
-// A stream of updates while StartUpdates is in effect.
-unsubscribe := location.Updates().Listen(platform.StreamHandler[location.Update]{OnEvent: func(u location.Update) {
-    drift.Dispatch(func() { moveMarker(u) })
-}})
-err := location.StartUpdates(location.UpdateOptions{
+// Updates run while the stream has listeners.
+err := location.SetUpdateOptions(location.UpdateOptions{
     Options: location.Options{HighAccuracy: true, DistanceFilter: 10},
 })
+unsubscribe := location.Updates().Listen(platform.StreamHandler[location.Update]{
+    OnEvent: func(u location.Update) {
+        drift.Dispatch(func() { moveMarker(u) })
+    },
+    // A failed start, or the user revoking the permission mid-stream.
+    OnError: func(err error) {
+        if errors.Is(err, location.ErrPermissionDenied) {
+            drift.Dispatch(showPermissionPrompt)
+        }
+    },
+})
+// Later: the last unsubscribe stops the platform's updates.
+unsubscribe()
 ```
 
 | Function | Waits | Notes |
@@ -296,24 +306,25 @@ err := location.StartUpdates(location.UpdateOptions{
 | `Current(ctx, opts)` | yes | A fresh fix |
 | `LastKnown(ctx)` | yes | The cached fix, or nil |
 | `IsEnabled(ctx)` | yes | Whether location services are on |
-| `StartUpdates(opts)`, `StopUpdates()` | no | Start or stop `Updates()`; a failed start leaves the running stream as it was |
+| `Updates()` | no | A stream of fixes. The platform's updates start with its first listener and stop when the last unsubscribes, so no listener leaves the GPS off and none is left waiting on a stopped stream. A failed start and a failure mid-stream reach `OnError` |
+| `SetUpdateOptions(opts)` | no | The stream's options, one setting for the app: a running stream changes at once, a later one starts with them. A failed call leaves the options and the stream as they were |
 
-Functions that wait must be called from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`. Failures match `location.ErrPermissionDenied`, `location.ErrDisabled` (location services off) and `location.ErrUnavailable` (no fix, Android) under `errors.Is`.
+Functions that wait must be called from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`. Failures match `location.ErrPermissionDenied`, `location.ErrDisabled` (location services off) and `location.ErrUnavailable` (no fix) under `errors.Is`.
 
 On iOS, Always can be requested only after WhenInUse is granted, and iOS asks at most once: once asked, Always reads `PermissionPermanentlyDenied` until the user grants it in Settings. On Android, Always is granted in Settings, where the request takes the user. Supported on iOS, xtool and Android (Google Play services).
 
 #### Background updates
 
-A stream started with `Background: true` keeps delivering updates to the app's Go code while the app is in the background:
+With `Background: true`, the stream keeps delivering updates to the app's Go code while the app is in the background:
 
 ```go
-err := location.StartUpdates(location.UpdateOptions{
+err := location.SetUpdateOptions(location.UpdateOptions{
     Options:    location.Options{HighAccuracy: true, DistanceFilter: 10},
     Background: true,
 })
 ```
 
-It fails instead of quietly running only in the foreground: with `location.ErrBackgroundNotConfigured` without the `always` config, with `location.ErrAlwaysDenied` until the user grants `Permission.Always`, and on Android with `location.ErrBackgroundStart` when the app is not in the foreground, since Android 12+ starts the foreground service only from there. Start it while the app is on screen, for example from the button that starts a run. Restarting the stream from the background with new options is fine; `StopUpdates` ends it.
+It fails instead of quietly running only in the foreground: `SetUpdateOptions` with `location.ErrBackgroundNotConfigured` without the `always` config and with `location.ErrAlwaysDenied` until the user grants `Permission.Always`; on Android, a background stream starting while the app is not in the foreground fails with `location.ErrBackgroundStart` (from `SetUpdateOptions` on a running stream, otherwise on the listener's `OnError`), since Android 12+ starts the foreground service only from there. Start it while the app is on screen, for example from the button that starts a run. Changing a running background stream's options from the background is fine; unsubscribing the last listener ends it.
 
 Updates reach Go, so they last only as long as the app's process:
 
@@ -800,7 +811,7 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 
 | Method | Purpose |
 |--------|---------|
-| `registerChannel(name) { ... }` | Handle method calls from Go, declaring each method in the block |
+| `registerChannel(name) { ... }` | Handle method calls from Go, declaring each method in the block, and optionally the event stream of the same name (`stream(onListen:onCancel:)`, see [The runtime half](#the-runtime-half)) |
 | `sendEvent(channel, data)` | Send an event to Go |
 | `sendEventError(channel, error)` / `sendEventDone(channel)` | Fail Go's stream with an error (a `DriftCallError`, or any error as `native_error`), which reaches its subscribers' `OnError`; or end it |
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
@@ -973,7 +984,30 @@ For events from native code, pick the channel kind by what a late subscriber sho
 | `platform.NewStickyEventChannel(name)` | The most recent event, then later ones | One-shot signals, such as `first_frame` |
 | `platform.NewQueuedEventChannel(name, capacity)` | Events sent while nobody listened, in order, once | Events that must each be handled, such as the tap that launched the app |
 
-Native code is not told when Go subscribes or cancels; it sends events whenever it has them. Start and stop native work with method calls, as the location plugin's `StartUpdates` and `StopUpdates` do.
+A native stream can run only while Go listens. Declare it on the channel of the event channel's name, and send its events on that name:
+
+```swift
+host.registerChannel("acme/compass") { channel in
+    channel.method("calibrate") { _ in ... }
+    channel.stream(onListen: { try startHeadingUpdates() }, onCancel: { stopHeadingUpdates() })
+}
+// in the heading callback:
+host.sendEvent("acme/compass", data: ["heading": heading])
+```
+
+```kotlin
+host.registerChannel("acme/compass") {
+    method("calibrate") { _ -> ... }
+    stream(onListen = { startHeadingUpdates() }, onCancel = { stopHeadingUpdates() })
+}
+```
+
+```go
+var methods = platform.NewMethodChannel("acme/compass")
+var headings = platform.NewStream("acme/compass", platform.NewEventChannel("acme/compass"), parseHeading)
+```
+
+`onListen` runs when the Go event channel gains its first subscriber, `onCancel` when it loses its last, on the main thread and strictly alternating, including for subscriptions made during package init. An error `onListen` throws reaches the subscribers' `OnError`, and no `onCancel` follows. `sendEventDone` ends the stream and Go's subscriptions without `onCancel`. Channels without a declared stream send events whenever they have them, as before. Options the stream needs are a method of their own, as the location plugin's `SetUpdateOptions` is.
 
 Wrap a channel in `platform.NewStream(name, channel, parse)` to give apps typed events. Apps subscribe with `Listen(platform.StreamHandler[T]{OnEvent: ..., OnError: ...})`: `OnError` receives the errors the native side sends (`sendEventError`), matching the channel's `ErrorCodes`, such as a permission revoked mid-stream; without one, they are reported through Drift's error handling. An event the parser rejects is malformed native data: it is reported, never delivered. Handlers run off the UI thread, so update widgets inside `drift.Dispatch`.
 
@@ -1033,7 +1067,8 @@ func TestBuildShipsGreeting(t *testing.T) {
 Test the runtime half against a fake native side from `pkg/platform` (the hello plugin's `runtime/hello_test.go` shows the pattern):
 
 - `platform.SetNativeBridge(fake)` with a `platform.NativeBridge` implementation captures method calls and answers them through the `reply` callback, in place or later from another goroutine (as an async method would).
-- `platform.HandleEvent(channel, data)` delivers an event as native code would; encode `data` with `platform.DefaultCodec.Encode`.
+- `platform.HandleEvent(channel, data)` delivers an event as native code would; encode `data` with `platform.DefaultCodec.Encode`. `platform.HandleEventError(channel, err)` delivers a stream error.
+- The fake also sees Go's stream requests: a `listen` or `cancel` call on the `drift/streams` channel, with the event channel's name in `channel`, when an event channel gains its first subscriber or loses its last. Answer them like any call; tests can assert on them.
 - Call `platform.ResetForTest()` in `t.Cleanup` to clear subscriptions, sticky values and queues between tests.
 
 ### Publishing a plugin

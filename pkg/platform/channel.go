@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -107,6 +108,10 @@ func (s *Subscription) IsCanceled() bool {
 //     queued and delivered, in order, when a subscriber joins, for events
 //     that must each be handled once, such as a notification tap that
 //     launched the app before the app subscribed.
+//
+// Native is told when the channel gains its first subscriber and loses its
+// last, so a stream it declares (DriftChannel.stream) starts and stops with
+// Go's interest; see [streamsChannel].
 type EventChannel struct {
 	name          string
 	codec         MessageCodec
@@ -114,6 +119,14 @@ type EventChannel struct {
 	delivery      eventDelivery
 	subscriptions []*Subscription
 	mu            sync.Mutex
+
+	// native is false for an Emitter's channel, which native never
+	// addresses, so its subscriptions are not reported.
+	native bool
+	// generation numbers the listen and cancel requests sent to native,
+	// which applies only the newest: requests from different goroutines
+	// can reach native out of order. Protected by mu.
+	generation int64
 
 	// Sticky channels: the single replay slot. Protected by mu.
 	replayValid bool
@@ -173,6 +186,7 @@ func NewQueuedEventChannel(name string, capacity int) *EventChannel {
 func newEventChannel(name string, delivery eventDelivery, queueCap int) *EventChannel {
 	ch := &EventChannel{
 		name:     name,
+		native:   true,
 		codec:    DefaultCodec,
 		delivery: delivery,
 		queueCap: queueCap,
@@ -218,6 +232,11 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 
 	c.mu.Lock()
 	c.subscriptions = append(c.subscriptions, sub)
+	listen := c.native && len(c.subscriptions) == 1
+	var generation int64
+	if listen {
+		generation = c.nextGenerationLocked()
+	}
 	var replay any
 	hasReplay := c.delivery == deliverSticky && c.replayValid
 	if hasReplay {
@@ -228,6 +247,10 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 		c.draining = true
 	}
 	c.mu.Unlock()
+
+	if listen {
+		c.tellNative(streamListen, generation)
+	}
 
 	// Replay the most recent sticky event to this fresh subscriber before
 	// the live stream resumes. Delivered synchronously from Listen so the
@@ -245,16 +268,62 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 	return sub
 }
 
-// removeSubscription removes a subscription from the channel.
+// removeSubscription removes a subscription from the channel, telling
+// native when it was the last.
 func (c *EventChannel) removeSubscription(sub *Subscription) {
 	c.mu.Lock()
+	cancel := false
+	var generation int64
 	for i, s := range c.subscriptions {
 		if s == sub {
 			c.subscriptions = append(c.subscriptions[:i], c.subscriptions[i+1:]...)
+			if cancel = c.native && len(c.subscriptions) == 0; cancel {
+				generation = c.nextGenerationLocked()
+			}
 			break
 		}
 	}
 	c.mu.Unlock()
+	if cancel {
+		c.tellNative(streamCancel, generation)
+	}
+}
+
+// streamsChannel is the native channel Go tells, with streamListen and
+// streamCancel, when an event channel gains its first subscriber and loses
+// its last; native runs the stream handler declared on the channel of the
+// same name. Each request carries the channel and a generation, newest
+// wins. Native answers at once.
+const (
+	streamsChannel = "drift/streams"
+	streamListen   = "listen"
+	streamCancel   = "cancel"
+)
+
+// nextGenerationLocked numbers a request to native. Caller holds mu.
+func (c *EventChannel) nextGenerationLocked() int64 {
+	c.generation++
+	return c.generation
+}
+
+// tellNative sends a listen or cancel request for the channel, without
+// holding mu, so a caller on the UI thread, which native answers in place,
+// never waits on a lock a goroutine holds. Before native is connected the
+// request fails with ErrPlatformUnavailable; [HandleNativeConnected]
+// replays what is due then.
+func (c *EventChannel) tellNative(method string, generation int64) {
+	_, err := invokeNative(context.Background(), streamsChannel, method, map[string]any{
+		"channel":    c.name,
+		"generation": generation,
+	})
+	if err != nil && !errors.Is(err, ErrPlatformUnavailable) {
+		drifterrors.Report(&drifterrors.DriftError{
+			Op:      "platform.stream." + method,
+			Kind:    drifterrors.KindPlatform,
+			Channel: c.name,
+			Err:     err,
+		})
+	}
 }
 
 // dispatchEvent sends an event to all subscribers.
@@ -350,7 +419,9 @@ func (c *EventChannel) dispatchError(err error) {
 	}
 }
 
-// dispatchDone notifies all subscribers that the stream has ended.
+// dispatchDone notifies all subscribers that the stream has ended. Native
+// ended it, so no cancel is sent: native's stream bookkeeping resets on
+// sendEventDone, and the next subscriber starts it again.
 func (c *EventChannel) dispatchDone() {
 	c.mu.Lock()
 	subs := c.snapshotLocked()

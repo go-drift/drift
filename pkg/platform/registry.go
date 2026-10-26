@@ -166,6 +166,32 @@ func HandleMethodCall(channel, method string, argsData []byte) ([]byte, error) {
 	return DefaultCodec.Encode(result)
 }
 
+// HandleNativeConnected is called from the bridge once native has
+// registered its method handler. It tells native about every event channel
+// that already has subscribers (from package init, say), whose listen
+// requests failed while native was not connected.
+func HandleNativeConnected() {
+	registry.mu.RLock()
+	channels := make([]*EventChannel, 0, len(registry.eventChannels))
+	for _, ch := range registry.eventChannels {
+		channels = append(channels, ch)
+	}
+	registry.mu.RUnlock()
+
+	for _, ch := range channels {
+		ch.mu.Lock()
+		listening := ch.native && len(ch.subscriptions) > 0
+		var generation int64
+		if listening {
+			generation = ch.nextGenerationLocked()
+		}
+		ch.mu.Unlock()
+		if listening {
+			ch.tellNative(streamListen, generation)
+		}
+	}
+}
+
 // ErrChannelNotRegistered is returned when an event is received for an unregistered channel.
 var ErrChannelNotRegistered = fmt.Errorf("event channel not registered")
 

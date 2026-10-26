@@ -26,6 +26,9 @@ import kotlin.concurrent.thread
  *   (an SDK callback, a dialog). Go must call it from a goroutine: a call
  *   from the UI thread fails with `blocks_ui_thread` every time, before the
  *   handler runs, since the UI thread cannot wait for a reply that needs it.
+ *
+ * The channel's events ([DriftPluginHost.sendEvent] with its name) can start
+ * and stop with Go's interest: see [stream].
  */
 class DriftChannel internal constructor(private val name: String) {
     internal sealed interface Method {
@@ -33,7 +36,13 @@ class DriftChannel internal constructor(private val name: String) {
         class Async(val handler: (args: Any?, result: DriftResult) -> Unit) : Method
     }
 
+    /** The handlers [stream] declared. */
+    internal class Stream(val onListen: () -> Unit, val onCancel: () -> Unit)
+
     private val methods = HashMap<String, Method>()
+
+    internal var declaredStream: Stream? = null
+        private set
 
     // Set by the host once the declare block returns; the method map is
     // then read from Go threads and must not change.
@@ -55,6 +64,29 @@ class DriftChannel internal constructor(private val name: String) {
      */
     fun asyncMethod(method: String, handler: (args: Any?, result: DriftResult) -> Unit) {
         add(method, Method.Async(handler))
+    }
+
+    /**
+     * Declares the channel's event stream: [onListen] runs when Go's event
+     * channel of this name gains its first subscriber, [onCancel] when it
+     * loses its last, each on the main thread, alternating, starting with
+     * [onListen]. Start the native work (location updates, a sensor) in
+     * [onListen] and send its events with sendEvent; stop it in [onCancel].
+     *
+     * An exception [onListen] throws reaches Go's subscribers as a stream
+     * error (as sendEventError sends), and [onCancel] then does not run: the
+     * stream did not start. A stream Go subscribed to before the app started
+     * starts once the channel is registered. sendEventDone ends the stream
+     * without [onCancel]; Go's next subscriber starts it again.
+     */
+    fun stream(onListen: () -> Unit, onCancel: () -> Unit) {
+        if (sealed) {
+            driftCrash("drift: $name stream declared after registerChannel returned; declare it inside its block")
+        }
+        if (declaredStream != null) {
+            driftCrash("drift: $name stream declared twice")
+        }
+        declaredStream = Stream(onListen, onCancel)
     }
 
     private fun add(method: String, m: Method) {

@@ -31,6 +31,9 @@ type locationState struct {
 	whenInUseStatus *core.Signal[platform.PermissionResult]
 	alwaysStatus    *core.Signal[platform.PermissionResult]
 	unsubFuncs      []func()
+	// stopUpdates unsubscribes from location.Updates, which stops the
+	// platform's updates; nil while not streaming.
+	stopUpdates func()
 }
 
 func (s *locationState) InitState() {
@@ -73,19 +76,14 @@ func (s *locationState) InitState() {
 		drift.Dispatch(func() { s.alwaysStatus.Set(status) })
 	})
 
-	// Listen for location updates using Stream
-	updatesUnsub := location.Updates().Listen(platform.StreamHandler[location.Update]{OnEvent: func(update location.Update) {
-		drift.Dispatch(func() {
-			s.location.Set(&update)
-			s.statusText.Set("Location updated")
-		})
-	}})
-
-	s.unsubFuncs = []func(){whenInUseUnsub, alwaysUnsub, updatesUnsub}
+	s.unsubFuncs = []func(){whenInUseUnsub, alwaysUnsub}
 
 	s.OnDispose(func() {
 		for _, unsub := range s.unsubFuncs {
 			unsub()
+		}
+		if s.stopUpdates != nil {
+			s.stopUpdates()
 		}
 	})
 }
@@ -256,25 +254,37 @@ func (s *locationState) getCurrentLocation() {
 	}()
 }
 
+// toggleUpdates subscribes to location.Updates, which starts the
+// platform's updates, or unsubscribes, which stops them.
 func (s *locationState) toggleUpdates() {
-	if s.isStreaming.Value() {
-		err := location.StopUpdates()
-		if err != nil {
-			s.statusText.Set("Error stopping: " + err.Error())
-			return
-		}
+	if s.stopUpdates != nil {
+		s.stopUpdates()
+		s.stopUpdates = nil
 		s.isStreaming.Set(false)
 		s.statusText.Set("Location updates stopped")
-	} else {
-		err := location.StartUpdates(location.UpdateOptions{Options: location.Options{
-			HighAccuracy:   true,
-			DistanceFilter: 10, // 10 meters
-		}})
-		if err != nil {
-			s.statusText.Set("Error starting: " + err.Error())
-			return
-		}
-		s.isStreaming.Set(true)
-		s.statusText.Set("Location updates started")
+		return
 	}
+	err := location.SetUpdateOptions(location.UpdateOptions{Options: location.Options{
+		HighAccuracy:   true,
+		DistanceFilter: 10, // 10 meters
+	}})
+	if err != nil {
+		s.statusText.Set("Error starting: " + err.Error())
+		return
+	}
+	s.stopUpdates = location.Updates().Listen(platform.StreamHandler[location.Update]{
+		OnEvent: func(update location.Update) {
+			drift.Dispatch(func() {
+				s.location.Set(&update)
+				s.statusText.Set("Location updated")
+			})
+		},
+		// A failed start (no permission, services off) or a revoked
+		// permission.
+		OnError: func(err error) {
+			drift.Dispatch(func() { s.statusText.Set("Updates: " + err.Error()) })
+		},
+	})
+	s.isStreaming.Set(true)
+	s.statusText.Set("Location updates started")
 }

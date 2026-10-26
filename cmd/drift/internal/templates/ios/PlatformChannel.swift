@@ -212,6 +212,8 @@ final class PlatformChannelManager: DriftPluginHost {
 
     private var channels: [String: Channel] = [:]
     private let channelsLock = NSLock()
+    /// Go's interest in each event stream, by channel name.
+    private let streams = StreamLifecycle()
     private var eventObservers: [String: [UUID: (Any?) -> Void]] = [:]
     private let eventObserversLock = NSLock()
     private let codec = JsonCodec()
@@ -231,6 +233,34 @@ final class PlatformChannelManager: DriftPluginHost {
         declare(channel)
         channel.seal()
         add(name, .plugin(channel))
+        if channel.declaredStream != nil {
+            // Go may have subscribed already (package init). Applied after
+            // the registering plugin finishes, so its handlers see it set up.
+            DispatchQueue.main.async { self.applyStream(name) }
+        }
+    }
+
+    /// Starts or stops the stream channel declared, on the main thread, to
+    /// match Go's latest request.
+    private func applyStream(_ name: String) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        channelsLock.lock()
+        let registered = channels[name]
+        channelsLock.unlock()
+        guard case .plugin(let channel)? = registered, let stream = channel.declaredStream,
+              let start = streams.transition(name) else {
+            return
+        }
+        if start {
+            do {
+                try stream.onListen()
+            } catch {
+                streams.failedToStart(name)
+                sendEventError(name, error)
+            }
+        } else {
+            stream.onCancel()
+        }
     }
 
     private func add(_ name: String, _ channel: Channel) {
@@ -420,8 +450,10 @@ final class PlatformChannelManager: DriftPluginHost {
         }
     }
 
-    /// Notifies Go that an event stream has ended.
+    /// Notifies Go that an event stream has ended. Go's subscriptions end
+    /// with it, so the stream no longer runs.
     func sendEventDone(channel: String) {
+        streams.ended(channel)
         channel.withCString { channelPtr in
             DriftPlatformHandleEventDone(channelPtr)
         }
@@ -491,6 +523,23 @@ final class PlatformChannelManager: DriftPluginHost {
         // URL Launcher channel
         register(channel: "drift/url_launcher") { method, args in
             return URLLauncherHandler.handle(method: method, args: args)
+        }
+
+        // Go's first-subscriber and last-unsubscriber requests for event
+        // streams (pkg/platform streamsChannel)
+        register(channel: "drift/streams") { [self] method, args in
+            guard let dict = args as? [String: Any], let name = dict["channel"] as? String,
+                  let generation = (dict["generation"] as? NSNumber)?.int64Value else {
+                return (nil, DriftCallError.invalidArguments("drift/streams needs channel and generation"))
+            }
+            switch method {
+            case "listen", "cancel":
+                streams.request(name, listen: method == "listen", generation: generation)
+                DispatchQueue.main.async { self.applyStream(name) }
+                return (nil, nil)
+            default:
+                return (nil, unknownMethod("drift/streams", method))
+            }
         }
     }
 }
@@ -904,6 +953,63 @@ enum URLLauncherHandler {
         default:
             return (nil, unknownMethod("drift/url_launcher", method))
         }
+    }
+}
+
+// MARK: - Stream Lifecycle
+
+/// Go's interest in each event stream and whether its declared stream runs.
+/// Go numbers its requests, which can arrive out of order from different
+/// threads; the newest wins. Requests are recorded on the calling thread,
+/// transitions made on the main thread.
+final class StreamLifecycle {
+    private struct State {
+        var generation: Int64 = 0
+        /// Whether Go has subscribers, by its newest request.
+        var wanted = false
+        /// Whether the channel's onListen ran without a matching onCancel.
+        var running = false
+    }
+
+    private var states: [String: State] = [:]
+    private let lock = NSLock()
+
+    /// Records Go's request unless a newer one arrived first.
+    func request(_ name: String, listen: Bool, generation: Int64) {
+        lock.lock()
+        defer { lock.unlock() }
+        var state = states[name, default: State()]
+        guard generation > state.generation else { return }
+        state.generation = generation
+        state.wanted = listen
+        states[name] = state
+    }
+
+    /// The transition due for name, recorded as made: true to start, false
+    /// to stop, nil when the stream already matches Go's request.
+    func transition(_ name: String) -> Bool? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard var state = states[name], state.wanted != state.running else { return nil }
+        state.running = state.wanted
+        states[name] = state
+        return state.running
+    }
+
+    /// A start that threw: the stream does not run, so no stop is due.
+    func failedToStart(_ name: String) {
+        lock.lock()
+        states[name]?.running = false
+        lock.unlock()
+    }
+
+    /// The stream ended natively (sendEventDone), and Go's subscriptions
+    /// with it.
+    func ended(_ name: String) {
+        lock.lock()
+        states[name]?.running = false
+        states[name]?.wanted = false
+        lock.unlock()
     }
 }
 

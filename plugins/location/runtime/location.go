@@ -15,6 +15,8 @@
 // Permission requests and the methods taking a ctx wait for the platform,
 // so call them from a goroutine: from the UI thread they fail with
 // platform.ErrBlocksUIThread. Updates is a stream; Listen from anywhere.
+// The platform's updates run while it has listeners, with the options
+// SetUpdateOptions set.
 //
 // # Background updates
 //
@@ -35,7 +37,8 @@
 //     swipes it away from Recents. Updates stop when the process is killed
 //     (force stop, the Task Manager's Stop, low memory) and do not restart.
 //
-// StopUpdates ends the stream, the service and the indicator.
+// Unsubscribing the last listener ends the stream, the service and the
+// indicator.
 package runtime
 
 import (
@@ -48,16 +51,14 @@ import (
 	"github.com/go-drift/drift/pkg/platform"
 )
 
-// Wire channels. Must match the literals in the plugin's native sources
-// (plugin/ios/DriftLocationPlugin.swift, plugin/android/DriftLocationPlugin.kt).
-const (
-	channelName    = "drift/location"
-	updatesChannel = "drift/location/updates"
-)
+// channelName carries the methods and the update stream. Must match the
+// literal in the plugin's native sources (plugin/ios/DriftLocationPlugin.swift,
+// plugin/android/DriftLocationPlugin.kt).
+const channelName = "drift/location"
 
 var (
 	channel = platform.NewMethodChannel(channelName).WithErrors(errorCodes)
-	updates = platform.NewStream(updatesChannel, platform.NewEventChannel(updatesChannel).WithErrors(errorCodes), parseUpdate)
+	updates = platform.NewStream(channelName, platform.NewEventChannel(channelName).WithErrors(errorCodes), parseUpdate)
 )
 
 var (
@@ -157,7 +158,7 @@ func (o Options) args() map[string]any {
 	}
 }
 
-// UpdateOptions configures a stream of updates (StartUpdates).
+// UpdateOptions configures the stream of updates (SetUpdateOptions).
 type UpdateOptions struct {
 	Options
 	// Background keeps updates coming while the app is in the background
@@ -218,27 +219,34 @@ func IsEnabled(ctx context.Context) (bool, error) {
 	return enabled, nil
 }
 
-// StartUpdates starts streaming location updates to Updates, replacing any
-// running stream's options, including whether it runs in the background.
-// A failed start leaves the running stream as it was. Any goroutine may
-// call it.
-func StartUpdates(opts UpdateOptions) error {
-	if _, err := channel.Invoke(context.Background(), "startUpdates", opts.args()); err != nil {
-		return fmt.Errorf("location start updates: %w", err)
+// SetUpdateOptions sets the options of the update stream, Updates: a
+// running stream (one with listeners) changes at once, and the next one
+// starts with them. Until the first call the stream uses high accuracy, in
+// the foreground. It is one setting for the app, not per listener.
+//
+// A failed call leaves the options and the running stream as they were.
+// It fails with ErrBackgroundNotConfigured or ErrAlwaysDenied for
+// Background without the always: config or the Always permission. A
+// background stream must also start while the app is in the foreground
+// (Android): with ErrBackgroundStart here when the stream is running, and
+// on the Listen that starts it otherwise, through its OnError. Any
+// goroutine may call it.
+func SetUpdateOptions(opts UpdateOptions) error {
+	if _, err := channel.Invoke(context.Background(), "setUpdateOptions", opts.args()); err != nil {
+		return fmt.Errorf("location set update options: %w", err)
 	}
 	return nil
 }
 
-// StopUpdates stops the stream, background or not. Any goroutine may call
-// it.
-func StopUpdates() error {
-	if _, err := channel.Invoke(context.Background(), "stopUpdates", nil); err != nil {
-		return fmt.Errorf("location stop updates: %w", err)
-	}
-	return nil
-}
-
-// Updates streams locations while StartUpdates is in effect.
+// Updates streams locations. The platform's updates run while the stream
+// has listeners: the first Listen starts them, with the options
+// SetUpdateOptions set, and unsubscribing the last stops them, so a
+// listener left subscribed keeps the GPS on.
+//
+// A start that fails (no permission, ErrPermissionDenied; services off,
+// ErrDisabled; ErrBackgroundStart), and a running stream that fails, such
+// as the user revoking the permission (ErrPermissionDenied), reach the
+// listeners' OnError; unsubscribe and listen again to retry.
 func Updates() *platform.Stream[Update] {
 	return updates
 }

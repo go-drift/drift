@@ -37,6 +37,17 @@ func (f *fakeNative) InvokeMethod(channel, method string, args []byte, reply fun
 	reply(platform.DefaultCodec.Encode(f.replies[method]))
 }
 
+// count returns how many times channel.method was called.
+func (f *fakeNative) count(call string) int {
+	n := 0
+	for _, c := range f.calls {
+		if c == call {
+			n++
+		}
+	}
+	return n
+}
+
 func useNative(t *testing.T, f *fakeNative) {
 	t.Helper()
 	platform.SetNativeBridge(f)
@@ -118,56 +129,78 @@ func TestAlwaysNamesMissingConfig(t *testing.T) {
 	}
 }
 
+// The first listener starts the platform's updates and the last stops
+// them; updates and stream errors reach the listener.
 func TestUpdatesStream(t *testing.T) {
-	useNative(t, &fakeNative{})
-	got := make(chan Update, 1)
-	unsubscribe := Updates().Listen(platform.StreamHandler[Update]{OnEvent: func(u Update) { got <- u }})
-	defer unsubscribe()
+	native := &fakeNative{}
+	useNative(t, native)
+	var updates []Update
+	var failures []error
+	unsubscribe := Updates().Listen(platform.StreamHandler[Update]{
+		OnEvent: func(u Update) { updates = append(updates, u) },
+		OnError: func(err error) { failures = append(failures, err) },
+	})
+	second := Updates().Listen(platform.StreamHandler[Update]{})
+	if got := native.count("drift/streams.listen"); got != 1 {
+		t.Errorf("listen sent %d times, want once for two listeners", got)
+	}
+	if args, _ := native.args["listen"].(map[string]any); args["channel"] != channelName {
+		t.Errorf("listen args = %v, want channel %s", args, channelName)
+	}
+
 	data, err := platform.DefaultCodec.Encode(fix)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := platform.HandleEvent(updatesChannel, data); err != nil {
+	if err := platform.HandleEvent(channelName, data); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case u := <-got:
-		if u.Latitude != 51.5 {
-			t.Errorf("update = %+v", u)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("no update delivered")
+	if err := platform.HandleEventError(channelName, platform.NewChannelError("permission_denied", "location permission revoked")); err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 1 || updates[0].Latitude != 51.5 {
+		t.Errorf("updates = %+v", updates)
+	}
+	if len(failures) != 1 || !errors.Is(failures[0], ErrPermissionDenied) {
+		t.Errorf("failures = %v, want ErrPermissionDenied", failures)
+	}
+
+	second()
+	unsubscribe()
+	if got := native.count("drift/streams.cancel"); got != 1 {
+		t.Errorf("cancel sent %d times, want once, after the last listener", got)
 	}
 }
 
 // The stream's options reach the native side, Background always stated:
-// restarting a background stream without it ends its background use.
-func TestStartUpdatesSendsOptions(t *testing.T) {
+// changing a background stream's options without it ends its background
+// use.
+func TestSetUpdateOptionsSendsOptions(t *testing.T) {
 	for _, background := range []bool{false, true} {
 		native := &fakeNative{}
 		useNative(t, native)
 		opts := UpdateOptions{Options: Options{HighAccuracy: true, DistanceFilter: 10}, Background: background}
-		if err := StartUpdates(opts); err != nil {
+		if err := SetUpdateOptions(opts); err != nil {
 			t.Fatal(err)
 		}
-		args, _ := native.args["startUpdates"].(map[string]any)
+		args, _ := native.args["setUpdateOptions"].(map[string]any)
 		if args["background"] != background || args["highAccuracy"] != true || args["distanceFilter"] != 10.0 {
-			t.Errorf("background=%v: startUpdates args = %v", background, args)
+			t.Errorf("background=%v: setUpdateOptions args = %v", background, args)
 		}
 	}
 }
 
-// A background stream fails, rather than silently running only in the
+// Background options fail, rather than silently running only in the
 // foreground, without the always: config, without Always, or (Android)
-// when started from the background.
-func TestStartUpdatesBackgroundErrors(t *testing.T) {
+// when the running stream cannot switch from the background.
+func TestSetUpdateOptionsBackgroundErrors(t *testing.T) {
 	for code, want := range map[string]error{
 		"background_not_configured": ErrBackgroundNotConfigured,
 		"always_denied":             ErrAlwaysDenied,
 		"background_start":          ErrBackgroundStart,
 	} {
-		useNative(t, &fakeNative{errs: map[string]error{"startUpdates": platform.NewChannelError(code, "native says no")}})
-		if err := StartUpdates(UpdateOptions{Background: true}); !errors.Is(err, want) {
+		useNative(t, &fakeNative{errs: map[string]error{"setUpdateOptions": platform.NewChannelError(code, "native says no")}})
+		if err := SetUpdateOptions(UpdateOptions{Background: true}); !errors.Is(err, want) {
 			t.Errorf("%s: err = %v, want %v", code, err, want)
 		}
 	}

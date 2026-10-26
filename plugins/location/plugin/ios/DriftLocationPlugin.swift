@@ -2,8 +2,8 @@
 ///
 /// The location plugin's native half on iOS, on the main thread: one
 /// CLLocationManager answers one-shot requests and another streams updates
-/// to Go on `drift/location/updates`, in the background too when the
-/// stream asks for it. Registers the `location` permission, and
+/// to Go on `drift/location` while Go listens, in the background too when
+/// the options (`setUpdateOptions`) ask for it. Registers the `location` permission, and
 /// `location_always` when the build added its usage string.
 ///
 /// Errors Go maps to its sentinels (runtime package): `permission_denied`,
@@ -19,7 +19,6 @@ import UIKit
 /// creates it from outside this module (DriftPlugin_location).
 public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManagerDelegate {
     private static let channel = "drift/location"
-    private static let updatesChannel = "drift/location/updates"
 
     /// Whether the build's always: config added the Always usage string and
     /// the location background mode. Background updates need both, and
@@ -36,6 +35,10 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
     private let updates = CLLocationManager()
     /// Requests waiting for the one-shot manager's next fix.
     private var pendingCurrent: [DriftResult] = []
+    /// The update stream's options, kept across starts.
+    private var options = UpdateOptions()
+    /// Whether the update stream runs (Go listens and it started).
+    private var streaming = false
 
     public override init() {
         super.init()
@@ -75,34 +78,50 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
                     result.success(["enabled": CLLocationManager.locationServicesEnabled()])
                 }
             }
-            channel.method("startUpdates") { [self] args in
-                try requireAuthorized()
-                let args = args as? [String: Any] ?? [:]
-                let background = args["background"] as? Bool ?? false
-                if background {
+            channel.method("setUpdateOptions") { [self] args in
+                let next = UpdateOptions(args as? [String: Any] ?? [:])
+                if next.background {
                     try requireBackground()
                 }
-                let highAccuracy = args["highAccuracy"] as? Bool ?? true
-                updates.desiredAccuracy = highAccuracy ? kCLLocationAccuracyBest : kCLLocationAccuracyHundredMeters
-                updates.distanceFilter = (args["distanceFilter"] as? Double).flatMap { $0 > 0 ? $0 : nil }
-                    ?? kCLDistanceFilterNone
-                if Self.backgroundConfigured {
-                    updates.allowsBackgroundLocationUpdates = background
+                if streaming {
+                    try requireAuthorized()
+                    apply(next)
                 }
-                // The status bar shows background use, as Android's
-                // notification does. A paused stream does not resume by
-                // itself, and an app in the background gets no chance to
-                // restart it, so a background stream never pauses.
-                updates.showsBackgroundLocationIndicator = background
-                updates.pausesLocationUpdatesAutomatically = !background
-                updates.startUpdatingLocation()
+                options = next
                 return nil
             }
-            channel.method("stopUpdates") { [self] _ in
-                updates.stopUpdatingLocation()
-                return nil
-            }
+            channel.stream(
+                onListen: { [self] in
+                    try requireAuthorized()
+                    if options.background {
+                        try requireBackground()
+                    }
+                    apply(options)
+                    updates.startUpdatingLocation()
+                    streaming = true
+                },
+                onCancel: { [self] in
+                    updates.stopUpdatingLocation()
+                    streaming = false
+                }
+            )
         }
+    }
+
+    /// Configures the update manager for opts; Core Location applies it to
+    /// a running stream at once.
+    private func apply(_ opts: UpdateOptions) {
+        updates.desiredAccuracy = opts.highAccuracy ? kCLLocationAccuracyBest : kCLLocationAccuracyHundredMeters
+        updates.distanceFilter = opts.distanceFilter > 0 ? opts.distanceFilter : kCLDistanceFilterNone
+        if Self.backgroundConfigured {
+            updates.allowsBackgroundLocationUpdates = opts.background
+        }
+        // The status bar shows background use, as Android's notification
+        // does. A paused stream does not resume by itself, and an app in
+        // the background gets no chance to restart it, so a background
+        // stream never pauses.
+        updates.showsBackgroundLocationIndicator = opts.background
+        updates.pausesLocationUpdatesAutomatically = !opts.background
     }
 
     /// Runs body on the main thread once location services are known to be
@@ -150,7 +169,7 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
         if manager === oneShot {
             finishCurrent { $0.success(Self.payload(location)) }
         } else {
-            host?.sendEvent(Self.updatesChannel, data: Self.payload(location))
+            host?.sendEvent(Self.channel, data: Self.payload(location))
         }
     }
 
@@ -173,9 +192,9 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             return
         case .denied?:
             // Access was revoked; Core Location stops the updates.
-            host?.sendEventError(Self.updatesChannel, DriftCallError("permission_denied", "location permission revoked"))
+            host?.sendEventError(Self.channel, DriftCallError("permission_denied", "location permission revoked"))
         default:
-            host?.sendEventError(Self.updatesChannel, error)
+            host?.sendEventError(Self.channel, error)
         }
     }
 
@@ -183,6 +202,23 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
         let waiting = pendingCurrent
         pendingCurrent.removeAll()
         waiting.forEach(reply)
+    }
+
+    // MARK: - Options
+
+    /// The update stream's options (the runtime package's UpdateOptions).
+    private struct UpdateOptions {
+        var highAccuracy = true
+        var distanceFilter: CLLocationDistance = 0
+        var background = false
+
+        init() {}
+
+        init(_ args: [String: Any]) {
+            highAccuracy = args["highAccuracy"] as? Bool ?? true
+            distanceFilter = args["distanceFilter"] as? Double ?? 0
+            background = args["background"] as? Bool ?? false
+        }
     }
 
     // MARK: - Payloads

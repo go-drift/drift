@@ -3,7 +3,8 @@
  *
  * The location plugin's native half on Android, on the main thread, over
  * Google Play services' fused location provider: one-shot fixes, and
- * updates streamed to Go on `drift/location/updates`. A background stream
+ * updates streamed to Go on `drift/location` while Go listens, with the
+ * options `setUpdateOptions` set. A background stream
  * also runs DriftLocationService, a foreground service that keeps the
  * process alive and its updates unthrottled once the app leaves the
  * screen. Registers the `location` permission (fine and coarse; coarse
@@ -41,7 +42,10 @@ import com.google.android.gms.location.Priority
 class DriftLocationPlugin : DriftPlugin {
     private lateinit var host: DriftPluginHost
     private lateinit var client: FusedLocationProviderClient
+    /** The running update stream's callback, null when none runs. */
     private var updates: LocationCallback? = null
+    /** The update stream's options, kept across starts. */
+    private var options = UpdateOptions()
     /** Whether DriftLocationService runs, for a background stream. */
     private var serviceRunning = false
 
@@ -84,49 +88,58 @@ class DriftLocationPlugin : DriftPlugin {
             asyncMethod("isEnabled") { _, result ->
                 result.success(mapOf("enabled" to servicesEnabled(context)))
             }
-            method("startUpdates") { args ->
-                requireUsable(context)
-                val options = args as? Map<*, *> ?: emptyMap<String, Any>()
-                val background = options["background"] as? Boolean ?: false
-                // Checked and started before the running stream changes,
-                // so a failed start leaves it as it was.
-                if (background) {
-                    requireBackground(context)
-                    startService(context)
+            method("setUpdateOptions") { args ->
+                val next = UpdateOptions.parse(args as? Map<*, *> ?: emptyMap<String, Any>())
+                if (next.background) requireBackground(context)
+                if (updates != null) {
+                    requireUsable(context)
+                    start(context, next)
                 }
-                removeUpdates()
-                if (!background) stopService(context)
-                val highAccuracy = options["highAccuracy"] as? Boolean ?: true
-                val intervalMs = (options["intervalMs"] as? Number)?.toLong()?.takeIf { it > 0 } ?: 10_000L
-                val fastestMs = (options["fastestIntervalMs"] as? Number)?.toLong()?.takeIf { it > 0 } ?: 5_000L
-                val distance = (options["distanceFilter"] as? Number)?.toFloat() ?: 0f
-                val request = LocationRequest.Builder(priority(highAccuracy), intervalMs)
-                    .setMinUpdateIntervalMillis(fastestMs)
-                    .setMinUpdateDistanceMeters(distance)
-                    .build()
-                val callback = object : LocationCallback() {
-                    override fun onLocationResult(result: LocationResult) {
-                        result.lastLocation?.let { host.sendEvent(UPDATES_CHANNEL, payload(it)) }
-                    }
-                }
-                updates = callback
-                @SuppressLint("MissingPermission") // requireUsable checked it.
-                val task = client.requestLocationUpdates(request, callback, Looper.getMainLooper())
-                task.addOnFailureListener { e ->
-                    // The stream is over; no notification outlives it.
-                    if (updates === callback) {
-                        updates = null
-                        stopService(context)
-                    }
-                    host.sendEventError(UPDATES_CHANNEL, e)
-                }
+                options = next
                 null
             }
-            method("stopUpdates") { _ ->
-                removeUpdates()
+            stream(
+                onListen = {
+                    requireUsable(context)
+                    if (options.background) requireBackground(context)
+                    start(context, options)
+                },
+                onCancel = {
+                    removeUpdates()
+                    stopService(context)
+                },
+            )
+        }
+    }
+
+    /**
+     * Streams updates with [opts], replacing a running stream. The service
+     * a background stream needs starts before the running stream changes,
+     * so a failed start leaves it as it was.
+     */
+    private fun start(context: Context, opts: UpdateOptions) {
+        if (opts.background) startService(context)
+        removeUpdates()
+        if (!opts.background) stopService(context)
+        val request = LocationRequest.Builder(priority(opts.highAccuracy), opts.intervalMs)
+            .setMinUpdateIntervalMillis(opts.fastestIntervalMs)
+            .setMinUpdateDistanceMeters(opts.distanceFilter)
+            .build()
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { host.sendEvent(CHANNEL, payload(it)) }
+            }
+        }
+        updates = callback
+        @SuppressLint("MissingPermission") // requireUsable checked it.
+        val task = client.requestLocationUpdates(request, callback, Looper.getMainLooper())
+        task.addOnFailureListener { e ->
+            // The stream is over; no notification outlives it.
+            if (updates === callback) {
+                updates = null
                 stopService(context)
-                null
             }
+            host.sendEventError(CHANNEL, e)
         }
     }
 
@@ -200,8 +213,26 @@ class DriftLocationPlugin : DriftPlugin {
         "isMocked" to location.isMock,
     )
 
+    /** The update stream's options (the runtime package's UpdateOptions). */
+    private data class UpdateOptions(
+        val highAccuracy: Boolean = true,
+        val intervalMs: Long = 10_000L,
+        val fastestIntervalMs: Long = 5_000L,
+        val distanceFilter: Float = 0f,
+        val background: Boolean = false,
+    ) {
+        companion object {
+            fun parse(args: Map<*, *>) = UpdateOptions(
+                highAccuracy = args["highAccuracy"] as? Boolean ?: true,
+                intervalMs = (args["intervalMs"] as? Number)?.toLong()?.takeIf { it > 0 } ?: 10_000L,
+                fastestIntervalMs = (args["fastestIntervalMs"] as? Number)?.toLong()?.takeIf { it > 0 } ?: 5_000L,
+                distanceFilter = (args["distanceFilter"] as? Number)?.toFloat() ?: 0f,
+                background = args["background"] as? Boolean ?: false,
+            )
+        }
+    }
+
     private companion object {
         const val CHANNEL = "drift/location"
-        const val UPDATES_CHANNEL = "drift/location/updates"
     }
 }

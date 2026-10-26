@@ -71,6 +71,9 @@ object PlatformChannelManager : DriftPluginHost {
 
     // Written on the main thread during registration, read from Go threads.
     private val channels = ConcurrentHashMap<String, Channel>()
+
+    /** Go's interest in each event stream, by channel name. */
+    private val streams = StreamLifecycle()
     private val codec = JsonCodec
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -137,6 +140,30 @@ object PlatformChannelManager : DriftPluginHost {
         channel.declare()
         channel.seal()
         add(name, Channel.Plugin(channel))
+        if (channel.declaredStream != null) {
+            // Go may have subscribed already. Applied after the registering
+            // plugin finishes, so its handlers see it set up.
+            mainHandler.post { applyStream(name) }
+        }
+    }
+
+    /**
+     * Starts or stops the stream channel [name] declared, on the main
+     * thread, to match Go's latest request.
+     */
+    private fun applyStream(name: String) {
+        val stream = (channels[name] as? Channel.Plugin)?.channel?.declaredStream ?: return
+        val start = streams.transition(name) ?: return
+        if (start) {
+            try {
+                stream.onListen()
+            } catch (e: Exception) {
+                streams.failedToStart(name)
+                sendEventError(name, e)
+            }
+        } else {
+            stream.onCancel()
+        }
     }
 
     private fun add(name: String, channel: Channel) {
@@ -343,6 +370,8 @@ object PlatformChannelManager : DriftPluginHost {
      * Notifies Go that an event stream has ended.
      */
     override fun sendEventDone(channel: String) {
+        // Go's subscriptions end with it, so the stream no longer runs.
+        streams.ended(channel)
         NativeBridge.platformHandleEventDone(channel)
     }
 
@@ -440,6 +469,24 @@ object PlatformChannelManager : DriftPluginHost {
         register("drift/url_launcher") { method, args ->
             URLLauncherHandler.handle(context, method, args)
         }
+
+        // Go's first-subscriber and last-unsubscriber requests for event
+        // streams (pkg/platform streamsChannel)
+        register("drift/streams") { method, args ->
+            val argsMap = args as? Map<*, *>
+            val name = argsMap?.get("channel") as? String
+            val generation = (argsMap?.get("generation") as? Number)?.toLong()
+            when {
+                name == null || generation == null ->
+                    Pair(null, IllegalArgumentException("drift/streams needs channel and generation"))
+                method == "listen" || method == "cancel" -> {
+                    streams.request(name, listen = method == "listen", generation = generation)
+                    mainHandler.post { applyStream(name) }
+                    Pair(null, null)
+                }
+                else -> Pair(null, unknownMethod("drift/streams", method))
+            }
+        }
     }
 
     private fun setupLifecycleObserver() {
@@ -469,6 +516,62 @@ object PlatformChannelManager : DriftPluginHost {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         })
+    }
+}
+
+// MARK: - Stream Lifecycle
+
+/**
+ * Go's interest in each event stream and whether its declared stream runs.
+ * Go numbers its requests, which can arrive out of order from different
+ * threads; the newest wins. Requests are recorded on the calling thread,
+ * transitions made on the main thread.
+ */
+class StreamLifecycle {
+    private class State {
+        var generation = 0L
+        /** Whether Go has subscribers, by its newest request. */
+        var wanted = false
+        /** Whether the channel's onListen ran without a matching onCancel. */
+        var running = false
+    }
+
+    private val states = HashMap<String, State>()
+
+    /** Records Go's request unless a newer one arrived first. */
+    @Synchronized
+    fun request(name: String, listen: Boolean, generation: Long) {
+        val state = states.getOrPut(name) { State() }
+        if (generation <= state.generation) return
+        state.generation = generation
+        state.wanted = listen
+    }
+
+    /**
+     * The transition due for [name], recorded as made: true to start, false
+     * to stop, null when the stream already matches Go's request.
+     */
+    @Synchronized
+    fun transition(name: String): Boolean? {
+        val state = states[name] ?: return null
+        if (state.wanted == state.running) return null
+        state.running = state.wanted
+        return state.running
+    }
+
+    /** A start that threw: the stream does not run, so no stop is due. */
+    @Synchronized
+    fun failedToStart(name: String) {
+        states[name]?.running = false
+    }
+
+    /** The stream ended natively (sendEventDone), and Go's subscriptions with it. */
+    @Synchronized
+    fun ended(name: String) {
+        states[name]?.let {
+            it.running = false
+            it.wanted = false
+        }
     }
 }
 

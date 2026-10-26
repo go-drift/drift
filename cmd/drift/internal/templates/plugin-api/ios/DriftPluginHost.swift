@@ -24,14 +24,24 @@ import Foundation
 ///   goroutine: a call from the UI thread fails with `blocks_ui_thread`
 ///   every time, before the handler runs, since the UI thread cannot wait
 ///   for a reply that needs it.
+///
+/// The channel's events (`DriftPluginHost.sendEvent` with its name) can
+/// start and stop with Go's interest: see `stream(onListen:onCancel:)`.
 public final class DriftChannel {
     @_spi(DriftHost) public enum Method {
         case sync((_ args: Any?) throws -> Any?)
         case async((_ args: Any?, _ result: DriftResult) -> Void)
     }
 
+    /// The handlers `stream(onListen:onCancel:)` declared.
+    @_spi(DriftHost) public struct Stream {
+        public let onListen: () throws -> Void
+        public let onCancel: () -> Void
+    }
+
     private let name: String
     private var methods: [String: Method] = [:]
+    @_spi(DriftHost) public private(set) var declaredStream: Stream?
     // Set by the host once the declare closure returns; the methods are
     // then read from Go threads and must not change.
     private var sealed = false
@@ -51,6 +61,28 @@ public final class DriftChannel {
     /// fails the call with `reply_dropped`.
     public func asyncMethod(_ method: String, _ handler: @escaping (_ args: Any?, _ result: DriftResult) -> Void) {
         add(method, .async(handler))
+    }
+
+    /// Declares the channel's event stream: `onListen` runs when Go's event
+    /// channel of this name gains its first subscriber, `onCancel` when it
+    /// loses its last, each on the main thread, alternating, starting with
+    /// `onListen`. Start the native work (location updates, a sensor) in
+    /// `onListen` and send its events with `sendEvent`; stop it in
+    /// `onCancel`.
+    ///
+    /// An error `onListen` throws reaches Go's subscribers as a stream error
+    /// (as `sendEventError` sends), and `onCancel` then does not run: the
+    /// stream did not start. A stream Go subscribed to before the app
+    /// started starts once the channel is registered. `sendEventDone` ends
+    /// the stream without `onCancel`; Go's next subscriber starts it again.
+    public func stream(onListen: @escaping () throws -> Void, onCancel: @escaping () -> Void) {
+        if sealed {
+            fatalError("drift: \(name) stream declared after registerChannel returned; declare it inside its closure")
+        }
+        if declaredStream != nil {
+            fatalError("drift: \(name) stream declared twice")
+        }
+        declaredStream = Stream(onListen: onListen, onCancel: onCancel)
     }
 
     private func add(_ method: String, _ m: Method) {

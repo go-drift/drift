@@ -120,10 +120,12 @@ func (b *nativePlatformBridge) InvokeMethod(channel, method string, args []byte,
 
 // DriftPlatformSetNativeHandler sets the callback for Go->Native method invocation.
 // Native code must call this during initialization to enable platform channels.
+// Go then tells native about the event channels subscribed before it could.
 //
 //export DriftPlatformSetNativeHandler
 func DriftPlatformSetNativeHandler(handler C.DriftNativeMethodHandler) {
 	C.setNativeMethodHandler(handler)
+	platform.HandleNativeConnected()
 }
 
 // DriftPlatformReply delivers the reply to a native call started by

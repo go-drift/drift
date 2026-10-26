@@ -304,8 +304,8 @@ Up to Drift v0.26 this was `platform.Location`. Apps moving to the plugin use it
 |-------------|-----|
 | `GetCurrent(platform.LocationOptions{...})` | `location.Current(ctx, location.Options{...})`, from a goroutine; returns a `location.Update`, not a pointer |
 | `LastKnown()`, `IsEnabled()` | `location.LastKnown(ctx)`, `location.IsEnabled(ctx)`, from a goroutine |
-| `StartUpdates(platform.LocationOptions{...})` | `location.StartUpdates(location.UpdateOptions{Options: location.Options{...}})`; `Background: true` keeps updates coming in the background |
-| `StopUpdates()`, `Updates()` | `location.StopUpdates()`, `location.Updates()` |
+| `StartUpdates(platform.LocationOptions{...})` | `location.SetUpdateOptions(location.UpdateOptions{Options: location.Options{...}})`, then listen to `location.Updates()`: updates run while it has listeners; `Background: true` keeps them coming in the background |
+| `StopUpdates()`, `Updates()` | Unsubscribe the last listener of `location.Updates()` |
 | `LocationUpdate`, `LocationOptions` | `location.Update`, `location.Options`, with the same fields |
 | `Permission.WhenInUse`, `Permission.Always` | See [Plugin Permissions](#plugin-permissions) |
 
