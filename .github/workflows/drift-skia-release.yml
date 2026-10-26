@@ -17,8 +17,28 @@ permissions:
   actions: write
 
 jobs:
+  # The tagged commit must require the released modules at this version
+  # (scripts/release.sh prepare), or plugins cannot be installed. Checked
+  # before the Skia builds so a bad release fails in seconds; a rebuild of
+  # an existing tag tags nothing, so it skips the check.
+  check-modules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Check module requirements
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ inputs.version }}" >/dev/null; then
+            echo "Tag ${{ inputs.version }} exists (rebuild); skipping the check."
+          else
+            go run ./scripts/releasetool check "${{ inputs.version }}"
+          fi
+
   build-android:
     runs-on: ubuntu-latest
+    needs: check-modules
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -48,6 +68,7 @@ jobs:
 
   build-ios:
     runs-on: macos-latest
+    needs: check-modules
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -124,16 +145,14 @@ jobs:
             }
           }
           EOF
-      - name: Push Git tag
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Push Git tags
         run: |
-          if git ls-remote --tags origin | grep -q "refs/tags/${{ inputs.version }}$"; then
-            echo "Tag ${{ inputs.version }} already exists on remote (rebuild). Skipping tag creation."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "${{ inputs.version }}" -m "Release ${{ inputs.version }}"
-            git push origin "${{ inputs.version }}"
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          scripts/release-tags.sh "${{ inputs.version }}"
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:

@@ -4,13 +4,21 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/release.sh [--force] <version>
+Usage: scripts/release.sh prepare <version>
+       scripts/release.sh [--force] <version>
 
-Triggers the Drift release workflow via GitHub Actions.
+Releases Drift: the root module and every plugin module under plugins/, in
+lockstep at <version>.
 
-The workflow builds Skia assets, creates a GitHub release, and only then
-pushes the Git tag. This ensures `go install @latest` always resolves to
-a version with ready assets.
+  prepare   Makes the release commit on master: every module in the
+            repository requires the released modules at <version>. Push
+            it, then run the second form.
+
+  (none)    Triggers the Drift release workflow via GitHub Actions. The
+            workflow builds Skia assets, creates a GitHub release, and only
+            then pushes the tags (<version> and plugins/<name>/<version>).
+            This ensures `go install @latest` always resolves to a version
+            with ready assets.
 
 Arguments:
   <version>  SemVer tag like v0.1.0
@@ -21,6 +29,7 @@ EOF
 }
 
 force=false
+prepare=false
 version=""
 
 while [[ $# -gt 0 ]]; do
@@ -32,6 +41,10 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       usage
       exit 0
+      ;;
+    prepare)
+      prepare=true
+      shift
       ;;
     -*)
       echo "Unknown option: $1" >&2
@@ -65,6 +78,7 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   echo "Not inside a git repository." >&2
   exit 1
 fi
+cd "$(git rev-parse --show-toplevel)"
 
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Working tree is dirty. Commit or stash changes first." >&2
@@ -89,6 +103,20 @@ if [[ "$local_sha" != "$remote_sha" ]]; then
   exit 1
 fi
 
+if [[ "$prepare" == "true" ]]; then
+  go run ./scripts/releasetool bump "$version"
+  if [[ -z "$(git status --porcelain)" ]]; then
+    echo "Every module already requires the released modules at $version; nothing to commit."
+  else
+    git commit -q -a -m "release: $version"
+    echo "Made the release commit:"
+    git log --oneline -1
+  fi
+  echo ""
+  echo "Push master, then run: scripts/release.sh $version"
+  exit 0
+fi
+
 # Check if tag exists on remote
 if git ls-remote --tags origin | grep -q "refs/tags/${version}$"; then
   if [[ "$force" == "true" ]]; then
@@ -98,6 +126,11 @@ if git ls-remote --tags origin | grep -q "refs/tags/${version}$"; then
     echo "Use --force to trigger a rebuild." >&2
     exit 1
   fi
+else
+  # The tagged commit must require the released modules at $version, or
+  # the plugin modules cannot be installed outside this repository. (A
+  # rebuild tags nothing.)
+  go run ./scripts/releasetool check "$version"
 fi
 
 # Check gh CLI is available and authenticated
@@ -118,4 +151,4 @@ echo ""
 echo "Release workflow started for $version"
 echo "Monitor progress at: $(gh repo view --json url -q .url)/actions"
 echo ""
-echo "The Git tag will be created automatically after the build succeeds."
+echo "The Git tags will be created automatically after the build succeeds."
