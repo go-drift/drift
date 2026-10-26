@@ -1,4 +1,16 @@
-// Package image provides network image loading with in-memory and disk caching.
+// Package image decodes images upright, and loads network images with
+// in-memory and disk caching.
+//
+// # Decoding
+//
+// [Decode] is the standard library's [image.Decode] plus EXIF orientation:
+// cameras store a JPEG's pixels as the sensor saw them and record in its
+// EXIF data how to turn them upright, which browsers apply and
+// [image.Decode] does not. Decode applies all eight orientations, so a
+// portrait photo decodes as portrait, its bounds being its displayed size.
+// Use it to decode photos, files and assets for [widgets.Image].
+//
+// # Network Images
 //
 // The primary entry point is [Loader], which fetches images over HTTP, decodes
 // them into standard [image.Image] values, and caches the results in a two-tier
@@ -16,7 +28,7 @@
 //
 // This package registers decoders for PNG, JPEG, GIF, and WebP on import.
 // Additional formats can be registered via the standard [image.RegisterFormat]
-// mechanism.
+// mechanism. EXIF orientation is applied to JPEG only.
 //
 // # Custom Loader
 //

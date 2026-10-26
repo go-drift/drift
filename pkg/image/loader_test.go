@@ -3,6 +3,7 @@ package image
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
@@ -370,5 +371,43 @@ func TestClearCache_ReturnsDiskCacheError(t *testing.T) {
 	}
 	if l.memCache.Len() != 0 {
 		t.Fatal("expected memory cache to be cleared even when disk cache clear fails")
+	}
+}
+
+func TestFetchOnce_AppliesJPEGOrientation(t *testing.T) {
+	jpegData := encodeJPEG(t, quadrantImage(), exifSegment(orientationTIFF(binary.BigEndian, uint16(orientationRotate90))))
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Write(jpegData)
+	}))
+	t.Cleanup(srv.Close)
+
+	dc, err := NewDiskCache(filepath.Join(t.TempDir(), "cache"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := &Loader{
+		memCache:  NewCache(CacheOptions{}),
+		diskCache: dc,
+		client:    srv.Client(),
+		inflight:  make(map[string]*inflightRequest),
+		variants:  make(map[string]map[string]struct{}),
+	}
+	url := srv.URL + "/photo.jpg"
+
+	// From the network, then (memory cleared) from disk: both upright.
+	for _, source := range []string{"network", "disk"} {
+		result := l.fetchOnce(context.Background(), url, requestKey(url, nil), LoadOptions{})
+		if result.Err != nil {
+			t.Fatalf("%s: %v", source, result.Err)
+		}
+		if b := result.Image.Bounds(); b.Dx() != quadH || b.Dy() != quadW {
+			t.Fatalf("%s: size %dx%d, want %dx%d", source, b.Dx(), b.Dy(), quadH, quadW)
+		}
+		l.memCache.Clear()
+	}
+	if requests.Load() != 1 {
+		t.Fatalf("expected 1 request (second from disk), got %d", requests.Load())
 	}
 }

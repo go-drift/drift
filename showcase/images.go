@@ -2,11 +2,10 @@ package main
 
 import (
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"sync"
 
 	"github.com/go-drift/drift/pkg/core"
+	driftimage "github.com/go-drift/drift/pkg/image"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -24,7 +23,7 @@ func loadImageAsset(name string) image.Image {
 	}
 	defer file.Close()
 
-	img, _, err := image.Decode(file)
+	img, _, err := driftimage.Decode(file)
 	if err != nil {
 		return nil
 	}

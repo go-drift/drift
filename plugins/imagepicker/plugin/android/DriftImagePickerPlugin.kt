@@ -22,6 +22,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +37,7 @@ import com.drift.runner.DriftResult
 import com.drift.runner.DriftRuntimePermission
 import com.drift.runner.launchForResult
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 import kotlin.concurrent.thread
 
@@ -173,19 +175,42 @@ class DriftImagePickerPlugin : DriftPlugin {
         return File(dir, "${UUID.randomUUID()}.$extension")
     }
 
+    /**
+     * Describes the image file, which keeps its bytes as picked or taken.
+     * Its size is as displayed, as on iOS: a JPEG whose EXIF orientation
+     * turns it a quarter (cameras store pixels as the sensor saw them) has
+     * width and height swapped, matching Drift's image.Decode, which
+     * applies the orientation to JPEGs.
+     */
     private fun describe(file: File, mimeType: String): Map<String, Any> {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
+        val quarterTurn = mimeType == "image/jpeg" && exifOrientation(file) in QUARTER_TURNS
         return mapOf(
             "path" to file.absolutePath,
             "mimeType" to mimeType,
-            "width" to bounds.outWidth,
-            "height" to bounds.outHeight,
+            "width" to if (quarterTurn) bounds.outHeight else bounds.outWidth,
+            "height" to if (quarterTurn) bounds.outWidth else bounds.outHeight,
             "size" to file.length(),
         )
     }
 
+    /** The file's EXIF orientation; unreadable metadata counts as none. */
+    private fun exifOrientation(file: File): Int = try {
+        ExifInterface(file).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    } catch (_: IOException) {
+        ExifInterface.ORIENTATION_NORMAL
+    }
+
     private companion object {
         const val CHANNEL = "drift/imagepicker"
+
+        /** EXIF orientations that turn the stored pixels by 90 or 270 degrees. */
+        val QUARTER_TURNS = setOf(
+            ExifInterface.ORIENTATION_TRANSPOSE,
+            ExifInterface.ORIENTATION_ROTATE_90,
+            ExifInterface.ORIENTATION_TRANSVERSE,
+            ExifInterface.ORIENTATION_ROTATE_270,
+        )
     }
 }

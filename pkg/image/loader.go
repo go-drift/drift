@@ -1,7 +1,6 @@
 package image
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,12 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	// Register additional image decoders beyond the stdlib defaults.
-	_ "golang.org/x/image/webp"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 )
 
 // LoadResult is the outcome of an image load operation.
@@ -44,7 +37,8 @@ type LoaderOptions struct {
 	Client *http.Client
 }
 
-// Loader coordinates fetching, decoding, and caching of network images.
+// Loader coordinates fetching, decoding (with [Decode]), and caching of
+// network images.
 // It deduplicates concurrent requests for the same URL.
 // All methods are safe for concurrent use.
 type Loader struct {
@@ -206,7 +200,7 @@ func (l *Loader) fetchOnce(ctx context.Context, url, key string, opts LoadOption
 	// Check disk cache before network.
 	if l.diskCache != nil {
 		if rc, ok := l.diskCache.Get(key); ok {
-			img, _, err := image.Decode(rc)
+			img, _, err := Decode(rc)
 			rc.Close()
 			if err == nil {
 				l.memCache.Put(key, img)
@@ -241,7 +235,7 @@ func (l *Loader) fetchOnce(ctx context.Context, url, key string, opts LoadOption
 		return LoadResult{Err: &networkError{err: fmt.Errorf("image: read %q: %w", url, err)}}
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(body))
+	img, _, err := decodeBytes(body)
 	if err != nil {
 		return LoadResult{Err: fmt.Errorf("image: decode %q: %w", url, err)}
 	}

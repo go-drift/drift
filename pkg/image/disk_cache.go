@@ -11,7 +11,7 @@ import (
 )
 
 // DiskCache persists raw image bytes to the filesystem. It stores undecoded
-// response bodies so that format detection (image.Decode) works on read.
+// response bodies so that [Decode] detects the format on read.
 //
 // Keys are hashed with SHA-256 to produce safe filenames. When the cache
 // exceeds MaxBytes, the oldest files by modification time are evicted.

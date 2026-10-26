@@ -15,6 +15,11 @@
 // Capture and Pick wait for the user, so call them from a goroutine: from
 // the UI thread they fail with platform.ErrBlocksUIThread. One picker is
 // open at a time.
+//
+// Decode an Image's file with Decode from github.com/go-drift/drift/pkg/image,
+// not the standard library's image.Decode: photos are stored as the camera
+// sensor saw them, with an EXIF orientation that turns them upright, which
+// only the former applies.
 package runtime
 
 import (
@@ -64,7 +69,9 @@ type Image struct {
 	Path string
 	// MimeType is the file's type, such as "image/jpeg".
 	MimeType string
-	// Width and Height are the image's size in pixels.
+	// Width and Height are the image's size in pixels as displayed, after
+	// its EXIF orientation: the bounds github.com/go-drift/drift/pkg/image
+	// Decode returns for it.
 	Width, Height int
 	// Size is the file size in bytes.
 	Size int64

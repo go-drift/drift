@@ -107,7 +107,10 @@ public final class DriftImagePickerPlugin: NSObject, DriftPlugin {
 
     // MARK: - Files
 
-    /// Writes image as JPEG to the caches directory and describes it.
+    /// Writes image as JPEG to the caches directory and describes it. The
+    /// JPEG keeps the photo's pixels as stored, with its EXIF orientation,
+    /// which Drift's image.Decode applies; the size is as displayed (UIImage
+    /// size accounts for orientation), as on Android.
     private static func save(_ image: UIImage) throws -> [String: Any] {
         guard let data = image.jpegData(compressionQuality: 0.9) else {
             throw error("native_error", "could not encode the image as JPEG")

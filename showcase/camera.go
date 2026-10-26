@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"os"
 	"strconv"
 
 	"github.com/go-drift/drift/pkg/core"
 	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
+	driftimage "github.com/go-drift/drift/pkg/image"
 	"github.com/go-drift/drift/pkg/layout"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -59,7 +58,8 @@ func loadImageFromPath(path string) (image.Image, error) {
 	}
 	defer file.Close()
 
-	img, _, err := image.Decode(file)
+	// driftimage.Decode turns camera photos upright (EXIF orientation).
+	img, _, err := driftimage.Decode(file)
 	if err != nil {
 		return nil, err
 	}

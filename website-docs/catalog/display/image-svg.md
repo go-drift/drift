@@ -32,6 +32,21 @@ widgets.Image{
 | `SemanticLabel` | `string` | Accessibility description |
 | `ExcludeFromSemantics` | `bool` | Hide from screen readers (for decorative images) |
 
+### Decoding Images
+
+Decode files, assets and picked photos with Drift's `image.Decode`, which works like the standard library's `image.Decode` but applies a JPEG's EXIF orientation, as browsers do. Cameras store pixels as the sensor saw them and record how to turn them upright; without it, a portrait photo shows sideways.
+
+```go
+import driftimage "github.com/go-drift/drift/pkg/image"
+
+f, err := os.Open(path)
+if err != nil {
+    return err
+}
+defer f.Close()
+img, _, err := driftimage.Decode(f) // upright; Bounds() is the displayed size
+```
+
 ## NetworkImage
 
 Load and display an image from a URL with automatic caching and fade-in:
@@ -96,7 +111,7 @@ NetworkImage uses a two-tier cache by default:
 - **Memory**: LRU cache (100 entries, 100 MB) for instant display of recently viewed images
 - **Disk**: Filesystem cache (500 MB) under the platform cache directory for persistence across app restarts
 
-Images are decoded from PNG, JPEG, GIF, and WebP formats. Concurrent requests for the same URL and headers are deduplicated into a single HTTP request.
+Images are decoded from PNG, JPEG, GIF, and WebP formats with Drift's `image.Decode`, so JPEG photos are upright. Concurrent requests for the same URL and headers are deduplicated into a single HTTP request.
 
 To evict or clear the cache programmatically:
 
