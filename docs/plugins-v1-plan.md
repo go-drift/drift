@@ -572,8 +572,8 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 - **A permission's `max_sdk` change does not reach an existing declaration** in an ejected project: `ensurePermission` keeps the declaration it finds, so a plugin upgrade changing `max_sdk` leaves the old value.
 
 **Correctness, low severity**
-- **`theme` vs `android:theme` do not conflict.** `SetActivityAttr.Targets()` uses the raw attribute name, while `setNSAttr` adds the `android:` prefix; normalise in `Targets()`.
-- **Bitmap target key names the wrong directory.** It claims `drawable/<stem>` but writes `drawable-nodpi/`, missing a real clash and reporting a false one. `WriteXML` into `values*/` claims only the file, so duplicate resource names inside it surface only in Gradle.
+- ~~**`theme` vs `android:theme` do not conflict.**~~ Fixed after 6.6: `QualifiedAttr()` adds the `android:` prefix once, for the target, the lock's edit text and the mutator.
+- ~~**Bitmap target key names the wrong directory.**~~ Fixed after 6.6: a bitmap claims its name in `drawable-nodpi/` (`protocol.AndroidDrawableDir`, where another file of the name is a duplicate resource) as well as in `drawable/` (a default drawable of the name shadows it). Still open: `WriteXML` into `values*/` claims only the file, so duplicate resource names inside it surface only in Gradle.
 - ~~**Android string values are not escaped** (`mutate/xml.go`), so an apostrophe fails aapt.~~ Fixed in `cef0167`: values are escaped for aapt2, and marked `formatted="false"` when they contain `%`.
 - **`drift plugin sync`'s schema pass does not type-check scalars** (`n: notanint` for an int field passes it; the `Build` pass that follows reports the decode error); a null optional struct is reported as "must be a mapping".
 - **Intent-filter dedup ignores the filter's own attributes** (`canonicalIntent`), so `autoVerify` is lost if an equivalent filter exists.

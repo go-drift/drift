@@ -72,8 +72,9 @@ Each op declares the **targets** it writes: a key naming a location (`plist:<fil
 - Owners of one key must write the same content; they collapse to one.
 - Members of a set merge; the same member twice must agree.
 - A key cannot be both owned and added to (`ios.plist.set` vs `ios.plist.append_array_item`).
+- Keys name what the project ends up holding, so spellings of one location agree: an activity attribute is keyed by its `android:`-qualified name (`QualifiedAttr`).
 
-Some ops claim more than one key: an image set also claims its loose `<Name>.png` bundle name (xtool), a non-values resource XML file also claims the resource its file name defines, a Swift source also claims its basename within the plugin's module.
+Some ops claim more than one key: an image set also claims its loose `<Name>.png` bundle name (xtool), a bitmap claims its resource name in `drawable-nodpi/` and in `drawable/`, a non-values resource XML file also claims the resource its file name defines, a Swift source also claims its basename within the plugin's module.
 
 Op types are few on purpose: one op per kind of edit, not per recorder. `ios.plist.set` carries any plist value (string, bool, integer, real, array, dictionary), keeping integers and reals apart on the wire; `android.manifest.add_component` takes the whole `<service>` or `<receiver>` element, its kind read from the root; `file.add` writes one whole file at a `FileLocation` (bundle root, drawable, resource, app module, either plugin config), which decides its platform, name rules and targets. A file in a Drift-owned synced directory (bundle resources, plugin config assets) is rewritten with that directory every build; any other is owned on its own and recorded by the ejected lock (`syncedFiles`, `opkinds.go`). A new kind of edit with fields of its own is a new op type, not another location or mode of an existing one.
 

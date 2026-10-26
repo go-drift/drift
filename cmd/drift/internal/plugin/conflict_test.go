@@ -128,6 +128,30 @@ func TestValidate(t *testing.T) {
 			wantConflict: "android-res:drawable/splash",
 		},
 		{
+			name: "drawable bitmap vs XML in its own directory",
+			ops: []protocol.Op{
+				&protocol.OpAddFile{Base: mkBase("a"), Location: protocol.FileAndroidDrawable, Name: "splash", Content: "AA=="},
+				&protocol.OpAddFile{Base: mkBase("b"), Location: protocol.FileAndroidResource, Name: "drawable-nodpi/splash.xml", Content: protocol.EncodeContent([]byte("<layer-list/>"))},
+			},
+			wantConflict: "android-res:drawable-nodpi/splash",
+		},
+		{
+			name: "activity attribute with and without its namespace",
+			ops: []protocol.Op{
+				&protocol.OpAndroidManifestSetActivityAttr{Base: mkBase("a"), Activity: ".MainActivity", Attr: "theme", Value: "@style/A"},
+				&protocol.OpAndroidManifestSetActivityAttr{Base: mkBase("b"), Activity: ".MainActivity", Attr: "android:theme", Value: "@style/B"},
+			},
+			wantConflict: "manifest:activity:.MainActivity@android:theme",
+		},
+		{
+			name: "activity attribute with and without its namespace agree",
+			ops: []protocol.Op{
+				&protocol.OpAndroidManifestSetActivityAttr{Base: mkBase("a"), Activity: ".MainActivity", Attr: "theme", Value: "@style/A"},
+				&protocol.OpAndroidManifestSetActivityAttr{Base: mkBase("b"), Activity: ".MainActivity", Attr: "android:theme", Value: "@style/A"},
+			},
+			wantLen: 1,
+		},
+		{
 			name: "night drawable does not clash with day drawable",
 			ops: []protocol.Op{
 				&protocol.OpAddFile{Base: mkBase("a"), Location: protocol.FileAndroidDrawable, Name: "splash", Content: "AA=="},

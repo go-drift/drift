@@ -127,11 +127,8 @@ func (p project) javaRoot() string      { return "app/src/main/java" }
 // generated registrant (protocol.AndroidRunnerPackage).
 func (p project) runnerPackage() string { return p.javaRoot() + "/com/drift/runner" }
 
-// drawables holds plugin bitmaps. They come at one pixel size, so they go
-// in drawable-nodpi: in drawable/ Android treats them as mdpi and scales
-// them up on denser screens (a 2000px image becomes ~5500px on a 420dpi
-// phone).
-func (p project) drawables() string { return p.resDir() + "/drawable-nodpi" }
+// drawables holds plugin bitmaps (protocol.AndroidDrawableDir).
+func (p project) drawables() string { return p.resDir() + "/" + protocol.AndroidDrawableDir }
 
 // pluginConfigs is the Drift-owned asset directory of plugin configs
 // (protocol.AndroidPluginConfigAssetDir).

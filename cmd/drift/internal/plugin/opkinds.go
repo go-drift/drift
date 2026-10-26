@@ -234,7 +234,7 @@ func init() {
 		m.IntentFilters = append(m.IntentFilters, o)
 	}))
 	register(manifestKind(func(o *protocol.OpAndroidManifestSetActivityAttr) string {
-		return fmt.Sprintf("%s=%q on activity %s", o.Attr, o.Value, o.Activity)
+		return fmt.Sprintf("%s=%q on activity %s", o.QualifiedAttr(), o.Value, o.Activity)
 	}, func(m *mutate.ManifestOps, o *protocol.OpAndroidManifestSetActivityAttr) {
 		m.ActivityAttrs = append(m.ActivityAttrs, o)
 	}))

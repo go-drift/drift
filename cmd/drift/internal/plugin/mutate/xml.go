@@ -52,7 +52,7 @@ func ApplyAndroidManifest(cs *Changeset, path string, ops ManifestOps) (bool, er
 		if act == nil {
 			return false, fmt.Errorf("AndroidManifest.xml: activity %q not found for SetActivityAttr", op.Activity)
 		}
-		setNSAttr(act, op.Attr, op.Value)
+		setNSAttr(act, op.QualifiedAttr(), op.Value)
 	}
 
 	for _, op := range ops.IntentFilters {
@@ -132,10 +132,8 @@ func findActivity(app *etree.Element, name string) *etree.Element {
 	return nil
 }
 
+// setNSAttr sets the attribute attr, namespace prefix included, on el.
 func setNSAttr(el *etree.Element, attr, value string) {
-	if !strings.Contains(attr, ":") {
-		attr = "android:" + attr
-	}
 	existing := el.SelectAttr(attr)
 	if existing != nil && existing.Value == value {
 		return

@@ -620,7 +620,7 @@ const (
 	// FileIOSPluginConfig is the plugin's NativeConfig in the bundle root;
 	// Name is IOSPluginConfigFile of the plugin.
 	FileIOSPluginConfig FileLocation = "ios.plugin_config"
-	// FileAndroidDrawable is res/drawable-nodpi; Name is the bitmap's file
+	// FileAndroidDrawable is res/<AndroidDrawableDir>; Name is the bitmap's file
 	// name (.png when it has no extension).
 	FileAndroidDrawable FileLocation = "android.drawable"
 	// FileAndroidResource is res/; Name is <dir>/<file>.xml, any resource
@@ -636,6 +636,12 @@ const (
 	// base name of AndroidPluginConfigAsset of the plugin.
 	FileAndroidPluginConfig FileLocation = "android.plugin_config"
 )
+
+// AndroidDrawableDir is the resource directory of plugin bitmaps
+// (FileAndroidDrawable). They come at one pixel size, so they go in
+// drawable-nodpi: in drawable/ Android treats them as mdpi and scales them
+// up on denser screens (a 2000px image becomes ~5500px on a 420dpi phone).
+const AndroidDrawableDir = "drawable-nodpi"
 
 // OpAddFile writes one whole file, Content (base64), at Name in Location.
 // Two plugins writing divergent content to one file conflict.
@@ -668,9 +674,16 @@ func (o *OpAddFile) Targets() []Target {
 		return []Target{owner("ios-bundle:"+o.Name, loc, o.Content)}
 	case FileAndroidDrawable:
 		// Resource names ignore the file extension: icon.png and icon.webp
-		// are both R.drawable.icon.
+		// are both R.drawable.icon. The bitmap claims that name in its own
+		// directory, where another file of the name is a duplicate
+		// resource, and in drawable/, since a density-independent bitmap
+		// and a default drawable of one name answer R.drawable.<name> at
+		// every density and one shadows the other.
 		name, _, _ := strings.Cut(o.Name, ".")
-		return []Target{owner("android-res:drawable/"+name, loc, o.Name, o.Content)}
+		return []Target{
+			owner("android-res:drawable/"+name, loc, o.Name, o.Content),
+			owner("android-res:"+AndroidDrawableDir+"/"+name, loc, o.Name, o.Content),
+		}
 	case FileAndroidResource:
 		ts := []Target{owner("android-res-file:"+o.Name, o.Content)}
 		// Outside values*/ the file itself is a resource named by its stem
@@ -792,7 +805,17 @@ type OpAndroidManifestSetActivityAttr struct {
 func (o *OpAndroidManifestSetActivityAttr) Type() string     { return "android.manifest.set_activity_attr" }
 func (o *OpAndroidManifestSetActivityAttr) Platform() string { return "android" }
 func (o *OpAndroidManifestSetActivityAttr) Targets() []Target {
-	return []Target{owner("manifest:activity:"+o.Activity+"@"+o.Attr, o.Value)}
+	return []Target{owner("manifest:activity:"+o.Activity+"@"+o.QualifiedAttr(), o.Value)}
+}
+
+// QualifiedAttr is the attribute as the manifest spells it: Attr with the
+// android: namespace prefix when it has none, so "theme" and
+// "android:theme" are one attribute.
+func (o *OpAndroidManifestSetActivityAttr) QualifiedAttr() string {
+	if strings.Contains(o.Attr, ":") {
+		return o.Attr
+	}
+	return "android:" + o.Attr
 }
 func (o *OpAndroidManifestSetActivityAttr) Validate() error {
 	if err := checkMatch(activityNameRe, "activity", o.Activity); err != nil {
