@@ -144,7 +144,10 @@ func (r *PlatformViewRegistry) RegisterFactory(factory PlatformViewFactory) {
 	r.mu.Unlock()
 }
 
-// Create creates a new platform view of the given type.
+// Create creates a new platform view of the given type, natively too: it
+// returns once the native factory has run (on the main thread: at once from
+// the UI thread, otherwise waiting for it), and fails with the factory's
+// error, a [*ChannelError], when the factory fails.
 func (r *PlatformViewRegistry) Create(viewType string, params map[string]any) (PlatformView, error) {
 	r.mu.RLock()
 	factory, ok := r.factories[viewType]

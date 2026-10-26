@@ -445,10 +445,8 @@ object PlatformChannelManager : DriftPluginHost {
             DeepLinkHandler.handle(method, args)
         }
 
-        // Platform Views channel
-        register("drift/platform_views") { method, args ->
-            PlatformViewHandler.handle(method, args)
-        }
+        // Platform Views channel and Drift's own view types
+        PlatformViewHandler.start(this)
         PlatformViewHandler.registerBuiltIns(this)
 
         // Permissions channel and Drift's own permission kinds

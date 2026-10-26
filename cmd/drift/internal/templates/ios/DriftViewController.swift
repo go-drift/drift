@@ -123,6 +123,10 @@ final class DriftViewController: UIViewController {
     func tearDown() {
         stopDisplayLink()
         DriftPlugins.shared.detach(from: ObjectIdentifier(self))
+        // The platform views move to the next controller's view.
+        if isViewLoaded {
+            PlatformViewHandler.removeHostView(view)
+        }
     }
 
     deinit {

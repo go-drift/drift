@@ -10,6 +10,11 @@
  * Threading: Drift creates views and calls them on the main thread, in the
  * order Go made the calls.
  *
+ * A view outlives the Activity that hosts it: when the Activity is
+ * recreated (a configuration change) or replaced (the app reopened after
+ * its Activity finished), Drift moves the view into the new one. Its
+ * context follows: see [DriftPlatformViewFactory.create].
+ *
  * IMPORTANT: shipped verbatim by Drift's scaffold; must not depend on the
  * user's app package.
  */
@@ -65,7 +70,16 @@ const val DRIFT_PLATFORM_VIEW_WARM_UP_EVENT = "drift/platform_views/warm_up"
 fun interface DriftPlatformViewFactory {
     /**
      * Creates view [viewId] with the parameters Go created it with, and its
-     * event sender. [context] is the Activity's.
+     * event sender. An exception it throws fails Go's
+     * PlatformViewRegistry.Create (a [DriftCallError] with its code, an
+     * IllegalArgumentException as `invalid_arguments`, anything else as
+     * `native_error`), and no view exists.
+     *
+     * [context] is the view's own: it wraps the hosting Activity, and Drift
+     * points it at the next Activity when it moves the view (and at the
+     * Application in between), so the view never keeps a dead Activity.
+     * Create the view with it; do not cast it to an Activity or keep the
+     * Activity it wraps.
      */
     fun create(context: Context, viewId: Int, params: Map<String, Any?>, events: DriftPlatformViewEvents): DriftPlatformView
 }

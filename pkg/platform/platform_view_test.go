@@ -576,3 +576,33 @@ func TestFlushGeometryBatch_ViewScrollsOutAndBack(t *testing.T) {
 		t.Error("frame 3: restored view should not have empty clip")
 	}
 }
+
+type failingViewFactory struct{}
+
+func (failingViewFactory) ViewType() string { return "test_failing_view" }
+func (failingViewFactory) Create(viewID int64, _ map[string]any) (PlatformView, error) {
+	return &failingTestView{PlatformViewBase: NewPlatformViewBase(viewID, "test_failing_view")}, nil
+}
+
+type failingTestView struct{ PlatformViewBase }
+
+func (*failingTestView) Create(map[string]any) error              { return nil }
+func (*failingTestView) Dispose()                                 {}
+func (*failingTestView) HandleEvent(string, map[string]any) error { return nil }
+
+// A native factory that fails fails Create with its error and leaves no
+// view.
+func TestCreateReturnsTheNativeFactoryError(t *testing.T) {
+	t.Cleanup(ResetForTest)
+	registry := GetPlatformViewRegistry()
+	registry.RegisterFactory(failingViewFactory{})
+	SetNativeBridge(failingBridge{NewChannelError("no_camera", "this device has no camera")})
+	view, err := registry.Create("test_failing_view", nil)
+	var channelErr *ChannelError
+	if view != nil || !errors.As(err, &channelErr) || channelErr.Code != "no_camera" {
+		t.Fatalf("Create = %v, %v; want the native error", view, err)
+	}
+	if n := registry.ViewCount(); n != 0 {
+		t.Errorf("%d views registered after a failed create", n)
+	}
+}

@@ -11,9 +11,14 @@
  *      push message or an alarm, with no Activity). Register channels,
  *      permissions and event observers here; they live as long as the
  *      process.
- *   2. onAttach once the Activity's views exist, and onDetach when the
- *      Activity is destroyed. Activity-bound state (views, listeners) lives
- *      between the two; an Activity recreation detaches and re-attaches.
+ *   2. onAttach once an Activity's views exist, and onDetach when that
+ *      Activity is destroyed: a pair per Activity, each with its own
+ *      binding. A configuration change Drift does not handle itself (dark
+ *      mode, locale) destroys the Activity and creates another, and the app
+ *      reopened after its Activity finished gets another too. Nothing a
+ *      plugin added to the old Activity (overlays, listeners) carries over;
+ *      add it again in onAttach. The process, its channels, Go's state and
+ *      the platform views (which Drift moves to the new Activity) do.
  *
  * Every method except onRegister has a default no-op implementation.
  *

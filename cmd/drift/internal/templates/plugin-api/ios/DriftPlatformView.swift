@@ -9,6 +9,10 @@
 ///
 /// Threading: Drift creates views and calls them on the main thread, in
 /// the order Go made the calls.
+///
+/// A view outlives the view controller that hosts it: when the scene
+/// reconnects, Drift moves it into the new Drift view. Do not keep the
+/// hosting view controller; reach the current one through `view.window`.
 
 import UIKit
 
@@ -62,5 +66,7 @@ public final class DriftPlatformViewEvents {
 public let driftPlatformViewWarmUpEvent = "drift/platform_views/warm_up"
 
 /// Creates a view of one type: its ID, the parameters Go created it with,
-/// and its event sender.
-public typealias DriftPlatformViewFactory = (_ viewId: Int, _ params: [String: Any], _ events: DriftPlatformViewEvents) -> DriftPlatformView
+/// and its event sender. An error it throws fails Go's
+/// `PlatformViewRegistry.Create` (a `DriftCallError` with its code, any
+/// other error as `native_error`), and no view exists.
+public typealias DriftPlatformViewFactory = (_ viewId: Int, _ params: [String: Any], _ events: DriftPlatformViewEvents) throws -> DriftPlatformView

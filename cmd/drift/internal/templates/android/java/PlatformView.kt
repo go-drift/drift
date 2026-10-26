@@ -5,7 +5,9 @@
 package {{.PackageName}}
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.MutableContextWrapper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -36,17 +38,65 @@ object PlatformViewHandler {
     private val views = mutableMapOf<Int, DriftPlatformView>()
     private val viewTypes = mutableMapOf<Int, String>()
     private val interceptors = mutableMapOf<Int, TouchInterceptorView>()
-    private var context: Context? = null
+    /**
+     * Each view's context: the hosting Activity while there is one, the
+     * Application between Activities, so a view never holds an Activity
+     * that is gone.
+     */
+    private val contexts = mutableMapOf<Int, MutableContextWrapper>()
+    private var activity: Activity? = null
     private var hostView: ViewGroup? = null
     private var surfaceView: View? = null
     private var overlayController: InputOverlayController? = null
     private val main = Handler(Looper.getMainLooper())
 
-    fun init(context: Context, hostView: ViewGroup, surfaceView: View, overlayController: InputOverlayController) {
-        this.context = context
+    /**
+     * Hosts platform views in [activity]'s [hostView]. Views outlive their
+     * Activity (recreation for a configuration change, or a new Activity
+     * after the last finished): those created earlier move into this one,
+     * hidden until the next frame positions them. Main thread.
+     */
+    fun init(activity: Activity, hostView: ViewGroup, surfaceView: View, overlayController: InputOverlayController) {
+        this.activity?.let { detachHost(it) }
+        this.activity = activity
         this.hostView = hostView
         this.surfaceView = surfaceView
         this.overlayController = overlayController
+        for ((viewId, interceptor) in interceptors) {
+            contexts[viewId]?.baseContext = activity
+            interceptor.surfaceView = surfaceView
+            interceptor.visibility = View.GONE
+            addToHost(viewId, interceptor)
+        }
+    }
+
+    /**
+     * Takes the platform views out of [activity], which is being destroyed,
+     * and points their contexts at the Application, so the Activity is not
+     * kept alive; the next Activity's [init] takes them in. Main thread.
+     */
+    fun detachHost(activity: Activity) {
+        if (this.activity !== activity) return
+        for ((viewId, interceptor) in interceptors) {
+            removeFromHost(viewId, interceptor)
+            interceptor.surfaceView = null
+            contexts[viewId]?.baseContext = activity.applicationContext
+        }
+        this.activity = null
+        hostView = null
+        surfaceView = null
+        overlayController = null
+    }
+
+    private fun addToHost(viewId: Int, interceptor: TouchInterceptorView) {
+        val host = hostView ?: return
+        (host as? InputOverlayLayout)?.addOverlayView(viewId, interceptor) ?: host.addView(interceptor)
+    }
+
+    private fun removeFromHost(viewId: Int, interceptor: TouchInterceptorView) {
+        overlayController?.removeView(viewId.toLong())
+        val host = hostView ?: return
+        (host as? InputOverlayLayout)?.removeOverlayView(viewId) ?: host.removeView(interceptor)
     }
 
     /** Registers the view type [type]; a second registration crashes. */
@@ -88,32 +138,34 @@ object PlatformViewHandler {
         Log.i("DriftWarmUp", "Platform view warmup complete")
     }
 
-    fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-
-        return when (method) {
-            "create" -> create(argsMap)
-            "dispose" -> onView(argsMap) { viewId, container ->
-                views.remove(viewId)
-                viewTypes.remove(viewId)
-                container.dispose()
-                overlayController?.removeView(viewId.toLong())
-                val host = hostView
-                val interceptor = interceptors.remove(viewId)
-                if (interceptor != null) {
-                    (host as? InputOverlayLayout)?.removeOverlayView(viewId) ?: host?.removeView(interceptor)
-                } else {
-                    host?.removeView(container.view)
+    /**
+     * Registers the drift/platform_views channel. `create` runs the factory
+     * on the main thread and replies with its outcome, so a factory's
+     * exception reaches Go's Create. Every later operation on a view runs
+     * asynchronously on the main thread, after earlier ones, and Go does not
+     * wait for it.
+     */
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/platform_views") {
+            method("create") { args -> create(viewArgs(args)) }
+            method("dispose") { args ->
+                onView(viewArgs(args)) { viewId, container ->
+                    views.remove(viewId)
+                    viewTypes.remove(viewId)
+                    contexts.remove(viewId)
+                    container.dispose()
+                    interceptors.remove(viewId)?.let { removeFromHost(viewId, it) }
                 }
             }
-            "setVisible" -> {
+            method("setVisible") { args ->
+                val argsMap = viewArgs(args)
                 val visible = argsMap["visible"] as? Boolean ?: true
                 onView(argsMap) { viewId, container ->
                     (interceptors[viewId] ?: container.view).visibility = if (visible) View.VISIBLE else View.GONE
                 }
             }
-            "setEnabled" -> {
+            method("setEnabled") { args ->
+                val argsMap = viewArgs(args)
                 val enabled = argsMap["enabled"] as? Boolean ?: true
                 onView(argsMap) { _, container ->
                     // The inner view, not the interceptor wrapper.
@@ -121,9 +173,10 @@ object PlatformViewHandler {
                     container.view.alpha = if (enabled) 1.0f else 0.5f
                 }
             }
-            "invokeViewMethod" -> {
+            method("invokeViewMethod") { args ->
+                val argsMap = viewArgs(args)
                 val viewMethod = argsMap["method"] as? String
-                    ?: return Pair(null, IllegalArgumentException("Missing method"))
+                    ?: throw IllegalArgumentException("Missing method")
                 @Suppress("UNCHECKED_CAST")
                 val viewArgs = argsMap as Map<String, Any?>
                 onView(argsMap) { viewId, container ->
@@ -138,69 +191,68 @@ object PlatformViewHandler {
                     }
                 }
             }
-            else -> Pair(null, unknownMethod("drift/platform_views", method))
         }
     }
+
+    private fun viewArgs(args: Any?): Map<*, *> =
+        args as? Map<*, *> ?: throw IllegalArgumentException("Invalid arguments")
 
     /**
      * Runs [body] on the main thread, after earlier calls, with the view
      * args' viewId names; a view already disposed is skipped (Go may call it
      * after disposing).
      */
-    private fun onView(args: Map<*, *>, body: (Int, DriftPlatformView) -> Unit): Pair<Any?, Exception?> {
+    private fun onView(args: Map<*, *>, body: (Int, DriftPlatformView) -> Unit): Any? {
         val viewId = (args["viewId"] as? Number)?.toInt()
-            ?: return Pair(null, IllegalArgumentException("Missing viewId"))
+            ?: throw IllegalArgumentException("Missing viewId")
         main.post {
             val container = views[viewId] ?: return@post
             body(viewId, container)
         }
-        return Pair(null, null)
+        return null
     }
 
-    private fun create(args: Map<*, *>): Pair<Any?, Exception?> {
+    /**
+     * Creates the view on the main thread, failing the call if the factory
+     * throws, and puts it in the host (or the next host, if no Activity
+     * hosts views now). Go is notified once the view is in the hierarchy,
+     * so resendGeometry targets it.
+     */
+    private fun create(args: Map<*, *>): Any? {
         val viewId = (args["viewId"] as? Number)?.toInt()
-            ?: return Pair(null, IllegalArgumentException("Missing viewId"))
+            ?: throw IllegalArgumentException("Missing viewId")
         val viewType = args["viewType"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing viewType"))
+            ?: throw IllegalArgumentException("Missing viewType")
         @Suppress("UNCHECKED_CAST")
         val params = args["params"] as? Map<String, Any?> ?: emptyMap()
-        val factory = factories[viewType] ?: return Pair(null, DriftCallError(
+        val factory = factories[viewType] ?: throw DriftCallError(
             "view_type_not_found",
             "no native platform view type \"$viewType\"; add the plugin that provides it to drift.yaml",
-        ))
+        )
 
-        // Created on the main thread, after earlier calls. Go is notified
-        // once the view is in the hierarchy, so resendGeometry targets it.
-        main.post {
-            val ctx = context
-            val host = hostView
-            if (ctx == null || host == null) {
-                Log.e("DriftPlatformView", "platform view $viewId created before the host view")
-                return@post
-            }
-            val events = DriftPlatformViewEvents(viewId) { event ->
-                PlatformChannelManager.sendEvent("drift/platform_views", event)
-            }
-            val container = factory.create(ctx, viewId, params, events)
-            views[viewId] = container
-            viewTypes[viewId] = viewType
-
-            val interceptor = TouchInterceptorView(ctx, viewId)
-            interceptor.supportsRegionMask = container.supportsRegionMask
-            if (viewType == "textinput") {
-                val multiline = params["multiline"] as? Boolean ?: false
-                interceptor.enableUnfocusedTextScrollForwarding = !multiline
-            }
-            interceptor.surfaceView = surfaceView
-            interceptor.addView(container.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-            interceptor.visibility = View.GONE // Hidden until positioned
-            interceptors[viewId] = interceptor
-            (host as? InputOverlayLayout)?.addOverlayView(viewId, interceptor) ?: host.addView(interceptor)
-
-            events.send("onViewCreated")
+        val ctx = MutableContextWrapper(activity ?: PlatformChannelManager.context)
+        val events = DriftPlatformViewEvents(viewId) { event ->
+            PlatformChannelManager.sendEvent("drift/platform_views", event)
         }
+        val container = factory.create(ctx, viewId, params, events)
+        views[viewId] = container
+        viewTypes[viewId] = viewType
+        contexts[viewId] = ctx
 
-        return Pair(mapOf("created" to true), null)
+        val interceptor = TouchInterceptorView(ctx, viewId)
+        interceptor.supportsRegionMask = container.supportsRegionMask
+        if (viewType == "textinput") {
+            val multiline = params["multiline"] as? Boolean ?: false
+            interceptor.enableUnfocusedTextScrollForwarding = !multiline
+        }
+        interceptor.surfaceView = surfaceView
+        interceptor.addView(container.view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        interceptor.visibility = View.GONE // Hidden until positioned
+        interceptors[viewId] = interceptor
+        addToHost(viewId, interceptor)
+
+        events.send("onViewCreated")
+        return null
     }
 }
 

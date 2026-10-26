@@ -797,7 +797,7 @@ The app creates one instance of each plugin class per process, in `drift.yaml` o
 | | iOS (`DriftPlugin` protocol) | Android (`DriftPlugin` interface) |
 |---|---|---|
 | Once per process | `register(host:)`, then `didFinishLaunching(_:options:)` | `onRegister(host)`, when the process starts (`Application.onCreate`), before any Activity, service or receiver; a process may start without an Activity, for a push message or an alarm |
-| View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller, which detaches when its scene disconnects | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity (recreation detaches and attaches again) |
+| View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller, which detaches when its scene disconnects | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity: a configuration change Drift does not handle itself (dark mode, locale) destroys the Activity and creates another, as does reopening the app after its Activity finished, each with a fresh binding |
 | Overlays | `binding.overlayView`: above Drift's content and platform views; touches pass through where it is empty | `binding.overlayView`: the window's decor view |
 | App events | `openURL` (a URL the app is opened with, such as an OAuth redirect), `continueUserActivity` (universal links, Handoff, Spotlight; on xtool universal links only), `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse`; launch URLs and activities included | `binding.addOnNewIntentListener`; the launch intent is `binding.activity.intent`, to act on only when `binding.isNewLaunch` (false for a recreated Activity or one relaunched from Recents) |
 
@@ -925,6 +925,10 @@ host.registerPlatformView("acme/map") { context, viewId, params, events ->
 ```
 
 A `DriftPlatformView` has its `view`, `handle(method, args)` for calls from Go, `dispose()`, and (Android) `supportsRegionMask`: true for TextureView-backed views, which Drift can clip by a path when Drift UI overlaps them. Go does not wait for view methods, so `handle` reports failures by throwing (they are logged) and results as events: `events.send(method, data)`.
+
+A factory that cannot make its view throws (a `DriftCallError` to give Go a code). Go's `Create` waits for the factory and returns that error, and no view exists; the media plugin's `NewVideoPlayerController` returns it to the app.
+
+A view outlives its host. When an Android Activity is recreated or replaced, or an iOS scene reconnects, Drift moves every view into the new Drift view, so a video keeps playing and a web view keeps its page; plugins do nothing. A view must not keep what it was hosted in: on Android its `context` wraps the hosting Activity and Drift points it at the next one (and at the Application in between), so create the view with it and never cast it to an `Activity` or keep the Activity; on iOS, reach the current view controller through `view.window`.
 
 Drift creates and drops a throwaway WebView at launch so the first real one opens without a stall. A view whose framework is slow to load can do the same: observe the warm-up event (`host.observeEvent(driftPlatformViewWarmUpEvent)` on iOS, `DRIFT_PLATFORM_VIEW_WARM_UP_EVENT` on Android), which Drift posts once at launch unless the app called `engine.DisableViewWarmUp`.
 

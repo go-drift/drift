@@ -110,6 +110,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         DriftPlugins.detach(this)
+        // The platform views move to the next Activity.
+        PlatformViewHandler.detachHost(this)
         super.onDestroy()
     }
 }

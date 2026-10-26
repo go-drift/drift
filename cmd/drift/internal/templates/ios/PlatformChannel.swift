@@ -500,10 +500,8 @@ final class PlatformChannelManager: DriftPluginHost {
             return DeepLinkHandler.handle(method: method, args: args)
         }
 
-        // Platform Views channel
-        register(channel: "drift/platform_views") { method, args in
-            return PlatformViewHandler.handle(method: method, args: args)
-        }
+        // Platform Views channel and Drift's own view types
+        PlatformViewHandler.start(host: self)
         PlatformViewHandler.registerBuiltIns(host: self)
 
         // Permissions channel and Drift's own permission kinds

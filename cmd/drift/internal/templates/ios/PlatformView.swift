@@ -296,12 +296,33 @@ enum PlatformViewHandler {
     /// A subview of hostView that platform views stay below (plugin overlays).
     private static weak var overlayView: UIView?
 
-    /// Sets the host view where platform views will be added, below
-    /// overlayView, one of its subviews.
+    /// Sets the host view where platform views go, below overlayView, one of
+    /// its subviews. Views outlive their host: those created earlier (for
+    /// a scene that disconnected, or before any host) move into this one,
+    /// hidden until the next frame positions them.
     static func setHostView(_ view: UIView, below overlayView: UIView) {
+        dispatchPrecondition(condition: .onQueue(.main))
         precondition(overlayView.superview === view, "drift: platform view overlay must be a subview of the host view")
         hostView = view
         self.overlayView = overlayView
+        for interceptor in interceptors.values {
+            interceptor.removeFromSuperview()
+            interceptor.isHidden = true
+            view.insertSubview(interceptor, belowSubview: overlayView)
+        }
+    }
+
+    /// Takes the platform views out of view, a host whose scene
+    /// disconnected, so they do not stay in its dead hierarchy; the next
+    /// host takes them in.
+    static func removeHostView(_ view: UIView) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard hostView === view else { return }
+        for interceptor in interceptors.values {
+            interceptor.removeFromSuperview()
+        }
+        hostView = nil
+        overlayView = nil
     }
 
     /// Pre-warms expensive platform view classes by creating throwaway
@@ -374,72 +395,90 @@ enum PlatformViewHandler {
         host.registerPlatformView("activity_indicator") { id, params, _ in NativeActivityIndicatorContainer(viewId: id, params: params) }
     }
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        guard let dict = args as? [String: Any] else {
-            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
+    /// Registers the drift/platform_views channel. `create` runs the
+    /// factory on the main thread and replies with its outcome, so a
+    /// factory's error reaches Go's Create. Every later operation on a view
+    /// runs asynchronously on the main thread, after earlier ones, and Go
+    /// does not wait for it.
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/platform_views") { channel in
+            channel.method("create") { args in
+                try create(args: viewArgs(args))
+            }
+            channel.method("dispose") { args in
+                try onView(viewArgs(args)) { viewId, container in
+                    let interceptor = interceptors.removeValue(forKey: viewId)
+                    maskLayers.removeValue(forKey: viewId)
+                    views.removeValue(forKey: viewId)
+                    viewTypes.removeValue(forKey: viewId)
+                    container.dispose()
+                    interceptor?.removeFromSuperview()
+                }
+            }
+            channel.method("setVisible") { args in
+                let dict = try viewArgs(args)
+                let visible = dict["visible"] as? Bool ?? true
+                return try onView(dict) { viewId, container in
+                    (interceptors[viewId] ?? container.view).isHidden = !visible
+                }
+            }
+            channel.method("setEnabled") { args in
+                let dict = try viewArgs(args)
+                let enabled = dict["enabled"] as? Bool ?? true
+                return try onView(dict) { _, container in
+                    container.view.isUserInteractionEnabled = enabled
+                    container.view.alpha = enabled ? 1.0 : 0.5
+                }
+            }
+            channel.method("invokeViewMethod") { args in
+                let dict = try viewArgs(args)
+                guard let viewMethod = dict["method"] as? String else {
+                    throw DriftCallError.invalidArguments("Missing method")
+                }
+                return try onView(dict) { viewId, container in
+                    do {
+                        try container.handle(viewMethod, dict)
+                    } catch {
+                        DriftLog.platform.error("platform view \(viewId) (\(viewTypes[viewId] ?? "?")): \(viewMethod): \(error.localizedDescription)")
+                    }
+                    if viewTypes[viewId] == "textinput", viewMethod == "updateConfig" {
+                        let multiline = dict["multiline"] as? Bool ?? false
+                        interceptors[viewId]?.enableUnfocusedTextScrollForwarding = !multiline
+                    }
+                }
+            }
         }
+    }
 
-        switch method {
-        case "create":
-            return create(args: dict)
-        case "dispose":
-            return onView(dict) { viewId, container in
-                let interceptor = interceptors.removeValue(forKey: viewId)
-                maskLayers.removeValue(forKey: viewId)
-                views.removeValue(forKey: viewId)
-                viewTypes.removeValue(forKey: viewId)
-                container.dispose()
-                interceptor?.removeFromSuperview()
-            }
-        case "setVisible":
-            let visible = dict["visible"] as? Bool ?? true
-            return onView(dict) { viewId, container in
-                (interceptors[viewId] ?? container.view).isHidden = !visible
-            }
-        case "setEnabled":
-            let enabled = dict["enabled"] as? Bool ?? true
-            return onView(dict) { _, container in
-                container.view.isUserInteractionEnabled = enabled
-                container.view.alpha = enabled ? 1.0 : 0.5
-            }
-        case "invokeViewMethod":
-            guard let viewMethod = dict["method"] as? String else {
-                return (nil, DriftCallError.invalidArguments("Missing method"))
-            }
-            return onView(dict) { viewId, container in
-                do {
-                    try container.handle(viewMethod, dict)
-                } catch {
-                    DriftLog.platform.error("platform view \(viewId) (\(viewTypes[viewId] ?? "?")): \(viewMethod): \(error.localizedDescription)")
-                }
-                if viewTypes[viewId] == "textinput", viewMethod == "updateConfig" {
-                    let multiline = dict["multiline"] as? Bool ?? false
-                    interceptors[viewId]?.enableUnfocusedTextScrollForwarding = !multiline
-                }
-            }
-        default:
-            return (nil, unknownMethod("drift/platform_views", method))
+    private static func viewArgs(_ args: Any?) throws -> [String: Any] {
+        guard let dict = args as? [String: Any] else {
+            throw DriftCallError.invalidArguments("Invalid arguments")
         }
+        return dict
     }
 
     /// Runs body on the main thread, after earlier calls, with the view
     /// args' viewId names; a view already disposed is skipped (Go may call
     /// it after disposing).
-    private static func onView(_ args: [String: Any], _ body: @escaping (Int, DriftPlatformView) -> Void) -> (Any?, Error?) {
+    private static func onView(_ args: [String: Any], _ body: @escaping (Int, DriftPlatformView) -> Void) throws -> Any? {
         guard let viewId = args["viewId"] as? Int else {
-            return (nil, DriftCallError.invalidArguments("Missing viewId"))
+            throw DriftCallError.invalidArguments("Missing viewId")
         }
         DispatchQueue.main.async {
             guard let container = views[viewId] else { return }
             body(viewId, container)
         }
-        return (nil, nil)
+        return nil
     }
 
-    private static func create(args: [String: Any]) -> (Any?, Error?) {
+    /// Creates the view on the main thread, failing the call if the
+    /// factory throws, and puts it in the host (or the next host, if none
+    /// is set). Go is notified once the view is in the hierarchy, so
+    /// resendGeometry targets it.
+    private static func create(args: [String: Any]) throws -> Any? {
         guard let viewId = args["viewId"] as? Int,
               let viewType = args["viewType"] as? String else {
-            return (nil, DriftCallError.invalidArguments("Missing viewId or viewType"))
+            throw DriftCallError.invalidArguments("Missing viewId or viewType")
         }
         let params = args["params"] as? [String: Any] ?? [:]
 
@@ -447,41 +486,36 @@ enum PlatformViewHandler {
         let factory = factories[viewType]
         factoriesLock.unlock()
         guard let factory else {
-            return (nil, DriftCallError("view_type_not_found", "no native platform view type \"\(viewType)\"; add the plugin that provides it to drift.yaml"))
+            throw DriftCallError("view_type_not_found", "no native platform view type \"\(viewType)\"; add the plugin that provides it to drift.yaml")
         }
 
-        // Created on the main thread, after earlier calls. Go is notified
-        // once the view is in the hierarchy, so resendGeometry targets it.
-        DispatchQueue.main.async {
-            let events = DriftPlatformViewEvents(viewId: viewId) { event in
-                PlatformChannelManager.shared.sendEvent(channel: "drift/platform_views", data: event)
-            }
-            let container = factory(viewId, params, events)
-            views[viewId] = container
-            viewTypes[viewId] = viewType
-            if let host = hostView, let overlay = overlayView {
-                let interceptor = TouchInterceptorView(viewId: viewId)
-                if viewType == "textinput" {
-                    let multiline = params["multiline"] as? Bool ?? false
-                    interceptor.enableUnfocusedTextScrollForwarding = !multiline
-                }
-                interceptor.addSubview(container.view)
-                // Child fills interceptor
-                container.view.translatesAutoresizingMaskIntoConstraints = false
-                NSLayoutConstraint.activate([
-                    container.view.topAnchor.constraint(equalTo: interceptor.topAnchor),
-                    container.view.leadingAnchor.constraint(equalTo: interceptor.leadingAnchor),
-                    container.view.trailingAnchor.constraint(equalTo: interceptor.trailingAnchor),
-                    container.view.bottomAnchor.constraint(equalTo: interceptor.bottomAnchor)
-                ])
-                interceptor.isHidden = true // Hidden until positioned
-                interceptors[viewId] = interceptor
-                host.insertSubview(interceptor, belowSubview: overlay)
-            }
-            events.send("onViewCreated")
+        let events = DriftPlatformViewEvents(viewId: viewId) { event in
+            PlatformChannelManager.shared.sendEvent(channel: "drift/platform_views", data: event)
         }
-
-        return (["created": true], nil)
+        let container = try factory(viewId, params, events)
+        views[viewId] = container
+        viewTypes[viewId] = viewType
+        let interceptor = TouchInterceptorView(viewId: viewId)
+        if viewType == "textinput" {
+            let multiline = params["multiline"] as? Bool ?? false
+            interceptor.enableUnfocusedTextScrollForwarding = !multiline
+        }
+        interceptor.addSubview(container.view)
+        // Child fills interceptor
+        container.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            container.view.topAnchor.constraint(equalTo: interceptor.topAnchor),
+            container.view.leadingAnchor.constraint(equalTo: interceptor.leadingAnchor),
+            container.view.trailingAnchor.constraint(equalTo: interceptor.trailingAnchor),
+            container.view.bottomAnchor.constraint(equalTo: interceptor.bottomAnchor)
+        ])
+        interceptor.isHidden = true // Hidden until positioned
+        interceptors[viewId] = interceptor
+        if let host = hostView, let overlay = overlayView {
+            host.insertSubview(interceptor, belowSubview: overlay)
+        }
+        events.send("onViewCreated")
+        return nil
     }
 
     /// Apply visibility masking to a platform view using visibleRect and occlusion masks.
