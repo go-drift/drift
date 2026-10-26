@@ -157,18 +157,25 @@ func TestImageSetBundleFilesLoosePNG(t *testing.T) {
 	}
 }
 
-func TestWriteAndroidAppModuleFiles(t *testing.T) {
+func TestWriteOwnedAppModuleFile(t *testing.T) {
 	dir := t.TempDir()
 	op := &protocol.OpAndroidAddAppModuleFile{
 		Base:    protocol.Base{Pkg: "fb"},
 		Name:    "google-services.json",
 		Content: base64.StdEncoding.EncodeToString([]byte(`{"project_info":{}}`)),
 	}
-	changed, err := writeAndroidAppModuleFiles(t, dir, []*protocol.OpAndroidAddAppModuleFile{op})
+	file, err := AppModuleFile(dir, op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := writeOwned(t, file)
 	if err != nil || len(changed) != 1 {
 		t.Fatalf("write: %v, %v", changed, err)
 	}
-	changed, err = writeAndroidAppModuleFiles(t, dir, []*protocol.OpAndroidAddAppModuleFile{op})
+	if got, err := os.ReadFile(filepath.Join(dir, "google-services.json")); err != nil || string(got) != `{"project_info":{}}` {
+		t.Errorf("google-services.json = %q, %v", got, err)
+	}
+	changed, err = writeOwned(t, file)
 	if err != nil || len(changed) != 0 {
 		t.Errorf("expected idempotent rerun, got %v, %v", changed, err)
 	}

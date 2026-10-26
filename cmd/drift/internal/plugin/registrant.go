@@ -42,10 +42,12 @@ var AndroidRunnerSupportFiles = []struct {
 func WriteRegistrant(cs *mutate.Changeset, buildDir, platform string, ops []protocol.Op) ([]string, error) {
 	switch platform {
 	case "android":
-		dest := filepath.Join(buildDir, "app", "src", "main", "java", "com", "drift", "runner", "DriftPluginRegistrant.kt")
+		p := project{dir: buildDir, platform: platform}
+		dest := p.abs(p.runnerPackage() + "/DriftPluginRegistrant.kt")
 		return planFile(cs, dest, []byte(androidRegistrant(ops)))
 	case "ios", "xtool":
-		dest := filepath.Join(iosRunnerSourcesDir(buildDir, platform), "DriftPluginRegistrant.swift")
+		p := project{dir: buildDir, platform: platform}
+		dest := p.abs(p.iosSources() + "/DriftPluginRegistrant.swift")
 		return planFile(cs, dest, []byte(iosRegistrant(ops)))
 	default:
 		return nil, fmt.Errorf("WriteRegistrant: unknown platform %q", platform)
@@ -135,7 +137,8 @@ var IOSRunnerSupportFiles = []string{
 }
 
 func ensureIOSRunnerSupport(cs *mutate.Changeset, buildDir, platform string) ([]string, error) {
-	dir := iosRunnerSourcesDir(buildDir, platform)
+	p := project{dir: buildDir, platform: platform}
+	dir := p.abs(p.iosSources())
 	var changed []string
 	for _, name := range IOSRunnerSupportFiles {
 		content, err := templates.ReadFile("ios/" + name)
@@ -151,18 +154,9 @@ func ensureIOSRunnerSupport(cs *mutate.Changeset, buildDir, platform string) ([]
 	return changed, nil
 }
 
-// iosRunnerSourcesDir is where the app target's Swift sources live:
-// Runner/ for xcodeproj builds (managed and ejected), Sources/Runner/ for
-// xtool.
-func iosRunnerSourcesDir(buildDir, platform string) string {
-	if platform == "xtool" {
-		return filepath.Join(buildDir, "Sources", "Runner")
-	}
-	return filepath.Join(buildDir, "Runner")
-}
-
 func ensureAndroidRunnerSupport(cs *mutate.Changeset, buildDir string) ([]string, error) {
-	root := filepath.Join(buildDir, "app", "src", "main", "java", "com", "drift", "runner")
+	p := project{dir: buildDir, platform: "android"}
+	root := p.abs(p.runnerPackage())
 	var changed []string
 	for _, f := range AndroidRunnerSupportFiles {
 		content, err := templates.ReadFile(f.TemplatePath)

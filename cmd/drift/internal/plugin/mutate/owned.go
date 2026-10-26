@@ -12,8 +12,8 @@ import (
 // bytes it writes. Drift creates and owns these files, or, for the launch
 // screen, takes over the template's file whole, unlike edits inside files
 // the scaffold or the user owns (Info.plist, AndroidManifest.xml,
-// build.gradle). The writers below and the ejected-project lock both use
-// these functions, so the lock records exactly what was written.
+// build.gradle). Apply writes exactly these files (WriteOwned) and the
+// ejected-project lock records them, so the lock records what was written.
 type OwnedFile struct {
 	Path    string
 	Content []byte
@@ -85,8 +85,8 @@ func AppModuleFile(appDir string, op *protocol.OpAndroidAddAppModuleFile) (Owned
 	return OwnedFile{Path: filepath.Join(appDir, op.Name), Content: content}, nil
 }
 
-// writeOwned plans each file and returns the paths whose bytes change.
-func writeOwned(cs *Changeset, files ...OwnedFile) ([]string, error) {
+// WriteOwned plans each file and returns the paths whose bytes change.
+func WriteOwned(cs *Changeset, files ...OwnedFile) ([]string, error) {
 	var changed []string
 	for _, f := range files {
 		ch, err := cs.WriteFile(f.Path, f.Content)
@@ -95,23 +95,6 @@ func writeOwned(cs *Changeset, files ...OwnedFile) ([]string, error) {
 		}
 		if ch {
 			changed = append(changed, f.Path)
-		}
-	}
-	return changed, nil
-}
-
-// writeEach plans the OwnedFile each op produces.
-func writeEach[O any](cs *Changeset, ops []O, file func(O) (OwnedFile, error)) ([]string, error) {
-	var changed []string
-	for _, op := range ops {
-		f, err := file(op)
-		if err != nil {
-			return changed, err
-		}
-		paths, err := writeOwned(cs, f)
-		changed = append(changed, paths...)
-		if err != nil {
-			return changed, err
 		}
 	}
 	return changed, nil

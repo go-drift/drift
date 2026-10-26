@@ -66,12 +66,9 @@ func CheckEjectedIOS(projectDir string, ops []protocol.Op) error {
 			`Runner.xcodeproj must reference the local Swift package at Drift/Plugins and link its "DriftPlugins" product, `+
 				`which holds the plugin API the app imports (Xcode: File > Add Package Dependencies > Add Local..., select Drift/Plugins)`)
 	}
-	editsEntitlements := slices.ContainsFunc(ops, func(op protocol.Op) bool {
-		p, ok := op.(protocol.PlistOp)
-		return ok && p.PlistFile() == protocol.PlistEntitlements
-	})
-	if editsEntitlements {
-		entitlements := iosPlistRelPath("ios", protocol.PlistEntitlements)
+	p := project{dir: projectDir, platform: "ios"}
+	entitlements := p.plist(protocol.PlistEntitlements)
+	if editsAny(ops, p, entitlements) {
 		if _, err := os.Stat(filepath.Join(projectDir, entitlements)); err != nil {
 			problems = append(problems, fmt.Sprintf(
 				"%s is required by plugins that add entitlements: create it as an empty plist (<dict/>) next to Runner.xcodeproj", entitlements))
@@ -99,19 +96,21 @@ func CheckEjectedAndroid(projectDir string, ops []protocol.Op) error {
 		}
 		return filepath.Join(filepath.Dir(mainActivity), name)
 	})
-	editsGradle := slices.ContainsFunc(ops, func(op protocol.Op) bool {
-		switch op.(type) {
-		case *protocol.OpAndroidGradleAddDependency, *protocol.OpAndroidGradleApplyPlugin:
-			return true
-		}
-		return false
-	})
-	if editsGradle {
-		if _, err := os.Stat(filepath.Join(projectDir, "app", "build.gradle")); err != nil {
+	p := project{dir: projectDir, platform: "android"}
+	if editsAny(ops, p, p.appGradle()) {
+		if _, err := os.Stat(p.abs(p.appGradle())); err != nil {
 			problems = append(problems, "app/build.gradle (Groovy DSL) is required by plugins that add Gradle dependencies or plugins; Kotlin DSL build files are not supported")
 		}
 	}
 	return wiringError("Android", projectDir, problems)
+}
+
+// editsAny reports whether an op for p's platform edits its shared file
+// rel.
+func editsAny(ops []protocol.Op, p project, rel string) bool {
+	return slices.ContainsFunc(ops, func(op protocol.Op) bool {
+		return opAppliesTo(op, p.platform) && edits(op, p, rel)
+	})
 }
 
 func checkWiring(projectDir string, calls []wiringCall, resolve func(name string) string) []string {
@@ -146,7 +145,8 @@ func wiringError(platform, projectDir string, problems []string) error {
 // findMainActivity returns the path of the ejected project's
 // MainActivity.kt, which lives under the app's package directory.
 func findMainActivity(projectDir string) (string, error) {
-	root := filepath.Join(projectDir, "app", "src", "main", "java")
+	p := project{dir: projectDir, platform: "android"}
+	root := p.abs(p.javaRoot())
 	var found []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

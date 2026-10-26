@@ -59,8 +59,8 @@ func writeIOSBundleResources(t *testing.T, dir string, files []BundleFile) ([]st
 	return committed(t, func(cs *Changeset) ([]string, error) { return WriteIOSBundleResources(cs, dir, files) })
 }
 
-func writeAndroidAppModuleFiles(t *testing.T, dir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
-	return committed(t, func(cs *Changeset) ([]string, error) { return WriteAndroidAppModuleFiles(cs, dir, ops) })
+func writeOwned(t *testing.T, files ...OwnedFile) ([]string, error) {
+	return committed(t, func(cs *Changeset) ([]string, error) { return WriteOwned(cs, files...) })
 }
 
 func writeAndroidColors(t *testing.T, path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {

@@ -12,7 +12,7 @@ Package layout:
 |---------|-------|
 | `pkg/plugin` | Author API: `Plugin[T]`, `BuildCtx` and its recorder scopes, config schema from `drift` tags, test contexts, bridge `Main`/`Bind` |
 | `pkg/plugin/protocol` | The CLI-to-bridge wire contract: envelope, response, op types (`ops.go`), validation (`validate.go`), config schema (`schema.go`), `Color` |
-| `cmd/drift/internal/plugin` | CLI side: drift.yaml parsing (`manifest.go`), deps (`deps.go`), bridge build/run (`bridge.go`), conflicts (`conflict.go`), apply (`apply.go`), registrant and host support files (`registrant.go`), ejected checks (`ejected.go`) and lock (`lock.go`), `sync`/`list` (`sync.go`) |
+| `cmd/drift/internal/plugin` | CLI side: drift.yaml parsing (`manifest.go`), deps (`deps.go`), bridge build/run (`bridge.go`), conflicts (`conflict.go`), op kinds (`opkinds.go`), project paths (`project.go`), apply (`apply.go`), registrant and host support files (`registrant.go`), ejected checks (`ejected.go`) and lock (`lock.go`), `sync`/`list` (`sync.go`) |
 | `cmd/drift/internal/plugin/mutate` | One mutator per file kind: plist, AndroidManifest and resource XML, Gradle, sources, bundle resources, the `Drift/Plugins` Swift package, `xtool.yml` |
 | `cmd/drift/internal/templates/plugin-api/ios`, `templates/android/runner` | The native plugin API (`DriftPlugin`, `DriftPluginHost`, bindings, `DriftResult`) |
 
@@ -75,7 +75,9 @@ Each op declares the **targets** it writes: a key naming a location (`plist:<fil
 
 Some ops claim more than one key: an image set also claims its loose `<Name>.png` bundle name (xtool), a non-values resource XML file also claims the resource its file name defines, a Swift source also claims its basename within the plugin's module.
 
-Adding an op means touching: the struct and its four methods plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), the bag and switch in `apply.go`, a mutator, the guide's op reference, `OwnedFiles` (`apply.go`) if it writes whole files, and `describeEdit` (`lock.go`) if it edits a shared file. `TestOpsCoverAllConstructors`, `TestApplyKnowsEveryOpType` and `TestOpReferenceListsEveryOp` catch omissions.
+On the CLI side, each op type has one `opKind` entry (`opkinds.go`): the shared files it edits and what it changes there (the ejected lock's edit text and the ejected-project checks), the whole files it owns (written as they are by `Apply` and recorded by the lock), the exact line of a versioned Gradle op, and the mutator batch it feeds. Every project location lives on `project` (`project.go`), so `Apply`, the lock, the registrant and the ejected checks share one path for each file.
+
+Adding an op means touching: the struct and its four methods plus the constructor table (`protocol/ops.go`), a recorder (`buildctx.go`), the fixture (`protocol/ops_test.go`), its `opKind` entry, a mutator if it writes a new kind of file, and the guide's op reference. `TestOpsCoverAllConstructors`, `TestEveryOpTypeHasAKind` and `TestOpReferenceListsEveryOp` catch omissions.
 
 ## iOS specifics
 

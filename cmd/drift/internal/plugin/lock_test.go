@@ -46,7 +46,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 
 	writeFiles := func() {
 		for _, op := range ops {
-			files, err := OwnedFiles(op, dir, "android")
+			files, err := ownedFiles(op, project{dir: dir, platform: "android"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -136,7 +136,7 @@ func TestSyncEjectedLockContentChangeIsNotRemoval(t *testing.T) {
 	}
 }
 
-// The lock records OwnedFiles; they must be exactly what Apply writes, or
+// The lock records ownedFiles; they must be exactly what Apply writes, or
 // cleanup would miss files or delete the wrong ones.
 func TestOwnedFilesMatchApply(t *testing.T) {
 	dir := t.TempDir()
@@ -154,9 +154,9 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 	for _, op := range ops {
-		files, err := OwnedFiles(op, dir, "android")
+		files, err := ownedFiles(op, project{dir: dir, platform: "android"})
 		if err != nil || len(files) != 1 {
-			t.Fatalf("%s: OwnedFiles = %v, %v", op.Type(), files, err)
+			t.Fatalf("%s: ownedFiles = %v, %v", op.Type(), files, err)
 		}
 		got, err := os.ReadFile(files[0].Path)
 		if err != nil {

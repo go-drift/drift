@@ -73,7 +73,8 @@ type lockedFile struct {
 // Returns the paths the commit deletes or restores, and the dropped edits.
 // err is a failure to plan, after which cs must not be committed.
 func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []protocol.Op, prev *Lock) (reverted, dropped []string, err error) {
-	cur, err := lockFor(ops, projectDir, platform)
+	p := project{dir: projectDir, platform: platform}
+	cur, err := lockFor(ops, p)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,8 +94,8 @@ func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []pr
 			if curFiles[f.Path] {
 				continue
 			}
-			path := filepath.Join(projectDir, filepath.FromSlash(f.Path))
-			def, err := templateDefault(projectDir, platform, path)
+			path := p.abs(f.Path)
+			def, err := templateDefault(p, path)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -189,23 +190,23 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func lockFor(ops []protocol.Op, projectDir, platform string) (Lock, error) {
+func lockFor(ops []protocol.Op, p project) (Lock, error) {
 	l := Lock{Version: 1, Ops: []lockedOp{}}
 	for _, op := range ops {
-		if !opAppliesTo(op, platform) {
+		if !opAppliesTo(op, p.platform) {
 			continue
 		}
-		files, err := OwnedFiles(op, projectDir, platform)
+		files, err := ownedFiles(op, p)
 		if err != nil {
 			return l, err
 		}
-		entry := lockedOp{Key: lockKey(op), Plugin: op.PluginPackage(), Edit: describeEdit(op, platform), Line: gradleLine(op)}
+		entry := lockedOp{Key: lockKey(op), Plugin: op.PluginPackage(), Edit: describeEdit(op, p), Line: gradleLine(op)}
 		for _, f := range files {
-			rel, err := filepath.Rel(projectDir, f.Path)
+			rel, err := p.rel(f.Path)
 			if err != nil {
 				return l, err
 			}
-			entry.Files = append(entry.Files, lockedFile{Path: filepath.ToSlash(rel), SHA256: sha256Hex(f.Content)})
+			entry.Files = append(entry.Files, lockedFile{Path: rel, SHA256: sha256Hex(f.Content)})
 		}
 		l.Ops = append(l.Ops, entry)
 	}
@@ -224,19 +225,6 @@ func lockKey(op protocol.Op) string {
 		parts = append(parts, t.String())
 	}
 	return strings.Join(parts, " ")
-}
-
-// gradleLine is the line a versioned Gradle op writes, or "".
-func gradleLine(op protocol.Op) string {
-	switch v := op.(type) {
-	case *protocol.OpAndroidGradleAddDependency:
-		return mutate.GradleDependencyLine(v)
-	case *protocol.OpAndroidGradleApplyPlugin:
-		if v.Version != "" {
-			return mutate.GradlePluginDeclaration(v)
-		}
-	}
-	return ""
 }
 
 // gradleReplacements maps the line each versioned Gradle op in ops writes
@@ -259,41 +247,6 @@ func (l *Lock) gradleReplacements(ops []protocol.Op) map[string]string {
 		}
 	}
 	return replace
-}
-
-// describeEdit names the edit op makes inside a shared file, or "" if it
-// makes none (it owns whole files, or writes output Drift regenerates).
-func describeEdit(op protocol.Op, platform string) string {
-	const manifest = "app/src/main/AndroidManifest.xml"
-	switch v := op.(type) {
-	case *protocol.OpPlistAppendArrayItem:
-		return fmt.Sprintf("%s: %q in array %s", iosPlistRelPath(platform, v.File), v.Value, v.Key)
-	case protocol.PlistOp:
-		return fmt.Sprintf("%s: key %s", iosPlistRelPath(platform, v.PlistFile()), v.PlistKey())
-	case *protocol.OpAndroidManifestAddPermission:
-		if v.MaxSDK > 0 {
-			return fmt.Sprintf("%s: <uses-permission android:name=%q android:maxSdkVersion=\"%d\">", manifest, v.Name, v.MaxSDK)
-		}
-		return fmt.Sprintf("%s: <uses-permission android:name=%q>", manifest, v.Name)
-	case *protocol.OpAndroidManifestAddIntentFilter:
-		return fmt.Sprintf("%s: %s on activity %s", manifest, strings.Join(strings.Fields(v.XML), " "), v.Activity)
-	case *protocol.OpAndroidManifestSetActivityAttr:
-		return fmt.Sprintf("%s: %s=%q on activity %s", manifest, v.Attr, v.Value, v.Activity)
-	case *protocol.OpAndroidManifestAddService:
-		return fmt.Sprintf("%s: <service android:name=%q>", manifest, v.ServiceName())
-	case *protocol.OpAndroidManifestAddReceiver:
-		return fmt.Sprintf("%s: <receiver android:name=%q>", manifest, v.ReceiverName())
-	case *protocol.OpAndroidManifestAddMetaData:
-		return fmt.Sprintf("%s: <meta-data android:name=%q> under %s", manifest, v.Name, v.Parent)
-	case *protocol.OpAndroidGradleAddDependency:
-		return fmt.Sprintf("app/build.gradle: %s %q", v.Configuration, v.Coord)
-	case *protocol.OpAndroidGradleApplyPlugin:
-		if v.Version != "" {
-			return fmt.Sprintf("app/build.gradle and build.gradle: Gradle plugin %s", v.ID)
-		}
-		return fmt.Sprintf("app/build.gradle: Gradle plugin %s", v.ID)
-	}
-	return ""
 }
 
 // revertIfUnchanged plans the undoing of a file Drift wrote at path, if its

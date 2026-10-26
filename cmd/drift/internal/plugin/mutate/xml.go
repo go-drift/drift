@@ -368,21 +368,6 @@ func setStyleEntry(root *etree.Element, op *protocol.OpAndroidStyleSet) {
 	}
 }
 
-// WriteAndroidDrawables plans raw bitmap files under drawableDir. Returns
-// the paths that change.
-func WriteAndroidDrawables(cs *Changeset, drawableDir string, ops []*protocol.OpAndroidWriteDrawable) ([]string, error) {
-	return writeEach(cs, ops, func(op *protocol.OpAndroidWriteDrawable) (OwnedFile, error) {
-		return DrawableFile(drawableDir, op)
-	})
-}
-
-// WriteAndroidResourceXML plans arbitrary res/<relPath> XML files.
-func WriteAndroidResourceXML(cs *Changeset, resRoot string, ops []*protocol.OpAndroidWriteResourceXML) ([]string, error) {
-	return writeEach(cs, ops, func(op *protocol.OpAndroidWriteResourceXML) (OwnedFile, error) {
-		return ResourceXMLFile(resRoot, op), nil
-	})
-}
-
 func loadXML(cs *Changeset, path string) (*etree.Document, error) {
 	data, err := cs.ReadFile(path)
 	if err != nil {

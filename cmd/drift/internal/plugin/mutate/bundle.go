@@ -51,7 +51,7 @@ func IOSBundleFiles(ops []*protocol.OpIOSAddBundleResource) ([]BundleFile, error
 // compile asset catalogs.
 //
 // FUTURE(xtool#219): once xtool compiles asset catalogs, xtool builds can
-// write image sets with WriteIOSAssets like xcodeproj builds and this
+// write image sets as owned files (ImageSetFiles) like xcodeproj builds and this
 // conversion goes away. https://github.com/xtool-org/xtool/pull/219
 func ImageSetBundleFiles(ops []*protocol.OpIOSAssetsAddImageSet) ([]BundleFile, error) {
 	out := make([]BundleFile, 0, len(ops))
@@ -174,15 +174,6 @@ func pruneDir(cs *Changeset, dir string, keep map[string]BundleFile) ([]string, 
 		cs.RemoveIfEmpty(dir)
 	}
 	return removed, nil
-}
-
-// WriteAndroidAppModuleFiles plans each OpAndroidAddAppModuleFile into the
-// app module directory (appDir, i.e. <project>/app), where Gradle plugins
-// such as google-services read their config.
-func WriteAndroidAppModuleFiles(cs *Changeset, appDir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
-	return writeEach(cs, ops, func(op *protocol.OpAndroidAddAppModuleFile) (OwnedFile, error) {
-		return AppModuleFile(appDir, op)
-	})
 }
 
 // maybeWarnLargeResource emits a single stderr line when a written

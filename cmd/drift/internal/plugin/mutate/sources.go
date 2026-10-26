@@ -7,40 +7,17 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-
-	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// WriteIOSAssets plans one Contents.json + image bundle per OpIOSAssetsAddImageSet
-// under the supplied Assets.xcassets directory. Each set lives at
-// <Assets.xcassets>/<Name>.imageset/.
-func WriteIOSAssets(cs *Changeset, assetsRoot string, ops []*protocol.OpIOSAssetsAddImageSet) ([]string, error) {
-	var changed []string
-	if err := ensureAssetsRoot(cs, assetsRoot); err != nil {
-		return changed, err
-	}
-	for _, op := range ops {
-		files, err := ImageSetFiles(assetsRoot, op)
-		if err != nil {
-			return changed, err
-		}
-		paths, err := writeOwned(cs, files...)
-		changed = append(changed, paths...)
-		if err != nil {
-			return changed, err
-		}
-	}
-	return changed, nil
-}
-
-// ensureAssetsRoot plans the catalog's root Contents.json unless one
-// exists.
-func ensureAssetsRoot(cs *Changeset, dir string) error {
+// EnsureAssetCatalog plans the root Contents.json of the asset catalog
+// at dir unless one exists, so the image sets plugins write into it
+// (ImageSetFiles) compile. Returns the path if it plans one.
+func EnsureAssetCatalog(cs *Changeset, dir string) ([]string, error) {
 	rootContents := filepath.Join(dir, "Contents.json")
 	if _, err := cs.ReadFile(rootContents); err == nil {
-		return nil
+		return nil, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("read %s: %w", rootContents, err)
+		return nil, fmt.Errorf("read %s: %w", rootContents, err)
 	}
 	root := []byte(`{
   "info" : {
@@ -49,8 +26,10 @@ func ensureAssetsRoot(cs *Changeset, dir string) error {
   }
 }
 `)
-	_, err := cs.WriteFile(rootContents, root)
-	return err
+	if _, err := cs.WriteFile(rootContents, root); err != nil {
+		return nil, err
+	}
+	return []string{rootContents}, nil
 }
 
 func imagesetContentsJSON(filename string) ([]byte, error) {
@@ -69,22 +48,4 @@ func imagesetContentsJSON(filename string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-// ReplaceLaunchScreen plans op's LaunchScreen.storyboard at path. Returns
-// the path if its bytes change.
-func ReplaceLaunchScreen(cs *Changeset, path string, op *protocol.OpIOSReplaceLaunchScreen) ([]string, error) {
-	changed, err := writeOwned(cs, LaunchScreenFile(path, op))
-	if err != nil {
-		return changed, fmt.Errorf("LaunchScreen: %w", err)
-	}
-	return changed, nil
-}
-
-// WriteKotlinSources plans Kotlin sources under
-// <javaRoot>/<packagePath>/<rel> where packagePath = pkg with dots to slashes.
-func WriteKotlinSources(cs *Changeset, javaRoot string, ops []*protocol.OpAddKotlinSource) ([]string, error) {
-	return writeEach(cs, ops, func(op *protocol.OpAddKotlinSource) (OwnedFile, error) {
-		return KotlinSourceFile(javaRoot, op)
-	})
 }

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -87,16 +88,16 @@ func base64(s string) string {
 	return b64.StdEncoding.EncodeToString([]byte(s))
 }
 
-// Every op type pkg/plugin can decode must be known to Apply; otherwise a
-// plugin's op is silently dropped with only a runtime error report.
-func TestApplyKnowsEveryOpType(t *testing.T) {
+// Every op type the CLI can decode has an opKind; without one, Apply
+// panics on the first build that uses it.
+func TestEveryOpTypeHasAKind(t *testing.T) {
 	for _, typ := range protocol.OpTypes() {
 		op, err := protocol.NewOp(typ)
 		if err != nil {
 			t.Fatalf("NewOp(%q): %v", typ, err)
 		}
-		if !bundleOp(&opBag{}, op) {
-			t.Errorf("Apply does not handle op type %q", typ)
+		if _, ok := opKinds[reflect.TypeOf(op)]; !ok {
+			t.Errorf("op type %q has no opKind", typ)
 		}
 	}
 }
