@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -213,6 +214,25 @@ type IOSScope struct {
 	Sources      *IOSSourcesScope
 }
 
+// urlSchemeRe is RFC 3986's scheme: a letter, then letters, digits, "+",
+// "-" or ".".
+var urlSchemeRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*$`)
+
+// AddURLScheme registers scheme as one the app opens, such as an OAuth
+// redirect's, as an Info.plist CFBundleURLTypes entry named after it. A
+// URL with it is offered to the plugins' openURL hooks, then to Drift's
+// deep links. On Android, register it with Android.Manifest.AddIntentFilter.
+func (s *IOSScope) AddURLScheme(scheme string) {
+	if !urlSchemeRe.MatchString(scheme) {
+		s.b.errs = append(s.b.errs, fmt.Errorf("AddURLScheme: %q is not a URL scheme (a letter, then letters, digits, \"+\", \"-\" or \".\")", scheme))
+		return
+	}
+	s.Info.AppendArrayDict("CFBundleURLTypes", map[string]any{
+		"CFBundleURLName":    scheme,
+		"CFBundleURLSchemes": []any{scheme},
+	})
+}
+
 // Plugin records the Swift class the app instantiates for this plugin. The
 // class conforms to DriftPlugin and has a no-argument initializer; the host
 // drives it through the plugin lifecycle (register, attach/detach, app
@@ -288,11 +308,25 @@ func (s *IOSPlistScope) SetStringArray(key string, values []string) {
 // AppendArrayItem adds value to the array at key (created if absent),
 // alongside what the template and other plugins put there, e.g. a
 // UIBackgroundModes entry.
-func (s *IOSPlistScope) AppendArrayItem(key, value string) {
+func (s *IOSPlistScope) AppendArrayItem(key, value string) { s.appendItem(key, value) }
+
+// AppendArrayDict adds dict to the array of dictionaries at key (created if
+// absent), alongside what the template and other plugins put there. For a
+// URL scheme, use IOSScope.AddURLScheme.
+func (s *IOSPlistScope) AppendArrayDict(key string, dict map[string]any) {
+	if dict == nil {
+		dict = map[string]any{}
+	}
+	s.appendItem(key, copyDict(dict))
+}
+
+// appendItem records item, a plist value as JSON decodes it, as an entry
+// of the array at key.
+func (s *IOSPlistScope) appendItem(key string, item any) {
 	s.b.push(&protocol.OpPlistAppendArrayItem{
 		Base:       newBase(s.b),
 		PlistEntry: s.entry(key),
-		Value:      value,
+		Value:      item,
 	})
 }
 

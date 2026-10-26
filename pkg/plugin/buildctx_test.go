@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -98,5 +99,41 @@ func TestNativeConfigRejectsMisuse(t *testing.T) {
 		if ctx.Err() == nil {
 			t.Errorf("%s: no error", name)
 		}
+	}
+}
+
+// A URL scheme becomes a CFBundleURLTypes entry beside the template's; a
+// string that is not a scheme is reported, not recorded.
+func TestAddURLScheme(t *testing.T) {
+	ctx := NewTestCtx()
+	ctx.IOS.AddURLScheme("com.example.app-oauth+v2")
+	ctx.IOS.AddURLScheme("2fa")
+	ctx.IOS.AddURLScheme("my scheme")
+	if err := ctx.Err(); err == nil || !strings.Contains(err.Error(), `"2fa"`) || !strings.Contains(err.Error(), `"my scheme"`) {
+		t.Errorf("Err() = %v, want both invalid schemes reported", err)
+	}
+	ops := ctx.Ops()
+	if len(ops) != 1 {
+		t.Fatalf("got %d ops, want 1", len(ops))
+	}
+	op, ok := ops[0].(*protocol.OpPlistAppendArrayItem)
+	want := map[string]any{"CFBundleURLName": "com.example.app-oauth+v2", "CFBundleURLSchemes": []any{"com.example.app-oauth+v2"}}
+	if !ok || op.File != protocol.PlistInfo || op.Key != "CFBundleURLTypes" || !reflect.DeepEqual(op.Value, want) {
+		t.Errorf("op = %#v, want a CFBundleURLTypes item %v", ops[0], want)
+	}
+}
+
+// Plugins add to the template's Info.plist arrays but never replace a key
+// the template writes.
+func TestInfoTemplateKeysCannotBeSet(t *testing.T) {
+	ctx := NewTestCtx()
+	ctx.IOS.Info.SetString("CFBundleIdentifier", "com.other")
+	ctx.IOS.Info.AppendArrayItem("LSApplicationQueriesSchemes", "comgooglemaps")
+	ctx.IOS.Entitlements.SetString("CFBundleIdentifier", "unrelated")
+	if err := ctx.Err(); err == nil || !strings.Contains(err.Error(), "CFBundleIdentifier") {
+		t.Errorf("Err() = %v, want the template key reported", err)
+	}
+	if got := len(ctx.Ops()); got != 2 {
+		t.Errorf("got %d ops, want the append and the entitlements key", got)
 	}
 }

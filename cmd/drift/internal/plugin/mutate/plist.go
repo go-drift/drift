@@ -8,6 +8,8 @@
 package mutate
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -52,9 +54,9 @@ func ApplyPlist(cs *Changeset, path string, ops []protocol.PlistOp) (bool, error
 		existing, ok := root[op.Key].([]any)
 		if !ok && root[op.Key] != nil {
 			return false, fmt.Errorf("%s: plugin %s appends %q to %s, which is a %T, not an array",
-				name, op.PluginPackage(), op.Value, op.Key, root[op.Key])
+				name, op.PluginPackage(), op.Item(), op.Key, root[op.Key])
 		}
-		if !slices.Contains(existing, any(op.Value)) {
+		if !slices.ContainsFunc(existing, func(item any) bool { return plistEqual(item, op.Value) }) {
 			root[op.Key] = append(existing, op.Value)
 		}
 	}
@@ -64,4 +66,14 @@ func ApplyPlist(cs *Changeset, path string, ops []protocol.PlistOp) (bool, error
 		return false, fmt.Errorf("marshal %s: %w", name, err)
 	}
 	return cs.WriteFile(path, out)
+}
+
+// plistEqual reports whether a, decoded from a plist, and b, an op's plist
+// value, hold the same value. They compare as JSON, since decoding and the
+// wire give one value different Go types (uint64 or int64, []any or
+// []string).
+func plistEqual(a, b any) bool {
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ja, jb)
 }

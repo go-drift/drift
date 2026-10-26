@@ -134,9 +134,40 @@ func (e PlistEntry) validate() error {
 	return checkNonEmpty("plist key", e.Key)
 }
 
+// templateInfoKeys are the top-level Info.plist keys Drift's app template
+// writes from drift.yaml and the runner's needs. A plugin may add to those
+// that are arrays but never replace one. TestTemplateInfoKeysAreReserved
+// keeps the list equal to the templates' keys.
+var templateInfoKeys = []string{
+	"CFBundleDevelopmentRegion",
+	"CFBundleDisplayName",
+	"CFBundleExecutable",
+	"CFBundleIdentifier",
+	"CFBundleInfoDictionaryVersion",
+	"CFBundleName",
+	"CFBundlePackageType",
+	"CFBundleShortVersionString",
+	"CFBundleURLTypes",
+	"CFBundleVersion",
+	"LSApplicationQueriesSchemes",
+	"LSRequiresIPhoneOS",
+	"MinimumOSVersion",
+	"NSAppTransportSecurity",
+	"UIApplicationSceneManifest",
+	"UILaunchStoryboardName",
+	"UIRequiredDeviceCapabilities",
+	"UISupportedInterfaceOrientations",
+	"UIViewControllerBasedStatusBarAppearance",
+}
+
+// TemplateInfoKeys returns the top-level Info.plist keys Drift's app
+// template writes, which plugins may not set, sorted.
+func TemplateInfoKeys() []string { return slices.Clone(templateInfoKeys) }
+
 // OpPlistSet sets one key of an iOS plist to Value, replacing what is
 // there: a plist value, which is a string, a bool, an integer, a real, an
-// array or a dictionary of plist values (checkPlistValue).
+// array or a dictionary of plist values (checkPlistValue). A key Drift's
+// Info.plist template writes (TemplateInfoKeys) cannot be set.
 type OpPlistSet struct {
 	Base
 	PlistEntry
@@ -152,6 +183,9 @@ func (o *OpPlistSet) Validate() error {
 	if err := o.validate(); err != nil {
 		return err
 	}
+	if o.File == PlistInfo && slices.Contains(templateInfoKeys, o.Key) {
+		return fmt.Errorf("Info.plist key %s is written by Drift's app template (from drift.yaml), so a plugin cannot set it", o.Key)
+	}
 	return checkPlistValue(o.Key, o.Value)
 }
 
@@ -165,8 +199,7 @@ func (o *OpPlistSet) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON reads Value's numbers back as the kind they were written
-// as: int64 for an integer literal, float64 for one with a fraction or
-// exponent.
+// as (readPlistValue).
 func (o *OpPlistSet) UnmarshalJSON(data []byte) error {
 	type plain OpPlistSet
 	var p struct {
@@ -177,36 +210,87 @@ func (o *OpPlistSet) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*o = OpPlistSet(p.plain)
-	o.Value = nil
-	if len(p.Value) == 0 || string(p.Value) == "null" {
-		return nil
-	}
-	dec := json.NewDecoder(bytes.NewReader(p.Value))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return err
-	}
-	typed, err := readPlistNumbers(v)
-	if err != nil {
-		return fmt.Errorf("value: %w", err)
-	}
-	o.Value = typed
-	return nil
+	var err error
+	o.Value, err = readPlistValue(p.Value)
+	return err
 }
 
+// OpPlistAppendArrayItem adds Value, a plist value (checkPlistValue), to
+// the array at Key (created if absent), alongside what the template and
+// other plugins put there. An equal item already in the array is not
+// added again.
 type OpPlistAppendArrayItem struct {
 	Base
 	PlistEntry
-	Value string `json:"value"`
+	Value any `json:"value"`
 }
 
 func (o *OpPlistAppendArrayItem) Type() string     { return "ios.plist.append_array_item" }
 func (o *OpPlistAppendArrayItem) Platform() string { return "ios" }
 func (o *OpPlistAppendArrayItem) Targets() []Target {
-	return []Target{member(o.targetKey(), o.Value)}
+	return []Target{member(o.targetKey(), o.Item())}
 }
-func (o *OpPlistAppendArrayItem) Validate() error { return o.validate() }
+func (o *OpPlistAppendArrayItem) Validate() error {
+	if err := o.validate(); err != nil {
+		return err
+	}
+	return checkPlistValue(o.Key+" item", o.Value)
+}
+
+// Item names Value within its array: a string as itself, any other value
+// as its canonical JSON.
+func (o *OpPlistAppendArrayItem) Item() string {
+	if s, ok := o.Value.(string); ok {
+		return s
+	}
+	return canonicalJSON(markPlistReals(o.Value))
+}
+
+// MarshalJSON writes Value's floats so they read back as floats; see
+// markPlistReals.
+func (o *OpPlistAppendArrayItem) MarshalJSON() ([]byte, error) {
+	type plain OpPlistAppendArrayItem
+	p := plain(*o)
+	p.Value = markPlistReals(o.Value)
+	return json.Marshal(p)
+}
+
+// UnmarshalJSON reads Value's numbers back as the kind they were written
+// as (readPlistValue).
+func (o *OpPlistAppendArrayItem) UnmarshalJSON(data []byte) error {
+	type plain OpPlistAppendArrayItem
+	var p struct {
+		plain
+		Value json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*o = OpPlistAppendArrayItem(p.plain)
+	var err error
+	o.Value, err = readPlistValue(p.Value)
+	return err
+}
+
+// readPlistValue decodes a plist value written with markPlistReals: its
+// numbers become int64 for an integer literal and float64 for one with a
+// fraction or exponent. Absent or null is nil, which Validate rejects.
+func readPlistValue(raw json.RawMessage) (any, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	typed, err := readPlistNumbers(v)
+	if err != nil {
+		return nil, fmt.Errorf("value: %w", err)
+	}
+	return typed, nil
+}
 
 // markPlistReals returns v with each float as a json.Number that keeps a
 // fraction or exponent (2 becomes 2.0). Plain JSON writes float64(2) as 2,

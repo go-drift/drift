@@ -105,6 +105,36 @@ func TestApplyPlistAppendArrayItem(t *testing.T) {
 	}
 }
 
+// A dictionary item, such as a URL type, is added once however often it
+// is applied, next to the template's, and the file is then left alone.
+func TestApplyPlistAppendDictItem(t *testing.T) {
+	path := writePlist(t)
+	urlType := func(scheme string) map[string]any {
+		return map[string]any{"CFBundleURLName": scheme, "CFBundleURLSchemes": []any{scheme}}
+	}
+	ops := []*protocol.OpPlistAppendArrayItem{
+		{Base: protocol.Base{Pkg: "a"}, PlistEntry: info("CFBundleURLTypes"), Value: urlType("template")},
+		{Base: protocol.Base{Pkg: "b"}, PlistEntry: info("CFBundleURLTypes"), Value: urlType("oauth")},
+	}
+	if _, err := applyPlist(t, path, plistOps(ops[:1])); err != nil {
+		t.Fatalf("seed the template's URL type: %v", err)
+	}
+	for range 2 {
+		if _, err := applyPlist(t, path, plistOps(ops)); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+	}
+	if changed, err := applyPlist(t, path, plistOps(ops)); err != nil || changed {
+		t.Errorf("re-apply: changed=%v, err=%v; want unchanged", changed, err)
+	}
+	body, _ := os.ReadFile(path)
+	for _, scheme := range []string{"template", "oauth"} {
+		if n := strings.Count(string(body), "<string>"+scheme+"</string>"); n != 2 { // name and scheme
+			t.Errorf("%s appears %d times, want 2 (one URL type):\n%s", scheme, n, body)
+		}
+	}
+}
+
 func TestApplyPlistSetBool(t *testing.T) {
 	path := writePlist(t)
 	ops := []*protocol.OpPlistSet{

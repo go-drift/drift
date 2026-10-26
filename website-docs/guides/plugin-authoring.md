@@ -220,13 +220,14 @@ What the platform itself requires stays where the platform reads it: a usage str
 
 ## Recording ops
 
-`ctx.IOS` and `ctx.Android` group the recorders; the [op reference](#op-reference) lists them all. Every op checks its input when recorded. Invalid input (a malformed plist key, a path escaping its directory, a bad Gradle coordinate) is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI checks again when it reads the ops.
+`ctx.IOS` and `ctx.Android` group the recorders; the [op reference](#op-reference) lists them all. Every op checks its input when recorded. Invalid input (an empty plist key, a path escaping its directory, a bad Gradle coordinate) is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI checks again when it reads the ops.
 
 Ops from different plugins are checked against each other by what they write, not by which recorder made them:
 
 - Two ops writing the same location (a plist key, a resource, a file) must write the same content; they then count once.
 - Ops adding to a set (manifest permissions, `UIBackgroundModes` entries, Gradle dependencies, SwiftPM products) merge.
 - A location cannot be both written whole by one op and added to by another, such as `SetStringArray` and `AppendArrayItem` on one key.
+- The `Info.plist` keys Drift's template writes from `drift.yaml` (`CFBundleIdentifier`, `CFBundleURLTypes`, `UISupportedInterfaceOrientations`, ...; `protocol.TemplateInfoKeys`) cannot be set; those that are arrays can be added to.
 
 A conflict fails the build and names both plugins.
 
@@ -283,7 +284,7 @@ The app creates one instance of each plugin class per process, in `drift.yaml` o
 | Once per process | `register(host:)`, then `didFinishLaunching(_:options:)` | `onRegister(host)`, when the process starts (`Application.onCreate`), before any Activity, service or receiver; a process may start without an Activity, for a push message or an alarm |
 | View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller, which detaches when its scene disconnects | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity: a configuration change Drift does not handle itself (dark mode, locale) destroys the Activity and creates another, as does reopening the app after its Activity finished, each with a fresh binding |
 | Overlays | `binding.overlayView`: above Drift's content and platform views; touches pass through where it is empty | `binding.overlayView`: the window's decor view |
-| App events | `openURL` (a URL the app is opened with, such as an OAuth redirect), `continueUserActivity` (universal links, Handoff, Spotlight; on xtool universal links only), `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse`; launch URLs and activities included | `binding.addIntentListener`: the intent the app is opened with (a notification tap, a deep link), including the one that launched it, offered once (a recreated Activity, or one relaunched from Recents, is not offered its old intent again) |
+| App events | `openURL` (a URL the app is opened with, such as an OAuth redirect; register its scheme with `ctx.IOS.AddURLScheme`), `continueUserActivity` (universal links, Handoff, Spotlight; on xtool universal links only), `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse`; launch URLs and activities included | `binding.addIntentListener`: the intent the app is opened with (a notification tap, a deep link), including the one that launched it, offered once (a recreated Activity, or one relaunched from Recents, is not offered its old intent again) |
 
 Register channels and observers once, in the registration method. Keep view state (overlays, view references) between attach and detach, and never keep a binding past detach.
 
@@ -596,7 +597,8 @@ Each recorder records one op, shown here by its wire name; `file.add` ops also n
 | Recorder | Op | Writes | Conflicts |
 |----------|----|--------|-----------|
 | `IOS.Info.SetString(key, value)` / `SetBool(key, value)` / `SetStringArray(key, values)` / `SetDict(key, dict)` | `ios.plist.set` | `Info.plist` key, whole value | Same location |
-| `IOS.Info.AppendArrayItem(key, value)` | `ios.plist.append_array_item` | One entry in an `Info.plist` array, alongside the template's and other plugins' | Set |
+| `IOS.Info.AppendArrayItem(key, value)` / `AppendArrayDict(key, dict)` | `ios.plist.append_array_item` | One entry in an `Info.plist` array, alongside the template's and other plugins' | Set |
+| `IOS.AddURLScheme(scheme)` | `ios.plist.append_array_item` | A `CFBundleURLTypes` entry for a URL scheme the app opens | Set |
 | `IOS.Entitlements.*` | the two `ios.plist.*` ops above | `Runner.entitlements`, such as `aps-environment` | As above |
 | `IOS.Assets.AddImageSet(name, png)` | `ios.assets.add_image_set` | Image set in `Assets.xcassets` (a loose `<name>.png` on xtool); load with `UIImage(named:)` | Same location |
 | `IOS.Storyboards.ReplaceLaunchScreen(xml)` | `ios.storyboards.replace_launch_screen` | `LaunchScreen.storyboard` | Same location |

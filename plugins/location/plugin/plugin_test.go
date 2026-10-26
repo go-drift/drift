@@ -102,7 +102,7 @@ func backgroundModes(ops []protocol.Op) []string {
 	var modes []string
 	for _, op := range ops {
 		if o, ok := op.(*protocol.OpPlistAppendArrayItem); ok && o.File == protocol.PlistInfo && o.Key == "UIBackgroundModes" {
-			modes = append(modes, o.Value)
+			modes = append(modes, o.Item())
 		}
 	}
 	return modes

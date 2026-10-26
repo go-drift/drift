@@ -3,10 +3,15 @@ package templates
 import (
 	"encoding/xml"
 	"io"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+
+	"howett.net/plist"
+
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // The app templates are the baseline every Drift app ships. Permissions,
@@ -95,6 +100,27 @@ func TestInfoPlistsDeclareNoCapabilities(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// Plugins may not set the keys the Info.plist templates write; the list
+// the op validation reserves must be exactly those keys.
+func TestTemplateInfoKeysAreReserved(t *testing.T) {
+	keys := map[string]bool{}
+	for _, path := range []string{"ios/Info.plist.tmpl", "xtool/Info.plist.tmpl"} {
+		for _, rendered := range renderAll(t, path) {
+			var root map[string]any
+			if _, err := plist.Unmarshal([]byte(rendered), &root); err != nil {
+				t.Fatalf("parse %s: %v", path, err)
+			}
+			for key := range root {
+				keys[key] = true
+			}
+		}
+	}
+	got := slices.Sorted(maps.Keys(keys))
+	if want := protocol.TemplateInfoKeys(); !slices.Equal(got, want) {
+		t.Errorf("template Info.plist keys = %v\nprotocol.TemplateInfoKeys() = %v", got, want)
 	}
 }
 

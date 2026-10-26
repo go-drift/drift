@@ -175,7 +175,7 @@ func init() {
 	// iOS
 	register(plistKind(func(o *protocol.OpPlistSet) string { return "key " + o.Key }))
 	register(plistKind(func(o *protocol.OpPlistAppendArrayItem) string {
-		return fmt.Sprintf("%q in array %s", o.Value, o.Key)
+		return fmt.Sprintf("%q in array %s", o.Item(), o.Key)
 	}))
 	register(kind[*protocol.OpIOSAssetsAddImageSet]{
 		owns: func(p project, o *protocol.OpIOSAssetsAddImageSet) ([]mutate.OwnedFile, error) {

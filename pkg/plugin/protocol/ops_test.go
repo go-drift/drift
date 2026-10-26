@@ -15,6 +15,7 @@ func fixtureOps() []Op {
 		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Baz"}, Value: true},
 		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr"}, Value: []any{"a", "b"}},
 		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr2"}, Value: "x"},
+		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "CFBundleURLTypes"}, Value: map[string]any{"CFBundleURLSchemes": []any{"x"}}},
 		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": "v"}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: "AA=="},
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<document/>"},
@@ -333,6 +334,10 @@ func invalidOps() []Op {
 		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}},
 		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: struct{}{}},
 		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
+		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}},
+		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{"k": nil}},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "CFBundleIdentifier"}, Value: "com.other"},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "CFBundleURLTypes"}, Value: []any{}},
 		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": nil}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "../Logo", Image: "AA=="},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: ""},
@@ -477,7 +482,8 @@ func TestSetDictTargetDistinguishesIntFromFloat(t *testing.T) {
 
 // A plist value crosses the wire as the kind it was recorded as: a string
 // stays a string, an integer an integer and a real a real, at any depth.
-func TestPlistSetRoundTripKeepsValueKinds(t *testing.T) {
+func TestPlistValueRoundTripKeepsValueKinds(t *testing.T) {
+	base, entry := Base{Pkg: "p", Ident: "p"}, PlistEntry{File: PlistInfo, Key: "K"}
 	for _, tc := range []struct{ recorded, decoded any }{
 		{"s", "s"},
 		{true, true},
@@ -486,17 +492,46 @@ func TestPlistSetRoundTripKeepsValueKinds(t *testing.T) {
 		{2.0, 2.0},
 		{map[string]any{"n": 2, "r": 2.5, "a": []any{1.0}}, map[string]any{"n": int64(2), "r": 2.5, "a": []any{1.0}}},
 	} {
-		raw, err := MarshalOp(&OpPlistSet{Base: Base{Pkg: "p", Ident: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: tc.recorded})
-		if err != nil {
-			t.Fatal(err)
+		for _, op := range []Op{
+			&OpPlistSet{Base: base, PlistEntry: entry, Value: tc.recorded},
+			&OpPlistAppendArrayItem{Base: base, PlistEntry: entry, Value: tc.recorded},
+		} {
+			raw, err := MarshalOp(op)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := UnmarshalOp(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got any
+			switch d := decoded.(type) {
+			case *OpPlistSet:
+				got = d.Value
+			case *OpPlistAppendArrayItem:
+				got = d.Value
+			}
+			if !reflect.DeepEqual(got, tc.decoded) {
+				t.Errorf("%s: %#v decoded as %#v, want %#v", op.Type(), tc.recorded, got, tc.decoded)
+			}
 		}
-		op, err := UnmarshalOp(raw)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := op.(*OpPlistSet).Value; !reflect.DeepEqual(got, tc.decoded) {
-			t.Errorf("%#v decoded as %#v, want %#v", tc.recorded, got, tc.decoded)
-		}
+	}
+}
+
+// An appended string is its own member, so the ejected lock keeps the
+// members string items had before items could be any plist value; any
+// other item is its canonical JSON, the same however its maps are typed.
+func TestAppendArrayItemMember(t *testing.T) {
+	item := func(v any) string {
+		return (&OpPlistAppendArrayItem{PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: v}).Targets()[0].Member
+	}
+	if got := item("fetch"); got != "fetch" {
+		t.Errorf("string member = %q, want fetch", got)
+	}
+	a := item(map[string]any{"CFBundleURLSchemes": []any{"x"}, "CFBundleURLName": "x"})
+	b := item(map[string]any{"CFBundleURLName": "x", "CFBundleURLSchemes": []string{"x"}})
+	if a != b || a != `{"CFBundleURLName":"x","CFBundleURLSchemes":["x"]}` {
+		t.Errorf("dict members = %q, %q; want equal canonical JSON", a, b)
 	}
 }
 
