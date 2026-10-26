@@ -44,6 +44,18 @@ interface DriftPlatformView {
 
     /** Releases the view's resources; Drift removes the view afterwards. */
     fun dispose()
+
+    /**
+     * Called after Drift moved the view to another host: into a new
+     * Activity, or out of a destroyed one (its context then wraps the
+     * Application until the next Activity). The view's context already
+     * follows the move, but objects the view or a library it uses built
+     * from the old Activity do not: a PopupWindow, a WindowManager or
+     * another service fetched once from the context. Rebuild those here (or
+     * the part of the view that holds them), or they keep the old Activity
+     * alive and stop working. Views holding none need not implement it.
+     */
+    fun onHostChanged() {}
 }
 
 /** Sends a view's events to its Go view (PlatformView.HandleEvent). */
@@ -77,9 +89,10 @@ fun interface DriftPlatformViewFactory {
      *
      * [context] is the view's own: it wraps the hosting Activity, and Drift
      * points it at the next Activity when it moves the view (and at the
-     * Application in between), so the view never keeps a dead Activity.
-     * Create the view with it; do not cast it to an Activity or keep the
-     * Activity it wraps.
+     * Application in between), its LayoutInflater included. Create the view
+     * with it; do not cast it to an Activity or keep the Activity it wraps,
+     * and rebuild what was built from that Activity in
+     * [DriftPlatformView.onHostChanged].
      */
     fun create(context: Context, viewId: Int, params: Map<String, Any?>, events: DriftPlatformViewEvents): DriftPlatformView
 }

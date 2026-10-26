@@ -9,6 +9,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.MutableContextWrapper
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -43,7 +44,7 @@ object PlatformViewHandler {
      * Application between Activities, so a view never holds an Activity
      * that is gone.
      */
-    private val contexts = mutableMapOf<Int, MutableContextWrapper>()
+    private val contexts = mutableMapOf<Int, PlatformViewContext>()
     private var activity: Activity? = null
     private var hostView: ViewGroup? = null
     private var surfaceView: View? = null
@@ -67,6 +68,7 @@ object PlatformViewHandler {
             interceptor.surfaceView = surfaceView
             interceptor.visibility = View.GONE
             addToHost(viewId, interceptor)
+            views[viewId]?.onHostChanged()
         }
     }
 
@@ -81,6 +83,7 @@ object PlatformViewHandler {
             removeFromHost(viewId, interceptor)
             interceptor.surfaceView = null
             contexts[viewId]?.baseContext = activity.applicationContext
+            views[viewId]?.onHostChanged()
         }
         this.activity = null
         hostView = null
@@ -230,7 +233,7 @@ object PlatformViewHandler {
             "no native platform view type \"$viewType\"; add the plugin that provides it to drift.yaml",
         )
 
-        val ctx = MutableContextWrapper(activity ?: PlatformChannelManager.context)
+        val ctx = PlatformViewContext(activity ?: PlatformChannelManager.context)
         val events = DriftPlatformViewEvents(viewId) { event ->
             PlatformChannelManager.sendEvent("drift/platform_views", event)
         }
@@ -254,6 +257,21 @@ object PlatformViewHandler {
         events.send("onViewCreated")
         return null
     }
+}
+
+/**
+ * A platform view's context, which Drift points at the hosting Activity
+ * (MutableContextWrapper.setBaseContext). Its LayoutInflater is its own,
+ * cloned from the Application's: the Activity's would give the views a
+ * factory inflates (a library's layout) the Activity itself as their
+ * context, and holds the Activity as its private factory, so they would
+ * keep a destroyed Activity alive instead of following this context.
+ */
+private class PlatformViewContext(base: Context) : MutableContextWrapper(base) {
+    private val inflater by lazy { LayoutInflater.from(applicationContext).cloneInContext(this) }
+
+    override fun getSystemService(name: String): Any? =
+        if (name == Context.LAYOUT_INFLATER_SERVICE) inflater else super.getSystemService(name)
 }
 
 /** The exception a view's handle throws for a method it does not know. */

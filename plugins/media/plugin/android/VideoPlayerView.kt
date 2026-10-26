@@ -11,6 +11,8 @@ import com.drift.runner.DriftPlatformView
 import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlatformViewEvents
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -27,7 +29,10 @@ import androidx.media3.ui.PlayerView
  * Platform view container for native video player using ExoPlayer.
  *
  * Wraps a PlayerView inside a FrameLayout and replaces the default SurfaceView
- * with a TextureView. TextureView integrates correctly with Drift's clipping
+ * with a TextureView. The player, and so playback, lives as long as the
+ * view; the PlayerView, the controls' UI, is rebuilt when Drift moves the
+ * view to another Activity (onHostChanged), since its controls keep a popup
+ * window tied to the Activity they were created in. TextureView integrates correctly with Drift's clipping
  * (View.clipBounds) and avoids z-ordering issues and black flashes on resize
  * that SurfaceView causes in a platform view context.
  */
@@ -37,10 +42,13 @@ class VideoPlayerView(
     private val events: DriftPlatformViewEvents,
 ) : DriftPlatformView {
 
-    override val view: View
+    private val container = FrameLayout(context)
+    override val view: View get() = container
     override val supportsRegionMask: Boolean get() = true
-    private val playerView: PlayerView
+    private lateinit var playerView: PlayerView
     private val player: ExoPlayer
+    private val main = Handler(Looper.getMainLooper())
+    private var showControls = true
 
     init {
         player = ExoPlayer.Builder(context).build().also {
@@ -53,21 +61,7 @@ class VideoPlayerView(
             )
         }
 
-        playerView = PlayerView(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-            this.player = this@VideoPlayerView.player
-            controllerAutoShow = true
-        }
-
-        // Replace the default SurfaceView with a TextureView.
-        // PlayerView uses SurfaceView by default, which does not respect
-        // View.clipBounds and causes z-ordering issues in platform views.
-        replaceWithTextureView(playerView)
-
-        view = playerView
+        buildPlayerView()
 
         // Configure player from params
         val url = params["url"] as? String
@@ -123,6 +117,35 @@ class VideoPlayerView(
     }
 
     /**
+     * Builds the PlayerView in the container's context (the hosting
+     * Activity), replacing any earlier one.
+     */
+    private fun buildPlayerView() {
+        if (::playerView.isInitialized) {
+            playerView.player = null
+            container.removeView(playerView)
+        }
+        playerView = PlayerView(container.context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            this.player = this@VideoPlayerView.player
+            controllerAutoShow = true
+            useController = showControls
+        }
+        // Replace the default SurfaceView with a TextureView.
+        // PlayerView uses SurfaceView by default, which does not respect
+        // View.clipBounds and causes z-ordering issues in platform views.
+        replaceWithTextureView(playerView)
+        container.addView(playerView)
+    }
+
+    override fun onHostChanged() {
+        buildPlayerView()
+    }
+
+    /**
      * Replaces the default SurfaceView inside PlayerView with a TextureView.
      * PlayerView renders video into the first SurfaceView/TextureView child it finds
      * in its subtree. By swapping the SurfaceView for a TextureView at the same
@@ -174,14 +197,14 @@ class VideoPlayerView(
                         "bufferedMs" to player.bufferedPosition,
                     ))
                 }
-                playerView.postDelayed(this, 250)
+                main.postDelayed(this, 250)
             }
         }
-        playerView.post(positionRunnable!!)
+        main.post(positionRunnable!!)
     }
 
     private fun stopPositionUpdates() {
-        positionRunnable?.let { playerView.removeCallbacks(it) }
+        positionRunnable?.let { main.removeCallbacks(it) }
         positionRunnable = null
     }
 
@@ -239,6 +262,7 @@ class VideoPlayerView(
     }
 
     fun setShowControls(show: Boolean) {
+        showControls = show
         playerView.useController = show
     }
 
