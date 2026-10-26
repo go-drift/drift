@@ -212,3 +212,52 @@ func TestWriteAndroidColorsRegeneratesAndRemoves(t *testing.T) {
 		t.Errorf("removing a missing file: changed=%v err=%v", changed, err)
 	}
 }
+
+// Each want is resource text that aapt2 compiles back to exactly value.
+func TestAndroidStringText(t *testing.T) {
+	for _, tc := range []struct{ value, want string }{
+		{"Hello", "Hello"},
+		{"", ""},
+		{"it's", `it\'s`},
+		{`say "hi"`, `say \"hi\"`},
+		{`C:\dir`, `C:\\dir`},
+		{"@string/app_name", `\@string/app_name`},
+		{"?attr/colorPrimary", `\?attr/colorPrimary`},
+		{"a@b?c", "a@b?c"},
+		{"line1\nline2", `line1\nline2`},
+		{"a\tb", `a\tb`},
+		{"a\rb\x01", `a\u000db\u0001`},
+		{" lead", `" lead"`},
+		{"trail ", `"trail "`},
+		{"two  spaces", `"two  spaces"`},
+		{" @it's ", `" @it\'s "`},
+		{"@ trail ", `"\@ trail "`},
+		{"one space", "one space"},
+		{"50% <b>&</b>", "50% <b>&</b>"},
+		{"héllo\u00a0\u00a0wörld 👋", "héllo\u00a0\u00a0wörld 👋"},
+	} {
+		if got := androidStringText(tc.value); got != tc.want {
+			t.Errorf("androidStringText(%q) = %q, want %q", tc.value, got, tc.want)
+		}
+	}
+}
+
+func TestWriteAndroidStringsEscapes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "values/plugin_strings.xml")
+	ops := []*protocol.OpAndroidStringSet{
+		{Base: protocol.Base{Pkg: "p"}, Name: "greeting", Value: "it's <b>"},
+		{Base: protocol.Base{Pkg: "p"}, Name: "offer", Value: "%s and %d"},
+	}
+	if _, _, err := WriteAndroidStrings(path, ops); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(path)
+	for _, want := range []string{
+		`<string name="greeting">it\&apos;s &lt;b&gt;</string>`,
+		`<string name="offer" formatted="false">%s and %d</string>`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("strings file missing %s:\n%s", want, body)
+		}
+	}
+}

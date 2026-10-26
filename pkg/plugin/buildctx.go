@@ -475,7 +475,10 @@ type AndroidResourcesScope struct {
 	// Colors values are Drift hex colours ("#RRGGBB" or "#RRGGBBAA", alpha
 	// last, as the `hex` config tag accepts); Drift writes them in Android's
 	// alpha-first format.
-	Colors  *AndroidValuesScope
+	Colors *AndroidValuesScope
+	// Strings values are literal text: Drift escapes them for Android's
+	// string resource syntax (apostrophes, quotes, backslashes, a leading
+	// @ or ?, whitespace, %), so the app reads back exactly the value.
 	Strings *AndroidValuesScope
 	Styles  *AndroidStylesScope
 }

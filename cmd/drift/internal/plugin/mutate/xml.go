@@ -248,12 +248,54 @@ func WriteAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string,
 }
 
 // WriteAndroidStrings is WriteAndroidColors for Drift's plugin strings file.
+// Values are literal text, written in Android's string resource syntax (see
+// androidStringText) so each compiled resource is exactly its value. A
+// value containing % is marked formatted="false": it is not a format
+// string, and aapt2 rejects some literal text, such as "%s and %d", as an
+// unnumbered format otherwise.
 func WriteAndroidStrings(path string, ops []*protocol.OpAndroidStringSet) (string, bool, error) {
 	return writeValuesXML(path, "string", len(ops), func(root *etree.Element) {
 		for _, op := range ops {
-			setValueEntry(root, "string", op.Name, op.Value)
+			el := setValueEntry(root, "string", op.Name, androidStringText(op.Value))
+			if strings.Contains(op.Value, "%") {
+				el.CreateAttr("formatted", "false")
+			} else {
+				el.RemoveAttr("formatted")
+			}
 		}
 	})
+}
+
+// androidStringText returns the text of a <string> resource (before XML
+// escaping, which etree does) that aapt2 compiles to exactly value.
+// Android string syntax goes beyond XML: a backslash starts an escape,
+// double quotes delimit, an unescaped apostrophe is an error, a leading @
+// or ? makes a reference, and outside quotes ASCII whitespace runs collapse
+// to one space and leading or trailing whitespace is trimmed. So
+// backslashes, quotes and a leading @ or ? are backslash-escaped, newline
+// and tab become \n and \t, other control characters \uXXXX, and a value
+// whose spaces would otherwise change is wrapped in double quotes.
+func androidStringText(value string) string {
+	var b strings.Builder
+	for i, r := range value {
+		switch {
+		case r == '\\' || r == '"' || r == '\'' || (i == 0 && (r == '@' || r == '?')):
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r < 0x20:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	if strings.HasPrefix(value, " ") || strings.HasSuffix(value, " ") || strings.Contains(value, "  ") {
+		return `"` + b.String() + `"`
+	}
+	return b.String()
 }
 
 // WriteAndroidStyles is WriteAndroidColors for Drift's plugin styles file.
@@ -291,16 +333,19 @@ func writeValuesXML(path, kind string, entries int, fill func(root *etree.Elemen
 	return path, ch, nil
 }
 
-func setValueEntry(root *etree.Element, tag, name, value string) {
+// setValueEntry sets the text of root's <tag name="name"> entry, creating
+// it if absent, and returns the entry.
+func setValueEntry(root *etree.Element, tag, name, value string) *etree.Element {
 	for _, el := range root.SelectElements(tag) {
 		if attr := el.SelectAttr("name"); attr != nil && attr.Value == name {
 			el.SetText(value)
-			return
+			return el
 		}
 	}
 	entry := root.CreateElement(tag)
 	entry.CreateAttr("name", name)
 	entry.SetText(value)
+	return entry
 }
 
 func setStyleEntry(root *etree.Element, op *protocol.OpAndroidStyleSet) {

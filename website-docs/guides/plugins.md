@@ -1010,7 +1010,7 @@ Each recorder records one op type, shown here by its wire name. "Same location" 
 | `Android.Manifest.AddService(xml)` | `android.manifest.add_service` | `<service>` in `<application>`, named by its fully qualified class | Same location |
 | `Android.Manifest.AddReceiver(xml)` | `android.manifest.add_receiver` | `<receiver>` in `<application>`, named by its fully qualified class | Same location |
 | `Android.Resources.Colors.Set(name, hex)` | `android.color.set` | `@color/<name>`, from a Drift hex colour | Same location |
-| `Android.Resources.Strings.Set(name, value)` | `android.string.set` | `@string/<name>` | Same location |
+| `Android.Resources.Strings.Set(name, value)` | `android.string.set` | `@string/<name>`, from literal text (Drift escapes it for Android) | Same location |
 | `Android.Resources.Styles.Set(name, parent, items)` | `android.style.set` | `@style/<name>` | Same location |
 | `Android.Drawables.AddBitmap(name, content)` | `android.drawable.write` | `res/drawable-nodpi/<name>` (not scaled by density) | Same location |
 | `Android.Resources.WriteXML(relPath, xml)` | `android.resource.write_xml` | Any resource file `res/<dir>/<file>.xml` except Drift's own values files | Same location |
