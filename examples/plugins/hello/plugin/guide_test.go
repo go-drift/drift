@@ -10,7 +10,7 @@ import (
 // Each file is quoted from its first line of code (start) to its end; a
 // test file is quoted from start up to end.
 func TestGuideQuotesThisPlugin(t *testing.T) {
-	guide, err := os.ReadFile("../../../../website-docs/guides/plugins.md")
+	guide, err := os.ReadFile("../../../../website-docs/guides/plugin-authoring.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestGuideQuotesThisPlugin(t *testing.T) {
 			text = text[:strings.Index(text, q.end)]
 		}
 		if !strings.Contains(string(guide), strings.TrimRight(text, "\n")+"\n```") {
-			t.Errorf("website-docs/guides/plugins.md does not quote %s verbatim (from %q); update the guide", q.file, q.start)
+			t.Errorf("website-docs/guides/plugin-authoring.md does not quote %s verbatim (from %q); update the guide", q.file, q.start)
 		}
 	}
 }

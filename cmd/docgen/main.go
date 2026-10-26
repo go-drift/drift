@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -20,6 +21,7 @@ type Package struct {
 	Name     string
 	Path     string
 	Position int
+	Title    string // when empty, formatTitle(Name)
 }
 
 // Packages to document (public-facing), in order.
@@ -39,6 +41,61 @@ var packages = []Package{
 	{Name: "errors", Path: "pkg/errors", Position: 13},
 	{Name: "validation", Path: "pkg/validation", Position: 14},
 	{Name: "accessibility", Path: "pkg/accessibility", Position: 15},
+	// The plugin author API. Its protocol subpackage is the CLI-to-bridge
+	// wire contract, not for authors.
+	{Name: "plugin", Path: "pkg/plugin", Position: 16},
+}
+
+// pluginPackages returns the runtime packages of every first-party plugin
+// (plugins/<name>/runtime and any package under it, such as
+// plugins/firebase/runtime/messaging): the Go API apps call, documented
+// after packages.
+func pluginPackages(root string) ([]Package, error) {
+	runtimes, err := filepath.Glob(filepath.Join(root, "plugins", "*", "runtime"))
+	if err != nil {
+		return nil, err
+	}
+	var out []Package
+	for _, runtime := range runtimes {
+		plugin := filepath.Base(filepath.Dir(runtime))
+		err := filepath.WalkDir(runtime, func(dir string, d fs.DirEntry, err error) error {
+			if err != nil || !d.IsDir() {
+				return err
+			}
+			sources, err := filepath.Glob(filepath.Join(dir, "*.go"))
+			if err != nil {
+				return err
+			}
+			if !slices.ContainsFunc(sources, func(f string) bool { return !strings.HasSuffix(f, "_test.go") }) {
+				return nil
+			}
+			rel, err := filepath.Rel(root, dir)
+			if err != nil {
+				return err
+			}
+			sub, err := filepath.Rel(runtime, dir)
+			if err != nil {
+				return err
+			}
+			name, title := plugin, formatTitle(plugin)
+			if sub != "." {
+				for _, part := range strings.Split(filepath.ToSlash(sub), "/") {
+					name += "-" + part
+					title += " " + formatTitle(part)
+				}
+			}
+			out = append(out, Package{Name: name, Path: filepath.ToSlash(rel), Title: title + " Plugin"})
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	for i := range out {
+		out[i].Position = len(packages) + 1 + i
+	}
+	return out, nil
 }
 
 func main() {
@@ -87,8 +144,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	plugins, err := pluginPackages(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error listing plugin packages: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Generate API docs for each package
-	for _, pkg := range packages {
+	for _, pkg := range append(packages, plugins...) {
 		pkgPath := filepath.Join(root, pkg.Path)
 		if _, err := os.Stat(pkgPath); os.IsNotExist(err) {
 			fmt.Printf("Skipping %s (not found)\n", pkg.Name)
@@ -268,13 +331,20 @@ title: %s
 sidebar_position: %d
 ---
 
-`, pkg.Name, formatTitle(pkg.Name), pkg.Position)
+`, pkg.Name, pkg.title(), pkg.Position)
 
 	finalContent := frontmatter + content
 
 	// Write to file
 	outputPath := filepath.Join(apiDir, pkg.Name+".md")
 	return os.WriteFile(outputPath, []byte(finalContent), 0644)
+}
+
+func (p Package) title() string {
+	if p.Title != "" {
+		return p.Title
+	}
+	return formatTitle(p.Name)
 }
 
 func formatTitle(name string) string {
@@ -294,6 +364,9 @@ func formatTitle(name string) string {
 		"errors":        "Errors",
 		"validation":    "Validation",
 		"accessibility": "Accessibility",
+		"plugin":        "Plugin",
+		"imagepicker":   "Image Picker",
+		"securestorage": "Secure Storage",
 	}
 
 	if title, ok := titles[name]; ok {

@@ -42,7 +42,7 @@ func TestOpReferenceListsEveryOp(t *testing.T) {
 // column's text, and every backquoted name in the Op column.
 func opReference(t *testing.T) (recorders string, ops []string) {
 	t.Helper()
-	guide, err := os.ReadFile("../../website-docs/guides/plugins.md")
+	guide, err := os.ReadFile("../../website-docs/guides/plugin-authoring.md")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -146,9 +146,25 @@ Do not place custom native libraries in `app/src/main/jniLibs/` as Drift overwri
 
 ## Plugins
 
-Plugins in `drift.yaml` keep working after ejecting: each build applies them to the ejected project, editing `Info.plist`, `Runner.entitlements`, `AndroidManifest.xml`, Gradle files and resources, and writing the plugins' own files. Drift records what it applied in `.drift/plugins.lock.json` inside each platform project; commit it.
+Plugins in `drift.yaml` keep working after ejecting: each build applies them to the ejected project. Drift owns these files and rewrites them each build:
 
-When you remove a plugin, Drift deletes the files it owned (unless you changed them), restores the template's launch screen if a plugin replaced it (again, unless you changed it), and the next build warns with a list of the edits it made inside your files, for you to undo or keep. If the project is missing the calls plugins need, the build names the file and call to restore. See [Plugins](/docs/guides/plugins#ejected-projects).
+| iOS (`platform/ios`) | Android (`platform/android`) |
+|----------------------|------------------------------|
+| `Drift/Plugins/` (a local Swift package holding every plugin's Swift module) | `app/src/main/java/com/drift/runner/` (plugin host support and the generated registrant) |
+| `Runner/PluginResources/` (bundle resources and plugin configs) | `app/src/main/assets/drift/plugins/` (plugin configs) |
+| `Runner/DriftPlugins.swift`, `Runner/DriftPluginRegistrant.swift` | |
+
+Plugins also edit shared files: `Info.plist`, `Runner.entitlements`, `AndroidManifest.xml`, `build.gradle`, resource values. Drift records what it applied in `.drift/plugins.lock.json` in each platform project; commit it.
+
+When you remove a plugin, Drift deletes the files it owned (unless you changed them), restores the template's `LaunchScreen.storyboard` if a plugin replaced it and you have not changed it since, and the next build warns with a list of the edits it made inside shared files, such as an `Info.plist` key or a manifest permission. Drift cannot tell those apart from your own edits, so you remove them, or keep them if you still want them. The build still succeeds; commit the updated lock, or each build from a checkout of the old one warns again.
+
+When a plugin upgrade changes a Gradle dependency's version or a Gradle plugin's version, Drift updates the line it wrote in place. If you changed that line yourself, Drift leaves it and adds its own.
+
+Drift never overwrites a file it did not write. If a plugin would replace one of your files, or a plugin file you edited, the build fails and names each file. That includes `LaunchScreen.storyboard`: a plugin such as splash replaces it only while it is the template's or what the plugin wrote, never your own launch screen. Move yours aside (or undo your change) to let the plugin write it, or remove the plugin. Like any plugin op that fails, this stops the build before Drift changes a file in the project.
+
+If `.drift/plugins.lock.json` stops parsing (a merge conflict, say), resolve it, or delete it: Drift then treats plugin files as new, and refuses only those whose content differs from what the plugin writes.
+
+If an ejected project lacks the wiring plugins need (calls into `DriftPlugins`, the `Drift/Plugins` package reference), the build fails and names the file and call to restore. Compare with a freshly ejected project.
 
 iOS projects ejected before plugins could claim URLs fail to build with plugins until `SceneDelegate.swift` offers URLs and user activities to `DriftPlugins.shared.openURL` / `continueUserActivity` before `DeepLinkHandler`; the error names the calls, and a freshly ejected project shows them in place.
 

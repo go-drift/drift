@@ -13,7 +13,7 @@ plugins:
   - package: github.com/go-drift/drift/plugins/media/plugin
 ```
 
-and import its Go API as `media "github.com/go-drift/drift/plugins/media/runtime"`. The [plugin's section](/docs/guides/plugins#media) lists its config (DASH on Android).
+and import its Go API as `media "github.com/go-drift/drift/plugins/media/runtime"`. The [plugin's section](/docs/guides/plugin-catalog#media) lists its config (DASH on Android).
 
 Up to Drift v0.26 these types were core: `platform.VideoPlayerController`, `platform.AudioPlayerController`, `platform.PlaybackState` and the `widgets.VideoPlayer` widget. In the `media` package the controllers publish playback as state instead of callbacks: `OnPlaybackStateChanged` and `OnPositionChanged` became `State()` and `Progress()`, `OnError` became the `Errors()` stream with the `media.ErrSource`, `ErrDecoder` and `ErrPlaybackFailed` sentinels in place of the `ErrCode*` strings, and `NewVideoPlayerController` returns an error.
 

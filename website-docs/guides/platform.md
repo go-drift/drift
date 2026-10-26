@@ -249,7 +249,7 @@ A `RequestWithOptions` made while a notification prompt is up returns that promp
 
 ### Plugin Permissions
 
-Permissions for features that live in plugins come from those plugins: location from the [location plugin](/docs/guides/plugins#location), and contacts, calendar, microphone and photos from the [permissions plugin](/docs/guides/plugins#permissions). They are `platform.Permission` values like the ones above.
+Permissions for features that live in plugins come from those plugins: location from the [location plugin](/docs/guides/plugin-catalog#location), and contacts, calendar, microphone and photos from the [permissions plugin](/docs/guides/plugin-catalog#permissions). They are `platform.Permission` values like the ones above.
 
 Up to Drift v0.26, these permissions were fields of core services. Each now comes with its plugin in `drift.yaml`:
 
@@ -281,7 +281,7 @@ platform.OpenAppSettings()
 
 ## Camera
 
-Taking photos and picking images is a plugin: see [Image picker](/docs/guides/plugins#image-picker) in the plugins guide.
+Taking photos and picking images is a plugin: see [Image picker](/docs/guides/plugin-catalog#image-picker) in the plugin catalogue.
 
 Up to Drift v0.26 this was `platform.Camera`. Apps moving to the plugin use its runtime (`imagepicker`, `github.com/go-drift/drift/plugins/imagepicker/runtime`):
 
@@ -296,7 +296,7 @@ Up to Drift v0.26 this was `platform.Camera`. Apps moving to the plugin use its 
 
 ## Location
 
-Location is a plugin: see [Location](/docs/guides/plugins#location) in the plugins guide.
+Location is a plugin: see [Location](/docs/guides/plugin-catalog#location) in the plugin catalogue.
 
 Up to Drift v0.26 this was `platform.Location`. Apps moving to the plugin use its runtime (`location`, `github.com/go-drift/drift/plugins/location/runtime`):
 
@@ -311,7 +311,7 @@ Up to Drift v0.26 this was `platform.Location`. Apps moving to the plugin use it
 
 ## Notifications
 
-Local notifications are a plugin: see [Notifications](/docs/guides/plugins#notifications) in the plugins guide; push notifications come from the [Firebase plugin](/docs/guides/plugins#firebase). Both use Drift's [notification permission](#notification-permissions).
+Local notifications are a plugin: see [Notifications](/docs/guides/plugin-catalog#notifications) in the plugin catalogue; push notifications come from the [Firebase plugin](/docs/guides/plugin-catalog#firebase). Both use Drift's [notification permission](#notification-permissions).
 
 Up to Drift v0.26, `platform.Notifications` also scheduled notifications and handled push. Apps moving to the plugins replace those calls with the notifications runtime (`notifications`, `github.com/go-drift/drift/plugins/notifications/runtime`) and Firebase messaging (`messaging`, `github.com/go-drift/drift/plugins/firebase/runtime/messaging`):
 
@@ -473,7 +473,7 @@ err = platform.Preferences.DeleteAll()
 
 ## Secure Storage
 
-Encrypted storage, with optional biometric protection, is a plugin: see [Secure storage](/docs/guides/plugins#secure-storage) in the plugins guide. For values that need no protection, use [Preferences](#preferences).
+Encrypted storage, with optional biometric protection, is a plugin: see [Secure storage](/docs/guides/plugin-catalog#secure-storage) in the plugin catalogue. For values that need no protection, use [Preferences](#preferences).
 
 Up to Drift v0.26 this was `platform.SecureStorage`. Apps moving to the plugin use its runtime (`securestorage`, `github.com/go-drift/drift/plugins/securestorage/runtime`). Every call now takes a `ctx` and waits for the platform, so call them from a goroutine:
 

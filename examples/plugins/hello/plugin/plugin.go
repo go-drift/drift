@@ -1,6 +1,6 @@
 // Package plugin is the build half of the hello plugin: the smallest
 // complete Drift plugin, quoted by the plugin guide
-// (website-docs/guides/plugins.md). Copy it to start a new plugin.
+// (website-docs/guides/plugin-authoring.md). Copy it to start a new plugin.
 //
 // It takes a greeting from drift.yaml and ships native code that returns
 // it to Go:

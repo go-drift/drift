@@ -1,6 +1,6 @@
 # Plugins: internals
 
-How the plugin system is built. Using and authoring plugins, including the op reference, is in the website guide [website-docs/guides/plugins.md](../website-docs/guides/plugins.md); this document does not repeat it. The guide's code is [examples/plugins/hello](../examples/plugins/hello), the smallest complete plugin; `TestGuideQuotesThisPlugin` keeps the two identical. The plan for finishing the branch is in [plugins-v1-plan.md](plugins-v1-plan.md).
+How the plugin system is built. Using plugins ([plugins.md](../website-docs/guides/plugins.md)), the first-party catalogue ([plugin-catalog.md](../website-docs/guides/plugin-catalog.md)), authoring and the op reference ([plugin-authoring.md](../website-docs/guides/plugin-authoring.md)) are website guides, and ejected projects are in the eject guide ([eject.md](../website-docs/guides/eject.md)); this document does not repeat them. The guide's code is [examples/plugins/hello](../examples/plugins/hello), the smallest complete plugin; `TestGuideQuotesThisPlugin` keeps the two identical. The plan for finishing the branch is in [plugins-v1-plan.md](plugins-v1-plan.md).
 
 ## Model
 

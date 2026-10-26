@@ -48,7 +48,16 @@ const sidebars: SidebarsConfig = {
           label: 'Platform Integration',
           items: [
             'guides/platform',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Plugins',
+          items: [
+            'guides/plugins',
+            'guides/plugin-catalog',
             'guides/media-player',
+            'guides/plugin-authoring',
           ],
         },
         {
