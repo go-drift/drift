@@ -142,41 +142,40 @@ internal class AudioPlayers(
         method("load") { args ->
             val url = (args as? Map<*, *>)?.get("url") as? String
                 ?: throw DriftCallError("invalid_arguments", "load needs a url")
-            val player = player(args, create = true)!!.player
+            val player = player(args).player
             player.setMediaItem(MediaItem.fromUri(url))
             player.prepare()
             null
         }
         method("play") { args ->
-            val player = player(args, create = true)!!.player
+            val player = player(args).player
             if (player.playbackState == Player.STATE_IDLE) player.prepare()
             player.play()
             null
         }
-        method("pause") { args -> player(args)?.player?.pause(); null }
+        method("pause") { args -> player(args).player.pause(); null }
         method("stop") { args ->
-            player(args)?.let {
-                it.player.stop()
-                it.player.seekTo(0)
-                it.sendStateEvent(0) // Idle with position reset to zero
-            }
+            val instance = player(args)
+            instance.player.stop()
+            instance.player.seekTo(0)
+            instance.sendStateEvent(0) // Idle with position reset to zero
             null
         }
         method("seekTo") { args ->
-            player(args)?.player?.seekTo(number(args, "positionMs")?.toLong() ?: 0L)
+            player(args).player.seekTo(number(args, "positionMs")?.toLong() ?: 0L)
             null
         }
         method("setVolume") { args ->
-            player(args)?.player?.volume = number(args, "volume")?.toFloat() ?: 1.0f
+            player(args).player.volume = number(args, "volume")?.toFloat() ?: 1.0f
             null
         }
         method("setLooping") { args ->
             val looping = (args as? Map<*, *>)?.get("looping") as? Boolean ?: false
-            player(args)?.player?.repeatMode = if (looping) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            player(args).player.repeatMode = if (looping) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
             null
         }
         method("setPlaybackSpeed") { args ->
-            player(args)?.player?.setPlaybackSpeed(number(args, "rate")?.toFloat() ?: 1.0f)
+            player(args).player.setPlaybackSpeed(number(args, "rate")?.toFloat() ?: 1.0f)
             null
         }
         method("dispose") { args ->
@@ -187,12 +186,13 @@ internal class AudioPlayers(
 
     private fun number(args: Any?, key: String) = (args as? Map<*, *>)?.get(key) as? Number
 
-    /** The player args' playerId names, created on first use when create. */
-    private fun player(args: Any?, create: Boolean = false): AudioPlayerInstance? {
+    /**
+     * The player args' playerId names, created on first use by any method
+     * but dispose, so settings made before load apply to what it loads.
+     */
+    private fun player(args: Any?): AudioPlayerInstance {
         val id = number(args, "playerId")?.toLong() ?: 0L
-        players[id]?.let { return it }
-        if (!create) return null
-        return AudioPlayerInstance(id, context, handler, send).also { players[id] = it }
+        return players.getOrPut(id) { AudioPlayerInstance(id, context, handler, send) }
     }
 
     companion object {

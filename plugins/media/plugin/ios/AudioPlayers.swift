@@ -266,27 +266,27 @@ final class AudioPlayers {
             guard let url = (args["url"] as? String).flatMap(URL.init(string:)) else {
                 throw DriftCallError.invalidArguments("load needs a url")
             }
-            player(args, create: true)?.load(url: url)
+            player(args).load(url: url)
             return nil
         }
-        channel.method("play") { [self] args in player(args, create: true)?.play(); return nil }
-        channel.method("pause") { [self] args in player(args)?.pause(); return nil }
-        channel.method("stop") { [self] args in player(args)?.stop(); return nil }
+        channel.method("play") { [self] args in player(args).play(); return nil }
+        channel.method("pause") { [self] args in player(args).pause(); return nil }
+        channel.method("stop") { [self] args in player(args).stop(); return nil }
         channel.method("seekTo") { [self] args in
             let positionMs = ((args as? [String: Any])?["positionMs"] as? NSNumber)?.int64Value ?? 0
-            player(args)?.seekTo(positionMs: positionMs)
+            player(args).seekTo(positionMs: positionMs)
             return nil
         }
         channel.method("setVolume") { [self] args in
-            player(args)?.setVolume(((args as? [String: Any])?["volume"] as? NSNumber)?.floatValue ?? 1.0)
+            player(args).setVolume(((args as? [String: Any])?["volume"] as? NSNumber)?.floatValue ?? 1.0)
             return nil
         }
         channel.method("setLooping") { [self] args in
-            player(args)?.setLooping((args as? [String: Any])?["looping"] as? Bool ?? false)
+            player(args).setLooping((args as? [String: Any])?["looping"] as? Bool ?? false)
             return nil
         }
         channel.method("setPlaybackSpeed") { [self] args in
-            player(args)?.setPlaybackSpeed(((args as? [String: Any])?["rate"] as? NSNumber)?.floatValue ?? 1.0)
+            player(args).setPlaybackSpeed(((args as? [String: Any])?["rate"] as? NSNumber)?.floatValue ?? 1.0)
             return nil
         }
         channel.method("dispose") { [self] args in
@@ -303,13 +303,13 @@ final class AudioPlayers {
         ((args as? [String: Any])?["playerId"] as? NSNumber)?.intValue ?? 0
     }
 
-    /// The player args' playerId names, created on first use when create.
-    private func player(_ args: Any?, create: Bool = false) -> AudioPlayerInstance? {
+    /// The player args' playerId names, created on first use by any method
+    /// but dispose, so settings made before load apply to what it loads.
+    private func player(_ args: Any?) -> AudioPlayerInstance {
         let id = playerId(args)
         if let existing = players[id] {
             return existing
         }
-        guard create else { return nil }
         let instance = AudioPlayerInstance(id: id, send: send)
         players[id] = instance
         return instance
