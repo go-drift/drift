@@ -8,7 +8,7 @@ sidebar_position: 8
 
 Plugins add native capabilities to a Drift app: SDKs, permissions, native UI, and platform hooks. The app never edits the generated Xcode or Android Studio projects; Drift applies each plugin's changes on every build.
 
-A plugin is a Go module with up to three parts:
+A plugin is a Go module (a first-party plugin is a directory of the Drift module) with up to three parts:
 
 | Part | Package | Runs | Purpose |
 |------|---------|------|---------|
@@ -16,7 +16,7 @@ A plugin is a Go module with up to three parts:
 | Native code | Swift and Kotlin embedded in the build half | In the app | The platform side: SDK calls, lifecycle hooks, overlays |
 | Runtime half | `<module>/runtime` (any name) | In the app | The Go API the app calls; talks to the native code over platform channels |
 
-First-party plugins live in the Drift repository:
+First-party plugins ship in the `github.com/go-drift/drift` module, at the same version as the rest of Drift:
 
 - [`plugins/splash`](#splash): a native splash screen held until the first frame.
 - [`plugins/firebase`](#firebase): Firebase Core and Cloud Messaging (push notifications).
@@ -25,16 +25,13 @@ First-party plugins live in the Drift repository:
 - [`plugins/notifications`](#notifications): local notifications and taps on them.
 - [`plugins/imagepicker`](#image-picker): a photo from the camera, or images from the photo library.
 - [`plugins/securestorage`](#secure-storage): encrypted key-value storage, optionally behind biometrics.
+- [`plugins/media`](#media): video and audio playback.
 
 ## Using plugins
 
 ### Adding a plugin
 
-Add the module to your app at your CLI's version (`drift version` prints it; see [Versions](#versions)), then list the build half in `drift.yaml`:
-
-```bash
-go get github.com/go-drift/drift/plugins/splash@<version>
-```
+List the plugin's build half in `drift.yaml`. A first-party plugin needs nothing else: it comes with your app's `github.com/go-drift/drift` dependency.
 
 ```yaml
 # drift.yaml
@@ -45,6 +42,12 @@ plugins:
       background_color: "#1A2238"
 ```
 
+A third-party plugin is a dependency of its own; add its module first:
+
+```bash
+go get example.com/hello@<version>
+```
+
 The next `drift build` or `drift run` picks it up. Plugins run in `drift.yaml` order, which also decides which plugin gets first claim on shared events such as notification taps.
 
 `config` is checked against the plugin's typed config: unknown keys, missing required keys, malformed colours and missing files fail the build with the offending key named.
@@ -53,7 +56,7 @@ The next `drift build` or `drift run` picks it up. Plugins run in `drift.yaml` o
 
 Drift runs build halves through a small generated program, `tools/drift-plugins/main.go`, built and cached by the CLI. Commit it: it imports every configured plugin, which keeps their modules in `go.mod` when you run `go mod tidy`.
 
-Drift never edits `go.mod` or `go.sum` during a build. If an entry is missing, the build stops and tells you to run `go mod tidy` (or `go get` for a plugin that is not a dependency yet; for a first-party plugin, a release CLI names its own version, see [Versions](#versions)).
+Drift never edits `go.mod` or `go.sum` during a build. If an entry is missing, the build stops and tells you to run `go mod tidy` (or `go get` for a third-party plugin that is not a dependency yet). A first-party plugin that is not found has a wrong package path, or is newer than the app's Drift: the error names the Drift version to update to (see [Versions](#versions)).
 
 ```bash
 drift plugin sync          # regenerate the bridge, check drift.yaml
@@ -67,11 +70,11 @@ drift plugin list --json
 
 ### Versions
 
-First-party plugins are released with Drift: each Drift release tags every plugin under `plugins/` at the same version. Use the plugins, the `github.com/go-drift/drift` module and the `drift` CLI at one version, and upgrade them together; for example, to v0.28.0:
+First-party plugins are part of the `github.com/go-drift/drift` module, so they always match the Drift your app uses. Use that module and the `drift` CLI at one version, and upgrade them together; for example, to v0.28.0:
 
 ```bash
 go install github.com/go-drift/drift/cmd/drift@v0.28.0
-go get github.com/go-drift/drift@v0.28.0 github.com/go-drift/drift/plugins/splash@v0.28.0
+go get github.com/go-drift/drift@v0.28.0
 ```
 
 A plugin's native code compiles against the plugin API the CLI ships, so a release CLI checks every build and stops on a mismatch, naming the versions involved:

@@ -340,8 +340,8 @@ What the migration built in core: the permission registry (plugins register kind
 
 1. ~~On the Mac: run `examples/plugins/hello` and `examples/firebase-demo` on the iOS Simulator, and the Phase 5 plugins.~~ Done 2026-10-21 (Second review, Phase 5 status).
 2. Do Phase 6 on `feat/plugins-release`, branched from `feat/core-plugins`, in the order below.
-3. Rebase `feat/plugins-release` onto `master`. Rerun `go vet`/`go test` in the root, every `plugins/*` module and `examples/plugins/hello`. Then one combined device pass: the 6.3 checks on the iOS Simulator (see the Mac Simulator notes in the session memory, or run on the Mac directly), the 6.1 install check (`scripts/install-check.sh --build android,xtool v0.27.0`), and a smoke run of splash-demo and firebase-demo on the emulator and Simulator.
-4. Fast-forward `master` to `feat/plugins-release` (`feat/plugins` and `feat/core-plugins` are its ancestors; delete them afterwards). Release: `scripts/release.sh prepare v0.27.0`, push the release commit, `scripts/release.sh v0.27.0` (the workflow tags the root and every plugin). Then `scripts/install-check.sh --real --build android,xtool v0.27.0` against the real tags.
+3. Rebase `feat/plugins-release` onto `master`. Rerun `go vet`/`go test` in the root and every nested module (`git ls-files '*/go.mod'`). Then one combined device pass: the 6.3 checks on the iOS Simulator (see the Mac Simulator notes in the session memory, or run on the Mac directly), the 6.1 install check (`scripts/install-check.sh --build android,xtool v0.27.0`), and a smoke run of splash-demo and firebase-demo on the emulator and Simulator.
+4. Fast-forward `master` to `feat/plugins-release` (`feat/plugins` and `feat/core-plugins` are its ancestors; delete them afterwards). Release: `scripts/release.sh v0.27.0` (the workflow tags the root). Then `scripts/install-check.sh --real --build android,xtool v0.27.0` against the real tags.
 
 ### Phase 6: release readiness
 
@@ -357,7 +357,7 @@ Runs before merge, on `feat/plugins-release` (see [Release sequence](#release-se
 
 ##### 6.1 status
 
-Done (`fddeba4`..`7118e69`). Decisions (2026-10-26):
+Done (`fddeba4`..`7118e69`), then reworked: see the one-module decision below, which supersedes the first two decisions here. Decisions (2026-10-26):
 - **Lockstep.** First-party plugins release with Drift: one version, tagged `vX.Y.Z` and `plugins/<name>/vX.Y.Z` on one commit, in one atomic push. Third-party plugins version freely; their contract is the drift version their `go.mod` requires.
 - **`replace`, not `go.work`.** Every in-repo module requires the last released drift (now `v0.26.1`) and keeps its `replace`; the release commit (`release.sh prepare`) bumps the requirements. Consumers ignore a dependency's `replace`; `go.work` would break `go mod tidy` in plugin modules (tidy ignores it and would fetch a drift tag lacking new packages) and errors on the existing replaces.
 - **Skew check** (answers Unresolved question 4; `APIVersion` stays the wire format). A release CLI refuses a plugin requiring a drift newer than the CLI or older than `templates.PluginAPIFloor` (`v0.27.0`), and a bridge (which now reports `drift_version`) on another drift major.minor. Development CLIs skip it. Fatal only on the plugin path; apps without plugins keep the `CheckVersionMismatch` warning.
@@ -372,6 +372,14 @@ Done (`fddeba4`..`7118e69`). Decisions (2026-10-26):
 | `7118e69` | `scripts/install-check.sh`: release rehearsal through a file `GOPROXY`, `--real` for published tags |
 
 **Verified (Linux):** `go vet`/`go test` in the root and every module; `scripts/install-check.sh --build android,xtool v0.27.0`: the CLI installed at `v0.27.0` from the rehearsal proxy, `drift init` outside the repo, `plugins/splash@v0.27.0` with no `replace`, `drift build android` and `drift build xtool` succeed; a plugin requiring `v0.28.0` fails naming it, `v0.28.0` and the CLI's `v0.27.0`; an app on drift `v0.28.0` fails naming both. Still to do: the pushed-branch check and, after tagging, `--real`.
+
+**Decision (2026-10-26): one module.** The first-party plugins fold into the root module before any `plugins/<name>` tag exists (unwinding published nested modules later would give users ambiguous imports). Lockstep across nine modules cost nine tags per release, a `release.sh prepare` bump commit, `replace` directives in every plugin, one `go get` per plugin, and possible skew between drift and its own plugins; the plugins had no dependencies beyond the root's. Now `plugins/<name>/plugin` and `/runtime` are packages of `github.com/go-drift/drift`, drift.yaml paths are unchanged, one `go get github.com/go-drift/drift@vX` installs every first-party plugin, and a release tags only the root. `examples/plugins/hello` stays a separate module: the only in-repo plugin on the third-party path (its own `go.mod`, a required drift version, the compat check). Nested modules require drift `v0.27.0` with their `replace` and are not bumped per release; a test keeps hello at or above `PluginAPIFloor`.
+
+| Commit | Content |
+|--------|---------|
+| `b57d8fc` | `plugins/*/go.mod` deleted; app modules drop plugin requires and replaces; CI vets and tests every nested module |
+| `17d06ef` | Missing first-party plugin hint: wrong path or update drift, not `go get` |
+| `508ef4a` | Release tags only the root: `release-tags.sh`, `release.sh prepare` and `releasetool` bump/check/tags deleted; `releasetool` becomes `scripts/fileproxy`; `install-check.sh` rehearses skew against a copy of hello served as `example.com/hello` |
 
 #### 6.2 Ejected projects
 

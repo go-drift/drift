@@ -40,6 +40,7 @@ Watch mode: `Refresh` re-runs `resolvePluginOps` and, when the hash of the op li
 ## Bridge
 
 - Built with `-mod=readonly`: the CLI never edits `go.mod`/`go.sum`; a missing entry fails with a `go mod tidy` hint (`drift plugin sync --tidy` runs it).
+- A configured package the module graph lacks fails before the build (`CheckPluginDeps`, `MissingPluginError`): a third-party one with a `go get ...@latest` hint; a first-party one, being in the drift module, with a wrong-path or update-drift hint naming the CLI's version.
 - Cache: binaries live under the cache root, keyed by a hash of everything that feeds the build (CLI and protocol versions, `bridgeTemplateVersion`, Go version, GOFLAGS, plugin module pins, bridge source, `go.mod`, `go.sum`, active `go.work`). Builds write a temp name and rename into place.
 - When any source is local (a plugin in the main module, a directory `replace`, including a local `github.com/go-drift/drift`, or a multi-module `go.work`), the key cannot see edits, so the bridge is rebuilt every time into a fixed per-project path; the Go build cache keeps that cheap.
 - The bridge refuses an envelope whose `APIVersion` differs, and the CLI refuses a response whose does. An op type the CLI does not know fails decoding.
@@ -49,18 +50,18 @@ Watch mode: `Refresh` re-runs `resolvePluginOps` and, when the hash of the op li
 
 ## Versions
 
-First-party plugins version in lockstep with Drift. A release tags `vX.Y.Z` and `plugins/<name>/vX.Y.Z` for every `plugins/*/go.mod` on one commit, in one atomic push (`scripts/release-tags.sh`, run by the release workflow after the Skia build). That commit is made by `scripts/release.sh prepare vX.Y.Z`: every module in the repository requires the root and plugin modules at `vX.Y.Z` (`scripts/releasetool bump`); the trigger and the workflow refuse a commit that does not (`releasetool check`). Between releases, modules require the last release.
+First-party plugins are packages of the root module (`plugins/<name>/plugin` and `/runtime`), so they release with Drift: a release tags only `vX.Y.Z` (the release workflow, after the Skia build).
 
-In-repo development keeps the `replace` directives in each plugin, example and showcase `go.mod`: consumers ignore a dependency's `replace`, and `go mod tidy` keeps working in each module (it ignores `go.work`). There is no `go.work`.
+The other modules in the repository (examples, showcase) are not released. Each keeps `replace github.com/go-drift/drift` pointing at the checkout, so `go mod tidy` works in each (it ignores `go.work`); there is no `go.work`. Their drift requirement is not bumped per release. `examples/plugins/hello`, the in-repo third-party-style plugin, requires the oldest drift whose plugin API it uses; `TestHelloRequiresAServedPluginAPI` keeps that at or above `PluginAPIFloor`.
 
 A release CLI checks compatibility (`cmd/drift/internal/plugin/compat.go`); a development build (`cache.NormalizeVersion` empty) skips it:
 
-- **Per plugin**, in `EnsureBridge` before building: the drift version the plugin module's `go.mod` requires (read from `go list`'s `Module.GoMod`) is the plugin API it was written against. Newer than the CLI, or older than `templates.PluginAPIFloor`, fails with a `VersionSkewError` naming every offending plugin. Plugins in the main module are left to the next check.
+- **Per plugin**, in `EnsureBridge` before building: the drift version the plugin module's `go.mod` requires (read from `go list`'s `Module.GoMod`) is the plugin API it was written against. Newer than the CLI, or older than `templates.PluginAPIFloor`, fails with a `VersionSkewError` naming every offending plugin. Plugins in the main module or in the drift module (first-party) are left to the next check.
 - **Bridge**, in `RunBridge`: a `drift_version` whose major.minor differs from the CLI's fails, since its op set and the app's runtime may not match the templates.
 
 Raise `PluginAPIFloor` in the release that breaks plugin native code (`plugin-api/ios`, `android/runner`, channel semantics).
 
-`scripts/install-check.sh <version>` rehearses a release before tagging: release commits in a clone, a file `GOPROXY` (`releasetool proxy`), the CLI installed from it, a fresh app with `plugins/splash` built per platform, and both skew errors; `--real` repeats the install against published tags.
+`scripts/install-check.sh <version>` rehearses a release before tagging: HEAD served from a file `GOPROXY` (`scripts/fileproxy`) as the release and the next minor, the CLI installed from it, a fresh app with `plugins/splash` built per platform, and both skew errors against a copy of `examples/plugins/hello` served as the third-party module `example.com/hello`; `--real` repeats the install against the published tag.
 
 ## Ops and conflicts
 
