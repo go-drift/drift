@@ -24,14 +24,14 @@ func TestCheckPluginDepsMissing(t *testing.T) {
 	}
 }
 
-// TestMissingPluginErrorHint checks the `go get` hint: a release CLI names
-// its own version for first-party plugins, which are tagged in lockstep with
-// drift, since @latest may need a newer CLI; third-party plugins and any
-// plugin under a development CLI get @latest.
+// TestMissingPluginErrorHint checks the hint. A first-party plugin ships in
+// drift itself, so a missing one is a wrong path or an app on a drift that
+// predates it: a release CLI names its own drift version, since a newer
+// drift needs a newer CLI. Third-party plugins get `go get ...@latest`.
 func TestMissingPluginErrorHint(t *testing.T) {
 	const (
-		splash = "github.com/go-drift/drift/plugins/splash"
-		hello  = "example.com/hello"
+		splash = "github.com/go-drift/drift/plugins/splash/plugin"
+		hello  = "example.com/hello/plugin"
 	)
 	tests := []struct {
 		name string
@@ -43,42 +43,46 @@ func TestMissingPluginErrorHint(t *testing.T) {
 			name: "release CLI, first-party",
 			cli:  "v0.28.0",
 			pkgs: []string{splash},
-			want: `Plugin package not found: github.com/go-drift/drift/plugins/splash
+			want: `Plugin package not found: github.com/go-drift/drift/plugins/splash/plugin
 
-Run:
-  go get github.com/go-drift/drift/plugins/splash@v0.28.0
+First-party plugins ship in github.com/go-drift/drift itself. Check the package path in drift.yaml, or update the app to a drift that has the plugin:
+  go get github.com/go-drift/drift@v0.28.0
 
-After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
+Then commit drift.yaml and tools/drift-plugins/main.go together.`,
 		},
 		{
 			name: "release CLI, first- and third-party",
 			cli:  "0.28.0",
 			pkgs: []string{splash, hello},
 			want: `Plugin packages not found:
-  - github.com/go-drift/drift/plugins/splash
-  - example.com/hello
+  - github.com/go-drift/drift/plugins/splash/plugin
+  - example.com/hello/plugin
 
 Run:
-  go get github.com/go-drift/drift/plugins/splash@v0.28.0
-  go get example.com/hello@latest
+  go get example.com/hello/plugin@latest
 
 If a plugin's latest version requires a drift newer than this CLI (v0.28.0), get an earlier version of it.
 
-After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
+First-party plugins ship in github.com/go-drift/drift itself. Check the package path in drift.yaml, or update the app to a drift that has the plugin:
+  go get github.com/go-drift/drift@v0.28.0
+
+Then commit drift.yaml and tools/drift-plugins/main.go together.`,
 		},
 		{
 			name: "development CLI",
 			cli:  "dev+abc123",
 			pkgs: []string{splash, hello},
 			want: `Plugin packages not found:
-  - github.com/go-drift/drift/plugins/splash
-  - example.com/hello
+  - github.com/go-drift/drift/plugins/splash/plugin
+  - example.com/hello/plugin
 
 Run:
-  go get github.com/go-drift/drift/plugins/splash@latest
-  go get example.com/hello@latest
+  go get example.com/hello/plugin@latest
 
-After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
+First-party plugins ship in github.com/go-drift/drift itself. Check the package path in drift.yaml, or update the app to a drift that has the plugin:
+  go get github.com/go-drift/drift@latest
+
+Then commit drift.yaml and tools/drift-plugins/main.go together.`,
 		},
 	}
 	for _, tt := range tests {
