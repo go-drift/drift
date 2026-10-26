@@ -74,7 +74,7 @@ func TestAvailableBiometric(t *testing.T) {
 }
 
 func TestNativeErrorCodesMapToSentinels(t *testing.T) {
-	for code, want := range nativeErrors {
+	for code, want := range errorCodes {
 		useNative(t, &fakeNative{err: platform.NewChannelError(code, "native says no")})
 		if _, _, err := Get(context.Background(), "k", nil); !errors.Is(err, want) {
 			t.Errorf("%s: err = %v, want %v", code, err, want)

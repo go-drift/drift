@@ -17,6 +17,7 @@ type MethodChannel struct {
 	name    string
 	codec   MessageCodec
 	handler MethodHandler
+	codes   ErrorCodes
 }
 
 // NewMethodChannel creates a new method channel with the given name.
@@ -34,6 +35,19 @@ func (c *MethodChannel) Name() string {
 	return c.name
 }
 
+// WithErrors declares the channel's own error codes (see [ErrorCodes]) and
+// returns the channel. Call it once, where the channel is declared, before
+// any call; a second call panics, as does a code repeating a transport
+// code.
+func (c *MethodChannel) WithErrors(codes ErrorCodes) *MethodChannel {
+	if c.codes != nil {
+		panic(fmt.Sprintf("platform: method channel %q declares its error codes twice", c.name))
+	}
+	codes.check(c.name)
+	c.codes = codes
+	return c
+}
+
 // SetHandler sets the handler for incoming method calls from native code.
 func (c *MethodChannel) SetHandler(handler MethodHandler) {
 	c.handler = handler
@@ -41,9 +55,11 @@ func (c *MethodChannel) SetHandler(handler MethodHandler) {
 
 // Invoke calls a method on the native side and returns the result.
 // Blocks until the native side responds, an error occurs, or ctx is canceled.
-// See [invokeNative] for the ctx cancellation contract.
+// See [invokeNative] for the ctx cancellation contract. A native error is a
+// [*ChannelError] matching the channel's [ErrorCodes] under [errors.Is].
 func (c *MethodChannel) Invoke(ctx context.Context, method string, args any) (any, error) {
-	return invokeNative(ctx, c.name, method, args)
+	result, err := invokeNative(ctx, c.name, method, args)
+	return result, c.codes.attach(err)
 }
 
 // handleCall processes an incoming method call from native code.
@@ -94,6 +110,7 @@ func (s *Subscription) IsCanceled() bool {
 type EventChannel struct {
 	name          string
 	codec         MessageCodec
+	codes         ErrorCodes
 	delivery      eventDelivery
 	subscriptions []*Subscription
 	mu            sync.Mutex
@@ -162,6 +179,20 @@ func newEventChannel(name string, delivery eventDelivery, queueCap int) *EventCh
 	}
 	registry.registerEvent(name, ch)
 	return ch
+}
+
+// WithErrors declares the error codes native streams on the channel (see
+// [ErrorCodes]) and returns the channel, so stream errors match their
+// sentinels under [errors.Is]. Call it once, where the channel is declared,
+// before any subscription; a second call panics, as does a code repeating
+// a transport code.
+func (c *EventChannel) WithErrors(codes ErrorCodes) *EventChannel {
+	if c.codes != nil {
+		panic(fmt.Sprintf("platform: event channel %q declares its error codes twice", c.name))
+	}
+	codes.check(c.name)
+	c.codes = codes
+	return c
 }
 
 // Name returns the channel name.
@@ -304,8 +335,10 @@ func deliverEvent(subs []*Subscription, data any) {
 	}
 }
 
-// dispatchError sends an error to all subscribers.
+// dispatchError sends an error to all subscribers, a native one matching
+// the channel's [ErrorCodes].
 func (c *EventChannel) dispatchError(err error) {
+	err = c.codes.attach(err)
 	c.mu.Lock()
 	subs := c.snapshotLocked()
 	c.mu.Unlock()

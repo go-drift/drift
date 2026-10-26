@@ -156,7 +156,8 @@ class DriftResult internal constructor(
  * message and [details]. Throw it from a method, or pass it to
  * [DriftResult.error]. Mirrors iOS's DriftCallError.
  *
- * Go matches [code] against its sentinel errors under errors.Is. An
+ * Go matches [code] against the sentinels the channel declares
+ * (platform.ErrorCodes) under errors.Is. An
  * IllegalArgumentException (as `require` throws) reaches Go as
  * `invalid_arguments`; any other exception as `native_error`, with its
  * class in the details.

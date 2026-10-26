@@ -825,7 +825,7 @@ host.registerChannel("acme/push") { channel in
 
 Calling a method that is not declared fails with `platform.ErrMethodNotFound`, on Drift's own channels too.
 
-To fail a call with an error Go can match, throw a `DriftCallError(code, message)` (Swift and Kotlin alike), or pass it to `result.error`; an optional `details` argument carries JSON-like data. Go receives a `*platform.ChannelError` with that `Code`, `Message` and `Details`; the runtime half maps codes to its own sentinel errors.
+To fail a call with an error Go can match, throw a `DriftCallError(code, message)` (Swift and Kotlin alike), or pass it to `result.error`; an optional `details` argument carries JSON-like data. Go receives a `*platform.ChannelError` with that `Code`, `Message` and `Details`; the runtime half declares which of its sentinel errors each code means (see [The runtime half](#the-runtime-half)).
 
 - Missing or malformed arguments: `DriftCallError.invalidArguments(message)` on iOS, an `IllegalArgumentException` (as `require` throws) on Android. Both match `platform.ErrInvalidArguments`.
 - Any other error reaches Go as `native_error`, with the `NSError` domain and code (iOS) or the exception class (Android) in `Details`.
@@ -950,6 +950,19 @@ func Greeting(ctx context.Context) (string, error) {
 	return s, nil
 }
 ```
+
+Declare the codes the native side fails with once, on the channel, so callers can match them under `errors.Is` while keeping the native message:
+
+```go
+// ErrDenied is the native halves' permission_denied.
+var ErrDenied = errors.New("acme camera: permission denied")
+
+var errorCodes = platform.ErrorCodes{"permission_denied": ErrDenied}
+
+var camera = platform.NewMethodChannel("acme/camera").WithErrors(errorCodes)
+```
+
+Every error `camera.Invoke` returns is then a `*platform.ChannelError` that matches its code's sentinel, so a runtime API wraps it with context (`fmt.Errorf("camera capture: %w", err)`) and documents the sentinels. Codes are per channel: two plugins may both use `permission_denied`. An event channel declares the codes its stream fails with the same way (`platform.NewEventChannel(name).WithErrors(errorCodes)`). Drift's own codes (`platform.ErrMethodNotFound`, `ErrInvalidArguments`, `ErrBlocksUIThread`, ...) match on every channel and cannot be redeclared.
 
 For events from native code, pick the channel kind by what a late subscriber should see:
 

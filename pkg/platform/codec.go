@@ -3,6 +3,8 @@ package platform
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 )
 
 // MessageCodec encodes and decodes messages for platform channel communication.
@@ -98,29 +100,73 @@ var (
 	ErrPermissionNotDeclared = errors.New("permission not declared in the Android manifest")
 )
 
-// channelErrorCodes are the wire codes of the standard errors, shared by
+// transportErrorCodes are the wire codes of the errors any channel can
+// answer, which the transport and Drift's native hosts produce. Shared by
 // both directions: a Go error crossing to native carries its code (see
-// [AsChannelError]), and a native error with a standard code matches its
-// sentinel under [errors.Is].
-var channelErrorCodes = map[error]string{
-	ErrChannelNotFound:     "channel_not_found",
-	ErrMethodNotFound:      "method_not_found",
-	ErrInvalidArguments:    "invalid_arguments",
-	ErrPlatformUnavailable: "platform_unavailable",
-	ErrTimeout:             "timeout",
-	ErrViewTypeNotFound:    "view_type_not_found",
-	ErrBlocksUIThread:      "blocks_ui_thread",
-	ErrReplyDropped:        "reply_dropped",
-	ErrNotEncodable:        "not_encodable",
+// [AsChannelError]), and a native error with one of these codes matches its
+// sentinel under [errors.Is]. A feature's own codes belong to its channel
+// ([ErrorCodes]).
+var transportErrorCodes = map[error]string{
+	ErrChannelNotFound:  "channel_not_found",
+	ErrMethodNotFound:   "method_not_found",
+	ErrInvalidArguments: "invalid_arguments",
+	ErrBlocksUIThread:   "blocks_ui_thread",
+	ErrReplyDropped:     "reply_dropped",
+	ErrNotEncodable:     "not_encodable",
+}
 
-	ErrPermissionNotRegistered: "permission_not_registered",
-	ErrPermissionNotDeclared:   "permission_not_declared",
+// ErrorCodes maps the wire codes a channel's native side answers with to
+// the sentinel errors they match. Declare a channel's codes once, with
+// [MethodChannel.WithErrors] (and [EventChannel.WithErrors] for its
+// stream): every error the channel returns or streams is then a
+// [*ChannelError] that matches its code's sentinel under [errors.Is], with
+// the native message kept.
+//
+//	var ErrDenied = errors.New("acme: permission denied")
+//
+//	var errorCodes = platform.ErrorCodes{"permission_denied": ErrDenied}
+//
+//	var channel = platform.NewMethodChannel("acme/camera").WithErrors(errorCodes)
+//
+// A code must not repeat a transport code (method_not_found and the like),
+// and each sentinel must be comparable (as errors.New's are).
+type ErrorCodes map[string]error
 
-	ErrStorageBusy: "storage_busy",
+// NewError returns the error native would send with code and message, for
+// Go code that receives codes some other way (in an event's payload, say).
+func (c ErrorCodes) NewError(code, message string) *ChannelError {
+	return &ChannelError{Code: code, Message: message, codes: c}
+}
+
+// check panics, naming channel, on a code that repeats a transport code or
+// a sentinel that is nil or not comparable.
+func (c ErrorCodes) check(channel string) {
+	for code, sentinel := range c {
+		for _, transport := range transportErrorCodes {
+			if code == transport {
+				panic(fmt.Sprintf("platform: channel %q declares the transport error code %q", channel, code))
+			}
+		}
+		if sentinel == nil || !reflect.TypeOf(sentinel).Comparable() {
+			panic(fmt.Sprintf("platform: channel %q maps error code %q to %#v; want a comparable error such as errors.New's", channel, code, sentinel))
+		}
+	}
+}
+
+// attach returns err with c as its codes when it is a [*ChannelError], so
+// it matches c's sentinels; other errors are returned as they are.
+func (c ErrorCodes) attach(err error) error {
+	channelErr, ok := err.(*ChannelError)
+	if !ok || len(c) == 0 {
+		return err
+	}
+	withCodes := *channelErr
+	withCodes.codes = c
+	return &withCodes
 }
 
 // AsChannelError converts a Go error to the ChannelError sent to native:
-// a ChannelError as is, a standard error with its code, anything else as
+// a ChannelError as is, a transport error with its code, anything else as
 // "go_error".
 func AsChannelError(err error) *ChannelError {
 	if err == nil {
@@ -130,7 +176,7 @@ func AsChannelError(err error) *ChannelError {
 	if errors.As(err, &channelErr) {
 		return channelErr
 	}
-	for sentinel, code := range channelErrorCodes {
+	for sentinel, code := range transportErrorCodes {
 		if errors.Is(err, sentinel) {
 			return NewChannelError(code, err.Error())
 		}
@@ -143,6 +189,10 @@ type ChannelError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Details any    `json:"details,omitempty"`
+
+	// codes are the channel's own codes (ErrorCodes), set by the channel
+	// the error came from.
+	codes ErrorCodes
 }
 
 func (e *ChannelError) Error() string {
@@ -152,15 +202,20 @@ func (e *ChannelError) Error() string {
 	return e.Code
 }
 
-// Is reports whether e carries target's wire code, so a native error such
-// as "blocks_ui_thread" matches [ErrBlocksUIThread] under [errors.Is].
+// Is reports whether e carries target's wire code: a transport code, such
+// as "blocks_ui_thread" for [ErrBlocksUIThread], or one its channel
+// declared ([ErrorCodes]).
 func (e *ChannelError) Is(target error) bool {
-	// A loop, not a map lookup: target may be of a non-comparable type,
-	// which would panic as a map key.
-	for sentinel, code := range channelErrorCodes {
+	// Loops, not map lookups keyed by target: target may be of a
+	// non-comparable type, which would panic as a map key. Comparing it
+	// with a comparable sentinel is safe.
+	for sentinel, code := range transportErrorCodes {
 		if sentinel == target {
 			return e.Code == code
 		}
+	}
+	if sentinel, ok := e.codes[e.Code]; ok {
+		return sentinel == target
 	}
 	return false
 }

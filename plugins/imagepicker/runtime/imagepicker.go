@@ -35,7 +35,7 @@ import (
 // (plugin/ios/DriftImagePickerPlugin.swift, plugin/android/*.kt).
 const channelName = "drift/imagepicker"
 
-var channel = platform.NewMethodChannel(channelName)
+var channel = platform.NewMethodChannel(channelName).WithErrors(errorCodes)
 
 var (
 	// ErrBusy indicates a picker is already open.
@@ -53,8 +53,8 @@ var (
 	ErrNoActivity = errors.New("no screen to show the picker over")
 )
 
-// nativeErrors maps the native halves' error codes to the sentinels.
-var nativeErrors = map[string]error{
+// errorCodes are the native halves' error codes for the sentinels.
+var errorCodes = platform.ErrorCodes{
 	"busy":                  ErrBusy,
 	"camera_unavailable":    ErrCameraUnavailable,
 	"camera_not_configured": ErrCameraNotConfigured,
@@ -95,7 +95,7 @@ type PickOptions struct {
 func Capture(ctx context.Context, opts CaptureOptions) (*Image, error) {
 	result, err := channel.Invoke(ctx, "capture", map[string]any{"frontCamera": opts.FrontCamera})
 	if err != nil {
-		return nil, wrap("capture", err)
+		return nil, fmt.Errorf("imagepicker capture: %w", err)
 	}
 	m, ok := result.(map[string]any)
 	if !ok {
@@ -116,7 +116,7 @@ func Capture(ctx context.Context, opts CaptureOptions) (*Image, error) {
 func Pick(ctx context.Context, opts PickOptions) ([]Image, error) {
 	result, err := channel.Invoke(ctx, "pick", map[string]any{"multiple": opts.Multiple})
 	if err != nil {
-		return nil, wrap("pick", err)
+		return nil, fmt.Errorf("imagepicker pick: %w", err)
 	}
 	m, _ := result.(map[string]any)
 	list, ok := m["images"].([]any)
@@ -132,16 +132,6 @@ func Pick(ctx context.Context, opts PickOptions) ([]Image, error) {
 		images = append(images, img)
 	}
 	return images, nil
-}
-
-func wrap(op string, err error) error {
-	var channelErr *platform.ChannelError
-	if errors.As(err, &channelErr) {
-		if sentinel, ok := nativeErrors[channelErr.Code]; ok {
-			return fmt.Errorf("imagepicker %s: %w", op, sentinel)
-		}
-	}
-	return fmt.Errorf("imagepicker %s: %w", op, err)
 }
 
 func parseImage(data any) (Image, error) {

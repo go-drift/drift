@@ -47,8 +47,12 @@ const (
 // Initialized eagerly so that permissions constructed at package init all
 // share the same channel state.
 var (
-	permissionsChannel = NewMethodChannel("drift/permissions")
-	permissionChanges  = NewStream(
+	permissionsChannel = NewMethodChannel("drift/permissions").WithErrors(ErrorCodes{
+		"permission_not_registered": ErrPermissionNotRegistered,
+		"permission_not_declared":   ErrPermissionNotDeclared,
+		"platform_unavailable":      ErrPlatformUnavailable,
+	})
+	permissionChanges = NewStream(
 		"drift/permissions/changes",
 		NewEventChannel("drift/permissions/changes"),
 		parsePermissionChange,

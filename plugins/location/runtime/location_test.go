@@ -76,7 +76,7 @@ func TestCurrentRejectsMalformedFix(t *testing.T) {
 }
 
 func TestNativeErrorCodesMapToSentinels(t *testing.T) {
-	for code, want := range nativeErrors {
+	for code, want := range errorCodes {
 		useNative(t, &fakeNative{errs: map[string]error{"getCurrentLocation": platform.NewChannelError(code, "native says no")}})
 		if _, err := Current(context.Background(), Options{}); !errors.Is(err, want) {
 			t.Errorf("%s: err = %v, want %v", code, err, want)

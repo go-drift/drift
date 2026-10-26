@@ -9,9 +9,9 @@ import Foundation
 /// `message` and `details`. Throw it from a method, or pass it to
 /// `DriftResult.error(_:)`.
 ///
-/// Go matches `code` against its sentinel errors under `errors.Is`. Any
-/// other `Error` reaches Go as `native_error`, with its NSError domain and
-/// code in `details`.
+/// Go matches `code` against the sentinels the channel declares
+/// (`platform.ErrorCodes`) under `errors.Is`. Any other `Error` reaches Go
+/// as `native_error`, with its NSError domain and code in `details`.
 public struct DriftCallError: Error, CustomStringConvertible {
     /// The wire code, such as `permission_denied`.
     public let code: String

@@ -86,9 +86,11 @@ func GetPlatformViewRegistry() *PlatformViewRegistry {
 
 func newPlatformViewRegistry() *PlatformViewRegistry {
 	r := &PlatformViewRegistry{
-		factories:          make(map[string]PlatformViewFactory),
-		views:              make(map[int64]PlatformView),
-		channel:            NewMethodChannel("drift/platform_views"),
+		factories: make(map[string]PlatformViewFactory),
+		views:     make(map[int64]PlatformView),
+		channel: NewMethodChannel("drift/platform_views").WithErrors(ErrorCodes{
+			"view_type_not_found": ErrViewTypeNotFound,
+		}),
 		geometryCache:      make(map[int64]CapturedViewGeometry),
 		viewsSeenThisFrame: make(map[int64]struct{}),
 	}

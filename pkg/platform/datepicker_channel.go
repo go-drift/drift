@@ -22,7 +22,9 @@ type DatePickerConfig struct {
 	MaxDate *time.Time
 }
 
-var datePickerChannel = NewMethodChannel("drift/date_picker")
+var datePickerChannel = NewMethodChannel("drift/date_picker").WithErrors(ErrorCodes{
+	"platform_unavailable": ErrPlatformUnavailable,
+})
 
 // ShowDatePicker shows the native date picker and returns the chosen date,
 // at midnight in [time.Local], or [ErrPickerCancelled]. Dates cross the

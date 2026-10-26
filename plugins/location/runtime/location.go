@@ -56,8 +56,8 @@ const (
 )
 
 var (
-	channel = platform.NewMethodChannel(channelName)
-	updates = platform.NewStream(updatesChannel, platform.NewEventChannel(updatesChannel), parseUpdate)
+	channel = platform.NewMethodChannel(channelName).WithErrors(errorCodes)
+	updates = platform.NewStream(updatesChannel, platform.NewEventChannel(updatesChannel).WithErrors(errorCodes), parseUpdate)
 )
 
 var (
@@ -84,8 +84,8 @@ var (
 	ErrBackgroundStart = errors.New("background location updates must start while the app is in the foreground")
 )
 
-// nativeErrors maps the native halves' error codes to the sentinels.
-var nativeErrors = map[string]error{
+// errorCodes are the native halves' error codes for the sentinels.
+var errorCodes = platform.ErrorCodes{
 	"permission_denied":         ErrPermissionDenied,
 	"location_disabled":         ErrDisabled,
 	"location_unavailable":      ErrUnavailable,
@@ -180,7 +180,7 @@ func (o UpdateOptions) args() map[string]any {
 func Current(ctx context.Context, opts Options) (Update, error) {
 	result, err := channel.Invoke(ctx, "getCurrentLocation", opts.args())
 	if err != nil {
-		return Update{}, wrap("current", err)
+		return Update{}, fmt.Errorf("location current: %w", err)
 	}
 	return parseUpdate(result)
 }
@@ -191,7 +191,7 @@ func Current(ctx context.Context, opts Options) (Update, error) {
 func LastKnown(ctx context.Context) (*Update, error) {
 	result, err := channel.Invoke(ctx, "getLastKnown", nil)
 	if err != nil {
-		return nil, wrap("last known", err)
+		return nil, fmt.Errorf("location last known: %w", err)
 	}
 	if result == nil {
 		return nil, nil
@@ -208,7 +208,7 @@ func LastKnown(ctx context.Context) (*Update, error) {
 func IsEnabled(ctx context.Context) (bool, error) {
 	result, err := channel.Invoke(ctx, "isEnabled", nil)
 	if err != nil {
-		return false, wrap("is enabled", err)
+		return false, fmt.Errorf("location is enabled: %w", err)
 	}
 	m, _ := result.(map[string]any)
 	enabled, ok := m["enabled"].(bool)
@@ -224,7 +224,7 @@ func IsEnabled(ctx context.Context) (bool, error) {
 // call it.
 func StartUpdates(opts UpdateOptions) error {
 	if _, err := channel.Invoke(context.Background(), "startUpdates", opts.args()); err != nil {
-		return wrap("start updates", err)
+		return fmt.Errorf("location start updates: %w", err)
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ func StartUpdates(opts UpdateOptions) error {
 // it.
 func StopUpdates() error {
 	if _, err := channel.Invoke(context.Background(), "stopUpdates", nil); err != nil {
-		return wrap("stop updates", err)
+		return fmt.Errorf("location stop updates: %w", err)
 	}
 	return nil
 }
@@ -241,17 +241,6 @@ func StopUpdates() error {
 // Updates streams locations while StartUpdates is in effect.
 func Updates() *platform.Stream[Update] {
 	return updates
-}
-
-// wrap names op and maps native error codes to the sentinels.
-func wrap(op string, err error) error {
-	var channelErr *platform.ChannelError
-	if errors.As(err, &channelErr) {
-		if sentinel, ok := nativeErrors[channelErr.Code]; ok {
-			return fmt.Errorf("location %s: %w", op, sentinel)
-		}
-	}
-	return fmt.Errorf("location %s: %w", op, err)
 }
 
 // alwaysPermission names the missing config when Always is not registered.

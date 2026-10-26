@@ -32,6 +32,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-drift/drift/pkg/platform"
@@ -43,15 +44,21 @@ import (
 // plugins/splash/plugin/android/DriftSplashPlugin.kt.
 const channelName = "drift/splash"
 
-var channel = platform.NewMethodChannel(channelName)
+// ErrAlreadyDismissed indicates Preserve came after the splash went:
+// call it before the first frame.
+var ErrAlreadyDismissed = errors.New("splash already dismissed")
+
+var channel = platform.NewMethodChannel(channelName).WithErrors(platform.ErrorCodes{
+	"already_dismissed": ErrAlreadyDismissed,
+})
 
 // Preserve keeps the splash up past the first frame until a matching
 // Remove. Call it before the first frame: from App.OnInit or the root
 // widget's InitState.
 //
-// It fails if the splash has already gone, or if the native plugin is
-// unreachable (the plugin is not in drift.yaml, or the call came from a
-// package init before the app started).
+// It fails with ErrAlreadyDismissed if the splash has already gone, or if
+// the native plugin is unreachable (the plugin is not in drift.yaml, or the
+// call came from a package init before the app started).
 func Preserve() error {
 	if _, err := channel.Invoke(context.Background(), "preserve", nil); err != nil {
 		return fmt.Errorf("splash preserve: %w", err)

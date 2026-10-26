@@ -39,7 +39,7 @@ import (
 // (plugin/ios/DriftSecureStoragePlugin.swift, plugin/android/*.kt).
 const channelName = "drift/securestorage"
 
-var channel = platform.NewMethodChannel(channelName)
+var channel = platform.NewMethodChannel(channelName).WithErrors(errorCodes)
 
 var (
 	// ErrAuthFailed indicates biometric authentication failed.
@@ -60,8 +60,8 @@ var (
 	ErrNoActivity = errors.New("no screen to show the biometric prompt over")
 )
 
-// nativeErrors maps the native halves' error codes to the sentinels.
-var nativeErrors = map[string]error{
+// errorCodes are the native halves' error codes for the sentinels.
+var errorCodes = platform.ErrorCodes{
 	"auth_failed":               ErrAuthFailed,
 	"auth_canceled":             ErrAuthCanceled,
 	"biometrics_unavailable":    ErrBiometricsUnavailable,
@@ -229,16 +229,10 @@ func AvailableBiometric(ctx context.Context) (Biometric, error) {
 
 func invoke(ctx context.Context, method string, args map[string]any) (any, error) {
 	result, err := channel.Invoke(ctx, method, args)
-	if err == nil {
-		return result, nil
+	if err != nil {
+		return nil, fmt.Errorf("securestorage %s: %w", method, err)
 	}
-	var channelErr *platform.ChannelError
-	if errors.As(err, &channelErr) {
-		if sentinel, ok := nativeErrors[channelErr.Code]; ok {
-			return nil, fmt.Errorf("securestorage %s: %w", method, sentinel)
-		}
-	}
-	return nil, fmt.Errorf("securestorage %s: %w", method, err)
+	return result, nil
 }
 
 func parseError(method string, got any) error {

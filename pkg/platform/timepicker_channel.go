@@ -18,7 +18,9 @@ type TimePickerConfig struct {
 	Is24Hour *bool
 }
 
-var timePickerChannel = NewMethodChannel("drift/time_picker")
+var timePickerChannel = NewMethodChannel("drift/time_picker").WithErrors(ErrorCodes{
+	"platform_unavailable": ErrPlatformUnavailable,
+})
 
 // ShowTimePicker shows the native time picker and returns the chosen hour
 // and minute, or [ErrPickerCancelled]. It waits for the user, so call it

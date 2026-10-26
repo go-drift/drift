@@ -100,3 +100,11 @@ func TestErrorsAreReturned(t *testing.T) {
 		t.Errorf("Remove err = %v", err)
 	}
 }
+
+func TestPreserveAfterDismissal(t *testing.T) {
+	t.Cleanup(platform.ResetForTest)
+	platform.SetNativeBridge(&fakeBridge{err: platform.NewChannelError("already_dismissed", "splash already dismissed")})
+	if err := Preserve(); !errors.Is(err, ErrAlreadyDismissed) {
+		t.Errorf("Preserve: err = %v, want ErrAlreadyDismissed", err)
+	}
+}

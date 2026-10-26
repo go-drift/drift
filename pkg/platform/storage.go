@@ -66,7 +66,10 @@ type StorageService struct {
 }
 
 // Storage is the singleton storage service.
-var Storage = &StorageService{channel: NewMethodChannel("drift/storage")}
+var Storage = &StorageService{channel: NewMethodChannel("drift/storage").WithErrors(ErrorCodes{
+	"storage_busy":         ErrStorageBusy,
+	"platform_unavailable": ErrPlatformUnavailable,
+})}
 
 // PickFile opens the system file picker and returns the chosen files, or
 // none if the user canceled. Returns [ErrStorageBusy] if a picker is open.
