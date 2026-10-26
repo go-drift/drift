@@ -70,12 +70,8 @@ class DriftFirebasePlugin : DriftPlugin {
     }
 
     override fun onAttach(binding: DriftActivityBinding) {
-        // A recreated Activity, or one relaunched from Recents, carries a
-        // launch intent an earlier Activity already handled.
-        if (binding.isNewLaunch) {
-            binding.activity.intent?.let { opened(it) }
-        }
-        binding.addOnNewIntentListener { opened(it) }
+        // The tap that launched the app, then later ones.
+        binding.addIntentListener { opened(it) }
     }
 
     internal fun onNewToken(token: String) {

@@ -42,15 +42,20 @@ object DriftPlugins {
 
     /**
      * Attaches every plugin to activity, detaching from a previous Activity
-     * first. overlayView hosts plugin overlays; isNewLaunch says whether
-     * activity.intent is a new launch (DriftActivityBinding).
+     * first, then offers them activity.intent if it is a new launch (not a
+     * recreated Activity's or one relaunched from Recents, whose intent an
+     * earlier Activity offered). overlayView hosts plugin overlays. Returns
+     * true if a plugin claimed the launch intent; otherwise MainActivity
+     * hands it to Drift's deep links.
      */
-    fun attach(activity: FragmentActivity, overlayView: ViewGroup, isNewLaunch: Boolean) {
+    fun attach(activity: FragmentActivity, overlayView: ViewGroup, isNewLaunch: Boolean): Boolean {
         val all = requirePlugins()
         binding?.let { detachAll(it) }
-        val b = DriftActivityBinding(activity, overlayView, isNewLaunch)
+        val b = DriftActivityBinding(activity, overlayView)
         binding = b
         all.forEach { it.onAttach(b) }
+        val launch = activity.intent ?: return false
+        return isNewLaunch && b.dispatchIntent(launch)
     }
 
     /** Detaches every plugin if they are attached to activity. */
@@ -61,10 +66,10 @@ object DriftPlugins {
         detachAll(b)
     }
 
-    /** Offers intent to attached plugins; true if one claimed it. */
+    /** Offers intent, delivered to the running Activity, to attached plugins; true if one claimed it. */
     fun onNewIntent(intent: Intent): Boolean {
         checkMainThread()
-        return binding?.dispatchNewIntent(intent) ?: false
+        return binding?.dispatchIntent(intent) ?: false
     }
 
     private fun detachAll(b: DriftActivityBinding) {

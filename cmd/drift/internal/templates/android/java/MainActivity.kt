@@ -37,9 +37,6 @@ class MainActivity : AppCompatActivity() {
         // Recents carries the launch intent again; it was handled.
         val newLaunch = savedInstanceState == null &&
             (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0
-        if (newLaunch) {
-            DeepLinkHandler.handleIntent(intent, "launch")
-        }
 
         container = DriftContainer(this)
         setContentView(container)
@@ -81,8 +78,12 @@ class MainActivity : AppCompatActivity() {
         })
 
         // Plugins attach once the views exist; the window's root view hosts
-        // their overlays above Drift's content.
-        DriftPlugins.attach(this, window.decorView as ViewGroup, newLaunch)
+        // their overlays above Drift's content. They are offered a new
+        // launch's intent first, as iOS offers them URLs first.
+        val claimed = DriftPlugins.attach(this, window.decorView as ViewGroup, newLaunch)
+        if (newLaunch && !claimed) {
+            DeepLinkHandler.handleIntent(intent, "launch")
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

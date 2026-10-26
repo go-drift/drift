@@ -2,13 +2,9 @@
  * DriftActivityBinding.kt
  *
  * What a plugin gets when it attaches to MainActivity: the Activity, the
- * root view for overlays, and the intents Android delivers to the running
- * Activity. Valid from
- * DriftPlugin.onAttach until onDetach; listeners are dropped on detach, and
- * a plugin must not keep the binding past it.
- *
- * The Intent that launched the Activity is `activity.intent` (act on it
- * only when isNewLaunch); the listener below covers later deliveries.
+ * root view for overlays, and the intents the Activity receives. Valid
+ * from DriftPlugin.onAttach until onDetach; listeners are dropped on
+ * detach, and a plugin must not keep the binding past it.
  *
  * IMPORTANT: shipped verbatim by Drift's scaffold; must not depend on the
  * user's app package.
@@ -31,29 +27,28 @@ class DriftActivityBinding(
      * platform views.
      */
     val overlayView: ViewGroup,
-    /**
-     * Whether activity.intent is a new launch to act on (a notification
-     * tap, a deep link). False when the Activity was recreated
-     * (configuration change, process restore) or relaunched from Recents:
-     * its intent is the one an earlier Activity already handled.
-     */
-    val isNewLaunch: Boolean,
 ) {
-    private val newIntentListeners = mutableListOf<(Intent) -> Boolean>()
+    private val intentListeners = mutableListOf<(Intent) -> Boolean>()
 
     /**
-     * Receives intents delivered to the running Activity (onNewIntent).
-     * Return true to claim the intent: later listeners and Drift's own
-     * deep-link handling do not see it.
+     * Receives the intents the app is opened with (a notification tap, a
+     * deep link), as iOS offers openURL: the intent that launched the
+     * Activity, right after every plugin's onAttach, and each intent
+     * delivered to the running Activity later (onNewIntent). Each arrives
+     * once: a recreated Activity, or one relaunched from Recents, carries an
+     * intent an earlier Activity already offered, and is not offered again.
+     * Offered to plugins in drift.yaml order; return true to claim the
+     * intent: later listeners and Drift's own deep-link handling do not see
+     * it.
      */
-    fun addOnNewIntentListener(listener: (intent: Intent) -> Boolean) {
-        newIntentListeners += listener
+    fun addIntentListener(listener: (intent: Intent) -> Boolean) {
+        intentListeners += listener
     }
 
-    internal fun dispatchNewIntent(intent: Intent): Boolean =
-        newIntentListeners.any { it(intent) }
+    internal fun dispatchIntent(intent: Intent): Boolean =
+        intentListeners.any { it(intent) }
 
     internal fun clear() {
-        newIntentListeners.clear()
+        intentListeners.clear()
     }
 }
