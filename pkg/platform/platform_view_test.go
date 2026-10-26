@@ -577,25 +577,30 @@ func TestFlushGeometryBatch_ViewScrollsOutAndBack(t *testing.T) {
 	}
 }
 
-type failingViewFactory struct{}
+type failingViewFactory struct{ created *failingTestView }
 
-func (failingViewFactory) ViewType() string { return "test_failing_view" }
-func (failingViewFactory) Create(viewID int64, _ map[string]any) (PlatformView, error) {
-	return &failingTestView{PlatformViewBase: NewPlatformViewBase(viewID, "test_failing_view")}, nil
+func (*failingViewFactory) ViewType() string { return "test_failing_view" }
+func (f *failingViewFactory) Create(viewID int64, _ map[string]any) (PlatformView, error) {
+	f.created = &failingTestView{PlatformViewBase: NewPlatformViewBase(viewID, "test_failing_view")}
+	return f.created, nil
 }
 
-type failingTestView struct{ PlatformViewBase }
+type failingTestView struct {
+	PlatformViewBase
+	disposed bool
+}
 
 func (*failingTestView) Create(map[string]any) error              { return nil }
-func (*failingTestView) Dispose()                                 {}
+func (v *failingTestView) Dispose()                               { v.disposed = true }
 func (*failingTestView) HandleEvent(string, map[string]any) error { return nil }
 
 // A native factory that fails fails Create with its error and leaves no
-// view.
+// view: the Go view the factory made is disposed.
 func TestCreateReturnsTheNativeFactoryError(t *testing.T) {
 	t.Cleanup(ResetForTest)
 	registry := GetPlatformViewRegistry()
-	registry.RegisterFactory(failingViewFactory{})
+	factory := &failingViewFactory{}
+	registry.RegisterFactory(factory)
 	SetNativeBridge(failingBridge{NewChannelError("no_camera", "this device has no camera")})
 	view, err := registry.Create("test_failing_view", nil)
 	var channelErr *ChannelError
@@ -604,5 +609,8 @@ func TestCreateReturnsTheNativeFactoryError(t *testing.T) {
 	}
 	if n := registry.ViewCount(); n != 0 {
 		t.Errorf("%d views registered after a failed create", n)
+	}
+	if !factory.created.disposed {
+		t.Error("the Go view of a failed create was not disposed")
 	}
 }

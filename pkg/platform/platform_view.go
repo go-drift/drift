@@ -178,6 +178,7 @@ func (r *PlatformViewRegistry) Create(viewType string, params map[string]any) (P
 		r.mu.Lock()
 		delete(r.views, viewID)
 		r.mu.Unlock()
+		view.Dispose()
 		return nil, err
 	}
 
