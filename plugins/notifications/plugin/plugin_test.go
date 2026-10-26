@@ -26,8 +26,8 @@ func TestBuild(t *testing.T) {
 		t.Error("POST_NOTIFICATIONS not declared")
 	}
 	if !has(func(op protocol.Op) bool {
-		o, ok := op.(*protocol.OpAndroidManifestAddReceiver)
-		return ok && o.ReceiverName() == androidPackage+".DriftNotificationReceiver"
+		o, ok := op.(*protocol.OpAndroidManifestAddComponent)
+		return ok && o.Tag() == "receiver" && o.Name() == androidPackage+".DriftNotificationReceiver"
 	}) {
 		t.Error("alarm receiver not declared")
 	}

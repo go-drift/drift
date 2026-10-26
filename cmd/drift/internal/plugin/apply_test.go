@@ -105,7 +105,7 @@ func TestEveryOpTypeHasAKind(t *testing.T) {
 func TestApplyIOSBundleResourcesLandInPluginResources(t *testing.T) {
 	dir := t.TempDir()
 	ops := []protocol.Op{
-		&protocol.OpIOSAddBundleResource{Base: protocol.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
+		&protocol.OpAddFile{Base: protocol.Base{Pkg: "fb"}, Location: protocol.FileIOSBundle, Name: "GoogleService-Info.plist", Content: base64("plist")},
 	}
 	if _, err := apply(t, ops, dir, "ios", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -126,7 +126,7 @@ func TestApplyXtoolBundleResourcesAndImageSets(t *testing.T) {
 		t.Fatal(err)
 	}
 	ops := []protocol.Op{
-		&protocol.OpIOSAddBundleResource{Base: protocol.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
+		&protocol.OpAddFile{Base: protocol.Base{Pkg: "fb"}, Location: protocol.FileIOSBundle, Name: "GoogleService-Info.plist", Content: base64("plist")},
 		&protocol.OpIOSAssetsAddImageSet{Base: protocol.Base{Pkg: "splash"}, Name: "DriftSplash", Image: base64("png")},
 	}
 	if _, err := apply(t, ops, dir, "xtool", nil); err != nil {
@@ -164,7 +164,7 @@ func TestApplyXtoolBundleResourcesAndImageSets(t *testing.T) {
 func TestApplyAndroidAppModuleFile(t *testing.T) {
 	dir := t.TempDir()
 	ops := []protocol.Op{
-		&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "fb"}, Name: "google-services.json", Content: base64("{}")},
+		&protocol.OpAddFile{Base: protocol.Base{Pkg: "fb"}, Location: protocol.FileAndroidAppModule, Name: "google-services.json", Content: base64("{}")},
 	}
 	if _, err := apply(t, ops, dir, "android", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -189,12 +189,12 @@ func TestApplyEntitlementsAndInfoPlistAreSeparateFiles(t *testing.T) {
 			dir := t.TempDir()
 			writeTree(t, dir, map[string]string{infoPath: empty, "Runner.entitlements": empty, "xtool.yml": "bundleID: com.example.app\n"})
 			ops := []protocol.Op{
-				&protocol.OpPlistSetString{
+				&protocol.OpPlistSet{
 					Base:       protocol.Base{Pkg: "fb"},
 					PlistEntry: protocol.PlistEntry{File: protocol.PlistEntitlements, Key: "aps-environment"},
 					Value:      "development",
 				},
-				&protocol.OpPlistSetBool{
+				&protocol.OpPlistSet{
 					Base:       protocol.Base{Pkg: "fb"},
 					PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "FirebaseAppDelegateProxyEnabled"},
 					Value:      false,
@@ -228,9 +228,9 @@ func TestApplyWritesNothingWhenALaterStepFails(t *testing.T) {
 	writeTree(t, dir, tree)
 	base := protocol.Base{Pkg: "github.com/acme/maps"}
 	ops := []protocol.Op{
-		&protocol.OpPlistSetString{Base: base, PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "MapsKey"}, Value: "k"},
+		&protocol.OpPlistSet{Base: base, PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "MapsKey"}, Value: "k"},
 		&protocol.OpIOSAssetsAddImageSet{Base: base, Name: "pin", Image: base64("png")},
-		&protocol.OpIOSAddBundleResource{Base: base, Path: "maps.json", Content: base64("{}")},
+		&protocol.OpAddFile{Base: base, Location: protocol.FileIOSBundle, Name: "maps.json", Content: base64("{}")},
 		&protocol.OpIOSPlugin{Base: base, Class: "MapsPlugin"},
 	}
 	cs := mutate.NewChangeset()

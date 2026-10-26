@@ -80,12 +80,14 @@ func TestBuildIOS(t *testing.T) {
 		strings.Join(spm.Products, ",") != "FirebaseCore,FirebaseMessaging" {
 		t.Errorf("SwiftPM dependency = %+v", spm)
 	}
-	res, ok := find(ops, func(o *protocol.OpIOSAddBundleResource) bool { return o.Path == "GoogleService-Info.plist" })
+	res, ok := find(ops, func(o *protocol.OpAddFile) bool {
+		return o.Location == protocol.FileIOSBundle && o.Name == "GoogleService-Info.plist"
+	})
 	if content, _ := protocol.DecodeContent(res.Content); !ok || !strings.Contains(string(content), "com.example.app") {
 		t.Error("GoogleService-Info.plist not shipped verbatim in the bundle")
 	}
-	if _, ok := find(ops, func(o *protocol.OpPlistSetBool) bool {
-		return o.File == protocol.PlistInfo && o.Key == "FirebaseAppDelegateProxyEnabled" && !o.Value
+	if _, ok := find(ops, func(o *protocol.OpPlistSet) bool {
+		return o.File == protocol.PlistInfo && o.Key == "FirebaseAppDelegateProxyEnabled" && o.Value == false
 	}); !ok {
 		t.Error("swizzling not disabled")
 	}
@@ -94,7 +96,7 @@ func TestBuildIOS(t *testing.T) {
 	}); !ok {
 		t.Error("remote-notification background mode missing")
 	}
-	if _, ok := find(ops, func(o *protocol.OpPlistSetString) bool {
+	if _, ok := find(ops, func(o *protocol.OpPlistSet) bool {
 		return o.File == protocol.PlistEntitlements && o.Key == "aps-environment"
 	}); !ok {
 		t.Error("aps-environment entitlement missing")
@@ -122,11 +124,13 @@ func TestBuildAndroid(t *testing.T) {
 	}); !ok {
 		t.Error("google-services Gradle plugin missing")
 	}
-	if _, ok := find(ops, func(o *protocol.OpAndroidAddAppModuleFile) bool { return o.Name == "google-services.json" }); !ok {
+	if _, ok := find(ops, func(o *protocol.OpAddFile) bool {
+		return o.Location == protocol.FileAndroidAppModule && o.Name == "google-services.json"
+	}); !ok {
 		t.Error("google-services.json missing")
 	}
-	service, ok := find(ops, func(*protocol.OpAndroidManifestAddService) bool { return true })
-	if !ok || service.ServiceName() != androidPackage+".DriftFirebaseMessagingService" ||
+	service, ok := find(ops, func(o *protocol.OpAndroidManifestAddComponent) bool { return o.Tag() == "service" })
+	if !ok || service.Name() != androidPackage+".DriftFirebaseMessagingService" ||
 		!strings.Contains(service.XML, "com.google.firebase.MESSAGING_EVENT") {
 		t.Errorf("messaging service = %+v", service)
 	}

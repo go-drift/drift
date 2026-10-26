@@ -40,17 +40,7 @@ func ApplyPlist(cs *Changeset, path string, ops []protocol.PlistOp) (bool, error
 	var appends []*protocol.OpPlistAppendArrayItem
 	for _, op := range ops {
 		switch v := op.(type) {
-		case *protocol.OpPlistSetString:
-			root[v.Key] = v.Value
-		case *protocol.OpPlistSetBool:
-			root[v.Key] = v.Value
-		case *protocol.OpPlistSetStringArray:
-			arr := make([]any, len(v.Values))
-			for i, s := range v.Values {
-				arr[i] = s
-			}
-			root[v.Key] = arr
-		case *protocol.OpPlistSetDict:
+		case *protocol.OpPlistSet:
 			root[v.Key] = v.Value
 		case *protocol.OpPlistAppendArrayItem:
 			appends = append(appends, v)

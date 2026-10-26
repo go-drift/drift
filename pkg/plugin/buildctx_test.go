@@ -20,7 +20,7 @@ func TestRecorderRejectsInvalidInputWithoutPanicking(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Err() to report the invalid ops")
 	}
-	for _, want := range []string{"android.app_module.add_file", "ios.spm.add_package"} {
+	for _, want := range []string{"file.add", "ios.spm.add_package"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("Err() = %q, want it to mention %s", err, want)
 		}
@@ -51,10 +51,35 @@ func TestNativeConfig(t *testing.T) {
 	if len(ops) != 2 {
 		t.Fatalf("ops = %v, want one per platform", ops)
 	}
-	ios, ok1 := ops[0].(*protocol.OpIOSPluginConfig)
-	android, ok2 := ops[1].(*protocol.OpAndroidPluginConfig)
-	if !ok1 || !ok2 || ios.Config != `{"kinds":["contacts"]}` || android.Config != ios.Config {
-		t.Errorf("ops = %#v, %#v", ops[0], ops[1])
+	want := protocol.EncodeContent([]byte(`{"kinds":["contacts"]}`))
+	for i, loc := range []protocol.FileLocation{protocol.FileIOSPluginConfig, protocol.FileAndroidPluginConfig} {
+		f, ok := ops[i].(*protocol.OpAddFile)
+		if !ok || f.Location != loc || f.Content != want {
+			t.Errorf("ops[%d] = %#v, want the config at %s", i, ops[i], loc)
+		}
+	}
+}
+
+// AddService and AddReceiver record one component op, and each refuses
+// the other's element.
+func TestManifestComponentsMatchTheirRecorder(t *testing.T) {
+	ctx := NewTestCtx()
+	ctx.Android.Manifest.AddService(`<service android:name="com.p.S" android:exported="false"/>`)
+	ctx.Android.Manifest.AddReceiver(`<receiver android:name="com.p.R" android:exported="false"/>`)
+	if err := ctx.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for i, tag := range []string{"service", "receiver"} {
+		if c, ok := ctx.Ops()[i].(*protocol.OpAndroidManifestAddComponent); !ok || c.Tag() != tag {
+			t.Errorf("ops[%d] = %#v, want a <%s>", i, ctx.Ops()[i], tag)
+		}
+	}
+
+	ctx = NewTestCtx()
+	ctx.Android.Manifest.AddService(`<receiver android:name="com.p.R" android:exported="false"/>`)
+	ctx.Android.Manifest.AddReceiver(`<service android:name="com.p.S" android:exported="false"/>`)
+	if err := ctx.Err(); err == nil || len(ctx.Ops()) != 0 {
+		t.Errorf("Err() = %v, ops = %v; want both refused", err, ctx.Ops())
 	}
 }
 

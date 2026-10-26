@@ -17,13 +17,12 @@ type ManifestOps struct {
 	IntentFilters []*protocol.OpAndroidManifestAddIntentFilter
 	ActivityAttrs []*protocol.OpAndroidManifestSetActivityAttr
 	MetaData      []*protocol.OpAndroidManifestAddMetaData
-	Services      []*protocol.OpAndroidManifestAddService
-	Receivers     []*protocol.OpAndroidManifestAddReceiver
+	Components    []*protocol.OpAndroidManifestAddComponent
 }
 
 // Empty reports whether there is nothing to apply.
 func (m ManifestOps) Empty() bool {
-	return len(m.Permissions)+len(m.IntentFilters)+len(m.ActivityAttrs)+len(m.MetaData)+len(m.Services)+len(m.Receivers) == 0
+	return len(m.Permissions)+len(m.IntentFilters)+len(m.ActivityAttrs)+len(m.MetaData)+len(m.Components) == 0
 }
 
 // ApplyAndroidManifest plans manifest ops' edits to the file at path into
@@ -44,7 +43,7 @@ func ApplyAndroidManifest(cs *Changeset, path string, ops ManifestOps) (bool, er
 	}
 
 	app := manifest.SelectElement("application")
-	if app == nil && len(ops.ActivityAttrs)+len(ops.IntentFilters)+len(ops.MetaData)+len(ops.Services)+len(ops.Receivers) > 0 {
+	if app == nil && len(ops.ActivityAttrs)+len(ops.IntentFilters)+len(ops.MetaData)+len(ops.Components) > 0 {
 		return false, fmt.Errorf("AndroidManifest.xml has no <application>; cannot apply activity, intent, meta-data, service or receiver ops")
 	}
 
@@ -77,14 +76,16 @@ func ApplyAndroidManifest(cs *Changeset, path string, ops ManifestOps) (bool, er
 		ensureMetaData(parent, op.Name, op.Value)
 	}
 
-	for _, op := range ops.Services {
-		if err := putComponent(app, "service", op.ServiceName(), op.XML, op.PluginPackage()); err != nil {
-			return false, err
-		}
-	}
-	for _, op := range ops.Receivers {
-		if err := putComponent(app, "receiver", op.ReceiverName(), op.XML, op.PluginPackage()); err != nil {
-			return false, err
+	// Grouped by kind, services first, so the manifest's order does not
+	// depend on the order plugins record them in.
+	for _, tag := range protocol.ManifestComponents {
+		for _, op := range ops.Components {
+			if op.Tag() != tag {
+				continue
+			}
+			if err := putComponent(app, tag, op.Name(), op.XML, op.PluginPackage()); err != nil {
+				return false, err
+			}
 		}
 	}
 

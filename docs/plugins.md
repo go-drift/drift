@@ -71,9 +71,11 @@ Each op declares the **targets** it writes: a key naming a location (`plist:<fil
 
 - Owners of one key must write the same content; they collapse to one.
 - Members of a set merge; the same member twice must agree.
-- A key cannot be both owned and added to (`set_string_array` vs `append_array_item`).
+- A key cannot be both owned and added to (`ios.plist.set` vs `ios.plist.append_array_item`).
 
 Some ops claim more than one key: an image set also claims its loose `<Name>.png` bundle name (xtool), a non-values resource XML file also claims the resource its file name defines, a Swift source also claims its basename within the plugin's module.
+
+Op types are few on purpose: one op per kind of edit, not per recorder. `ios.plist.set` carries any plist value (string, bool, integer, real, array, dictionary), keeping integers and reals apart on the wire; `android.manifest.add_component` takes the whole `<service>` or `<receiver>` element, its kind read from the root; `file.add` writes one whole file at a `FileLocation` (bundle root, drawable, resource, app module, either plugin config), which decides its platform, name rules and targets. A file in a Drift-owned synced directory (bundle resources, plugin config assets) is rewritten with that directory every build; any other is owned on its own and recorded by the ejected lock (`syncedFiles`, `opkinds.go`). A new kind of edit with fields of its own is a new op type, not another location or mode of an existing one.
 
 On the CLI side, each op type has one `opKind` entry (`opkinds.go`): the shared files it edits and what it changes there (the ejected lock's edit text and the ejected-project checks), the whole files it owns (written as they are by `Apply` and recorded by the lock), the exact line of a versioned Gradle op, and the mutator batch it feeds. Every project location lives on `project` (`project.go`), so `Apply`, the lock, the registrant and the ejected checks share one path for each file.
 
@@ -92,7 +94,7 @@ Adding an op means touching: the struct and its four methods plus the constructo
 
 `DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the plugin instances and drives the lifecycle described in the guide; it is Drift-owned and rewritten every build. Each plugin registers with its own `PluginHost`, which forwards to `PlatformChannelManager` (Drift's own host, whose `config` is empty) and adds:
 
-- `config`: the plugin's `ctx.NativeConfig`, recorded as `ios.plugin_config` / `android.plugin_config` and shipped as `DriftPluginConfig-<name>.json` in the bundle root (`Runner/PluginResources`, xtool `PluginResources`) and the asset `drift/plugins/<name>.json` (Drift-owned `app/src/main/assets/drift/plugins`, pruned every build like the bundle resources), read at registration. Android decodes it with the runner's `JsonCodec` (`DriftJsonCodec.kt`), the host's own codec. A file that is not a JSON object crashes.
+- `config`: the plugin's `ctx.NativeConfig`, recorded as `file.add` at the `ios.plugin_config` and `android.plugin_config` locations and shipped as `DriftPluginConfig-<name>.json` in the bundle root (`Runner/PluginResources`, xtool `PluginResources`) and the asset `drift/plugins/<name>.json` (Drift-owned `app/src/main/assets/drift/plugins`, pruned every build like the bundle resources), read at registration. Android decodes it with the runner's `JsonCodec` (`DriftJsonCodec.kt`), the host's own codec. A file that is not a JSON object crashes.
 - The `drift/` channel reservation: the registrant lists each plugin as a `DriftPluginEntry(name, firstParty, plugin)`, `firstParty` for a package under `github.com/go-drift/drift/plugins/` (`firstParty` in `registrant.go`), and `registerChannel` traps on a `drift/` name from any other plugin.
 
 Callers:

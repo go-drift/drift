@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,7 +15,7 @@ import (
 
 // Op is the closed interface for all plugin-emitted build ops.
 type Op interface {
-	// Type returns the JSON discriminator (e.g. "ios.plist.set_string").
+	// Type returns the JSON discriminator (e.g. "ios.plist.set").
 	Type() string
 	// Targets names every location the op writes. Two ops touching the
 	// same target must agree (see Target); the CLI's conflict check keys
@@ -133,44 +134,66 @@ func (e PlistEntry) validate() error {
 	return checkNonEmpty("plist key", e.Key)
 }
 
-type OpPlistSetString struct {
+// OpPlistSet sets one key of an iOS plist to Value, replacing what is
+// there: a plist value, which is a string, a bool, an integer, a real, an
+// array or a dictionary of plist values (checkPlistValue).
+type OpPlistSet struct {
 	Base
 	PlistEntry
-	Value string `json:"value"`
+	Value any `json:"value"`
 }
 
-func (o *OpPlistSetString) Type() string     { return "ios.plist.set_string" }
-func (o *OpPlistSetString) Platform() string { return "ios" }
-func (o *OpPlistSetString) Targets() []Target {
-	return []Target{owner(o.targetKey(), o.Type(), o.Value)}
+func (o *OpPlistSet) Type() string     { return "ios.plist.set" }
+func (o *OpPlistSet) Platform() string { return "ios" }
+func (o *OpPlistSet) Targets() []Target {
+	return []Target{owner(o.targetKey(), canonicalJSON(markPlistReals(o.Value)))}
 }
-func (o *OpPlistSetString) Validate() error { return o.validate() }
-
-type OpPlistSetBool struct {
-	Base
-	PlistEntry
-	Value bool `json:"value"`
-}
-
-func (o *OpPlistSetBool) Type() string     { return "ios.plist.set_bool" }
-func (o *OpPlistSetBool) Platform() string { return "ios" }
-func (o *OpPlistSetBool) Targets() []Target {
-	return []Target{owner(o.targetKey(), o.Type(), strconv.FormatBool(o.Value))}
-}
-func (o *OpPlistSetBool) Validate() error { return o.validate() }
-
-type OpPlistSetStringArray struct {
-	Base
-	PlistEntry
-	Values []string `json:"values"`
+func (o *OpPlistSet) Validate() error {
+	if err := o.validate(); err != nil {
+		return err
+	}
+	return checkPlistValue(o.Key, o.Value)
 }
 
-func (o *OpPlistSetStringArray) Type() string     { return "ios.plist.set_string_array" }
-func (o *OpPlistSetStringArray) Platform() string { return "ios" }
-func (o *OpPlistSetStringArray) Targets() []Target {
-	return []Target{owner(o.targetKey(), append([]string{o.Type()}, o.Values...)...)}
+// MarshalJSON writes Value's floats so they read back as floats; see
+// markPlistReals.
+func (o *OpPlistSet) MarshalJSON() ([]byte, error) {
+	type plain OpPlistSet
+	p := plain(*o)
+	p.Value = markPlistReals(o.Value)
+	return json.Marshal(p)
 }
-func (o *OpPlistSetStringArray) Validate() error { return o.validate() }
+
+// UnmarshalJSON reads Value's numbers back as the kind they were written
+// as: int64 for an integer literal, float64 for one with a fraction or
+// exponent.
+func (o *OpPlistSet) UnmarshalJSON(data []byte) error {
+	type plain OpPlistSet
+	var p struct {
+		plain
+		Value json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*o = OpPlistSet(p.plain)
+	o.Value = nil
+	if len(p.Value) == 0 || string(p.Value) == "null" {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(p.Value))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return err
+	}
+	typed, err := readPlistNumbers(v)
+	if err != nil {
+		return fmt.Errorf("value: %w", err)
+	}
+	o.Value = typed
+	return nil
+}
 
 type OpPlistAppendArrayItem struct {
 	Base
@@ -184,58 +207,6 @@ func (o *OpPlistAppendArrayItem) Targets() []Target {
 	return []Target{member(o.targetKey(), o.Value)}
 }
 func (o *OpPlistAppendArrayItem) Validate() error { return o.validate() }
-
-type OpPlistSetDict struct {
-	Base
-	PlistEntry
-	Value map[string]any `json:"value"`
-}
-
-func (o *OpPlistSetDict) Type() string     { return "ios.plist.set_dict" }
-func (o *OpPlistSetDict) Platform() string { return "ios" }
-func (o *OpPlistSetDict) Targets() []Target {
-	return []Target{owner(o.targetKey(), o.Type(), canonicalJSON(markPlistReals(o.Value)))}
-}
-
-// MarshalJSON writes Value's floats so they read back as floats; see
-// markPlistReals.
-func (o *OpPlistSetDict) MarshalJSON() ([]byte, error) {
-	type plain OpPlistSetDict
-	p := plain(*o)
-	p.Value, _ = markPlistReals(o.Value).(map[string]any)
-	return json.Marshal(p)
-}
-
-// UnmarshalJSON reads Value's numbers back as the kind they were written
-// as: int64 for an integer literal, float64 for one with a fraction or
-// exponent.
-func (o *OpPlistSetDict) UnmarshalJSON(data []byte) error {
-	type plain OpPlistSetDict
-	var p struct {
-		plain
-		Value json.RawMessage `json:"value"`
-	}
-	if err := json.Unmarshal(data, &p); err != nil {
-		return err
-	}
-	*o = OpPlistSetDict(p.plain)
-	o.Value = nil
-	if len(p.Value) == 0 || string(p.Value) == "null" {
-		return nil
-	}
-	dec := json.NewDecoder(bytes.NewReader(p.Value))
-	dec.UseNumber()
-	var v map[string]any
-	if err := dec.Decode(&v); err != nil {
-		return err
-	}
-	typed, err := readPlistNumbers(v)
-	if err != nil {
-		return fmt.Errorf("value: %w", err)
-	}
-	o.Value = typed.(map[string]any)
-	return nil
-}
 
 // markPlistReals returns v with each float as a json.Number that keeps a
 // fraction or exponent (2 becomes 2.0). Plain JSON writes float64(2) as 2,
@@ -301,12 +272,6 @@ func readPlistNumbers(v any) (any, error) {
 		}
 	}
 	return v, nil
-}
-func (o *OpPlistSetDict) Validate() error {
-	if err := o.validate(); err != nil {
-		return err
-	}
-	return checkPlistValue(o.Key, map[string]any(o.Value))
 }
 
 // ---- iOS assets / storyboards / sources ---------------------------------
@@ -588,7 +553,7 @@ var appModuleReservedNames = map[string]bool{
 	"build":              true,
 }
 
-// validateAppModuleFileName checks a file name for OpAndroidAddAppModuleFile:
+// validateAppModuleFileName checks a FileAndroidAppModule file name:
 // a single file name (no separators) that does not collide with files the
 // scaffold owns in the app module.
 func validateAppModuleFileName(name string) error {
@@ -602,29 +567,6 @@ func validateAppModuleFileName(name string) error {
 		return fmt.Errorf("app module file %q is reserved by the Drift scaffold", name)
 	}
 	return nil
-}
-
-// OpIOSAddBundleResource records a file to copy into the root of the iOS
-// app bundle, where Bundle.main and UIImage(named:) find it. Path is a plain
-// file name (see validateBundleFileName).
-//
-// Two plugins writing divergent content to the same bundle name conflict.
-type OpIOSAddBundleResource struct {
-	Base
-	Path    string `json:"path"`              // bundle-root file name
-	Content string `json:"content,omitempty"` // base64
-}
-
-func (o *OpIOSAddBundleResource) Type() string     { return "ios.bundle.add_resource" }
-func (o *OpIOSAddBundleResource) Platform() string { return "ios" }
-func (o *OpIOSAddBundleResource) Targets() []Target {
-	return []Target{owner("ios-bundle:"+o.Path, o.Type(), o.Content)}
-}
-func (o *OpIOSAddBundleResource) Validate() error {
-	if err := validateBundleFileName(o.Path); err != nil {
-		return err
-	}
-	return checkContent("bundle resource content", o.Content, false)
 }
 
 // ---- Plugin config --------------------------------------------------------
@@ -644,43 +586,158 @@ func AndroidPluginConfigAsset(name string) string {
 // configs, under app/src/main/assets.
 const AndroidPluginConfigAssetDir = "drift/plugins"
 
-// OpIOSPluginConfig ships the plugin's NativeConfig, a JSON object, as its
-// config file in the app bundle (IOSPluginConfigFile).
-type OpIOSPluginConfig struct {
-	Base
-	Config string `json:"config"` // a JSON object
-}
-
-func (o *OpIOSPluginConfig) Type() string     { return "ios.plugin_config" }
-func (o *OpIOSPluginConfig) Platform() string { return "ios" }
-func (o *OpIOSPluginConfig) Targets() []Target {
-	return []Target{owner("ios-bundle:"+IOSPluginConfigFile(o.Ident), o.Config)}
-}
-func (o *OpIOSPluginConfig) Validate() error { return validatePluginConfig(o.Ident, o.Config) }
-
-// OpAndroidPluginConfig ships the plugin's NativeConfig, a JSON object, as
-// its config asset (AndroidPluginConfigAsset).
-type OpAndroidPluginConfig struct {
-	Base
-	Config string `json:"config"` // a JSON object
-}
-
-func (o *OpAndroidPluginConfig) Type() string     { return "android.plugin_config" }
-func (o *OpAndroidPluginConfig) Platform() string { return "android" }
-func (o *OpAndroidPluginConfig) Targets() []Target {
-	return []Target{owner("android-asset:"+AndroidPluginConfigAsset(o.Ident), o.Config)}
-}
-func (o *OpAndroidPluginConfig) Validate() error { return validatePluginConfig(o.Ident, o.Config) }
-
-// validatePluginConfig checks a plugin config op: a valid plugin name,
-// which names its file, and a config that is a JSON object.
-func validatePluginConfig(name, config string) error {
-	if err := ValidatePluginName(name); err != nil {
+// validatePluginConfig checks a plugin config file: named for its plugin,
+// whose name must be valid, and holding a JSON object.
+func validatePluginConfig(plugin, name, want, content string) error {
+	if err := ValidatePluginName(plugin); err != nil {
 		return err
 	}
+	if name != want {
+		return fmt.Errorf("plugin config of plugin %s must be named %q, got %q", plugin, want, name)
+	}
+	config, err := DecodeContent(content)
+	if err != nil {
+		return fmt.Errorf("plugin config: %w", err)
+	}
 	var object map[string]any
-	if err := json.Unmarshal([]byte(config), &object); err != nil || object == nil {
+	if err := json.Unmarshal(config, &object); err != nil || object == nil {
 		return fmt.Errorf("plugin config must be a JSON object, got %q", config)
+	}
+	return nil
+}
+
+// ---- Files ----------------------------------------------------------------
+
+// FileLocation names where in the native project an OpAddFile writes, and
+// so which platform it is for and what Name means there.
+type FileLocation string
+
+const (
+	// FileIOSBundle is the root of the iOS app bundle, where Bundle.main
+	// and UIImage(named:) find files. Name is a plain file name (see
+	// validateBundleFileName).
+	FileIOSBundle FileLocation = "ios.bundle"
+	// FileIOSPluginConfig is the plugin's NativeConfig in the bundle root;
+	// Name is IOSPluginConfigFile of the plugin.
+	FileIOSPluginConfig FileLocation = "ios.plugin_config"
+	// FileAndroidDrawable is res/drawable-nodpi; Name is the bitmap's file
+	// name (.png when it has no extension).
+	FileAndroidDrawable FileLocation = "android.drawable"
+	// FileAndroidResource is res/; Name is <dir>/<file>.xml, any resource
+	// file except Drift's own values files.
+	FileAndroidResource FileLocation = "android.resource"
+	// FileAndroidAppModule is the app module directory, next to
+	// app/build.gradle, where Gradle plugins read their config (the
+	// google-services plugin reads app/google-services.json). Name is a
+	// plain file name (see validateAppModuleFileName).
+	FileAndroidAppModule FileLocation = "android.app_module"
+	// FileAndroidPluginConfig is the plugin's NativeConfig in the
+	// Drift-owned asset directory AndroidPluginConfigAssetDir; Name is the
+	// base name of AndroidPluginConfigAsset of the plugin.
+	FileAndroidPluginConfig FileLocation = "android.plugin_config"
+)
+
+// OpAddFile writes one whole file, Content (base64), at Name in Location.
+// Two plugins writing divergent content to one file conflict.
+type OpAddFile struct {
+	Base
+	Location FileLocation `json:"location"`
+	Name     string       `json:"name"`
+	Content  string       `json:"content,omitempty"` // base64
+}
+
+func (o *OpAddFile) Type() string { return "file.add" }
+
+// Platform is the platform of the op's Location, "" for an unknown one
+// (which Validate rejects).
+func (o *OpAddFile) Platform() string {
+	switch o.Location {
+	case FileIOSBundle, FileIOSPluginConfig:
+		return "ios"
+	case FileAndroidDrawable, FileAndroidResource, FileAndroidAppModule, FileAndroidPluginConfig:
+		return "android"
+	}
+	return ""
+}
+
+func (o *OpAddFile) Targets() []Target {
+	loc := string(o.Location)
+	switch o.Location {
+	case FileIOSBundle, FileIOSPluginConfig:
+		// Both land in the bundle root, as do xtool's image sets.
+		return []Target{owner("ios-bundle:"+o.Name, loc, o.Content)}
+	case FileAndroidDrawable:
+		// Resource names ignore the file extension: icon.png and icon.webp
+		// are both R.drawable.icon.
+		name, _, _ := strings.Cut(o.Name, ".")
+		return []Target{owner("android-res:drawable/"+name, loc, o.Name, o.Content)}
+	case FileAndroidResource:
+		ts := []Target{owner("android-res-file:"+o.Name, o.Content)}
+		// Outside values*/ the file itself is a resource named by its stem
+		// (drawable/splash.xml is R.drawable.splash), so it also claims
+		// that resource in its configuration directory.
+		dir, file, _ := strings.Cut(o.Name, "/")
+		if dir != "values" && !strings.HasPrefix(dir, "values-") {
+			ts = append(ts, owner("android-res:"+dir+"/"+strings.TrimSuffix(file, ".xml"), loc, o.Content))
+		}
+		return ts
+	case FileAndroidAppModule:
+		return []Target{owner("android-app-file:"+o.Name, o.Content)}
+	case FileAndroidPluginConfig:
+		return []Target{owner("android-asset:"+AndroidPluginConfigAssetDir+"/"+o.Name, o.Content)}
+	}
+	return nil
+}
+
+func (o *OpAddFile) Validate() error {
+	switch o.Location {
+	case FileIOSBundle:
+		if err := validateBundleFileName(o.Name); err != nil {
+			return err
+		}
+		return checkContent("bundle resource content", o.Content, false)
+	case FileIOSPluginConfig:
+		return validatePluginConfig(o.Ident, o.Name, IOSPluginConfigFile(o.Ident), o.Content)
+	case FileAndroidDrawable:
+		if err := checkMatch(drawableNameRe, "drawable name", o.Name); err != nil {
+			return err
+		}
+		return checkContent("drawable content", o.Content, true)
+	case FileAndroidResource:
+		if err := validateResourceFile(o.Name); err != nil {
+			return err
+		}
+		return checkContent("resource content", o.Content, true)
+	case FileAndroidAppModule:
+		if err := validateAppModuleFileName(o.Name); err != nil {
+			return err
+		}
+		return checkContent("app module file content", o.Content, false)
+	case FileAndroidPluginConfig:
+		return validatePluginConfig(o.Ident, o.Name, path.Base(AndroidPluginConfigAsset(o.Ident)), o.Content)
+	}
+	return fmt.Errorf("unknown file location %q", o.Location)
+}
+
+// validateResourceFile checks a resource file path, <dir>/<file>.xml under
+// res/, which must not be one of Drift's own values files.
+func validateResourceFile(rel string) error {
+	if err := checkRelPath("resource path", rel); err != nil {
+		return err
+	}
+	dir, file, ok := strings.Cut(rel, "/")
+	if !ok || strings.Contains(file, "/") {
+		return fmt.Errorf("resource path %q must be <dir>/<file>.xml", rel)
+	}
+	if err := checkMatch(resDirRe, "resource directory", dir); err != nil {
+		return err
+	}
+	if err := checkMatch(resFileRe, "resource file", file); err != nil {
+		return err
+	}
+	switch rel {
+	case AndroidPluginColorsFile, AndroidPluginStringsFile, AndroidPluginStylesFile:
+		return fmt.Errorf("resource path %q is owned by Drift; use Resources.Colors, Strings or Styles", rel)
 	}
 	return nil
 }
@@ -766,50 +823,49 @@ func (o *OpAndroidManifestAddMetaData) Validate() error {
 	return checkNonEmpty("meta-data name", o.Name)
 }
 
-// OpAndroidManifestAddService declares a <service> in <application>, for
-// plugin classes the system starts (a FirebaseMessagingService subclass).
-// XML is the whole element; its android:name is the fully qualified class,
-// since plugin sources do not live in the app's package.
-type OpAndroidManifestAddService struct {
+// OpAndroidManifestAddComponent declares a component the system starts in
+// <application>: a <service> (a FirebaseMessagingService subclass) or a
+// <receiver> (an alarm firing, a notification action). XML is the whole
+// element; its root is the component's kind, and its android:name the
+// fully qualified class, since plugin sources do not live in the app's
+// package.
+type OpAndroidManifestAddComponent struct {
 	Base
 	XML string `json:"xml"`
 }
 
-func (o *OpAndroidManifestAddService) Type() string     { return "android.manifest.add_service" }
-func (o *OpAndroidManifestAddService) Platform() string { return "android" }
-func (o *OpAndroidManifestAddService) Targets() []Target {
-	return []Target{owner("manifest:application:service:"+o.ServiceName(), o.XML)}
+// ManifestComponents are the elements OpAndroidManifestAddComponent may
+// declare.
+var ManifestComponents = []string{"service", "receiver"}
+
+func (o *OpAndroidManifestAddComponent) Type() string     { return "android.manifest.add_component" }
+func (o *OpAndroidManifestAddComponent) Platform() string { return "android" }
+func (o *OpAndroidManifestAddComponent) Targets() []Target {
+	return []Target{owner("manifest:application:"+o.Tag()+":"+o.Name(), o.XML)}
 }
 
-// ServiceName returns the service's android:name, or "" if XML is invalid.
-func (o *OpAndroidManifestAddService) ServiceName() string {
-	name, _ := componentName("service", o.XML)
+// Tag returns the component's element name ("service" or "receiver"), or
+// "" if XML is invalid.
+func (o *OpAndroidManifestAddComponent) Tag() string {
+	tag, _ := xmlRoot("manifest component", o.XML)
+	return tag
+}
+
+// Name returns the component's android:name, or "" if XML is invalid.
+func (o *OpAndroidManifestAddComponent) Name() string {
+	name, _ := componentName(o.Tag(), o.XML)
 	return name
 }
 
-func (o *OpAndroidManifestAddService) Validate() error {
-	return validateComponent("service", o.XML)
-}
-
-// OpAndroidManifestAddReceiver declares a <receiver> in <application>, for
-// plugin broadcast receivers the system starts (an alarm firing, a
-// notification action). XML is the whole element, as for services.
-type OpAndroidManifestAddReceiver struct {
-	Base
-	XML string `json:"xml"`
-}
-
-func (o *OpAndroidManifestAddReceiver) Type() string     { return "android.manifest.add_receiver" }
-func (o *OpAndroidManifestAddReceiver) Platform() string { return "android" }
-func (o *OpAndroidManifestAddReceiver) Targets() []Target {
-	return []Target{owner("manifest:application:receiver:"+o.ReceiverName(), o.XML)}
-}
-func (o *OpAndroidManifestAddReceiver) ReceiverName() string {
-	name, _ := componentName("receiver", o.XML)
-	return name
-}
-func (o *OpAndroidManifestAddReceiver) Validate() error {
-	return validateComponent("receiver", o.XML)
+func (o *OpAndroidManifestAddComponent) Validate() error {
+	tag, err := xmlRoot("manifest component", o.XML)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(ManifestComponents, tag) {
+		return fmt.Errorf("manifest component <%s> must be one of %v", tag, ManifestComponents)
+	}
+	return validateComponent(tag, o.XML)
 }
 
 // validateComponent checks a manifest component element of kind (its tag):
@@ -897,92 +953,6 @@ func (o *OpAndroidStyleSet) Validate() error {
 	return nil
 }
 
-type OpAndroidWriteDrawable struct {
-	Base
-	Name    string `json:"name"`
-	Content string `json:"content"` // base64
-}
-
-func (o *OpAndroidWriteDrawable) Type() string     { return "android.drawable.write" }
-func (o *OpAndroidWriteDrawable) Platform() string { return "android" }
-func (o *OpAndroidWriteDrawable) Targets() []Target {
-	// Resource names ignore the file extension: icon.png and icon.webp are
-	// both R.drawable.icon.
-	name, _, _ := strings.Cut(o.Name, ".")
-	return []Target{owner("android-res:drawable/"+name, o.Type(), o.Name, o.Content)}
-}
-func (o *OpAndroidWriteDrawable) Validate() error {
-	if err := checkMatch(drawableNameRe, "drawable name", o.Name); err != nil {
-		return err
-	}
-	return checkContent("drawable content", o.Content, true)
-}
-
-type OpAndroidWriteResourceXML struct {
-	Base
-	RelPath string `json:"rel_path"`
-	Content string `json:"content"`
-}
-
-func (o *OpAndroidWriteResourceXML) Type() string     { return "android.resource.write_xml" }
-func (o *OpAndroidWriteResourceXML) Platform() string { return "android" }
-func (o *OpAndroidWriteResourceXML) Targets() []Target {
-	ts := []Target{owner("android-res-file:"+o.RelPath, o.Content)}
-	// Outside values*/ the file itself is a resource named by its stem
-	// (drawable/splash.xml is R.drawable.splash), so it also claims that
-	// resource in its configuration directory.
-	dir, file, _ := strings.Cut(o.RelPath, "/")
-	if dir != "values" && !strings.HasPrefix(dir, "values-") {
-		ts = append(ts, owner("android-res:"+dir+"/"+strings.TrimSuffix(file, ".xml"), o.Type(), o.Content))
-	}
-	return ts
-}
-func (o *OpAndroidWriteResourceXML) Validate() error {
-	if err := checkRelPath("resource path", o.RelPath); err != nil {
-		return err
-	}
-	dir, file, ok := strings.Cut(o.RelPath, "/")
-	if !ok || strings.Contains(file, "/") {
-		return fmt.Errorf("resource path %q must be <dir>/<file>.xml", o.RelPath)
-	}
-	if err := checkMatch(resDirRe, "resource directory", dir); err != nil {
-		return err
-	}
-	if err := checkMatch(resFileRe, "resource file", file); err != nil {
-		return err
-	}
-	switch o.RelPath {
-	case AndroidPluginColorsFile, AndroidPluginStringsFile, AndroidPluginStylesFile:
-		return fmt.Errorf("resource path %q is owned by Drift; use Resources.Colors, Strings or Styles", o.RelPath)
-	}
-	return checkNonEmpty("resource content", o.Content)
-}
-
-// OpAndroidAddAppModuleFile records a file to drop into the Android app
-// module directory (app/<name>), next to app/build.gradle. This is where
-// Gradle plugins look for build-time config, e.g. the google-services
-// plugin reads app/google-services.json. Name is a plain file name (see
-// validateAppModuleFileName).
-//
-// Two plugins writing divergent content to the same name conflict.
-type OpAndroidAddAppModuleFile struct {
-	Base
-	Name    string `json:"name"`
-	Content string `json:"content,omitempty"` // base64
-}
-
-func (o *OpAndroidAddAppModuleFile) Type() string     { return "android.app_module.add_file" }
-func (o *OpAndroidAddAppModuleFile) Platform() string { return "android" }
-func (o *OpAndroidAddAppModuleFile) Targets() []Target {
-	return []Target{owner("android-app-file:"+o.Name, o.Content)}
-}
-func (o *OpAndroidAddAppModuleFile) Validate() error {
-	if err := validateAppModuleFileName(o.Name); err != nil {
-		return err
-	}
-	return checkContent("app module file content", o.Content, false)
-}
-
 // ---- Android sources / registrant ---------------------------------------
 
 type OpAddKotlinSource struct {
@@ -1018,9 +988,8 @@ const AndroidRunnerPackage = "com.drift.runner"
 // OpAndroidPlugin names a Kotlin class, implementing
 // com.drift.runner.DriftPlugin, that the generated DriftPluginRegistrant
 // instantiates (with its no-argument constructor) once per process. The
-// host drives it through the DriftPlugin lifecycle: register once, the
-// pre-activity hook and attach/detach per Activity. Plugins are created in
-// drift.yaml order.
+// host drives it through the DriftPlugin lifecycle: register once, then
+// attach/detach per Activity. Plugins are created in drift.yaml order.
 type OpAndroidPlugin struct {
 	Base
 	Class string `json:"class"`
@@ -1116,32 +1085,23 @@ func (o *OpAndroidGradleApplyPlugin) Validate() error {
 // opConstructors maps JSON discriminators to fresh-instance constructors so
 // json.Unmarshal can target the correct concrete type.
 var opConstructors = map[string]func() Op{
-	"ios.plist.set_string":                  func() Op { return &OpPlistSetString{} },
-	"ios.plist.set_bool":                    func() Op { return &OpPlistSetBool{} },
-	"ios.plist.set_string_array":            func() Op { return &OpPlistSetStringArray{} },
+	"file.add":                              func() Op { return &OpAddFile{} },
+	"ios.plist.set":                         func() Op { return &OpPlistSet{} },
 	"ios.plist.append_array_item":           func() Op { return &OpPlistAppendArrayItem{} },
-	"ios.plist.set_dict":                    func() Op { return &OpPlistSetDict{} },
 	"ios.assets.add_image_set":              func() Op { return &OpIOSAssetsAddImageSet{} },
 	"ios.storyboards.replace_launch_screen": func() Op { return &OpIOSReplaceLaunchScreen{} },
 	"ios.source.add":                        func() Op { return &OpAddIOSSource{} },
 	"ios.plugin":                            func() Op { return &OpIOSPlugin{} },
-	"ios.bundle.add_resource":               func() Op { return &OpIOSAddBundleResource{} },
 	"ios.spm.add_package":                   func() Op { return &OpIOSAddPackageDependency{} },
-	"ios.plugin_config":                     func() Op { return &OpIOSPluginConfig{} },
-	"android.plugin_config":                 func() Op { return &OpAndroidPluginConfig{} },
-	"android.app_module.add_file":           func() Op { return &OpAndroidAddAppModuleFile{} },
 	"android.gradle.apply_plugin":           func() Op { return &OpAndroidGradleApplyPlugin{} },
 	"android.manifest.add_permission":       func() Op { return &OpAndroidManifestAddPermission{} },
 	"android.manifest.add_intent_filter":    func() Op { return &OpAndroidManifestAddIntentFilter{} },
 	"android.manifest.set_activity_attr":    func() Op { return &OpAndroidManifestSetActivityAttr{} },
 	"android.manifest.add_meta_data":        func() Op { return &OpAndroidManifestAddMetaData{} },
-	"android.manifest.add_service":          func() Op { return &OpAndroidManifestAddService{} },
-	"android.manifest.add_receiver":         func() Op { return &OpAndroidManifestAddReceiver{} },
+	"android.manifest.add_component":        func() Op { return &OpAndroidManifestAddComponent{} },
 	"android.color.set":                     func() Op { return &OpAndroidColorSet{} },
 	"android.string.set":                    func() Op { return &OpAndroidStringSet{} },
 	"android.style.set":                     func() Op { return &OpAndroidStyleSet{} },
-	"android.drawable.write":                func() Op { return &OpAndroidWriteDrawable{} },
-	"android.resource.write_xml":            func() Op { return &OpAndroidWriteResourceXML{} },
 	"android.source.add":                    func() Op { return &OpAddKotlinSource{} },
 	"android.gradle.add_dependency":         func() Op { return &OpAndroidGradleAddDependency{} },
 	"android.plugin":                        func() Op { return &OpAndroidPlugin{} },

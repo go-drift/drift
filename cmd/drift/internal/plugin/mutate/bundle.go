@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 
@@ -31,13 +30,14 @@ type BundleFile struct {
 	Plugin  string // emitting plugin package, for diagnostics
 }
 
-// IOSBundleFiles decodes OpIOSAddBundleResource ops into BundleFiles.
-func IOSBundleFiles(ops []*protocol.OpIOSAddBundleResource) ([]BundleFile, error) {
+// AddedFiles decodes OpAddFile ops bound for one Drift-owned directory
+// (the bundle root, the plugin config assets) into BundleFiles.
+func AddedFiles(ops []*protocol.OpAddFile) ([]BundleFile, error) {
 	out := make([]BundleFile, 0, len(ops))
 	for _, op := range ops {
-		f, err := decodeBundleFile(op.Path, op.Content, op.PluginPackage())
+		f, err := decodeBundleFile(op.Name, op.Content, op.PluginPackage())
 		if err != nil {
-			return nil, fmt.Errorf("iOS bundle resource %s: %w", op.Path, err)
+			return nil, fmt.Errorf("%s file %s: %w", op.Location, op.Name, err)
 		}
 		out = append(out, f)
 	}
@@ -73,17 +73,6 @@ func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
 	return BundleFile{Name: name, Content: decoded, Plugin: plugin}, nil
 }
 
-// PluginConfigBundleFiles converts OpIOSPluginConfig ops into the bundle
-// files native code reads each plugin's config from
-// (protocol.IOSPluginConfigFile).
-func PluginConfigBundleFiles(ops []*protocol.OpIOSPluginConfig) []BundleFile {
-	out := make([]BundleFile, 0, len(ops))
-	for _, op := range ops {
-		out = append(out, BundleFile{Name: protocol.IOSPluginConfigFile(op.PluginID()), Content: []byte(op.Config), Plugin: op.PluginPackage()})
-	}
-	return out
-}
-
 // WriteIOSBundleResources plans dir to contain exactly files: each file is
 // written (only when its bytes differ) and anything else in dir is removed,
 // so a plugin dropped from the project, including mid-watch-session, takes
@@ -98,14 +87,10 @@ func WriteIOSBundleResources(cs *Changeset, dir string, files []BundleFile) ([]s
 }
 
 // WriteAndroidPluginConfigs plans dir, the Drift-owned asset directory
-// (protocol.AndroidPluginConfigAssetDir), to hold exactly each plugin's
-// config, as WriteIOSBundleResources does for the bundle, so a dropped
-// plugin's config goes with it.
-func WriteAndroidPluginConfigs(cs *Changeset, dir string, ops []*protocol.OpAndroidPluginConfig) ([]string, error) {
-	files := make([]BundleFile, 0, len(ops))
-	for _, op := range ops {
-		files = append(files, BundleFile{Name: path.Base(protocol.AndroidPluginConfigAsset(op.PluginID())), Content: []byte(op.Config), Plugin: op.PluginPackage()})
-	}
+// (protocol.AndroidPluginConfigAssetDir), to hold exactly files, each
+// plugin's config, as WriteIOSBundleResources does for the bundle, so a
+// dropped plugin's config goes with it.
+func WriteAndroidPluginConfigs(cs *Changeset, dir string, files []BundleFile) ([]string, error) {
 	return syncDir(cs, dir, files, "Android plugin config")
 }
 

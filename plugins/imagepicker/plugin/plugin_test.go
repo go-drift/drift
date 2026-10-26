@@ -22,8 +22,9 @@ func build(t *testing.T, config string) ([]protocol.Op, error) {
 
 func cameraUsage(ops []protocol.Op) (string, bool) {
 	for _, op := range ops {
-		if o, ok := op.(*protocol.OpPlistSetString); ok && o.Key == "NSCameraUsageDescription" {
-			return o.Value, true
+		if o, ok := op.(*protocol.OpPlistSet); ok && o.Key == "NSCameraUsageDescription" {
+			s, ok := o.Value.(string)
+			return s, ok
 		}
 	}
 	return "", false

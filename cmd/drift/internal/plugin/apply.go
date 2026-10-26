@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -107,11 +108,10 @@ func applyIOSBatch(cs *mutate.Changeset, b *batch, p project) ([]string, error) 
 
 	// Files for the root of the app bundle. On xtool, image sets join them as
 	// loose PNGs because xtool cannot compile asset catalogs.
-	bundleFiles, err := mutate.IOSBundleFiles(b.bundle)
+	bundleFiles, err := mutate.AddedFiles(slices.Concat(b.files[protocol.FileIOSBundle], b.files[protocol.FileIOSPluginConfig]))
 	if err != nil {
 		return changed, err
 	}
-	bundleFiles = append(bundleFiles, mutate.PluginConfigBundleFiles(b.iosConfigs)...)
 	if p.xtool() {
 		// FUTURE(xtool#219): write image sets as owned files into a
 		// Drift-owned Assets.xcassets (listed under xtool.yml
@@ -255,7 +255,11 @@ func applyAndroidBatch(cs *mutate.Changeset, b *batch, p project, replace map[st
 	}
 
 	// Always synced, even with zero configs, so a removed plugin's goes.
-	paths, err := mutate.WriteAndroidPluginConfigs(cs, p.abs(p.pluginConfigs()), b.configs)
+	configs, err := mutate.AddedFiles(b.files[protocol.FileAndroidPluginConfig])
+	if err != nil {
+		return changed, err
+	}
+	paths, err := mutate.WriteAndroidPluginConfigs(cs, p.abs(p.pluginConfigs()), configs)
 	if err != nil {
 		return changed, err
 	}

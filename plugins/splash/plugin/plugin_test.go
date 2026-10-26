@@ -74,6 +74,16 @@ func hasOpType(ops []protocol.Op, typ string) bool {
 	return false
 }
 
+// hasFile reports whether the op list adds a file at loc.
+func hasFile(ops []protocol.Op, loc protocol.FileLocation) bool {
+	for _, op := range ops {
+		if f, ok := op.(*protocol.OpAddFile); ok && f.Location == loc {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBuild_EmitsBothPlatforms(t *testing.T) {
 	ops := runBuild(t, `
 image: assets/splash.png
@@ -85,7 +95,6 @@ background_color: "#1A2238"
 		"ios.storyboards.replace_launch_screen",
 		"ios.source.add",
 		"ios.plugin",
-		"android.drawable.write",
 		"android.color.set",
 		"android.style.set",
 		"android.manifest.set_activity_attr",
@@ -96,14 +105,18 @@ background_color: "#1A2238"
 			t.Errorf("missing op type %q", typ)
 		}
 	}
+	if !hasFile(ops, protocol.FileAndroidDrawable) {
+		t.Error("missing the splash drawable")
+	}
 	// The platform splash needs no library and no resource files of its own.
-	for _, typ := range []string{"android.gradle.add_dependency", "android.resource.write_xml"} {
-		if hasOpType(ops, typ) {
-			t.Errorf("unexpected op type %q", typ)
-		}
+	if hasOpType(ops, "android.gradle.add_dependency") {
+		t.Error("unexpected Gradle dependency")
+	}
+	if hasFile(ops, protocol.FileAndroidResource) {
+		t.Error("unexpected resource file")
 	}
 	// UILaunchStoryboardName=LaunchScreen is in both Info.plist templates.
-	if hasOpType(ops, "ios.plist.set_string") {
+	if hasOpType(ops, "ios.plist.set") {
 		t.Errorf("splash should not set Info.plist keys the templates already set")
 	}
 }
@@ -179,10 +192,14 @@ func nativeConfigOf(t *testing.T, ops []protocol.Op) nativeConfig {
 	var ios, android string
 	for _, op := range ops {
 		switch o := op.(type) {
-		case *protocol.OpIOSPluginConfig:
-			ios = o.Config
-		case *protocol.OpAndroidPluginConfig:
-			android = o.Config
+		case *protocol.OpAddFile:
+			content, _ := protocol.DecodeContent(o.Content)
+			switch o.Location {
+			case protocol.FileIOSPluginConfig:
+				ios = string(content)
+			case protocol.FileAndroidPluginConfig:
+				android = string(content)
+			}
 		}
 	}
 	if ios == "" || ios != android {
@@ -307,7 +324,7 @@ func TestBuild_AndroidPlatformSplash(t *testing.T) {
 func drawable(t *testing.T, ops []protocol.Op, name string) []byte {
 	t.Helper()
 	for _, op := range ops {
-		if d, ok := op.(*protocol.OpAndroidWriteDrawable); ok && d.Name == name {
+		if d, ok := op.(*protocol.OpAddFile); ok && d.Location == protocol.FileAndroidDrawable && d.Name == name {
 			b, err := protocol.DecodeContent(d.Content)
 			if err != nil {
 				t.Fatalf("decode %s: %v", name, err)

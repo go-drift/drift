@@ -165,6 +165,19 @@ func checkPlistValue(where string, v any) error {
 // checkXMLRoot requires s to be well-formed XML whose root element is named
 // root (ignoring any namespace prefix).
 func checkXMLRoot(what, s, root string) error {
+	got, err := xmlRoot(what, s)
+	if err != nil {
+		return err
+	}
+	if got != root {
+		return fmt.Errorf("%s root element is %q, want %q", what, got, root)
+	}
+	return nil
+}
+
+// xmlRoot returns the name of the one root element of s, which must be
+// well-formed XML; what names s in errors.
+func xmlRoot(what, s string) (string, error) {
 	dec := xml.NewDecoder(strings.NewReader(s))
 	var got string
 	depth := 0
@@ -174,13 +187,13 @@ func checkXMLRoot(what, s, root string) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("%s is not well-formed XML: %w", what, err)
+			return "", fmt.Errorf("%s is not well-formed XML: %w", what, err)
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
 			if depth == 0 {
 				if got != "" {
-					return fmt.Errorf("%s has more than one root element", what)
+					return "", fmt.Errorf("%s has more than one root element", what)
 				}
 				got = t.Name.Local
 			}
@@ -189,10 +202,7 @@ func checkXMLRoot(what, s, root string) error {
 			depth--
 		}
 	}
-	if got != root {
-		return fmt.Errorf("%s root element is %q, want %q", what, got, root)
-	}
-	return nil
+	return got, nil
 }
 
 // checkGradleCoord requires group:artifact with an optional version and

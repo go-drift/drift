@@ -37,11 +37,11 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	dir := t.TempDir()
 	base := protocol.Base{Pkg: "github.com/acme/camera"}
 	src := &protocol.OpAddKotlinSource{Base: base, Package: "com.acme.camera", RelPath: "CameraPlugin.kt", Content: b64.StdEncoding.EncodeToString([]byte("class CameraPlugin\n"))}
-	drawable := &protocol.OpAndroidWriteDrawable{Base: base, Name: "camera_icon", Content: b64.StdEncoding.EncodeToString([]byte("png"))}
+	drawable := &protocol.OpAddFile{Base: base, Location: protocol.FileAndroidDrawable, Name: "camera_icon", Content: b64.StdEncoding.EncodeToString([]byte("png"))}
 	perm := &protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"}
 	// Plugins record ops for every platform; an Android project's lock
 	// must ignore the iOS ones.
-	plist := &protocol.OpPlistSetString{Base: base, PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "NSCameraUsageDescription"}, Value: "camera"}
+	plist := &protocol.OpPlistSet{Base: base, PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "NSCameraUsageDescription"}, Value: "camera"}
 	ops := []protocol.Op{src, drawable, perm, plist}
 
 	writeFiles := func() {
@@ -120,7 +120,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 func TestSyncEjectedLockContentChangeIsNotRemoval(t *testing.T) {
 	dir := t.TempDir()
 	mk := func(body string) []protocol.Op {
-		return []protocol.Op{&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "p"}, Name: "google-services.json", Content: b64.StdEncoding.EncodeToString([]byte(body))}}
+		return []protocol.Op{&protocol.OpAddFile{Base: protocol.Base{Pkg: "p"}, Location: protocol.FileAndroidAppModule, Name: "google-services.json", Content: b64.StdEncoding.EncodeToString([]byte(body))}}
 	}
 	path := filepath.Join(dir, "app/google-services.json")
 	writeTree(t, dir, map[string]string{"app/google-services.json": "v1"})
@@ -145,10 +145,10 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 	base := protocol.Base{Pkg: "p"}
 	ops := []protocol.Op{
 		&protocol.OpAddKotlinSource{Base: base, Package: "com.p", RelPath: "sub/P.kt", Content: enc("class P")},
-		&protocol.OpAndroidWriteDrawable{Base: base, Name: "p_icon", Content: enc("png")},
-		&protocol.OpAndroidWriteDrawable{Base: base, Name: "p_photo.webp", Content: enc("webp")},
-		&protocol.OpAndroidWriteResourceXML{Base: base, RelPath: "xml/p_config.xml", Content: "<config/>"},
-		&protocol.OpAndroidAddAppModuleFile{Base: base, Name: "p-services.json", Content: enc("{}")},
+		&protocol.OpAddFile{Base: base, Location: protocol.FileAndroidDrawable, Name: "p_icon", Content: enc("png")},
+		&protocol.OpAddFile{Base: base, Location: protocol.FileAndroidDrawable, Name: "p_photo.webp", Content: enc("webp")},
+		&protocol.OpAddFile{Base: base, Location: protocol.FileAndroidResource, Name: "xml/p_config.xml", Content: protocol.EncodeContent([]byte("<config/>"))},
+		&protocol.OpAddFile{Base: base, Location: protocol.FileAndroidAppModule, Name: "p-services.json", Content: enc("{}")},
 	}
 	if _, err := apply(t, ops, dir, "android", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -174,7 +174,7 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 func TestSyncEjectedLockRenamedOpIsNotRemoval(t *testing.T) {
 	dir := t.TempDir()
 	base := protocol.Base{Pkg: "p"}
-	file := &protocol.OpAndroidAddAppModuleFile{Base: base, Name: "p-services.json", Content: b64.StdEncoding.EncodeToString([]byte("{}"))}
+	file := &protocol.OpAddFile{Base: base, Location: protocol.FileAndroidAppModule, Name: "p-services.json", Content: b64.StdEncoding.EncodeToString([]byte("{}"))}
 	perm := &protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"}
 	ops := []protocol.Op{file, perm}
 	writeTree(t, dir, map[string]string{"app/p-services.json": "{}"})
@@ -210,7 +210,7 @@ func TestSyncEjectedLockRenamedOpIsNotRemoval(t *testing.T) {
 func TestSyncEjectedLockRemovesMovedFile(t *testing.T) {
 	dir := t.TempDir()
 	mk := func(name string) []protocol.Op {
-		return []protocol.Op{&protocol.OpAndroidWriteResourceXML{Base: protocol.Base{Pkg: "p"}, RelPath: name, Content: "<config/>"}}
+		return []protocol.Op{&protocol.OpAddFile{Base: protocol.Base{Pkg: "p"}, Location: protocol.FileAndroidResource, Name: name, Content: protocol.EncodeContent([]byte("<config/>"))}}
 	}
 	writeTree(t, dir, map[string]string{"app/src/main/res/xml/p_old.xml": "<config/>"})
 	if _, _, err := syncLock(t, dir, mk("xml/p_old.xml")); err != nil {
@@ -264,7 +264,7 @@ func TestSyncEjectedLockRecoversFromAFailedWrite(t *testing.T) {
 	}
 	dir := t.TempDir()
 	mk := func(body string) []protocol.Op {
-		return []protocol.Op{&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "p"}, Name: "p.json", Content: b64.StdEncoding.EncodeToString([]byte(body))}}
+		return []protocol.Op{&protocol.OpAddFile{Base: protocol.Base{Pkg: "p"}, Location: protocol.FileAndroidAppModule, Name: "p.json", Content: b64.StdEncoding.EncodeToString([]byte(body))}}
 	}
 	writeTree(t, dir, map[string]string{"app/p.json": "v1"})
 	if _, _, err := syncLock(t, dir, mk("v1")); err != nil {

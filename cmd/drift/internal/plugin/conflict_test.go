@@ -39,24 +39,24 @@ func TestValidate(t *testing.T) {
 		{
 			name: "identical plist values collapse",
 			ops: []protocol.Op{
-				&protocol.OpPlistSetString{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "bar"},
-				&protocol.OpPlistSetString{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "bar"},
+				&protocol.OpPlistSet{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "bar"},
+				&protocol.OpPlistSet{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "bar"},
 			},
 			wantLen: 1,
 		},
 		{
 			name: "different plist values conflict",
 			ops: []protocol.Op{
-				&protocol.OpPlistSetString{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "x"},
-				&protocol.OpPlistSetString{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "y"},
+				&protocol.OpPlistSet{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "x"},
+				&protocol.OpPlistSet{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "y"},
 			},
 			wantConflict: "plist:info:Foo",
 		},
 		{
 			name: "string and bool on one plist key conflict",
 			ops: []protocol.Op{
-				&protocol.OpPlistSetString{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "true"},
-				&protocol.OpPlistSetBool{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: true},
+				&protocol.OpPlistSet{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: "true"},
+				&protocol.OpPlistSet{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Foo"}, Value: true},
 			},
 			wantConflict: "plist:info:Foo",
 		},
@@ -73,7 +73,7 @@ func TestValidate(t *testing.T) {
 			name: "array item vs whole array conflict",
 			ops: []protocol.Op{
 				&protocol.OpPlistAppendArrayItem{Base: mkBase("a"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Value: "fetch"},
-				&protocol.OpPlistSetStringArray{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Values: []string{"audio"}},
+				&protocol.OpPlistSet{Base: mkBase("b"), PlistEntry: protocol.PlistEntry{File: protocol.PlistInfo, Key: "Modes"}, Value: []any{"audio"}},
 			},
 			wantConflict: "plist:info:Modes",
 			wantMixed:    true,
@@ -114,24 +114,24 @@ func TestValidate(t *testing.T) {
 		{
 			name: "drawable name ignores extension",
 			ops: []protocol.Op{
-				&protocol.OpAndroidWriteDrawable{Base: mkBase("a"), Name: "icon", Content: "AA=="},
-				&protocol.OpAndroidWriteDrawable{Base: mkBase("b"), Name: "icon.webp", Content: "AA=="},
+				&protocol.OpAddFile{Base: mkBase("a"), Location: protocol.FileAndroidDrawable, Name: "icon", Content: "AA=="},
+				&protocol.OpAddFile{Base: mkBase("b"), Location: protocol.FileAndroidDrawable, Name: "icon.webp", Content: "AA=="},
 			},
 			wantConflict: "android-res:drawable/icon",
 		},
 		{
 			name: "drawable bitmap vs drawable XML with the same name",
 			ops: []protocol.Op{
-				&protocol.OpAndroidWriteDrawable{Base: mkBase("a"), Name: "splash", Content: "AA=="},
-				&protocol.OpAndroidWriteResourceXML{Base: mkBase("b"), RelPath: "drawable/splash.xml", Content: "<layer-list/>"},
+				&protocol.OpAddFile{Base: mkBase("a"), Location: protocol.FileAndroidDrawable, Name: "splash", Content: "AA=="},
+				&protocol.OpAddFile{Base: mkBase("b"), Location: protocol.FileAndroidResource, Name: "drawable/splash.xml", Content: protocol.EncodeContent([]byte("<layer-list/>"))},
 			},
 			wantConflict: "android-res:drawable/splash",
 		},
 		{
 			name: "night drawable does not clash with day drawable",
 			ops: []protocol.Op{
-				&protocol.OpAndroidWriteDrawable{Base: mkBase("a"), Name: "splash", Content: "AA=="},
-				&protocol.OpAndroidWriteResourceXML{Base: mkBase("a"), RelPath: "drawable-night/splash.xml", Content: "<layer-list/>"},
+				&protocol.OpAddFile{Base: mkBase("a"), Location: protocol.FileAndroidDrawable, Name: "splash", Content: "AA=="},
+				&protocol.OpAddFile{Base: mkBase("a"), Location: protocol.FileAndroidResource, Name: "drawable-night/splash.xml", Content: protocol.EncodeContent([]byte("<layer-list/>"))},
 			},
 			wantLen: 2,
 		},
@@ -139,7 +139,7 @@ func TestValidate(t *testing.T) {
 			name: "color vs color state list with the same name",
 			ops: []protocol.Op{
 				&protocol.OpAndroidColorSet{Base: mkBase("a"), Name: "brand", Value: "#FFFFFF"},
-				&protocol.OpAndroidWriteResourceXML{Base: mkBase("b"), RelPath: "color/brand.xml", Content: "<selector/>"},
+				&protocol.OpAddFile{Base: mkBase("b"), Location: protocol.FileAndroidResource, Name: "color/brand.xml", Content: protocol.EncodeContent([]byte("<selector/>"))},
 			},
 			wantConflict: "android-res:color/brand",
 		},
@@ -172,7 +172,7 @@ func TestValidate(t *testing.T) {
 			name: "image set vs bundle PNG of the same name",
 			ops: []protocol.Op{
 				&protocol.OpIOSAssetsAddImageSet{Base: mkBase("a"), Name: "Logo", Image: "AA=="},
-				&protocol.OpIOSAddBundleResource{Base: mkBase("b"), Path: "Logo.png", Content: "AA=="},
+				&protocol.OpAddFile{Base: mkBase("b"), Location: protocol.FileIOSBundle, Name: "Logo.png", Content: "AA=="},
 			},
 			wantConflict: "ios-bundle:Logo.png",
 		},

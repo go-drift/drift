@@ -50,7 +50,7 @@ func plistOps[T protocol.PlistOp](ops []T) []protocol.PlistOp {
 
 func TestApplyPlistSetString(t *testing.T) {
 	path := writePlist(t)
-	ops := []*protocol.OpPlistSetString{
+	ops := []*protocol.OpPlistSet{
 		{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("NSCameraUsageDescription"), Value: "Take photos"},
 	}
 	changed, err := applyPlist(t, path, plistOps(ops))
@@ -71,7 +71,7 @@ func TestApplyPlistSetString(t *testing.T) {
 
 func TestApplyPlistIdempotent(t *testing.T) {
 	path := writePlist(t)
-	ops := []*protocol.OpPlistSetString{
+	ops := []*protocol.OpPlistSet{
 		{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("NSCameraUsageDescription"), Value: "Take photos"},
 	}
 	if _, err := applyPlist(t, path, plistOps(ops)); err != nil {
@@ -107,7 +107,7 @@ func TestApplyPlistAppendArrayItem(t *testing.T) {
 
 func TestApplyPlistSetBool(t *testing.T) {
 	path := writePlist(t)
-	ops := []*protocol.OpPlistSetBool{
+	ops := []*protocol.OpPlistSet{
 		{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("MyFlag"), Value: true},
 	}
 	if _, err := applyPlist(t, path, plistOps(ops)); err != nil {
@@ -124,7 +124,7 @@ func TestApplyPlistAppendsAfterSet(t *testing.T) {
 	path := writePlist(t)
 	ops := []protocol.PlistOp{
 		&protocol.OpPlistAppendArrayItem{Base: protocol.Base{Pkg: "a"}, PlistEntry: info("Modes"), Value: "remote-notification"},
-		&protocol.OpPlistSetStringArray{Base: protocol.Base{Pkg: "b"}, PlistEntry: info("Modes"), Values: []string{"fetch"}},
+		&protocol.OpPlistSet{Base: protocol.Base{Pkg: "b"}, PlistEntry: info("Modes"), Value: []any{"fetch"}},
 	}
 	if _, err := applyPlist(t, path, ops); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -155,7 +155,7 @@ func TestApplyPlistAppendToNonArrayFails(t *testing.T) {
 // A dict crosses the bridge as JSON, which writes float64(2) as 2; the
 // plist must still get <integer> for ints and <real> for floats.
 func TestApplyPlistSetDictKeepsNumberKinds(t *testing.T) {
-	sent := &protocol.OpPlistSetDict{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("Limits"), Value: map[string]any{
+	sent := &protocol.OpPlistSet{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("Limits"), Value: map[string]any{
 		"count": 2,
 		"ratio": 2.0,
 		"list":  []any{3, 1.5},

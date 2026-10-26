@@ -69,7 +69,7 @@ func TestApplyPluginOpsWritesNothingWhenAnOpFails(t *testing.T) {
 		return applyPluginOps(ws, p)
 	}
 
-	if err := build(&protocol.OpAndroidWriteDrawable{Base: base, Name: "push_icon", Content: enc("png v1")}); err != nil {
+	if err := build(&protocol.OpAddFile{Base: base, Location: protocol.FileAndroidDrawable, Name: "push_icon", Content: enc("png v1")}); err != nil {
 		t.Fatalf("first build: %v", err)
 	}
 	before := snapshotTree(t, dir)
@@ -77,7 +77,7 @@ func TestApplyPluginOpsWritesNothingWhenAnOpFails(t *testing.T) {
 	good := []protocol.Op{
 		&protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.POST_NOTIFICATIONS"},
 		&protocol.OpAndroidColorSet{Base: base, Name: "push_accent", Value: "#ff0000ff"},
-		&protocol.OpAndroidWriteDrawable{Base: base, Name: "push_icon", Content: enc("png v2")},
+		&protocol.OpAddFile{Base: base, Location: protocol.FileAndroidDrawable, Name: "push_icon", Content: enc("png v2")},
 		&protocol.OpAddKotlinSource{Base: base, Package: "com.acme.push", RelPath: "PushPlugin.kt", Content: enc("class PushPlugin\n")},
 		&protocol.OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "com.acme:push:1.0"},
 		&protocol.OpAndroidPlugin{Base: base, Class: "com.acme.push.PushPlugin"},

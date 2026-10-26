@@ -81,17 +81,17 @@ func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 
 func TestApplyAndroidManifestAddService(t *testing.T) {
 	path := writeManifest(t)
-	service := func(exported string) *protocol.OpAndroidManifestAddService {
-		return &protocol.OpAndroidManifestAddService{
+	service := func(exported string) *protocol.OpAndroidManifestAddComponent {
+		return &protocol.OpAndroidManifestAddComponent{
 			Base: protocol.Base{Pkg: "fb"},
 			XML: `<service android:name="com.drift.plugin.firebase.PushService" android:exported="` + exported + `">
     <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
 </service>`,
 		}
 	}
-	apply := func(op *protocol.OpAndroidManifestAddService) string {
+	apply := func(op *protocol.OpAndroidManifestAddComponent) string {
 		t.Helper()
-		if _, err := applyAndroidManifest(t, path, ManifestOps{Services: []*protocol.OpAndroidManifestAddService{op}}); err != nil {
+		if _, err := applyAndroidManifest(t, path, ManifestOps{Components: []*protocol.OpAndroidManifestAddComponent{op}}); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 		body, _ := os.ReadFile(path)
@@ -119,12 +119,12 @@ func TestApplyAndroidManifestAddService(t *testing.T) {
 
 func TestApplyAndroidManifestAddReceiver(t *testing.T) {
 	path := writeManifest(t)
-	op := &protocol.OpAndroidManifestAddReceiver{
+	op := &protocol.OpAndroidManifestAddComponent{
 		Base: protocol.Base{Pkg: "n"},
 		XML:  `<receiver android:name="com.drift.plugin.notifications.AlarmReceiver" android:exported="false" />`,
 	}
 	for range 2 { // a rerun converges
-		if _, err := applyAndroidManifest(t, path, ManifestOps{Receivers: []*protocol.OpAndroidManifestAddReceiver{op}}); err != nil {
+		if _, err := applyAndroidManifest(t, path, ManifestOps{Components: []*protocol.OpAndroidManifestAddComponent{op}}); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 	}

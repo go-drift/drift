@@ -223,7 +223,7 @@ func TestCheckEjectedIOS(t *testing.T) {
 		"Runner/DriftViewController.swift": "",
 		"Runner.xcodeproj/project.pbxproj": "// no package refs\n",
 	})
-	entitlementOp := []protocol.Op{&protocol.OpPlistSetString{
+	entitlementOp := []protocol.Op{&protocol.OpPlistSet{
 		Base:       protocol.Base{Pkg: "p"},
 		PlistEntry: protocol.PlistEntry{File: protocol.PlistEntitlements, Key: "aps-environment"},
 		Value:      "development",

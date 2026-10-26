@@ -31,11 +31,19 @@ func TestBuildShipsGreeting(t *testing.T) {
 	}
 	var ios, android string
 	for _, op := range ops {
-		switch o := op.(type) {
-		case *protocol.OpIOSPluginConfig:
-			ios = o.Config
-		case *protocol.OpAndroidPluginConfig:
-			android = o.Config
+		f, ok := op.(*protocol.OpAddFile)
+		if !ok {
+			continue
+		}
+		content, err := protocol.DecodeContent(f.Content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch f.Location {
+		case protocol.FileIOSPluginConfig:
+			ios = string(content)
+		case protocol.FileAndroidPluginConfig:
+			android = string(content)
 		}
 	}
 	if want := `{"greeting":"hello"}`; ios != want || android != want {

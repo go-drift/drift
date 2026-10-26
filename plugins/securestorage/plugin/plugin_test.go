@@ -34,9 +34,9 @@ func summarize(t *testing.T, ops []protocol.Op) summary {
 		switch o := op.(type) {
 		case *protocol.OpAndroidGradleAddDependency:
 			s.deps = append(s.deps, o.Coord)
-		case *protocol.OpPlistSetString:
+		case *protocol.OpPlistSet:
 			if o.Key == "NSFaceIDUsageDescription" {
-				s.faceID = o.Value
+				s.faceID, _ = o.Value.(string)
 			}
 		case *protocol.OpAddKotlinSource:
 			if o.RelPath == "Biometrics.kt" {

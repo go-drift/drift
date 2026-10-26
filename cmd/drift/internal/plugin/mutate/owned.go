@@ -55,34 +55,18 @@ func KotlinSourceFile(javaRoot string, op *protocol.OpAddKotlinSource) (OwnedFil
 	return OwnedFile{Path: filepath.Join(parts...), Content: content}, nil
 }
 
-// DrawableFile is the bitmap an OpAndroidWriteDrawable writes into
-// drawableDir; a name without an extension gets .png.
-func DrawableFile(drawableDir string, op *protocol.OpAndroidWriteDrawable) (OwnedFile, error) {
+// AddedFile is the file an OpAddFile writes into dir, its location's
+// directory. A drawable named without an extension gets .png.
+func AddedFile(dir string, op *protocol.OpAddFile) (OwnedFile, error) {
 	content, err := protocol.DecodeContent(op.Content)
 	if err != nil {
-		return OwnedFile{}, fmt.Errorf("decode drawable %s: %w", op.Name, err)
+		return OwnedFile{}, fmt.Errorf("%s file %s: decode content: %w", op.Location, op.Name, err)
 	}
 	name := op.Name
-	if filepath.Ext(name) == "" {
+	if op.Location == protocol.FileAndroidDrawable && filepath.Ext(name) == "" {
 		name += ".png"
 	}
-	return OwnedFile{Path: filepath.Join(drawableDir, name), Content: content}, nil
-}
-
-// ResourceXMLFile is the file an OpAndroidWriteResourceXML writes under
-// resRoot.
-func ResourceXMLFile(resRoot string, op *protocol.OpAndroidWriteResourceXML) OwnedFile {
-	return OwnedFile{Path: filepath.Join(resRoot, filepath.FromSlash(op.RelPath)), Content: []byte(op.Content)}
-}
-
-// AppModuleFile is the file an OpAndroidAddAppModuleFile writes into the
-// app module directory.
-func AppModuleFile(appDir string, op *protocol.OpAndroidAddAppModuleFile) (OwnedFile, error) {
-	content, err := protocol.DecodeContent(op.Content)
-	if err != nil {
-		return OwnedFile{}, fmt.Errorf("Android app module file %s: decode content: %w", op.Name, err)
-	}
-	return OwnedFile{Path: filepath.Join(appDir, op.Name), Content: content}, nil
+	return OwnedFile{Path: filepath.Join(dir, filepath.FromSlash(name)), Content: content}, nil
 }
 
 // WriteOwned plans each file and returns the paths whose bytes change.

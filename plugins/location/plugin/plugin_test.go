@@ -40,8 +40,10 @@ const withAlways = whenInUse + "always:\n  description: Tracks runs in the backg
 func plistStrings(ops []protocol.Op) map[string]string {
 	keys := map[string]string{}
 	for _, op := range ops {
-		if o, ok := op.(*protocol.OpPlistSetString); ok && o.File == protocol.PlistInfo {
-			keys[o.Key] = o.Value
+		if o, ok := op.(*protocol.OpPlistSet); ok && o.File == protocol.PlistInfo {
+			if s, ok := o.Value.(string); ok {
+				keys[o.Key] = s
+			}
 		}
 	}
 	return keys
@@ -109,7 +111,7 @@ func backgroundModes(ops []protocol.Op) []string {
 func services(ops []protocol.Op) []string {
 	var xml []string
 	for _, op := range ops {
-		if o, ok := op.(*protocol.OpAndroidManifestAddService); ok {
+		if o, ok := op.(*protocol.OpAndroidManifestAddComponent); ok && o.Tag() == "service" {
 			xml = append(xml, o.XML)
 		}
 	}
@@ -120,9 +122,13 @@ func services(ops []protocol.Op) []string {
 func androidConfig(t *testing.T, ops []protocol.Op) nativeConfig {
 	t.Helper()
 	for _, op := range ops {
-		if o, ok := op.(*protocol.OpAndroidPluginConfig); ok {
+		if o, ok := op.(*protocol.OpAddFile); ok && o.Location == protocol.FileAndroidPluginConfig {
+			data, err := protocol.DecodeContent(o.Content)
+			if err != nil {
+				t.Fatal(err)
+			}
 			var cfg nativeConfig
-			if err := json.Unmarshal([]byte(o.Config), &cfg); err != nil {
+			if err := json.Unmarshal(data, &cfg); err != nil {
 				t.Fatal(err)
 			}
 			return cfg

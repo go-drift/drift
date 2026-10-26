@@ -122,15 +122,23 @@ type batch struct {
 	iosSources  []*protocol.OpAddIOSSource
 	iosPlugins  []*protocol.OpIOSPlugin
 	spm         []*protocol.OpIOSAddPackageDependency
-	bundle      []*protocol.OpIOSAddBundleResource
-	iosConfigs  []*protocol.OpIOSPluginConfig
+	files       map[protocol.FileLocation][]*protocol.OpAddFile // syncedFiles only
 	manifest    mutate.ManifestOps
 	colors      []*protocol.OpAndroidColorSet
 	strings     []*protocol.OpAndroidStringSet
 	styles      []*protocol.OpAndroidStyleSet
 	gradleDeps  []*protocol.OpAndroidGradleAddDependency
 	gradlePlugs []*protocol.OpAndroidGradleApplyPlugin
-	configs     []*protocol.OpAndroidPluginConfig
+}
+
+// syncedFiles are the OpAddFile locations in a directory Drift owns and
+// syncs every build, removing files no op adds (the bundle resources, the
+// plugin config assets). A file anywhere else is owned on its own: written
+// as it is and recorded by the ejected lock.
+var syncedFiles = map[protocol.FileLocation]bool{
+	protocol.FileIOSBundle:           true,
+	protocol.FileIOSPluginConfig:     true,
+	protocol.FileAndroidPluginConfig: true,
 }
 
 // one wraps a single owned file.
@@ -154,8 +162,6 @@ func plistKind[T protocol.PlistOp](edit func(T) string) kind[T] {
 	}
 }
 
-func plistKey[T protocol.PlistOp](o T) string { return "key " + o.PlistKey() }
-
 // manifestKind edits the AndroidManifest; edit names the element.
 func manifestKind[T protocol.Op](edit func(T) string, stage func(*mutate.ManifestOps, T)) kind[T] {
 	return kind[T]{
@@ -167,10 +173,7 @@ func manifestKind[T protocol.Op](edit func(T) string, stage func(*mutate.Manifes
 
 func init() {
 	// iOS
-	register(plistKind[*protocol.OpPlistSetString](plistKey))
-	register(plistKind[*protocol.OpPlistSetBool](plistKey))
-	register(plistKind[*protocol.OpPlistSetStringArray](plistKey))
-	register(plistKind[*protocol.OpPlistSetDict](plistKey))
+	register(plistKind(func(o *protocol.OpPlistSet) string { return "key " + o.Key }))
 	register(plistKind(func(o *protocol.OpPlistAppendArrayItem) string {
 		return fmt.Sprintf("%q in array %s", o.Value, o.Key)
 	}))
@@ -198,11 +201,22 @@ func init() {
 	register(kind[*protocol.OpIOSAddPackageDependency]{
 		stage: func(b *batch, o *protocol.OpIOSAddPackageDependency) { b.spm = append(b.spm, o) },
 	})
-	register(kind[*protocol.OpIOSAddBundleResource]{
-		stage: func(b *batch, o *protocol.OpIOSAddBundleResource) { b.bundle = append(b.bundle, o) },
-	})
-	register(kind[*protocol.OpIOSPluginConfig]{
-		stage: func(b *batch, o *protocol.OpIOSPluginConfig) { b.iosConfigs = append(b.iosConfigs, o) },
+	register(kind[*protocol.OpAddFile]{
+		owns: func(p project, o *protocol.OpAddFile) ([]mutate.OwnedFile, error) {
+			if syncedFiles[o.Location] {
+				return nil, nil
+			}
+			return one(mutate.AddedFile(p.abs(p.fileDir(o.Location)), o))
+		},
+		stage: func(b *batch, o *protocol.OpAddFile) {
+			if !syncedFiles[o.Location] {
+				return
+			}
+			if b.files == nil {
+				b.files = map[protocol.FileLocation][]*protocol.OpAddFile{}
+			}
+			b.files[o.Location] = append(b.files[o.Location], o)
+		},
 	})
 
 	// Android
@@ -229,15 +243,10 @@ func init() {
 	}, func(m *mutate.ManifestOps, o *protocol.OpAndroidManifestAddMetaData) {
 		m.MetaData = append(m.MetaData, o)
 	}))
-	register(manifestKind(func(o *protocol.OpAndroidManifestAddService) string {
-		return fmt.Sprintf("<service android:name=%q>", o.ServiceName())
-	}, func(m *mutate.ManifestOps, o *protocol.OpAndroidManifestAddService) {
-		m.Services = append(m.Services, o)
-	}))
-	register(manifestKind(func(o *protocol.OpAndroidManifestAddReceiver) string {
-		return fmt.Sprintf("<receiver android:name=%q>", o.ReceiverName())
-	}, func(m *mutate.ManifestOps, o *protocol.OpAndroidManifestAddReceiver) {
-		m.Receivers = append(m.Receivers, o)
+	register(manifestKind(func(o *protocol.OpAndroidManifestAddComponent) string {
+		return fmt.Sprintf("<%s android:name=%q>", o.Tag(), o.Name())
+	}, func(m *mutate.ManifestOps, o *protocol.OpAndroidManifestAddComponent) {
+		m.Components = append(m.Components, o)
 	}))
 	register(kind[*protocol.OpAndroidColorSet]{
 		stage: func(b *batch, o *protocol.OpAndroidColorSet) { b.colors = append(b.colors, o) },
@@ -247,21 +256,6 @@ func init() {
 	})
 	register(kind[*protocol.OpAndroidStyleSet]{
 		stage: func(b *batch, o *protocol.OpAndroidStyleSet) { b.styles = append(b.styles, o) },
-	})
-	register(kind[*protocol.OpAndroidWriteDrawable]{
-		owns: func(p project, o *protocol.OpAndroidWriteDrawable) ([]mutate.OwnedFile, error) {
-			return one(mutate.DrawableFile(p.abs(p.drawables()), o))
-		},
-	})
-	register(kind[*protocol.OpAndroidWriteResourceXML]{
-		owns: func(p project, o *protocol.OpAndroidWriteResourceXML) ([]mutate.OwnedFile, error) {
-			return one(mutate.ResourceXMLFile(p.abs(p.resDir()), o), nil)
-		},
-	})
-	register(kind[*protocol.OpAndroidAddAppModuleFile]{
-		owns: func(p project, o *protocol.OpAndroidAddAppModuleFile) ([]mutate.OwnedFile, error) {
-			return one(mutate.AppModuleFile(p.abs(p.appModule()), o))
-		},
 	})
 	register(kind[*protocol.OpAddKotlinSource]{
 		owns: func(p project, o *protocol.OpAddKotlinSource) ([]mutate.OwnedFile, error) {
@@ -293,8 +287,5 @@ func init() {
 			return mutate.GradlePluginDeclaration(o)
 		},
 		stage: func(b *batch, o *protocol.OpAndroidGradleApplyPlugin) { b.gradlePlugs = append(b.gradlePlugs, o) },
-	})
-	register(kind[*protocol.OpAndroidPluginConfig]{
-		stage: func(b *batch, o *protocol.OpAndroidPluginConfig) { b.configs = append(b.configs, o) },
 	})
 }

@@ -136,8 +136,11 @@ func (b *BuildCtx) NativeConfig(v any) {
 		b.errs = append(b.errs, fmt.Errorf("NativeConfig: %w", err))
 		return
 	}
-	b.push(&protocol.OpIOSPluginConfig{Base: newBase(b), Config: string(data)})
-	b.push(&protocol.OpAndroidPluginConfig{Base: newBase(b), Config: string(data)})
+	content := protocol.EncodeContent(data)
+	b.push(&protocol.OpAddFile{Base: newBase(b), Location: protocol.FileIOSPluginConfig,
+		Name: protocol.IOSPluginConfigFile(b.pluginName), Content: content})
+	b.push(&protocol.OpAddFile{Base: newBase(b), Location: protocol.FileAndroidPluginConfig,
+		Name: path.Base(protocol.AndroidPluginConfigAsset(b.pluginName)), Content: content})
 }
 
 // ResolveAsset reads an asset at a path relative to the project root. Plugin
@@ -242,10 +245,11 @@ func (s *IOSScope) AddPackageDependency(url string, req SPMRequirement, products
 // images, fonts, JSON data, or ML models. name is a plain file name: both
 // iOS build paths flatten resources into the bundle root.
 func (s *IOSScope) AddBundleResource(name string, content []byte) {
-	s.b.push(&protocol.OpIOSAddBundleResource{
-		Base:    newBase(s.b),
-		Path:    name,
-		Content: protocol.EncodeContent(content),
+	s.b.push(&protocol.OpAddFile{
+		Base:     newBase(s.b),
+		Location: protocol.FileIOSBundle,
+		Name:     name,
+		Content:  protocol.EncodeContent(content),
 	})
 }
 
@@ -260,28 +264,25 @@ func (s *IOSPlistScope) entry(key string) protocol.PlistEntry {
 	return protocol.PlistEntry{File: s.file, Key: key}
 }
 
-func (s *IOSPlistScope) SetString(key, value string) {
-	s.b.push(&protocol.OpPlistSetString{
+// set records value, a plist value as JSON decodes it, at key.
+func (s *IOSPlistScope) set(key string, value any) {
+	s.b.push(&protocol.OpPlistSet{
 		Base:       newBase(s.b),
 		PlistEntry: s.entry(key),
 		Value:      value,
 	})
 }
 
-func (s *IOSPlistScope) SetBool(key string, value bool) {
-	s.b.push(&protocol.OpPlistSetBool{
-		Base:       newBase(s.b),
-		PlistEntry: s.entry(key),
-		Value:      value,
-	})
-}
+func (s *IOSPlistScope) SetString(key, value string) { s.set(key, value) }
+
+func (s *IOSPlistScope) SetBool(key string, value bool) { s.set(key, value) }
 
 func (s *IOSPlistScope) SetStringArray(key string, values []string) {
-	s.b.push(&protocol.OpPlistSetStringArray{
-		Base:       newBase(s.b),
-		PlistEntry: s.entry(key),
-		Values:     append([]string(nil), values...),
-	})
+	array := make([]any, len(values))
+	for i, v := range values {
+		array[i] = v
+	}
+	s.set(key, array)
 }
 
 // AppendArrayItem adds value to the array at key (created if absent),
@@ -296,11 +297,10 @@ func (s *IOSPlistScope) AppendArrayItem(key, value string) {
 }
 
 func (s *IOSPlistScope) SetDict(key string, dict map[string]any) {
-	s.b.push(&protocol.OpPlistSetDict{
-		Base:       newBase(s.b),
-		PlistEntry: s.entry(key),
-		Value:      copyDict(dict),
-	})
+	if dict == nil {
+		dict = map[string]any{}
+	}
+	s.set(key, copyDict(dict))
 }
 
 // IOSAssetsScope records additions to Runner/Assets.xcassets.
@@ -413,10 +413,11 @@ func (s *AndroidScope) ApplyGradlePlugin(id, version string) {
 // a plain file name; scaffold-owned names (build.gradle, src, ...) are
 // rejected.
 func (s *AndroidScope) AddAppModuleFile(name string, content []byte) {
-	s.b.push(&protocol.OpAndroidAddAppModuleFile{
-		Base:    newBase(s.b),
-		Name:    name,
-		Content: protocol.EncodeContent(content),
+	s.b.push(&protocol.OpAddFile{
+		Base:     newBase(s.b),
+		Location: protocol.FileAndroidAppModule,
+		Name:     name,
+		Content:  protocol.EncodeContent(content),
 	})
 }
 
@@ -473,12 +474,7 @@ func (s *AndroidManifestScope) SetActivityTheme(activity, theme string) {
 //	        <action android:name="com.google.firebase.MESSAGING_EVENT" />
 //	    </intent-filter>
 //	</service>
-func (s *AndroidManifestScope) AddService(xml string) {
-	s.b.push(&protocol.OpAndroidManifestAddService{
-		Base: newBase(s.b),
-		XML:  xml,
-	})
-}
+func (s *AndroidManifestScope) AddService(xml string) { s.addComponent("service", xml) }
 
 // AddReceiver declares a <receiver> in <application>, for a plugin
 // BroadcastReceiver the system starts. xml is the whole element, with the
@@ -486,11 +482,16 @@ func (s *AndroidManifestScope) AddService(xml string) {
 // must set android:exported. For example:
 //
 //	<receiver android:name="com.example.alarms.AlarmReceiver" android:exported="false" />
-func (s *AndroidManifestScope) AddReceiver(xml string) {
-	s.b.push(&protocol.OpAndroidManifestAddReceiver{
-		Base: newBase(s.b),
-		XML:  xml,
-	})
+func (s *AndroidManifestScope) AddReceiver(xml string) { s.addComponent("receiver", xml) }
+
+// addComponent records xml, which must be a <tag> element.
+func (s *AndroidManifestScope) addComponent(tag, xml string) {
+	op := &protocol.OpAndroidManifestAddComponent{Base: newBase(s.b), XML: xml}
+	if got := op.Tag(); got != "" && got != tag {
+		s.b.errs = append(s.b.errs, fmt.Errorf("%s: <%s> element, want <%s>", op.Type(), got, tag))
+		return
+	}
+	s.b.push(op)
 }
 
 func (s *AndroidManifestScope) AddMetaData(parent, name, value string) {
@@ -519,10 +520,11 @@ type AndroidResourcesScope struct {
 // WriteXML writes an arbitrary resource XML file under res/<relPath>.
 // relPath is slash-separated and rooted at res/.
 func (s *AndroidResourcesScope) WriteXML(relPath, content string) {
-	s.b.push(&protocol.OpAndroidWriteResourceXML{
-		Base:    newBase(s.b),
-		RelPath: relPath,
-		Content: content,
+	s.b.push(&protocol.OpAddFile{
+		Base:     newBase(s.b),
+		Location: protocol.FileAndroidResource,
+		Name:     relPath,
+		Content:  protocol.EncodeContent([]byte(content)),
 	})
 }
 
@@ -566,10 +568,11 @@ func (s *AndroidStylesScope) Set(name, parent string, items map[string]string) {
 type AndroidDrawablesScope struct{ b *BuildCtx }
 
 func (s *AndroidDrawablesScope) AddBitmap(name string, content []byte) {
-	s.b.push(&protocol.OpAndroidWriteDrawable{
-		Base:    newBase(s.b),
-		Name:    name,
-		Content: protocol.EncodeContent(content),
+	s.b.push(&protocol.OpAddFile{
+		Base:     newBase(s.b),
+		Location: protocol.FileAndroidDrawable,
+		Name:     name,
+		Content:  protocol.EncodeContent(content),
 	})
 }
 

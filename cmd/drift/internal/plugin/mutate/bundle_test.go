@@ -12,18 +12,19 @@ import (
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-func iosBundleOp(pkg, path string, content []byte) *protocol.OpIOSAddBundleResource {
-	return &protocol.OpIOSAddBundleResource{
-		Base:    protocol.Base{Pkg: pkg},
-		Path:    path,
-		Content: base64.StdEncoding.EncodeToString(content),
+func iosBundleOp(pkg, path string, content []byte) *protocol.OpAddFile {
+	return &protocol.OpAddFile{
+		Base:     protocol.Base{Pkg: pkg},
+		Location: protocol.FileIOSBundle,
+		Name:     path,
+		Content:  base64.StdEncoding.EncodeToString(content),
 	}
 }
 
 // writeBundleOps decodes ops the way apply.go does and syncs dir to them.
-func writeBundleOps(t *testing.T, dir string, ops ...*protocol.OpIOSAddBundleResource) ([]string, error) {
+func writeBundleOps(t *testing.T, dir string, ops ...*protocol.OpAddFile) ([]string, error) {
 	t.Helper()
-	files, err := IOSBundleFiles(ops)
+	files, err := AddedFiles(ops)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +136,7 @@ func TestWriteIOSBundleResourceDuplicateNameFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, err := IOSBundleFiles([]*protocol.OpIOSAddBundleResource{iosBundleOp("other", "Logo.png", []byte("other"))})
+	files, err := AddedFiles([]*protocol.OpAddFile{iosBundleOp("other", "Logo.png", []byte("other"))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,14 +158,15 @@ func TestImageSetBundleFilesLoosePNG(t *testing.T) {
 	}
 }
 
-func TestWriteOwnedAppModuleFile(t *testing.T) {
+func TestWriteOwnedAddedFile(t *testing.T) {
 	dir := t.TempDir()
-	op := &protocol.OpAndroidAddAppModuleFile{
-		Base:    protocol.Base{Pkg: "fb"},
-		Name:    "google-services.json",
-		Content: base64.StdEncoding.EncodeToString([]byte(`{"project_info":{}}`)),
+	op := &protocol.OpAddFile{
+		Base:     protocol.Base{Pkg: "fb"},
+		Location: protocol.FileAndroidAppModule,
+		Name:     "google-services.json",
+		Content:  base64.StdEncoding.EncodeToString([]byte(`{"project_info":{}}`)),
 	}
-	file, err := AppModuleFile(dir, op)
+	file, err := AddedFile(dir, op)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +193,7 @@ func TestWriteIOSBundleResourceBinaryRoundTrip(t *testing.T) {
 		"random.bin": randomBytes(t, 1024),
 		"nulls.bin":  {0x00, 0x01, 0x00, 0x02, 0xFF, 0xFE},
 	}
-	var ops []*protocol.OpIOSAddBundleResource
+	var ops []*protocol.OpAddFile
 	for name, content := range cases {
 		ops = append(ops, iosBundleOp("p", name, content))
 	}

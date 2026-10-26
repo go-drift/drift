@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"encoding/json"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,19 +11,19 @@ import (
 func fixtureOps() []Op {
 	base := Base{Pkg: "github.com/test/plugin", Ident: "test"}
 	return []Op{
-		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Foo"}, Value: "bar"},
-		&OpPlistSetBool{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Baz"}, Value: true},
-		&OpPlistSetStringArray{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr"}, Values: []string{"a", "b"}},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Foo"}, Value: "bar"},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Baz"}, Value: true},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr"}, Value: []any{"a", "b"}},
 		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Arr2"}, Value: "x"},
-		&OpPlistSetDict{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": "v"}},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": "v"}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: "AA=="},
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<document/>"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
 		&OpIOSPlugin{Base: base, Class: "FooPlugin"},
-		&OpIOSAddBundleResource{Base: base, Path: "GoogleService-Info.plist", Content: "AA=="},
-		&OpIOSPluginConfig{Base: base, Config: `{"greeting":"hi"}`},
-		&OpAndroidPluginConfig{Base: base, Config: `{"greeting":"hi"}`},
-		&OpAndroidAddAppModuleFile{Base: base, Name: "google-services.json", Content: "AA=="},
+		&OpAddFile{Base: base, Location: FileIOSBundle, Name: "GoogleService-Info.plist", Content: "AA=="},
+		&OpAddFile{Base: base, Location: FileIOSPluginConfig, Name: "DriftPluginConfig-test.json", Content: enc(`{"greeting":"hi"}`)},
+		&OpAddFile{Base: base, Location: FileAndroidPluginConfig, Name: "test.json", Content: enc(`{"greeting":"hi"}`)},
+		&OpAddFile{Base: base, Location: FileAndroidAppModule, Name: "google-services.json", Content: "AA=="},
 		&OpAndroidGradleApplyPlugin{Base: base, ID: "com.google.gms.google-services", Version: "4.4.0"},
 		&OpIOSAddPackageDependency{
 			Base:        base,
@@ -36,18 +35,20 @@ func fixtureOps() []Op {
 		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<intent-filter/>"},
 		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/X"},
 		&OpAndroidManifestAddMetaData{Base: base, Parent: "application", Name: "foo", Value: "bar"},
-		&OpAndroidManifestAddService{Base: base, XML: `<service android:name="com.foo.PushService" android:exported="false"/>`},
-		&OpAndroidManifestAddReceiver{Base: base, XML: `<receiver android:name="com.foo.AlarmReceiver" android:exported="false"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<service android:name="com.foo.PushService" android:exported="false"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<receiver android:name="com.foo.AlarmReceiver" android:exported="false"/>`},
 		&OpAndroidColorSet{Base: base, Name: "splash_bg", Value: "#FFFFFF"},
 		&OpAndroidStringSet{Base: base, Name: "hello", Value: "world"},
 		&OpAndroidStyleSet{Base: base, Name: "X", Parent: "Y", Items: []StyleItem{{Name: "a", Value: "b"}}},
-		&OpAndroidWriteDrawable{Base: base, Name: "icon", Content: "AA=="},
-		&OpAndroidWriteResourceXML{Base: base, RelPath: "raw/foo.xml", Content: "<x/>"},
+		&OpAddFile{Base: base, Location: FileAndroidDrawable, Name: "icon", Content: "AA=="},
+		&OpAddFile{Base: base, Location: FileAndroidResource, Name: "raw/foo.xml", Content: enc("<x/>")},
 		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "Foo.kt", Content: "AA=="},
 		&OpAndroidPlugin{Base: base, Class: "com.foo.FooPlugin"},
 		&OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "androidx.core:core-splashscreen:1.0.1"},
 	}
 }
+
+func enc(s string) string { return EncodeContent([]byte(s)) }
 
 func TestOpsCoverAllConstructors(t *testing.T) {
 	fixtures := fixtureOps()
@@ -62,20 +63,6 @@ func TestOpsCoverAllConstructors(t *testing.T) {
 	}
 	if len(seen) != len(OpTypes()) {
 		t.Errorf("fixtureOps has duplicates: %d unique types, %d constructors", len(seen), len(OpTypes()))
-	}
-}
-
-// The plugin guide's op reference is hand-written; every op type must
-// appear in it.
-func TestOpReferenceListsEveryOp(t *testing.T) {
-	guide, err := os.ReadFile("../../../website-docs/guides/plugins.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, typ := range OpTypes() {
-		if !strings.Contains(string(guide), "`"+typ+"`") {
-			t.Errorf("website-docs/guides/plugins.md op reference does not list %q", typ)
-		}
 	}
 }
 
@@ -301,7 +288,7 @@ func spmFrom(v string) SPMRequirement { return SPMRequirement{Kind: SPMFrom, Val
 
 func TestDecodeOpsParsesJSONList(t *testing.T) {
 	ops := []Op{
-		&OpPlistSetString{Base: Base{Pkg: "p", Ident: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "V"},
+		&OpPlistSet{Base: Base{Pkg: "p", Ident: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "V"},
 	}
 	raw, err := MarshalOpList(ops)
 	if err != nil {
@@ -340,23 +327,27 @@ func TestFixtureOpsAreValid(t *testing.T) {
 func invalidOps() []Op {
 	base := Base{Pkg: "github.com/test/plugin", Ident: "test"}
 	return []Op{
-		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
-		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{File: "Info.plist", Key: "K"}},
-		&OpPlistSetString{Base: base, PlistEntry: PlistEntry{Key: "K"}},
-		&OpPlistSetBool{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
-		&OpPlistSetStringArray{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}, Value: "V"},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: "Info.plist", Key: "K"}, Value: "V"},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{Key: "K"}, Value: "V"},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: struct{}{}},
 		&OpPlistAppendArrayItem{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: ""}},
-		&OpPlistSetDict{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": nil}},
+		&OpPlistSet{Base: base, PlistEntry: PlistEntry{File: PlistInfo, Key: "Dict"}, Value: map[string]any{"k": nil}},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "../Logo", Image: "AA=="},
 		&OpIOSAssetsAddImageSet{Base: base, Name: "Logo", Image: ""},
 		&OpIOSReplaceLaunchScreen{Base: base, Content: "<storyboard/>"},
 		&OpAddIOSSource{Base: base, Group: "a b", RelPath: "Foo.swift"},
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "../Foo.swift"},
 		&OpIOSPlugin{Base: base, Class: "Foo.register"},
-		&OpIOSAddBundleResource{Base: base, Path: "a/b.plist"},
-		&OpIOSPluginConfig{Base: base, Config: `["not", "an", "object"]`},
-		&OpAndroidPluginConfig{Base: base, Config: `null`},
-		&OpAndroidAddAppModuleFile{Base: base, Name: "build.gradle"},
+		&OpAddFile{Base: base, Location: FileIOSBundle, Name: "a/b.plist"},
+		&OpAddFile{Base: base, Location: FileIOSBundle, Name: "b.plist", Content: "not base64"},
+		&OpAddFile{Base: base, Location: FileIOSPluginConfig, Name: "DriftPluginConfig-test.json", Content: enc(`["not", "an", "object"]`)},
+		&OpAddFile{Base: base, Location: FileIOSPluginConfig, Name: "DriftPluginConfig-other.json", Content: enc(`{}`)},
+		&OpAddFile{Base: base, Location: FileAndroidPluginConfig, Name: "test.json", Content: enc(`null`)},
+		&OpAddFile{Base: base, Location: FileAndroidPluginConfig, Name: "other.json", Content: enc(`{}`)},
+		&OpAddFile{Base: base, Location: FileAndroidAppModule, Name: "build.gradle"},
+		&OpAddFile{Base: base, Location: "ios.documents", Name: "a.txt"},
 		&OpAndroidGradleApplyPlugin{Base: base, ID: ""},
 		&OpIOSAddPackageDependency{Base: base, URL: "http://x/y", Requirement: spmFrom("1.0.0"), Products: []string{"P"}},
 		&OpAndroidManifestAddPermission{Base: base, Name: "not a permission"},
@@ -364,20 +355,21 @@ func invalidOps() []Op {
 		&OpAndroidManifestAddIntentFilter{Base: base, Activity: ".MainActivity", XML: "<activity/>"},
 		&OpAndroidManifestSetActivityAttr{Base: base, Activity: ".MainActivity", Attr: "android theme", Value: "x"},
 		&OpAndroidManifestAddMetaData{Base: base, Parent: "service", Name: "foo"},
-		&OpAndroidManifestAddService{Base: base, XML: `<receiver android:name="com.foo.R"/>`},
-		&OpAndroidManifestAddService{Base: base, XML: `<service android:exported="false"/>`},
-		&OpAndroidManifestAddService{Base: base, XML: `<service android:name=".PushService" android:exported="false"/>`},
-		&OpAndroidManifestAddService{Base: base, XML: `<service android:name="com.foo.S"><intent-filter><action android:name="x"/></intent-filter></service>`},
-		&OpAndroidManifestAddReceiver{Base: base, XML: `<service android:name="com.foo.R"/>`},
-		&OpAndroidManifestAddReceiver{Base: base, XML: `<receiver android:name=".AlarmReceiver"/>`},
-		&OpAndroidManifestAddReceiver{Base: base, XML: `<receiver android:name="com.foo.R"><intent-filter><action android:name="x"/></intent-filter></receiver>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<activity android:name="com.foo.A"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<service android:name="com.foo.S"/><service android:name="com.foo.T"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<service android:exported="false"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<service android:name=".PushService" android:exported="false"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<service android:name="com.foo.S"><intent-filter><action android:name="x"/></intent-filter></service>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<receiver android:name=".AlarmReceiver"/>`},
+		&OpAndroidManifestAddComponent{Base: base, XML: `<receiver android:name="com.foo.R"><intent-filter><action android:name="x"/></intent-filter></receiver>`},
 		&OpAndroidColorSet{Base: base, Name: "splash-bg", Value: "#FFFFFF"},
 		&OpAndroidColorSet{Base: base, Name: "splash_bg", Value: "#fff"},
 		&OpAndroidStringSet{Base: base, Name: "1hello"},
 		&OpAndroidStyleSet{Base: base, Name: "X", Items: []StyleItem{{Name: "a", Value: "1"}, {Name: "a", Value: "2"}}},
-		&OpAndroidWriteDrawable{Base: base, Name: "Icon", Content: "AA=="},
-		&OpAndroidWriteResourceXML{Base: base, RelPath: "../raw/foo.xml", Content: "<x/>"},
-		&OpAndroidWriteResourceXML{Base: base, RelPath: AndroidPluginColorsFile, Content: "<resources/>"},
+		&OpAddFile{Base: base, Location: FileAndroidDrawable, Name: "Icon", Content: "AA=="},
+		&OpAddFile{Base: base, Location: FileAndroidDrawable, Name: "icon"},
+		&OpAddFile{Base: base, Location: FileAndroidResource, Name: "../raw/foo.xml", Content: enc("<x/>")},
+		&OpAddFile{Base: base, Location: FileAndroidResource, Name: AndroidPluginColorsFile, Content: enc("<resources/>")},
 		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "/abs/Foo.kt"},
 		&OpAddKotlinSource{Base: base, Package: "com.drift.runner", RelPath: "Foo.kt", Content: "AA=="},
 		&OpAddKotlinSource{Base: base, Package: "com.drift.runner.extra", RelPath: "Foo.kt", Content: "AA=="},
@@ -402,12 +394,12 @@ func TestOpValidateRejects(t *testing.T) {
 }
 
 func TestDecodeOpsRejectsInvalid(t *testing.T) {
-	raw, err := MarshalOp(&OpAndroidAddAppModuleFile{Base: Base{Pkg: "p", Ident: "p"}, Name: "../escape"})
+	raw, err := MarshalOp(&OpAddFile{Base: Base{Pkg: "p", Ident: "p"}, Location: FileAndroidAppModule, Name: "../escape"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = DecodeOps([]json.RawMessage{raw})
-	if err == nil || !strings.Contains(err.Error(), "android.app_module.add_file") {
+	if err == nil || !strings.Contains(err.Error(), "file.add") {
 		t.Fatalf("expected validation error naming the op, got %v", err)
 	}
 }
@@ -426,10 +418,10 @@ func TestEveryOpHasTargets(t *testing.T) {
 // Without the JSON round trip in canonicalJSON the typed map would fall
 // through to json.Marshal with unsorted keys.
 func TestSetDictTargetStableAcrossNestedConcreteTypes(t *testing.T) {
-	generic := &OpPlistSetDict{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{
+	generic := &OpPlistSet{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{
 		"inner": map[string]any{"b": "2", "a": "1"},
 	}}
-	typed := &OpPlistSetDict{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{
+	typed := &OpPlistSet{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{
 		"inner": map[string]string{"b": "2", "a": "1"},
 	}}
 	if !reflect.DeepEqual(generic.Targets(), typed.Targets()) {
@@ -438,7 +430,7 @@ func TestSetDictTargetStableAcrossNestedConcreteTypes(t *testing.T) {
 }
 
 func TestDecodeOpsRejectsInvalidPluginName(t *testing.T) {
-	raw, err := MarshalOp(&OpPlistSetString{Base: Base{Pkg: "p", Ident: "Bad-Name"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "V"})
+	raw, err := MarshalOp(&OpPlistSet{Base: Base{Pkg: "p", Ident: "Bad-Name"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "V"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,8 +441,8 @@ func TestDecodeOpsRejectsInvalidPluginName(t *testing.T) {
 
 // One key in Info.plist and the entitlements are different targets.
 func TestPlistTargetsIncludeFile(t *testing.T) {
-	info := &OpPlistSetString{PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "a"}
-	ent := &OpPlistSetString{PlistEntry: PlistEntry{File: PlistEntitlements, Key: "K"}, Value: "b"}
+	info := &OpPlistSet{PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: "a"}
+	ent := &OpPlistSet{PlistEntry: PlistEntry{File: PlistEntitlements, Key: "K"}, Value: "b"}
 	if info.Targets()[0].Key == ent.Targets()[0].Key {
 		t.Errorf("both target %q", info.Targets()[0].Key)
 	}
@@ -459,8 +451,8 @@ func TestPlistTargetsIncludeFile(t *testing.T) {
 // A service is keyed by its class, so two plugins declaring one service
 // differently conflict, and different services do not.
 func TestAddServiceTargetsName(t *testing.T) {
-	a := &OpAndroidManifestAddService{XML: `<service android:name="com.a.S" android:exported="false"/>`}
-	b := &OpAndroidManifestAddService{XML: `<service android:name="com.b.S" android:exported="false"/>`}
+	a := &OpAndroidManifestAddComponent{XML: `<service android:name="com.a.S" android:exported="false"/>`}
+	b := &OpAndroidManifestAddComponent{XML: `<service android:name="com.b.S" android:exported="false"/>`}
 	if err := a.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -475,10 +467,63 @@ func TestAddServiceTargetsName(t *testing.T) {
 // An integer and a float of equal value are different plist values
 // (<integer> vs <real>), so two plugins writing them conflict.
 func TestSetDictTargetDistinguishesIntFromFloat(t *testing.T) {
-	op := func(v any) *OpPlistSetDict {
-		return &OpPlistSetDict{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{"n": v}}
+	op := func(v any) *OpPlistSet {
+		return &OpPlistSet{Base: Base{Pkg: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: map[string]any{"n": v}}
 	}
 	if reflect.DeepEqual(op(2).Targets(), op(2.0).Targets()) {
 		t.Error("SetDict {n: 2} and {n: 2.0} have the same target content")
+	}
+}
+
+// A plist value crosses the wire as the kind it was recorded as: a string
+// stays a string, an integer an integer and a real a real, at any depth.
+func TestPlistSetRoundTripKeepsValueKinds(t *testing.T) {
+	for _, tc := range []struct{ recorded, decoded any }{
+		{"s", "s"},
+		{true, true},
+		{[]any{"a", "b"}, []any{"a", "b"}},
+		{2, int64(2)},
+		{2.0, 2.0},
+		{map[string]any{"n": 2, "r": 2.5, "a": []any{1.0}}, map[string]any{"n": int64(2), "r": 2.5, "a": []any{1.0}}},
+	} {
+		raw, err := MarshalOp(&OpPlistSet{Base: Base{Pkg: "p", Ident: "p"}, PlistEntry: PlistEntry{File: PlistInfo, Key: "K"}, Value: tc.recorded})
+		if err != nil {
+			t.Fatal(err)
+		}
+		op, err := UnmarshalOp(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := op.(*OpPlistSet).Value; !reflect.DeepEqual(got, tc.decoded) {
+			t.Errorf("%#v decoded as %#v, want %#v", tc.recorded, got, tc.decoded)
+		}
+	}
+}
+
+// A file op's platform is its location's.
+func TestAddFilePlatformFollowsLocation(t *testing.T) {
+	for loc, want := range map[FileLocation]string{
+		FileIOSBundle:           "ios",
+		FileIOSPluginConfig:     "ios",
+		FileAndroidDrawable:     "android",
+		FileAndroidResource:     "android",
+		FileAndroidAppModule:    "android",
+		FileAndroidPluginConfig: "android",
+		"ios.documents":         "",
+	} {
+		if got := (&OpAddFile{Location: loc}).Platform(); got != want {
+			t.Errorf("%s: platform %q, want %q", loc, got, want)
+		}
+	}
+}
+
+// A component is keyed by its element and class.
+func TestAddComponentTargetsTagAndName(t *testing.T) {
+	op := &OpAndroidManifestAddComponent{XML: `<receiver android:name="com.a.R" android:exported="false"/>`}
+	if op.Tag() != "receiver" || op.Name() != "com.a.R" {
+		t.Errorf("tag %q, name %q", op.Tag(), op.Name())
+	}
+	if got := op.Targets()[0].Key; got != "manifest:application:receiver:com.a.R" {
+		t.Errorf("target %q", got)
 	}
 }

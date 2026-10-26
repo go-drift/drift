@@ -34,6 +34,23 @@ func (p project) rel(path string) (string, error) {
 
 func (p project) xtool() bool { return p.platform == "xtool" }
 
+// fileDir is the directory of an OpAddFile location.
+func (p project) fileDir(loc protocol.FileLocation) string {
+	switch loc {
+	case protocol.FileIOSBundle, protocol.FileIOSPluginConfig:
+		return p.bundleResources()
+	case protocol.FileAndroidDrawable:
+		return p.drawables()
+	case protocol.FileAndroidResource:
+		return p.resDir()
+	case protocol.FileAndroidAppModule:
+		return p.appModule()
+	case protocol.FileAndroidPluginConfig:
+		return p.pluginConfigs()
+	}
+	panic(fmt.Sprintf("plugin: unknown file location %q", loc))
+}
+
 // ---- iOS ----------------------------------------------------------------
 
 // iosSources is where the app target's Swift sources live: Runner/ for
@@ -72,7 +89,7 @@ func (p project) launchScreen() string {
 func (p project) assetCatalog() string { return "Runner/Assets.xcassets" }
 
 // bundleResources is the Drift-owned directory for files destined for the
-// root of the app bundle (OpIOSAddBundleResource, plugin configs, plus
+// root of the app bundle (protocol.FileIOSBundle, plugin configs, plus
 // image sets on xtool). On xcodeproj builds it is Runner/PluginResources:
 // the PBXFileSystemSynchronizedRootGroup includes it and Xcode's resources
 // phase copies the files flat into the bundle root. Keeping it out of

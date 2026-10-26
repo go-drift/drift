@@ -11,8 +11,8 @@ import (
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-func appModuleFile(name, body string) *protocol.OpAndroidAddAppModuleFile {
-	return &protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "github.com/acme/push"}, Name: name, Content: b64.StdEncoding.EncodeToString([]byte(body))}
+func appModuleFile(name, body string) *protocol.OpAddFile {
+	return &protocol.OpAddFile{Base: protocol.Base{Pkg: "github.com/acme/push"}, Location: protocol.FileAndroidAppModule, Name: name, Content: b64.StdEncoding.EncodeToString([]byte(body))}
 }
 
 // wantForeign checks err is a *ForeignFileError naming exactly paths.
@@ -99,7 +99,7 @@ func TestApplyRefusesToReplaceTemplateFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(root, "android")
-	op := &protocol.OpAndroidWriteResourceXML{Base: protocol.Base{Pkg: "github.com/acme/push"}, RelPath: "drawable/launch_background.xml", Content: "<layer-list/>"}
+	op := &protocol.OpAddFile{Base: protocol.Base{Pkg: "github.com/acme/push"}, Location: protocol.FileAndroidResource, Name: "drawable/launch_background.xml", Content: protocol.EncodeContent([]byte("<layer-list/>"))}
 	_, err := apply(t, []protocol.Op{op}, dir, "android", nil)
 	wantForeign(t, err, "app/src/main/res/drawable/launch_background.xml")
 }

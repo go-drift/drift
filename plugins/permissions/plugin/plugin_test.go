@@ -42,15 +42,21 @@ func TestBuildDeclaresConfiguredKindsOnly(t *testing.T) {
 	var iosCfg, androidCfg string
 	for _, op := range ops {
 		switch o := op.(type) {
-		case *protocol.OpPlistSetString:
-			plist[o.Key] = o.Value
+		case *protocol.OpPlistSet:
+			if s, ok := o.Value.(string); ok {
+				plist[o.Key] = s
+			}
 		case *protocol.OpAndroidManifestAddPermission:
 			perms = append(perms, o.Name)
 			maxSDK[o.Name] = o.MaxSDK
-		case *protocol.OpIOSPluginConfig:
-			iosCfg = o.Config
-		case *protocol.OpAndroidPluginConfig:
-			androidCfg = o.Config
+		case *protocol.OpAddFile:
+			content, _ := protocol.DecodeContent(o.Content)
+			switch o.Location {
+			case protocol.FileIOSPluginConfig:
+				iosCfg = string(content)
+			case protocol.FileAndroidPluginConfig:
+				androidCfg = string(content)
+			}
 		}
 	}
 	if plist["NSContactsUsageDescription"] != "Finds friends." || plist["NSPhotoLibraryUsageDescription"] != "Picks a profile photo." {
@@ -80,7 +86,7 @@ func TestBuildCalendarSetsBothUsageStrings(t *testing.T) {
 	ops := mustBuild(t, "calendar:\n  description: Adds events.\n")
 	keys := map[string]bool{}
 	for _, op := range ops {
-		if o, ok := op.(*protocol.OpPlistSetString); ok {
+		if o, ok := op.(*protocol.OpPlistSet); ok {
 			keys[o.Key] = true
 		}
 	}

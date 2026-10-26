@@ -1050,11 +1050,19 @@ func TestBuildShipsGreeting(t *testing.T) {
 	}
 	var ios, android string
 	for _, op := range ops {
-		switch o := op.(type) {
-		case *protocol.OpIOSPluginConfig:
-			ios = o.Config
-		case *protocol.OpAndroidPluginConfig:
-			android = o.Config
+		f, ok := op.(*protocol.OpAddFile)
+		if !ok {
+			continue
+		}
+		content, err := protocol.DecodeContent(f.Content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch f.Location {
+		case protocol.FileIOSPluginConfig:
+			ios = string(content)
+		case protocol.FileAndroidPluginConfig:
+			android = string(content)
 		}
 	}
 	if want := `{"greeting":"hello"}`; ios != want || android != want {
@@ -1065,7 +1073,7 @@ func TestBuildShipsGreeting(t *testing.T) {
 
 - `NewTestCtx()`, `NewTestCtxAt(root)` and `NewTestCtxFor(root, platform)` create contexts; the root is where `ResolveAsset` reads, so seed it with test files. The first two build for every platform (`Platform()` is `"all"`).
 - Test contexts have `AppID() == driftplugin.TestAppID`.
-- Recorded ops are the types in `github.com/go-drift/drift/pkg/plugin/protocol`.
+- Recorded ops are the types in `github.com/go-drift/drift/pkg/plugin/protocol`, one per wire name in the [op reference](#op-reference). They are API: a release changes them only alongside the plugin API, as it does `BuildCtx`, so tests may switch on them as above. Whole files (bundle resources, drawables, plugin configs) are all `*protocol.OpAddFile`, told apart by `Location`, with base64 `Content` (`protocol.DecodeContent`).
 
 Test the runtime half against a fake native side from `pkg/platform` (the hello plugin's `runtime/hello_test.go` shows the pattern):
 
@@ -1097,25 +1105,22 @@ Until a plugin is published, an app can also use it from a branch: `go get examp
 
 ## Op reference
 
-Each recorder records one op type, shown here by its wire name. "Same location" ops must agree with any other op writing there; "set" ops merge with other members.
+Each recorder records one op, shown here by its wire name; `file.add` ops also name their location. "Same location" ops must agree with any other op writing there; "set" ops merge with other members.
 
 ### iOS
 
 | Recorder | Op | Writes | Conflicts |
 |----------|----|--------|-----------|
-| `IOS.Info.SetString(key, value)` | `ios.plist.set_string` | `Info.plist` key | Same location |
-| `IOS.Info.SetBool(key, value)` | `ios.plist.set_bool` | `Info.plist` key | Same location |
-| `IOS.Info.SetStringArray(key, values)` | `ios.plist.set_string_array` | `Info.plist` key, whole array | Same location |
+| `IOS.Info.SetString(key, value)` / `SetBool(key, value)` / `SetStringArray(key, values)` / `SetDict(key, dict)` | `ios.plist.set` | `Info.plist` key, whole value | Same location |
 | `IOS.Info.AppendArrayItem(key, value)` | `ios.plist.append_array_item` | One entry in an `Info.plist` array, alongside the template's and other plugins' | Set |
-| `IOS.Info.SetDict(key, dict)` | `ios.plist.set_dict` | `Info.plist` key, whole dictionary | Same location |
-| `IOS.Entitlements.*` | the five `ios.plist.*` ops above | `Runner.entitlements`, such as `aps-environment` | As above |
+| `IOS.Entitlements.*` | the two `ios.plist.*` ops above | `Runner.entitlements`, such as `aps-environment` | As above |
 | `IOS.Assets.AddImageSet(name, png)` | `ios.assets.add_image_set` | Image set in `Assets.xcassets` (a loose `<name>.png` on xtool); load with `UIImage(named:)` | Same location |
 | `IOS.Storyboards.ReplaceLaunchScreen(xml)` | `ios.storyboards.replace_launch_screen` | `LaunchScreen.storyboard` | Same location |
 | `IOS.Sources.AddFS(group, fs, root)` / `AddFile(group, rel, content)` | `ios.source.add` | Swift file in the plugin's module | File names unique per plugin |
 | `IOS.Plugin(class)` | `ios.plugin` | The plugin class the app creates | Set |
 | `IOS.AddPackageDependency(url, req, products)` | `ios.spm.add_package` | SwiftPM package and products for the plugin's module | One requirement per package; products are a set |
-| `IOS.AddBundleResource(name, content)` | `ios.bundle.add_resource` | File in the app bundle root, for SDKs that read `Bundle.main` | Same location |
-| `NativeConfig(v)` (with Android's) | `ios.plugin_config` | The plugin's native config, `DriftPluginConfig-<name>.json` in the bundle root | Same location |
+| `IOS.AddBundleResource(name, content)` | `file.add` at `ios.bundle` | File in the app bundle root, for SDKs that read `Bundle.main` | Same location |
+| `NativeConfig(v)` (with Android's) | `file.add` at `ios.plugin_config` | The plugin's native config, `DriftPluginConfig-<name>.json` in the bundle root | Same location |
 
 ### Android
 
@@ -1125,19 +1130,18 @@ Each recorder records one op type, shown here by its wire name. "Same location" 
 | `Android.Manifest.AddIntentFilter(activity, xml)` | `android.manifest.add_intent_filter` | `<intent-filter>` in an activity | Set |
 | `Android.Manifest.SetActivityAttr(activity, attr, value)` / `SetActivityTheme(activity, theme)` | `android.manifest.set_activity_attr` | Activity attribute, such as `android:theme` | Same location |
 | `Android.Manifest.AddMetaData(parent, name, value)` | `android.manifest.add_meta_data` | `<meta-data>` in `application` or `activity:<name>` | Same location |
-| `Android.Manifest.AddService(xml)` | `android.manifest.add_service` | `<service>` in `<application>`, named by its fully qualified class | Same location |
-| `Android.Manifest.AddReceiver(xml)` | `android.manifest.add_receiver` | `<receiver>` in `<application>`, named by its fully qualified class | Same location |
+| `Android.Manifest.AddService(xml)` / `AddReceiver(xml)` | `android.manifest.add_component` | `<service>` or `<receiver>` in `<application>`, named by its fully qualified class | Same location |
 | `Android.Resources.Colors.Set(name, hex)` | `android.color.set` | `@color/<name>`, from a Drift hex colour | Same location |
 | `Android.Resources.Strings.Set(name, value)` | `android.string.set` | `@string/<name>`, from literal text (Drift escapes it for Android) | Same location |
 | `Android.Resources.Styles.Set(name, parent, items)` | `android.style.set` | `@style/<name>` | Same location |
-| `Android.Drawables.AddBitmap(name, content)` | `android.drawable.write` | `res/drawable-nodpi/<name>` (not scaled by density) | Same location |
-| `Android.Resources.WriteXML(relPath, xml)` | `android.resource.write_xml` | Any resource file `res/<dir>/<file>.xml` except Drift's own values files | Same location |
-| `Android.AddAppModuleFile(name, content)` | `android.app_module.add_file` | File next to `app/build.gradle`, such as `google-services.json` | Same location |
+| `Android.Drawables.AddBitmap(name, content)` | `file.add` at `android.drawable` | `res/drawable-nodpi/<name>` (not scaled by density) | Same location |
+| `Android.Resources.WriteXML(relPath, xml)` | `file.add` at `android.resource` | Any resource file `res/<dir>/<file>.xml` except Drift's own values files | Same location |
+| `Android.AddAppModuleFile(name, content)` | `file.add` at `android.app_module` | File next to `app/build.gradle`, such as `google-services.json` | Same location |
 | `Android.AddGradleDependency(configuration, coord)` | `android.gradle.add_dependency` | Dependency with a pinned version | Set |
 | `Android.ApplyGradlePlugin(id, version)` | `android.gradle.apply_plugin` | Applied Gradle plugin, declared at `version` (empty: already on the classpath) | One version per plugin id |
 | `Android.Sources.AddFS(pkg, fs, root)` / `AddFile(pkg, rel, content)` | `android.source.add` | Kotlin file under the package | Same location |
 | `Android.Plugin(class)` | `android.plugin` | The plugin class the app creates | Set |
-| `NativeConfig(v)` (with iOS's) | `android.plugin_config` | The plugin's native config, the asset `drift/plugins/<name>.json` | Same location |
+| `NativeConfig(v)` (with iOS's) | `file.add` at `android.plugin_config` | The plugin's native config, the asset `drift/plugins/<name>.json` | Same location |
 
 ## Next Steps
 

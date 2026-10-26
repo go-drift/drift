@@ -17,7 +17,7 @@ import (
 // APIVersion is the major version of the plugin protocol shared by the Drift
 // CLI and the generated bridge binary. The CLI refuses bridge responses whose
 // api_version differs.
-const APIVersion = 1
+const APIVersion = 2
 
 // DriftModulePath is the module path of the Drift framework. The bridge
 // reports the version of this module it was compiled with.
