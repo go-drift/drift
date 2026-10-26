@@ -91,7 +91,10 @@ func NewEmitter[T any](name string) *Emitter[T] {
 	return &Emitter[T]{
 		channel: channel,
 		stream: NewStream(name, channel, func(data any) (T, error) {
-			return data.(T), nil
+			// Emit takes a T, so data is a T or, for a nil value of an
+			// interface T, nil, which the comma-ok form maps back to it.
+			value, _ := data.(T)
+			return value, nil
 		}),
 	}
 }

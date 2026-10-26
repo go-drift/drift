@@ -101,3 +101,16 @@ func TestEmitter(t *testing.T) {
 		t.Error("an emitter's channel is registered for native events")
 	}
 }
+
+// A nil value of an interface type is a value like any other.
+func TestEmitterNilInterfaceValue(t *testing.T) {
+	emitter := NewEmitter[error]("test/emitter_nil")
+	var events []error
+	defer emitter.Stream().Listen(StreamHandler[error]{
+		OnEvent: func(v error) { events = append(events, v) },
+	})()
+	emitter.Emit(nil)
+	if len(events) != 1 || events[0] != nil {
+		t.Errorf("events = %v, want [<nil>]", events)
+	}
+}
