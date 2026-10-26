@@ -43,9 +43,6 @@ func (b *deferredBridge) release(value any) {
 	}
 }
 
-func (b *deferredBridge) StartEventStream(string) error { return nil }
-func (b *deferredBridge) StopEventStream(string) error  { return nil }
-
 // countingBridge counts InvokeMethod calls and answers them in place with a
 // canned response.
 type countingBridge struct {
@@ -60,9 +57,6 @@ func (b *countingBridge) InvokeMethod(_, _ string, _ []byte, reply func([]byte, 
 	b.mu.Unlock()
 	reply(DefaultCodec.Encode(b.response))
 }
-
-func (b *countingBridge) StartEventStream(string) error { return nil }
-func (b *countingBridge) StopEventStream(string) error  { return nil }
 
 func (b *countingBridge) callCount() int {
 	b.mu.Lock()
@@ -173,8 +167,6 @@ func (b *threadBridge) InvokeMethod(_, _ string, _ []byte, reply func([]byte, er
 	b.callers = append(b.callers, goroutineID())
 	reply(DefaultCodec.Encode(nil))
 }
-func (b *threadBridge) StartEventStream(string) error { return nil }
-func (b *threadBridge) StopEventStream(string) error  { return nil }
 
 // Native decides where a handler runs from the thread it is called on, and
 // a UI-thread call must be answered there. A cgo callback's goroutine is
@@ -220,8 +212,6 @@ func (doubleReplyBridge) InvokeMethod(_, _ string, _ []byte, reply func([]byte, 
 	reply(nil, nil)
 	reply(nil, nil)
 }
-func (doubleReplyBridge) StartEventStream(string) error { return nil }
-func (doubleReplyBridge) StopEventStream(string) error  { return nil }
 
 // Native refuses an async method called from the UI thread with a wire
 // code; Go callers match it by sentinel.

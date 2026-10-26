@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -97,7 +96,6 @@ type EventChannel struct {
 	codec         MessageCodec
 	delivery      eventDelivery
 	subscriptions []*Subscription
-	started       bool // whether native event stream is active
 	mu            sync.Mutex
 
 	// Sticky channels: the single replay slot. Protected by mu.
@@ -181,10 +179,6 @@ func (c *EventChannel) IsSticky() bool {
 }
 
 // Listen subscribes to events on this channel.
-// If the native bridge is not yet available (e.g., during init), the subscription
-// is created but the event stream start is deferred until [SetNativeBridge] is called.
-// Any error from starting the native event stream is reported via the error handler
-// but does not prevent the subscription from being created.
 func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 	sub := &Subscription{
 		channel: c,
@@ -193,10 +187,6 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 
 	c.mu.Lock()
 	c.subscriptions = append(c.subscriptions, sub)
-	shouldStart := nativeBridge != nil && !c.started
-	if shouldStart {
-		c.started = true
-	}
 	var replay any
 	hasReplay := c.delivery == deliverSticky && c.replayValid
 	if hasReplay {
@@ -221,20 +211,6 @@ func (c *EventChannel) Listen(handler EventHandler) *Subscription {
 		c.drainQueue()
 	}
 
-	// Notify native that we're listening. Skip if:
-	// - bridge not yet set (SetNativeBridge will start pending streams), or
-	// - stream already started by a prior subscriber or SetNativeBridge.
-	if shouldStart {
-		if err := startEventStream(c.name); err != nil {
-			c.mu.Lock()
-			c.started = false
-			c.mu.Unlock()
-			if handler.OnError != nil {
-				handler.OnError(err)
-			}
-		}
-	}
-
 	return sub
 }
 
@@ -247,19 +223,7 @@ func (c *EventChannel) removeSubscription(sub *Subscription) {
 			break
 		}
 	}
-	hasListeners := len(c.subscriptions) > 0
-	if !hasListeners {
-		c.started = false
-	}
 	c.mu.Unlock()
-
-	// Notify native if no more listeners.
-	// ErrClosed is expected during normal shutdown and not reported.
-	if !hasListeners {
-		if err := stopEventStream(c.name); err != nil && !errors.Is(err, ErrClosed) {
-			// Unexpected teardown error - already reported by stopEventStream
-		}
-	}
 }
 
 // dispatchEvent sends an event to all subscribers.
@@ -358,7 +322,6 @@ func (c *EventChannel) dispatchDone() {
 	c.mu.Lock()
 	subs := c.snapshotLocked()
 	c.subscriptions = nil
-	c.started = false
 	c.mu.Unlock()
 
 	for _, sub := range subs {

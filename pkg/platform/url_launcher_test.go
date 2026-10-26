@@ -35,8 +35,6 @@ func (b *urlLauncherBridge) answer(channel, method string, args []byte) ([]byte,
 	}
 	return DefaultCodec.Encode(b.response)
 }
-func (b *urlLauncherBridge) StartEventStream(string) error { return nil }
-func (b *urlLauncherBridge) StopEventStream(string) error  { return nil }
 
 func TestCanOpenURL(t *testing.T) {
 	tests := []struct {

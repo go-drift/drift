@@ -76,50 +76,12 @@ type NativeBridge interface {
 	// need it. Moving the call to another goroutine hides that thread and
 	// deadlocks the app.
 	InvokeMethod(channel, method string, args []byte, reply func(result []byte, err error))
-
-	// StartEventStream tells native to start sending events for a channel.
-	StartEventStream(channel string) error
-
-	// StopEventStream tells native to stop sending events for a channel.
-	StopEventStream(channel string) error
 }
 
 // SetNativeBridge sets the native bridge implementation.
 // Called by the bridge package during initialization.
-//
-// After setting the bridge, SetNativeBridge starts event streams for any
-// event channels that acquired subscriptions before the bridge was available
-// (e.g., during package init). This ensures that init-time Listen calls
-// for Lifecycle, SafeArea, Accessibility, etc. are not silently lost.
-// Startup errors are dispatched to subscribers' error handlers.
 func SetNativeBridge(bridge NativeBridge) {
 	nativeBridge = bridge
-
-	// Start event streams for channels that subscribed before the bridge was set.
-	registry.mu.RLock()
-	channels := make([]*EventChannel, 0, len(registry.eventChannels))
-	for _, ch := range registry.eventChannels {
-		channels = append(channels, ch)
-	}
-	registry.mu.RUnlock()
-
-	for _, ch := range channels {
-		ch.mu.Lock()
-		shouldStart := len(ch.subscriptions) > 0 && !ch.started
-		if shouldStart {
-			ch.started = true
-		}
-		ch.mu.Unlock()
-
-		if shouldStart {
-			if err := startEventStream(ch.name); err != nil {
-				ch.mu.Lock()
-				ch.started = false
-				ch.mu.Unlock()
-				ch.dispatchError(err)
-			}
-		}
-	}
 }
 
 // invokeNative calls a native method and waits for its reply.
@@ -179,52 +141,6 @@ func (r nativeReply) decode() (any, error) {
 		return nil, r.err
 	}
 	return DefaultCodec.Decode(r.data)
-}
-
-// startEventStream notifies native to start sending events.
-func startEventStream(channel string) error {
-	if nativeBridge == nil {
-		errors.Report(&errors.DriftError{
-			Op:      "platform.startEventStream",
-			Kind:    errors.KindPlatform,
-			Channel: channel,
-			Err:     ErrPlatformUnavailable,
-		})
-		return ErrPlatformUnavailable
-	}
-	if err := nativeBridge.StartEventStream(channel); err != nil {
-		errors.Report(&errors.DriftError{
-			Op:      "platform.startEventStream",
-			Kind:    errors.KindPlatform,
-			Channel: channel,
-			Err:     err,
-		})
-		return err
-	}
-	return nil
-}
-
-// stopEventStream notifies native to stop sending events.
-func stopEventStream(channel string) error {
-	if nativeBridge == nil {
-		errors.Report(&errors.DriftError{
-			Op:      "platform.stopEventStream",
-			Kind:    errors.KindPlatform,
-			Channel: channel,
-			Err:     ErrPlatformUnavailable,
-		})
-		return ErrPlatformUnavailable
-	}
-	if err := nativeBridge.StopEventStream(channel); err != nil {
-		errors.Report(&errors.DriftError{
-			Op:      "platform.stopEventStream",
-			Kind:    errors.KindPlatform,
-			Channel: channel,
-			Err:     err,
-		})
-		return err
-	}
-	return nil
 }
 
 // HandleMethodCall is called from the bridge when native invokes a Go method.
@@ -333,8 +249,7 @@ func ResetForTest() {
 	SafeArea.handlers = SafeArea.handlers[:0]
 	SafeArea.mu.Unlock()
 
-	// Clear all event channel subscriptions, started flags, sticky replay
-	// slots and queues
+	// Clear all event channel subscriptions, sticky replay slots and queues
 	registry.mu.RLock()
 	channels := make([]*EventChannel, 0, len(registry.eventChannels))
 	for _, ch := range registry.eventChannels {
@@ -345,7 +260,6 @@ func ResetForTest() {
 	for _, ch := range channels {
 		ch.mu.Lock()
 		ch.subscriptions = ch.subscriptions[:0]
-		ch.started = false
 		ch.replayValid = false
 		ch.replayData = nil
 		ch.queue = nil

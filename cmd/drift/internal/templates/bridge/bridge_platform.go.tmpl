@@ -76,10 +76,6 @@ var (
 	bridgeInstance = &nativePlatformBridge{}
 	bridgeOnce     sync.Once
 
-	// activeStreams tracks which event channels are actively listening
-	activeStreams   = make(map[string]bool)
-	activeStreamsMu sync.Mutex
-
 	// replies holds the reply callback of each native call in flight, by
 	// call ID, until DriftPlatformReply takes it.
 	replies    sync.Map // int64 -> func([]byte, error)
@@ -120,22 +116,6 @@ func (b *nativePlatformBridge) InvokeMethod(channel, method string, args []byte,
 			reply(nil, platform.NewChannelError("native_error", "native could not take the call to "+channel+"."+method))
 		}
 	}
-}
-
-// StartEventStream tells native to start sending events.
-func (b *nativePlatformBridge) StartEventStream(channel string) error {
-	activeStreamsMu.Lock()
-	activeStreams[channel] = true
-	activeStreamsMu.Unlock()
-	return nil
-}
-
-// StopEventStream tells native to stop sending events.
-func (b *nativePlatformBridge) StopEventStream(channel string) error {
-	activeStreamsMu.Lock()
-	delete(activeStreams, channel)
-	activeStreamsMu.Unlock()
-	return nil
 }
 
 // DriftPlatformSetNativeHandler sets the callback for Go->Native method invocation.
@@ -228,22 +208,6 @@ func DriftPlatformHandleEventError(channelPtr *C.char, codePtr *C.char, messageP
 func DriftPlatformHandleEventDone(channelPtr *C.char) {
 	channel := C.GoString(channelPtr)
 	platform.HandleEventDone(channel)
-}
-
-// DriftPlatformIsStreamActive returns 1 if Go is listening to the given event channel.
-//
-//export DriftPlatformIsStreamActive
-func DriftPlatformIsStreamActive(channelPtr *C.char) C.int {
-	channel := C.GoString(channelPtr)
-
-	activeStreamsMu.Lock()
-	active := activeStreams[channel]
-	activeStreamsMu.Unlock()
-
-	if active {
-		return 1
-	}
-	return 0
 }
 
 // DriftSetScheduleFrameHandler registers a native callback that Go invokes

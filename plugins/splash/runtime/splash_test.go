@@ -31,9 +31,6 @@ func (b *fakeBridge) InvokeMethod(channel, method string, _ []byte, reply func([
 	reply(platform.DefaultCodec.Encode(nil))
 }
 
-func (b *fakeBridge) StartEventStream(string) error { return nil }
-func (b *fakeBridge) StopEventStream(string) error  { return nil }
-
 func (b *fakeBridge) snapshot() ([]string, []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

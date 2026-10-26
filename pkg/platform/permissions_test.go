@@ -77,9 +77,6 @@ func (b *permissionsBridge) answer(channel, method string, args []byte) ([]byte,
 	return DefaultCodec.Encode(nil)
 }
 
-func (b *permissionsBridge) StartEventStream(string) error { return nil }
-func (b *permissionsBridge) StopEventStream(string) error  { return nil }
-
 func (b *permissionsBridge) snapshot() []recordedCall {
 	b.mu.Lock()
 	defer b.mu.Unlock()

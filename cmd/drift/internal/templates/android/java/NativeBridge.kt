@@ -156,14 +156,6 @@ object NativeBridge {
     external fun platformHandleEventDone(channel: String)
 
     /**
-     * Checks if Go is listening to events on the given channel.
-     *
-     * @param channel The channel name.
-     * @return 1 if active, 0 if not.
-     */
-    external fun platformIsStreamActive(channel: String): Int
-
-    /**
      * Initializes platform channels by registering the native callback with Go.
      * Must be called after the Go library is loaded and before using platform channels.
      *

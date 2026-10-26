@@ -25,9 +25,6 @@ func (f *fakeNative) InvokeMethod(channel, method string, _ []byte, reply func([
 	reply(platform.DefaultCodec.Encode(f.reply))
 }
 
-func (f *fakeNative) StartEventStream(string) error { return nil }
-func (f *fakeNative) StopEventStream(string) error  { return nil }
-
 func useNative(t *testing.T, f *fakeNative) {
 	t.Helper()
 	platform.SetNativeBridge(f)

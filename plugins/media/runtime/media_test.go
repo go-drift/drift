@@ -25,9 +25,6 @@ func (f *fakeNative) InvokeMethod(channel, method string, args []byte, reply fun
 	reply(platform.DefaultCodec.Encode(nil))
 }
 
-func (f *fakeNative) StartEventStream(string) error { return nil }
-func (f *fakeNative) StopEventStream(string) error  { return nil }
-
 // last returns the last call on channel.
 func (f *fakeNative) last(t *testing.T, channel string) call {
 	t.Helper()

@@ -902,6 +902,8 @@ For events from native code, pick the channel kind by what a late subscriber sho
 | `platform.NewStickyEventChannel(name)` | The most recent event, then later ones | One-shot signals, such as `first_frame` |
 | `platform.NewQueuedEventChannel(name, capacity)` | Events sent while nobody listened, in order, once | Events that must each be handled, such as the tap that launched the app |
 
+Native code is not told when Go subscribes or cancels; it sends events whenever it has them. Start and stop native work with method calls, as the location plugin's `StartUpdates` and `StopUpdates` do.
+
 Wrap a channel in `platform.NewStream(name, channel, parse)` to give apps typed events; parse errors are reported through Drift's error handling instead of reaching listeners. Expose state the native side pushes as a `*core.Derived[T]` fed by a `core.Signal[T]`, as the Firebase plugin does for the FCM token. Apps subscribe with `Listen`/`AddListener` and update widgets inside `drift.Dispatch`.
 
 ### Testing

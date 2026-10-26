@@ -40,9 +40,6 @@ func (b *testBridge) answer(channel, method string, argsData []byte) ([]byte, er
 	return DefaultCodec.Encode(nil)
 }
 
-func (b *testBridge) StartEventStream(string) error { return nil }
-func (b *testBridge) StopEventStream(string) error  { return nil }
-
 func (b *testBridge) reset() {
 	b.mu.Lock()
 	b.calls = b.calls[:0]

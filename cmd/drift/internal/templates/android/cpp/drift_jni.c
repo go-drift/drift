@@ -83,12 +83,6 @@ typedef void (*DriftPlatformHandleEventErrorFn)(const char *channel, const char 
 typedef void (*DriftPlatformHandleEventDoneFn)(const char *channel);
 
 /**
- * Function pointer type for DriftPlatformIsStreamActive.
- * Matches the signature exported by Go.
- */
-typedef int (*DriftPlatformIsStreamActiveFn)(const char *channel);
-
-/**
  * Function pointer type for DriftPlatformReply.
  * Matches the signature exported by Go:
  *   func DriftPlatformReply(callID C.int64_t, data unsafe.Pointer, dataLen C.int, errorJSON *C.char)
@@ -154,7 +148,6 @@ static DriftSkiaInitVulkanFn drift_skia_init_vulkan = NULL;
 static DriftPlatformHandleEventFn drift_platform_event = NULL;
 static DriftPlatformHandleEventErrorFn drift_platform_event_error = NULL;
 static DriftPlatformHandleEventDoneFn drift_platform_event_done = NULL;
-static DriftPlatformIsStreamActiveFn drift_platform_stream_active = NULL;
 static DriftPlatformSetNativeHandlerFn drift_platform_set_handler = NULL;
 static DriftPlatformReplyFn drift_platform_reply = NULL;
 static DriftBackButtonFn drift_back_button = NULL;
@@ -650,32 +643,6 @@ Java_{{.JNIPackage}}_NativeBridge_platformHandleEventDone(
         drift_platform_event_done(channelStr);
         (*env)->ReleaseStringUTFChars(env, channel, channelStr);
     }
-}
-
-/**
- * JNI implementation for NativeBridge.platformIsStreamActive().
- *
- * Checks if Go is listening to events on the given channel.
- */
-JNIEXPORT jint JNICALL
-Java_{{.JNIPackage}}_NativeBridge_platformIsStreamActive(
-    JNIEnv *env,
-    jclass clazz,
-    jstring channel
-) {
-    (void)clazz;
-
-    if (resolve_symbol("DriftPlatformIsStreamActive", (void **)&drift_platform_stream_active) != 0) {
-        return 0;
-    }
-
-    const char *channelStr = (*env)->GetStringUTFChars(env, channel, NULL);
-    if (!channelStr) return 0;
-
-    int result = drift_platform_stream_active(channelStr);
-    (*env)->ReleaseStringUTFChars(env, channel, channelStr);
-
-    return (jint)result;
 }
 
 /**

@@ -30,9 +30,6 @@ func (b *replyBridge) InvokeMethod(_, method string, args []byte, reply func([]b
 	reply(DefaultCodec.Encode(b.reply))
 }
 
-func (b *replyBridge) StartEventStream(string) error { return nil }
-func (b *replyBridge) StopEventStream(string) error  { return nil }
-
 func useReplyBridge(t *testing.T, b *replyBridge) {
 	t.Helper()
 	SetupTestBridge(t.Cleanup)

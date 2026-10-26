@@ -43,10 +43,6 @@ func DriftPlatformHandleEventError(
 @_silgen_name("DriftPlatformHandleEventDone")
 func DriftPlatformHandleEventDone(_ channel: UnsafePointer<CChar>)
 
-/// FFI declaration for checking if Go is listening to an event channel.
-@_silgen_name("DriftPlatformIsStreamActive")
-func DriftPlatformIsStreamActive(_ channel: UnsafePointer<CChar>) -> Int32
-
 /// FFI declaration for freeing Go-allocated memory.
 @_silgen_name("DriftPlatformFree")
 func DriftPlatformFree(_ ptr: UnsafeMutableRawPointer?)

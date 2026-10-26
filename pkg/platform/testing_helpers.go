@@ -6,8 +6,6 @@ type noopBridge struct{}
 func (noopBridge) InvokeMethod(_, _ string, _ []byte, reply func([]byte, error)) {
 	reply(DefaultCodec.Encode(nil))
 }
-func (noopBridge) StartEventStream(string) error { return nil }
-func (noopBridge) StopEventStream(string) error  { return nil }
 
 // SetupTestBridge installs a no-op native bridge and synchronous dispatch
 // function for testing. The cleanup function should be testing.T.Cleanup or
