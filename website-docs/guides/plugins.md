@@ -98,6 +98,7 @@ Plugins work in [ejected](/docs/guides/eject) projects too, applied to your file
 | iOS (`platform/ios`) | Android (`platform/android`) |
 |----------------------|------------------------------|
 | `Drift/Plugins/` (a local Swift package holding every plugin's Swift module) | `app/src/main/java/com/drift/runner/` (plugin host support and the generated registrant) |
+| `Runner/PluginResources/` (bundle resources and plugin configs) | `app/src/main/assets/drift/plugins/` (plugin configs) |
 | `Runner/DriftPlugins.swift`, `Runner/DriftPluginRegistrant.swift` | |
 
 Plugins also edit shared files: `Info.plist`, `Runner.entitlements`, `AndroidManifest.xml`, `build.gradle`, resource values. Drift records what it applied in `.drift/plugins.lock.json` in each platform project; commit it.
@@ -684,13 +685,12 @@ type hello struct{}
 func (hello) Name() string { return "hello" }
 
 func (hello) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-	// iOS: the greeting goes in Info.plist; HelloPlugin.swift reads it.
-	ctx.IOS.Info.SetString("HelloGreeting", cfg.Greeting)
+	// The native code reads the greeting as host.config["greeting"].
+	ctx.NativeConfig(map[string]string{"greeting": cfg.Greeting})
+
 	ctx.IOS.Sources.AddFS("Hello", iosSources, "ios")
 	ctx.IOS.Plugin("HelloPlugin")
 
-	// Android: the greeting is a string resource; HelloPlugin.kt reads it.
-	ctx.Android.Resources.Strings.Set("hello_greeting", cfg.Greeting)
 	ctx.Android.Sources.AddFS("com.example.hello", androidSources, "android")
 	ctx.Android.Plugin("com.example.hello.HelloPlugin")
 	return nil
@@ -728,6 +728,12 @@ Combine them with commas: `drift:"required,asset"`. Optional sections are pointe
 
 Further checks belong in `Build`: return an error naming the key, such as `fmt.Errorf("image_width must be positive, got %d", w)`. `drift plugin sync` runs `Build` too, so these fail it as well as the build.
 
+### Native config
+
+Pass what the native code needs from the config with `ctx.NativeConfig(v)`: `v` (a struct with `json` tags, or a map) must marshal to a JSON object, recorded once for both platforms. Native code reads it as `host.config`, a `[String: Any]` (iOS) or `Map<String, Any?>` (Android) of JSON-like values, empty when a plugin records none; numbers arrive as `NSNumber` on iOS and `Int`, `Long` or `Double` on Android. The hello plugin passes its greeting this way. Use it for every build-time choice the native code acts on, such as which permission kinds to register or a splash screen's timings, instead of generating sources or reading back `Info.plist` keys and resources.
+
+What the platform itself requires stays where the platform reads it: a usage string in `Info.plist`, a permission in the manifest. Native code that checks for one (`Bundle.main.object(forInfoDictionaryKey:)` before using the camera) checks the platform's precondition, which another plugin may also satisfy, not the plugin's config.
+
 ### Recording ops
 
 `ctx.IOS` and `ctx.Android` group the recorders; the [op reference](#op-reference) lists them all. Every op checks its input when recorded. Invalid input (a malformed plist key, a path escaping its directory, a bad Gradle coordinate) is not recorded; it is reported by `ctx.Err()`, which fails the build. The CLI checks again when it reads the ops.
@@ -756,7 +762,7 @@ public final class HelloPlugin: DriftPlugin {
     public func register(host: DriftPluginHost) {
         host.registerChannel("example/hello") { channel in
             channel.method("greeting") { _ in
-                Bundle.main.object(forInfoDictionaryKey: "HelloGreeting") as? String
+                host.config["greeting"] as? String
             }
         }
     }
@@ -776,13 +782,7 @@ import com.drift.runner.DriftPluginHost
 class HelloPlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
         host.registerChannel("example/hello") {
-            method("greeting") { _ ->
-                // Plugin code cannot see the app's R class; look the
-                // resource up by name.
-                val res = host.context.resources
-                val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
-                res.getString(id)
-            }
+            method("greeting") { _ -> host.config["greeting"] }
         }
     }
 }
@@ -817,6 +817,7 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
 | `registerPermission(kind, permission)` | Provide a runtime permission kind (see [Providing permissions](#providing-permissions)) |
 | `registerPlatformView(type, factory)` | Provide a native view type to embed in widgets (see [Platform views](#platform-views)) |
+| `config` | The plugin's own native config (see [Native config](#native-config)) |
 | `context` (Android only) | The application `Context` |
 
 Each method declares how it replies:
@@ -846,7 +847,7 @@ Values crossing the channel are JSON-like: nil, booleans, finite numbers, string
 
 On Android, start an Activity for its result (a system picker, a camera app) with `launchForResult(activity, contract, input) { output -> ... }` from `com.drift.runner`, passing the binding's `FragmentActivity`. It calls back once: with the output, or with `null` if the Activity is destroyed first, so an `asyncMethod` waiting on it always replies.
 
-Name channels `<vendor>/<feature>`, such as `acme/camera`; `drift/` is reserved for Drift and its first-party plugins. Registering a channel name twice traps at startup.
+Name channels `<vendor>/<feature>`, such as `acme/camera`; `drift/` is reserved for Drift and its first-party plugins. Registering a channel under `drift/`, or a name twice, traps at startup.
 
 ### Threading
 
@@ -1041,21 +1042,17 @@ func TestBuildShipsGreeting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plist, resource string
+	var ios, android string
 	for _, op := range ops {
 		switch o := op.(type) {
-		case *protocol.OpPlistSetString:
-			if o.Key == "HelloGreeting" {
-				plist = o.Value
-			}
-		case *protocol.OpAndroidStringSet:
-			if o.Name == "hello_greeting" {
-				resource = o.Value
-			}
+		case *protocol.OpIOSPluginConfig:
+			ios = o.Config
+		case *protocol.OpAndroidPluginConfig:
+			android = o.Config
 		}
 	}
-	if plist != "hello" || resource != "hello" {
-		t.Errorf("Info.plist greeting = %q, string resource = %q, want hello for both", plist, resource)
+	if want := `{"greeting":"hello"}`; ios != want || android != want {
+		t.Errorf("native config = %s (iOS), %s (Android), want %s for both", ios, android, want)
 	}
 }
 ```
@@ -1112,6 +1109,7 @@ Each recorder records one op type, shown here by its wire name. "Same location" 
 | `IOS.Plugin(class)` | `ios.plugin` | The plugin class the app creates | Set |
 | `IOS.AddPackageDependency(url, req, products)` | `ios.spm.add_package` | SwiftPM package and products for the plugin's module | One requirement per package; products are a set |
 | `IOS.AddBundleResource(name, content)` | `ios.bundle.add_resource` | File in the app bundle root, for SDKs that read `Bundle.main` | Same location |
+| `NativeConfig(v)` (with Android's) | `ios.plugin_config` | The plugin's native config, `DriftPluginConfig-<name>.json` in the bundle root | Same location |
 
 ### Android
 
@@ -1133,6 +1131,7 @@ Each recorder records one op type, shown here by its wire name. "Same location" 
 | `Android.ApplyGradlePlugin(id, version)` | `android.gradle.apply_plugin` | Applied Gradle plugin, declared at `version` (empty: already on the classpath) | One version per plugin id |
 | `Android.Sources.AddFS(pkg, fs, root)` / `AddFile(pkg, rel, content)` | `android.source.add` | Kotlin file under the package | Same location |
 | `Android.Plugin(class)` | `android.plugin` | The plugin class the app creates | Set |
+| `NativeConfig(v)` (with iOS's) | `android.plugin_config` | The plugin's native config, the asset `drift/plugins/<name>.json` | Same location |
 
 ## Next Steps
 

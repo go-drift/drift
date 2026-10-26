@@ -35,13 +35,12 @@ type hello struct{}
 func (hello) Name() string { return "hello" }
 
 func (hello) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-	// iOS: the greeting goes in Info.plist; HelloPlugin.swift reads it.
-	ctx.IOS.Info.SetString("HelloGreeting", cfg.Greeting)
+	// The native code reads the greeting as host.config["greeting"].
+	ctx.NativeConfig(map[string]string{"greeting": cfg.Greeting})
+
 	ctx.IOS.Sources.AddFS("Hello", iosSources, "ios")
 	ctx.IOS.Plugin("HelloPlugin")
 
-	// Android: the greeting is a string resource; HelloPlugin.kt reads it.
-	ctx.Android.Resources.Strings.Set("hello_greeting", cfg.Greeting)
 	ctx.Android.Sources.AddFS("com.example.hello", androidSources, "android")
 	ctx.Android.Plugin("com.example.hello.HelloPlugin")
 	return nil

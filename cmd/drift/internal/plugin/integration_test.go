@@ -108,7 +108,7 @@ func TestPipelineEndToEndAndroid(t *testing.T) {
 	}
 
 	registrant := readFile(t, filepath.Join(dir, "app/src/main/java/com/drift/runner/DriftPluginRegistrant.kt"))
-	if !strings.Contains(registrant, "com.example.splash.SplashPlugin(),") {
+	if !strings.Contains(registrant, "com.example.splash.SplashPlugin()),") {
 		t.Errorf("registrant missing plugin:\n%s", registrant)
 	}
 }

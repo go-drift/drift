@@ -3,6 +3,8 @@ package plugin
 import (
 	"strings"
 	"testing"
+
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 func TestRecorderRejectsInvalidInputWithoutPanicking(t *testing.T) {
@@ -34,5 +36,42 @@ func TestRecorderErrIsNilWhenValid(t *testing.T) {
 	}
 	if got := len(ctx.Ops()); got != 2 {
 		t.Fatalf("got %d ops, want 2", got)
+	}
+}
+
+func TestNativeConfig(t *testing.T) {
+	ctx := NewTestCtx()
+	ctx.NativeConfig(struct {
+		Kinds []string `json:"kinds"`
+	}{[]string{"contacts"}})
+	if err := ctx.Err(); err != nil {
+		t.Fatal(err)
+	}
+	ops := ctx.Ops()
+	if len(ops) != 2 {
+		t.Fatalf("ops = %v, want one per platform", ops)
+	}
+	ios, ok1 := ops[0].(*protocol.OpIOSPluginConfig)
+	android, ok2 := ops[1].(*protocol.OpAndroidPluginConfig)
+	if !ok1 || !ok2 || ios.Config != `{"kinds":["contacts"]}` || android.Config != ios.Config {
+		t.Errorf("ops = %#v, %#v", ops[0], ops[1])
+	}
+}
+
+func TestNativeConfigRejectsMisuse(t *testing.T) {
+	for name, record := range map[string]func(*BuildCtx){
+		"not an object": func(ctx *BuildCtx) { ctx.NativeConfig([]string{"a"}) },
+		"nil":           func(ctx *BuildCtx) { ctx.NativeConfig(nil) },
+		"unmarshalable": func(ctx *BuildCtx) { ctx.NativeConfig(map[string]any{"f": func() {}}) },
+		"twice": func(ctx *BuildCtx) {
+			ctx.NativeConfig(map[string]any{})
+			ctx.NativeConfig(map[string]any{})
+		},
+	} {
+		ctx := NewTestCtx()
+		record(ctx)
+		if ctx.Err() == nil {
+			t.Errorf("%s: no error", name)
+		}
 	}
 }

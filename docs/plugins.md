@@ -88,7 +88,12 @@ Adding an op means touching: the struct and its four methods plus the constructo
 
 ## Native host
 
-`DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the plugin instances and drives the lifecycle described in the guide; it is Drift-owned and rewritten every build. Callers:
+`DriftPlugins` (iOS `templates/ios/DriftPlugins.swift`, Android `templates/android/runner/DriftPlugins.kt`) owns the plugin instances and drives the lifecycle described in the guide; it is Drift-owned and rewritten every build. Each plugin registers with its own `PluginHost`, which forwards to `PlatformChannelManager` (Drift's own host, whose `config` is empty) and adds:
+
+- `config`: the plugin's `ctx.NativeConfig`, recorded as `ios.plugin_config` / `android.plugin_config` and shipped as `DriftPluginConfig-<name>.json` in the bundle root (`Runner/PluginResources`, xtool `PluginResources`) and the asset `drift/plugins/<name>.json` (Drift-owned `app/src/main/assets/drift/plugins`, pruned every build like the bundle resources), read at registration. Android decodes it with the runner's `JsonCodec` (`DriftJsonCodec.kt`), the host's own codec. A file that is not a JSON object crashes.
+- The `drift/` channel reservation: the registrant lists each plugin as a `DriftPluginEntry(name, firstParty, plugin)`, `firstParty` for a package under `github.com/go-drift/drift/plugins/` (`firstParty` in `registrant.go`), and `registerChannel` traps on a `drift/` name from any other plugin.
+
+Callers:
 
 | | iOS | Android |
 |---|---|---|

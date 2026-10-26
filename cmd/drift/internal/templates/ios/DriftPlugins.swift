@@ -25,10 +25,12 @@ final class DriftPlugins {
 
     private init() {}
 
-    /// Creates the plugins, registers each with host, then delivers
-    /// didFinishLaunching. Called once, from the app delegate. host must be
-    /// fully constructed: this runs outside its initializer so a plugin can
-    /// use the host (or PlatformChannelManager.shared) while registering.
+    /// Creates the plugins, registers each with its own view of host (its
+    /// config, and the drift/ channel names closed to third-party plugins),
+    /// then delivers didFinishLaunching. Called once, from the app delegate.
+    /// host must be fully constructed: this runs outside its initializer so
+    /// a plugin can use the host (or PlatformChannelManager.shared) while
+    /// registering.
     func launch(
         _ application: UIApplication,
         options: [UIApplication.LaunchOptionsKey: Any]?,
@@ -37,9 +39,10 @@ final class DriftPlugins {
         dispatchPrecondition(condition: .onQueue(.main))
         precondition(!launched, "drift: DriftPlugins.launch called twice")
         launched = true
-        plugins = DriftPluginRegistrant.makePlugins()
-        for plugin in plugins {
-            plugin.register(host: host)
+        let entries = DriftPluginRegistrant.makePlugins()
+        plugins = entries.map(\.plugin)
+        for entry in entries {
+            entry.plugin.register(host: PluginHost(host, entry))
         }
         for plugin in plugins {
             plugin.didFinishLaunching(application, options: options)
@@ -134,5 +137,72 @@ final class DriftPlugins {
     func continueUserActivity(_ activity: NSUserActivity) -> Bool {
         dispatchPrecondition(condition: .onQueue(.main))
         return plugins.contains { $0.continueUserActivity(activity) }
+    }
+}
+
+/// One plugin the registrant lists: its Name(), whether it ships in the
+/// drift module, and its instance.
+struct DriftPluginEntry {
+    let name: String
+    let firstParty: Bool
+    let plugin: DriftPlugin
+}
+
+/// The host one plugin registers with: Drift's, with the plugin's own
+/// config, and Drift's reserved drift/ channel names closed unless the
+/// plugin is first-party.
+private final class PluginHost: DriftPluginHost {
+    private let host: DriftPluginHost
+    private let entry: DriftPluginEntry
+    let config: [String: Any]
+
+    init(_ host: DriftPluginHost, _ entry: DriftPluginEntry) {
+        self.host = host
+        self.entry = entry
+        config = Self.readConfig(entry.name)
+    }
+
+    /// The config the build shipped for plugin name
+    /// (protocol.IOSPluginConfigFile), or none.
+    private static func readConfig(_ name: String) -> [String: Any] {
+        guard let url = Bundle.main.url(forResource: "DriftPluginConfig-\(name)", withExtension: "json") else {
+            return [:]
+        }
+        guard let data = try? Data(contentsOf: url),
+              let config = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            fatalError("drift: plugin \(name)'s config file \(url.lastPathComponent) is not a JSON object")
+        }
+        return config
+    }
+
+    func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void) {
+        if name.hasPrefix("drift/") && !entry.firstParty {
+            fatalError("drift: plugin \(entry.name) registers channel \"\(name)\"; drift/ is reserved for Drift, so name it <vendor>/<feature>")
+        }
+        host.registerChannel(name, declare)
+    }
+
+    func sendEvent(_ channel: String, data: Any?) {
+        host.sendEvent(channel, data: data)
+    }
+
+    func sendEventError(_ channel: String, _ error: Error) {
+        host.sendEventError(channel, error)
+    }
+
+    func sendEventDone(_ channel: String) {
+        host.sendEventDone(channel)
+    }
+
+    func observeEvent(_ channel: String, handler: @escaping (Any?) -> Void) -> DriftSubscription {
+        host.observeEvent(channel, handler: handler)
+    }
+
+    func registerPermission(_ kind: String, _ permission: DriftPermission) {
+        host.registerPermission(kind, permission)
+    }
+
+    func registerPlatformView(_ type: String, _ factory: @escaping DriftPlatformViewFactory) {
+        host.registerPlatformView(type, factory)
     }
 }

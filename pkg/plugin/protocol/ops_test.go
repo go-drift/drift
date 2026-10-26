@@ -22,6 +22,8 @@ func fixtureOps() []Op {
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "Foo.swift", Content: "AA=="},
 		&OpIOSPlugin{Base: base, Class: "FooPlugin"},
 		&OpIOSAddBundleResource{Base: base, Path: "GoogleService-Info.plist", Content: "AA=="},
+		&OpIOSPluginConfig{Base: base, Config: `{"greeting":"hi"}`},
+		&OpAndroidPluginConfig{Base: base, Config: `{"greeting":"hi"}`},
 		&OpAndroidAddAppModuleFile{Base: base, Name: "google-services.json", Content: "AA=="},
 		&OpAndroidGradleApplyPlugin{Base: base, ID: "com.google.gms.google-services", Version: "4.4.0"},
 		&OpIOSAddPackageDependency{
@@ -352,6 +354,8 @@ func invalidOps() []Op {
 		&OpAddIOSSource{Base: base, Group: "Cam", RelPath: "../Foo.swift"},
 		&OpIOSPlugin{Base: base, Class: "Foo.register"},
 		&OpIOSAddBundleResource{Base: base, Path: "a/b.plist"},
+		&OpIOSPluginConfig{Base: base, Config: `["not", "an", "object"]`},
+		&OpAndroidPluginConfig{Base: base, Config: `null`},
 		&OpAndroidAddAppModuleFile{Base: base, Name: "build.gradle"},
 		&OpAndroidGradleApplyPlugin{Base: base, ID: ""},
 		&OpIOSAddPackageDependency{Base: base, URL: "http://x/y", Requirement: spmFrom("1.0.0"), Products: []string{"P"}},

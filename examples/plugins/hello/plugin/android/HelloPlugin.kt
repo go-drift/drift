@@ -13,13 +13,7 @@ import com.drift.runner.DriftPluginHost
 class HelloPlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
         host.registerChannel("example/hello") {
-            method("greeting") { _ ->
-                // Plugin code cannot see the app's R class; look the
-                // resource up by name.
-                val res = host.context.resources
-                val id = res.getIdentifier("hello_greeting", "string", host.context.packageName)
-                res.getString(id)
-            }
+            method("greeting") { _ -> host.config["greeting"] }
         }
     }
 }

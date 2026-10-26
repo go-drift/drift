@@ -4,7 +4,7 @@ import DriftPluginAPI
 
 enum DriftPluginRegistrant {
     /// Creates one instance of every configured plugin, in drift.yaml order.
-    static func makePlugins() -> [DriftPlugin] {
+    static func makePlugins() -> [DriftPluginEntry] {
         return []
     }
 }

@@ -29,21 +29,17 @@ func TestBuildShipsGreeting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plist, resource string
+	var ios, android string
 	for _, op := range ops {
 		switch o := op.(type) {
-		case *protocol.OpPlistSetString:
-			if o.Key == "HelloGreeting" {
-				plist = o.Value
-			}
-		case *protocol.OpAndroidStringSet:
-			if o.Name == "hello_greeting" {
-				resource = o.Value
-			}
+		case *protocol.OpIOSPluginConfig:
+			ios = o.Config
+		case *protocol.OpAndroidPluginConfig:
+			android = o.Config
 		}
 	}
-	if plist != "hello" || resource != "hello" {
-		t.Errorf("Info.plist greeting = %q, string resource = %q, want hello for both", plist, resource)
+	if want := `{"greeting":"hello"}`; ios != want || android != want {
+		t.Errorf("native config = %s (iOS), %s (Android), want %s for both", ios, android, want)
 	}
 }
 

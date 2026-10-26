@@ -48,6 +48,8 @@ class DriftSplashPlugin : DriftPlugin {
     private var attachedBefore = false
     /** The attached Activity's content view and the listener holding its draws. */
     private var hold: Pair<View, ViewTreeObserver.OnPreDrawListener>? = null
+    /** The build's config, read at registration. */
+    private lateinit var config: SplashConfig
 
     /**
      * The splash waits for content (a slow App.OnInit keeps it up) and the
@@ -57,6 +59,7 @@ class DriftSplashPlugin : DriftPlugin {
     private val dismissible get() = ceilingReached || contentShown && (preserveCount == 0 || timedOut)
 
     override fun onRegister(host: DriftPluginHost) {
+        config = SplashConfig(host.config)
         host.registerChannel("drift/splash") {
             method("preserve") { _ ->
                 if (dismissed) {
@@ -120,17 +123,17 @@ class DriftSplashPlugin : DriftPlugin {
         main.postDelayed({
             timedOut = true
             if (dismissed || preserveCount == 0) return@postDelayed
-            Log.e(TAG, "splash held past max_duration_ms=${DriftSplashConfig.MAX_DURATION_MS} " +
+            Log.e(TAG, "splash held past max_duration_ms=${config.maxDurationMs} " +
                 "by $preserveCount Preserve without Remove; ignoring them")
             reconcile()
-        }, DriftSplashConfig.MAX_DURATION_MS.toLong())
+        }, config.maxDurationMs)
         main.postDelayed({
             ceilingReached = true
             if (dismissed) return@postDelayed
-            Log.e(TAG, "splash still up ${DriftSplashConfig.CEILING_MS} ms after the Activity appeared " +
+            Log.e(TAG, "splash still up ${config.ceilingMs} ms after the Activity appeared " +
                 "(first frame drawn: $contentShown); dismissing it")
             reconcile()
-        }, DriftSplashConfig.CEILING_MS.toLong())
+        }, config.ceilingMs)
     }
 
     /**
@@ -145,7 +148,7 @@ class DriftSplashPlugin : DriftPlugin {
     private fun fadeOut(view: SplashScreenView) {
         view.animate()
             .alpha(0f)
-            .setDuration(DriftSplashConfig.FADE_DURATION_MS.toLong())
+            .setDuration(config.fadeDurationMs)
             .withEndAction { view.remove() }
             .start()
     }

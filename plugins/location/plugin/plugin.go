@@ -62,12 +62,14 @@ const playServicesLocation = "com.google.android.gms:play-services-location:21.1
 // androidPackage is the Kotlin package of the plugin's Android sources.
 const androidPackage = "com.drift.plugin.location"
 
-// The string resources the background service's notification reads. Must
-// match the names in plugin/android/DriftLocationService.kt.
-const (
-	notificationTitleString = "drift_location_notification_title"
-	notificationTextString  = "drift_location_notification_text"
-)
+// nativeConfig is what the native halves read as host.config
+// (plugin/android/DriftLocationPlugin.kt).
+type nativeConfig struct {
+	// NotificationTitle and NotificationText are the ongoing notification
+	// of Android's background service, set with the always: config.
+	NotificationTitle string `json:"notificationTitle,omitempty"`
+	NotificationText  string `json:"notificationText,omitempty"`
+}
 
 // Config is the location plugin's drift.yaml config block.
 type Config struct {
@@ -129,11 +131,15 @@ func (location) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 		ctx.Android.Manifest.AddPermission("android.permission.FOREGROUND_SERVICE_LOCATION")
 		ctx.Android.Manifest.AddPermission("android.permission.POST_NOTIFICATIONS")
 		ctx.Android.Manifest.AddService(`<service android:name="` + androidPackage + `.DriftLocationService" android:exported="false" android:foregroundServiceType="location" />`)
-		ctx.Android.Resources.Strings.Set(notificationTitleString, cfg.Always.NotificationTitle)
-		ctx.Android.Resources.Strings.Set(notificationTextString, cfg.Always.NotificationText)
 	}
 	ctx.Android.Sources.AddFS(androidPackage, androidSources, "android")
 	ctx.Android.Plugin(androidPackage + ".DriftLocationPlugin")
+
+	var native nativeConfig
+	if a := cfg.Always; a != nil {
+		native = nativeConfig{NotificationTitle: a.NotificationTitle, NotificationText: a.NotificationText}
+	}
+	ctx.NativeConfig(native)
 	return nil
 }
 

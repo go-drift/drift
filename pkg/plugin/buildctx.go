@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -28,6 +29,8 @@ type BuildCtx struct {
 	appID         string
 
 	ops []protocol.Op
+	// nativeConfig is set once NativeConfig recorded the plugin's config.
+	nativeConfig bool
 
 	// errs collects recorder failures: invalid op input and embed.FS walk
 	// errors. Recorders are fluent (no error return), so failures surface
@@ -109,6 +112,33 @@ func (b *BuildCtx) ProjectRoot() string { return b.projectRoot }
 // BuildDir returns the absolute build directory (managed or ejected);
 // empty under drift plugin sync, which builds nothing.
 func (b *BuildCtx) BuildDir() string { return b.buildDir }
+
+// NativeConfig records v, which must marshal (encoding/json) to a JSON
+// object, as the plugin's config for its native code on every platform:
+// native code reads it as DriftPluginHost.config, a dictionary (iOS) or
+// map (Android) of JSON-like values, empty when a plugin records none.
+// Use it for build-time choices native code acts on, such as which
+// permission kinds to register or a splash screen's colours, rather than
+// Info.plist keys, resources or generated sources. Call it at most once
+// per Build.
+//
+// Values arrive as JSON decodes them natively: numbers as NSNumber (iOS)
+// and Int, Long or Double (Android), so read them as numbers, not a
+// specific integer type.
+func (b *BuildCtx) NativeConfig(v any) {
+	if b.nativeConfig {
+		b.errs = append(b.errs, errors.New("NativeConfig: called twice; record the whole config at once"))
+		return
+	}
+	b.nativeConfig = true
+	data, err := json.Marshal(v)
+	if err != nil {
+		b.errs = append(b.errs, fmt.Errorf("NativeConfig: %w", err))
+		return
+	}
+	b.push(&protocol.OpIOSPluginConfig{Base: newBase(b), Config: string(data)})
+	b.push(&protocol.OpAndroidPluginConfig{Base: newBase(b), Config: string(data)})
+}
 
 // ResolveAsset reads an asset at a path relative to the project root. Plugin
 // authors use this to bundle user-provided images, fonts, etc.

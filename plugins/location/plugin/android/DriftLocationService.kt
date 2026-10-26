@@ -5,8 +5,9 @@
  * running, with an ongoing notification, while a background stream of
  * location updates is on. DriftLocationPlugin holds the location request
  * and starts and stops this service around it; the service itself only
- * shows the notification. The build declares it, with its permissions
- * and notification strings, only for the always: config.
+ * shows the notification, whose text the plugin passes in the start
+ * intent (from the always: config). The build declares it, with its
+ * permissions, only for that config.
  */
 package com.drift.plugin.location
 
@@ -24,13 +25,16 @@ class DriftLocationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        val start = checkNotNull(intent) { "drift location: started without an intent" }
+        val title = checkNotNull(start.getStringExtra(EXTRA_TITLE)) { "drift location: started without its notification title" }
+        val text = checkNotNull(start.getStringExtra(EXTRA_TEXT)) { "drift location: started without its notification text" }
+        startForeground(NOTIFICATION_ID, notification(title, text), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         // The stream (the plugin's request, Go's listeners) dies with the
         // process, so a service restarted after that would track nothing.
         return START_NOT_STICKY
     }
 
-    private fun notification(): Notification {
+    private fun notification(title: String, text: String): Notification {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW),
         )
@@ -42,27 +46,21 @@ class DriftLocationService : Service() {
         val tap = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle(string(TITLE_STRING))
-            .setContentText(string(TEXT_STRING))
+            .setContentTitle(title)
+            .setContentText(text)
             .setOngoing(true)
             .setContentIntent(tap)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
-    /** A string resource the build wrote (plugin code cannot see R). */
-    private fun string(name: String): String {
-        val id = resources.getIdentifier(name, "string", packageName)
-        check(id != 0) { "drift location: string resource $name missing; the build adds it for the always: config" }
-        return resources.getString(id)
-    }
+    companion object {
+        /** The start intent's notification title and text. */
+        const val EXTRA_TITLE = "com.drift.plugin.location.NOTIFICATION_TITLE"
+        const val EXTRA_TEXT = "com.drift.plugin.location.NOTIFICATION_TEXT"
 
-    private companion object {
-        const val NOTIFICATION_ID = 0x10c
-        const val CHANNEL_ID = "drift_location"
-        const val CHANNEL_NAME = "Background location"
-        // Must match the names in plugin.go.
-        const val TITLE_STRING = "drift_location_notification_title"
-        const val TEXT_STRING = "drift_location_notification_text"
+        private const val NOTIFICATION_ID = 0x10c
+        private const val CHANNEL_ID = "drift_location"
+        private const val CHANNEL_NAME = "Background location"
     }
 }

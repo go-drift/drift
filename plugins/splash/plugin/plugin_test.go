@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/png"
 	"os"
@@ -109,18 +110,6 @@ background_color: "#1A2238"
 
 // kotlinSource returns the decoded content of the Kotlin source op whose
 // path is rel, or "".
-func kotlinSource(ops []protocol.Op, rel string) string {
-	for _, op := range ops {
-		if src, ok := op.(*protocol.OpAddKotlinSource); ok && src.RelPath == rel {
-			b, err := protocol.DecodeContent(src.Content)
-			if err != nil {
-				return ""
-			}
-			return string(b)
-		}
-	}
-	return ""
-}
 
 // Config the plugin cannot honour on every platform is not accepted:
 // unknown keys fail the build rather than doing nothing.
@@ -183,17 +172,27 @@ func launchStoryboard(ops []protocol.Op) string {
 	return ""
 }
 
-func iosSource(ops []protocol.Op, rel string) string {
+// nativeConfigOf decodes the config the build recorded for native code,
+// the same on both platforms.
+func nativeConfigOf(t *testing.T, ops []protocol.Op) nativeConfig {
+	t.Helper()
+	var ios, android string
 	for _, op := range ops {
-		if src, ok := op.(*protocol.OpAddIOSSource); ok && src.RelPath == rel {
-			b, err := protocol.DecodeContent(src.Content)
-			if err != nil {
-				return ""
-			}
-			return string(b)
+		switch o := op.(type) {
+		case *protocol.OpIOSPluginConfig:
+			ios = o.Config
+		case *protocol.OpAndroidPluginConfig:
+			android = o.Config
 		}
 	}
-	return ""
+	if ios == "" || ios != android {
+		t.Fatalf("native config: iOS %q, Android %q; want one config for both", ios, android)
+	}
+	var cfg nativeConfig
+	if err := json.Unmarshal([]byte(ios), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }
 
 // The launch screen and the iOS overlay show the image at image_width with
@@ -210,8 +209,8 @@ func TestBuild_ImageSizedByWidthAndAspect(t *testing.T) {
 			t.Errorf("storyboard missing %s:\n%s", want, sb)
 		}
 	}
-	if cfg := iosSource(ops, "SplashConfig.swift"); !strings.Contains(cfg, "CGSize(width: 150, height: 75)") {
-		t.Errorf("SplashConfig.swift size wrong:\n%s", cfg)
+	if cfg := nativeConfigOf(t, ops); cfg.ImageWidth != 150 || cfg.ImageHeight != 75 {
+		t.Errorf("native config size = %v x %v, want 150 x 75", cfg.ImageWidth, cfg.ImageHeight)
 	}
 }
 
@@ -240,8 +239,8 @@ android:
 	if sb := launchStoryboard(ops); !strings.Contains(sb, want) {
 		t.Errorf("storyboard colour missing %s:\n%s", want, sb)
 	}
-	if cfg := iosSource(ops, "SplashConfig.swift"); !strings.Contains(cfg, "UIColor(red: 0.2000, green: 0.4000, blue: 0.6000, alpha: 0.5020)") {
-		t.Errorf("SplashConfig.swift colour wrong:\n%s", cfg)
+	if got := nativeConfigOf(t, ops).BackgroundColor; got != [4]float64{0.2, 0.4, 0.6, 0.502} {
+		t.Errorf("native config colour = %v, want the storyboard's", got)
 	}
 }
 
@@ -360,8 +359,8 @@ func TestBuild_RejectsNonPositiveImageWidth(t *testing.T) {
 
 func TestBuild_MaxDuration(t *testing.T) {
 	ops := runBuild(t, "image: assets/splash.png\n", "assets/splash.png")
-	if cfg := iosSource(ops, "SplashConfig.swift"); !strings.Contains(cfg, "maxDurationMs = 10000") {
-		t.Errorf("default max_duration_ms should be 10000:\n%s", cfg)
+	if got := nativeConfigOf(t, ops).MaxDurationMs; got != 10000 {
+		t.Errorf("default max_duration_ms = %d, want 10000", got)
 	}
 	if _, err := buildYAML(t, "image: assets/splash.png\nmax_duration_ms: 0\n", "assets/splash.png"); err == nil {
 		t.Error("max_duration_ms 0 accepted")
@@ -371,16 +370,13 @@ func TestBuild_MaxDuration(t *testing.T) {
 // The ceiling is the same on both platforms: at least 30 s, and never
 // shorter than max_duration_ms, so it cannot cut Preserve short.
 func TestBuild_Ceiling(t *testing.T) {
-	for config, want := range map[string]string{
-		"image: assets/splash.png\n":                         "30000",
-		"image: assets/splash.png\nmax_duration_ms: 45000\n": "45000",
+	for config, want := range map[string]int{
+		"image: assets/splash.png\n":                         30000,
+		"image: assets/splash.png\nmax_duration_ms: 45000\n": 45000,
 	} {
 		ops := runBuild(t, config, "assets/splash.png")
-		if swift := iosSource(ops, "SplashConfig.swift"); !strings.Contains(swift, "ceilingMs = "+want) {
-			t.Errorf("%q: SplashConfig.swift lacks ceilingMs = %s:\n%s", config, want, swift)
-		}
-		if kt := kotlinSource(ops, "SplashConfig.kt"); !strings.Contains(kt, "CEILING_MS: Int = "+want) {
-			t.Errorf("%q: SplashConfig.kt lacks CEILING_MS = %s:\n%s", config, want, kt)
+		if got := nativeConfigOf(t, ops).CeilingMs; got != want {
+			t.Errorf("%q: ceilingMs = %d, want %d", config, got, want)
 		}
 	}
 }

@@ -627,6 +627,64 @@ func (o *OpIOSAddBundleResource) Validate() error {
 	return checkContent("bundle resource content", o.Content, false)
 }
 
+// ---- Plugin config --------------------------------------------------------
+
+// The files that carry each plugin's NativeConfig, read natively as
+// DriftPluginHost.config. Must match DriftPlugins.swift and DriftPlugins.kt.
+
+// IOSPluginConfigFile is the bundle-root file holding plugin name's config.
+func IOSPluginConfigFile(name string) string { return "DriftPluginConfig-" + name + ".json" }
+
+// AndroidPluginConfigAsset is the asset path holding plugin name's config.
+func AndroidPluginConfigAsset(name string) string {
+	return AndroidPluginConfigAssetDir + "/" + name + ".json"
+}
+
+// AndroidPluginConfigAssetDir is the Drift-owned asset directory of plugin
+// configs, under app/src/main/assets.
+const AndroidPluginConfigAssetDir = "drift/plugins"
+
+// OpIOSPluginConfig ships the plugin's NativeConfig, a JSON object, as its
+// config file in the app bundle (IOSPluginConfigFile).
+type OpIOSPluginConfig struct {
+	Base
+	Config string `json:"config"` // a JSON object
+}
+
+func (o *OpIOSPluginConfig) Type() string     { return "ios.plugin_config" }
+func (o *OpIOSPluginConfig) Platform() string { return "ios" }
+func (o *OpIOSPluginConfig) Targets() []Target {
+	return []Target{owner("ios-bundle:"+IOSPluginConfigFile(o.Ident), o.Config)}
+}
+func (o *OpIOSPluginConfig) Validate() error { return validatePluginConfig(o.Ident, o.Config) }
+
+// OpAndroidPluginConfig ships the plugin's NativeConfig, a JSON object, as
+// its config asset (AndroidPluginConfigAsset).
+type OpAndroidPluginConfig struct {
+	Base
+	Config string `json:"config"` // a JSON object
+}
+
+func (o *OpAndroidPluginConfig) Type() string     { return "android.plugin_config" }
+func (o *OpAndroidPluginConfig) Platform() string { return "android" }
+func (o *OpAndroidPluginConfig) Targets() []Target {
+	return []Target{owner("android-asset:"+AndroidPluginConfigAsset(o.Ident), o.Config)}
+}
+func (o *OpAndroidPluginConfig) Validate() error { return validatePluginConfig(o.Ident, o.Config) }
+
+// validatePluginConfig checks a plugin config op: a valid plugin name,
+// which names its file, and a config that is a JSON object.
+func validatePluginConfig(name, config string) error {
+	if err := ValidatePluginName(name); err != nil {
+		return err
+	}
+	var object map[string]any
+	if err := json.Unmarshal([]byte(config), &object); err != nil || object == nil {
+		return fmt.Errorf("plugin config must be a JSON object, got %q", config)
+	}
+	return nil
+}
+
 // ---- Android manifest ---------------------------------------------------
 
 type OpAndroidManifestAddPermission struct {
@@ -1069,6 +1127,8 @@ var opConstructors = map[string]func() Op{
 	"ios.plugin":                            func() Op { return &OpIOSPlugin{} },
 	"ios.bundle.add_resource":               func() Op { return &OpIOSAddBundleResource{} },
 	"ios.spm.add_package":                   func() Op { return &OpIOSAddPackageDependency{} },
+	"ios.plugin_config":                     func() Op { return &OpIOSPluginConfig{} },
+	"android.plugin_config":                 func() Op { return &OpAndroidPluginConfig{} },
 	"android.app_module.add_file":           func() Op { return &OpAndroidAddAppModuleFile{} },
 	"android.gradle.apply_plugin":           func() Op { return &OpAndroidGradleApplyPlugin{} },
 	"android.manifest.add_permission":       func() Op { return &OpAndroidManifestAddPermission{} },

@@ -8,9 +8,9 @@ import UIKit
 
 final class DriftSplashOverlayView: UIView {
 
-    init() {
+    init(_ config: SplashConfig) {
         super.init(frame: .zero)
-        backgroundColor = DriftSplashConfig.backgroundColor
+        backgroundColor = config.backgroundColor
 
         guard let image = UIImage(named: "DriftSplash") else {
             preconditionFailure("drift splash: DriftSplash image missing from the app bundle")
@@ -20,7 +20,7 @@ final class DriftSplashOverlayView: UIView {
         imageView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(imageView)
 
-        let size = DriftSplashConfig.imageSize
+        let size = config.imageSize
         NSLayoutConstraint.activate([
             imageView.centerXAnchor.constraint(equalTo: centerXAnchor),
             imageView.centerYAnchor.constraint(equalTo: centerYAnchor),

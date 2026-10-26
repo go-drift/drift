@@ -46,11 +46,17 @@ class DriftLocationPlugin : DriftPlugin {
     private var updates: LocationCallback? = null
     /** The update stream's options, kept across starts. */
     private var options = UpdateOptions()
+    /** The background service's notification, from host.config. */
+    private var notificationTitle: String? = null
+    private var notificationText: String? = null
     /** Whether DriftLocationService runs, for a background stream. */
     private var serviceRunning = false
 
     override fun onRegister(host: DriftPluginHost) {
         this.host = host
+        // Set with the always: config (plugin.go nativeConfig).
+        notificationTitle = host.config["notificationTitle"] as? String
+        notificationText = host.config["notificationText"] as? String
         val context = host.context
         client = LocationServices.getFusedLocationProviderClient(context)
         host.registerPermission("location", DriftRuntimePermission(
@@ -168,7 +174,11 @@ class DriftLocationPlugin : DriftPlugin {
     private fun startService(context: Context) {
         if (serviceRunning) return
         try {
-            context.startForegroundService(Intent(context, DriftLocationService::class.java))
+            context.startForegroundService(
+                Intent(context, DriftLocationService::class.java)
+                    .putExtra(DriftLocationService.EXTRA_TITLE, checkNotNull(notificationTitle) { "drift location: no notification title in the always: config" })
+                    .putExtra(DriftLocationService.EXTRA_TEXT, checkNotNull(notificationText) { "drift location: no notification text in the always: config" }),
+            )
         } catch (e: ForegroundServiceStartNotAllowedException) {
             throw DriftCallError("background_start", "background location updates must start while the app is in the foreground")
         }

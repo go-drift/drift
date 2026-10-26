@@ -171,6 +171,11 @@ public final class DriftSubscription {
 }
 
 public protocol DriftPluginHost: AnyObject {
+    /// The plugin's config, as its build half recorded it with
+    /// `ctx.NativeConfig`: JSON-like values (numbers are NSNumbers), empty
+    /// when it recorded none. Fixed for the life of the process.
+    var config: [String: Any] { get }
+
     /// Registers the channel `name` and its methods, declared in `declare`:
     ///
     ///     host.registerChannel("acme/camera") { channel in
@@ -180,6 +185,9 @@ public protocol DriftPluginHost: AnyObject {
     ///
     /// See `DriftChannel` for how each kind of method replies. Declare every
     /// method inside the closure; the channel is fixed once it returns.
+    /// Name it `<vendor>/<feature>`; `drift/` is reserved for Drift and its
+    /// first-party plugins, and registering a name there, or a name twice,
+    /// traps.
     func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void)
     /// Sends `data` (JSON-like, or nil) to Go's listeners on `channel`,
     /// whether or not Go is listening. A value that is not JSON-like is

@@ -227,6 +227,10 @@ final class PlatformChannelManager: DriftPluginHost {
         add(channel, .builtIn(handler))
     }
 
+    /// `DriftPluginHost`: Drift's own channels have no plugin config; each
+    /// plugin sees its own through a `PluginHost` (DriftPlugins.swift).
+    var config: [String: Any] { [:] }
+
     /// `DriftPluginHost`: register a plugin channel and its methods.
     func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void) {
         let channel = DriftChannel(name: name)

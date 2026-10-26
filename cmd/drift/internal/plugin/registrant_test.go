@@ -28,19 +28,19 @@ func readRegistrant(t *testing.T, dir, platform string) string {
 func TestWriteRegistrantAndroidListsPluginsInSourceOrder(t *testing.T) {
 	dir := t.TempDir()
 	ops := []protocol.Op{
-		&protocol.OpAndroidPlugin{Base: protocol.Base{Pkg: "z"}, Class: "com.zeta.ZetaPlugin"},
-		&protocol.OpAndroidManifestAddPermission{Base: protocol.Base{Pkg: "z"}, Name: "android.permission.CAMERA"},
-		&protocol.OpAndroidPlugin{Base: protocol.Base{Pkg: "a"}, Class: "com.alpha.AlphaPlugin"},
+		&protocol.OpAndroidPlugin{Base: protocol.Base{Pkg: "example.com/zeta/plugin", Ident: "zeta"}, Class: "com.zeta.ZetaPlugin"},
+		&protocol.OpAndroidManifestAddPermission{Base: protocol.Base{Pkg: "example.com/zeta/plugin", Ident: "zeta"}, Name: "android.permission.CAMERA"},
+		&protocol.OpAndroidPlugin{Base: protocol.Base{Pkg: protocol.DriftModulePath + "/plugins/alpha/plugin", Ident: "alpha"}, Class: "com.alpha.AlphaPlugin"},
 	}
 	if _, err := writeRegistrant(t, dir, "android", ops); err != nil {
 		t.Fatalf("WriteRegistrant: %v", err)
 	}
 	s := readRegistrant(t, dir, "android")
-	want := "    fun makePlugins(): List<DriftPlugin> = listOf(\n" +
-		"        com.zeta.ZetaPlugin(),\n" +
-		"        com.alpha.AlphaPlugin(),\n" +
+	want := "    fun makePlugins(): List<DriftPluginEntry> = listOf(\n" +
+		"        DriftPluginEntry(\"zeta\", false, com.zeta.ZetaPlugin()),\n" +
+		"        DriftPluginEntry(\"alpha\", true, com.alpha.AlphaPlugin()),\n" +
 		"    )\n"
-	for _, w := range []string{"package com.drift.runner", "object DriftPluginRegistrant", want} {
+	for _, w := range []string{"package com.drift.runner", "internal object DriftPluginRegistrant", want} {
 		if !strings.Contains(s, w) {
 			t.Errorf("registrant missing %q:\n%s", w, s)
 		}
@@ -49,8 +49,8 @@ func TestWriteRegistrantAndroidListsPluginsInSourceOrder(t *testing.T) {
 
 func TestWriteRegistrantIOSListsPluginsInSourceOrder(t *testing.T) {
 	ops := []protocol.Op{
-		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "z", Ident: "zeta"}, Class: "ZetaPlugin"},
-		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "a", Ident: "alpha"}, Class: "AlphaPlugin"},
+		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: "example.com/zeta/plugin", Ident: "zeta"}, Class: "ZetaPlugin"},
+		&protocol.OpIOSPlugin{Base: protocol.Base{Pkg: protocol.DriftModulePath + "/plugins/alpha/plugin", Ident: "alpha"}, Class: "AlphaPlugin"},
 	}
 	for _, platform := range []string{"ios", "xtool"} {
 		dir := t.TempDir()
@@ -64,10 +64,10 @@ func TestWriteRegistrantIOSListsPluginsInSourceOrder(t *testing.T) {
 			"\n" +
 			"enum DriftPluginRegistrant {\n" +
 			"    /// Creates one instance of every configured plugin, in drift.yaml order.\n" +
-			"    static func makePlugins() -> [DriftPlugin] {\n" +
+			"    static func makePlugins() -> [DriftPluginEntry] {\n" +
 			"        return [\n" +
-			"            DriftPlugin_zeta.ZetaPlugin(),\n" +
-			"            DriftPlugin_alpha.AlphaPlugin(),\n" +
+			"            DriftPluginEntry(name: \"zeta\", firstParty: false, plugin: DriftPlugin_zeta.ZetaPlugin()),\n" +
+			"            DriftPluginEntry(name: \"alpha\", firstParty: true, plugin: DriftPlugin_alpha.AlphaPlugin()),\n" +
 			"        ]\n" +
 			"    }\n"
 		if !strings.Contains(s, want) {

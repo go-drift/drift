@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -115,14 +116,20 @@ func services(ops []protocol.Op) []string {
 	return xml
 }
 
-func androidStrings(ops []protocol.Op) map[string]string {
-	values := map[string]string{}
+// androidConfig decodes the native config the Android build ships.
+func androidConfig(t *testing.T, ops []protocol.Op) nativeConfig {
+	t.Helper()
 	for _, op := range ops {
-		if o, ok := op.(*protocol.OpAndroidStringSet); ok {
-			values[o.Name] = o.Value
+		if o, ok := op.(*protocol.OpAndroidPluginConfig); ok {
+			var cfg nativeConfig
+			if err := json.Unmarshal([]byte(o.Config), &cfg); err != nil {
+				t.Fatal(err)
+			}
+			return cfg
 		}
 	}
-	return values
+	t.Fatal("no native config")
+	return nativeConfig{}
 }
 
 // Without always:, nothing for the background is declared (App Review,
@@ -135,8 +142,8 @@ func TestBuildWithoutAlwaysDeclaresNoBackground(t *testing.T) {
 	if got := services(android); len(got) != 0 {
 		t.Errorf("services = %v, want none", got)
 	}
-	if got := androidStrings(android); len(got) != 0 {
-		t.Errorf("strings = %v, want none", got)
+	if got := androidConfig(t, android); got != (nativeConfig{}) {
+		t.Errorf("native config = %+v, want none of the background's", got)
 	}
 }
 
@@ -155,7 +162,8 @@ func TestBuildAlwaysIOS(t *testing.T) {
 
 // Always adds, on Android, the background permission and the foreground
 // service that keeps background updates running, with the permissions
-// Android 14+ needs to start it and its notification's strings.
+// Android 14+ needs to start it, and its notification's text in the native
+// config.
 func TestBuildAlwaysAndroid(t *testing.T) {
 	ops := mustBuild(t, "android", withAlways)
 	if got := permissions(ops); !slices.Equal(got, []string{
@@ -175,17 +183,17 @@ func TestBuildAlwaysAndroid(t *testing.T) {
 		!strings.Contains(svc[0], `android:exported="false"`) {
 		t.Errorf("services = %v, want DriftLocationService of type location, not exported", svc)
 	}
-	if got := androidStrings(ops); got[notificationTitleString] != "Using your location" ||
-		got[notificationTextString] != "Location updates continue while the app is in the background." {
-		t.Errorf("default notification strings = %v", got)
+	if got := androidConfig(t, ops); got.NotificationTitle != "Using your location" ||
+		got.NotificationText != "Location updates continue while the app is in the background." {
+		t.Errorf("default notification = %+v", got)
 	}
 }
 
 func TestBuildAlwaysNotificationText(t *testing.T) {
 	config := withAlways + "  notification_title: Recording your run\n  notification_text: You're on mile 3.\n"
-	got := androidStrings(mustBuild(t, "android", config))
-	if got[notificationTitleString] != "Recording your run" || got[notificationTextString] != "You're on mile 3." {
-		t.Errorf("notification strings = %v", got)
+	got := androidConfig(t, mustBuild(t, "android", config))
+	if got.NotificationTitle != "Recording your run" || got.NotificationText != "You're on mile 3." {
+		t.Errorf("notification = %+v", got)
 	}
 }
 

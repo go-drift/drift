@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 
@@ -72,6 +73,17 @@ func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
 	return BundleFile{Name: name, Content: decoded, Plugin: plugin}, nil
 }
 
+// PluginConfigBundleFiles converts OpIOSPluginConfig ops into the bundle
+// files native code reads each plugin's config from
+// (protocol.IOSPluginConfigFile).
+func PluginConfigBundleFiles(ops []*protocol.OpIOSPluginConfig) []BundleFile {
+	out := make([]BundleFile, 0, len(ops))
+	for _, op := range ops {
+		out = append(out, BundleFile{Name: protocol.IOSPluginConfigFile(op.PluginID()), Content: []byte(op.Config), Plugin: op.PluginPackage()})
+	}
+	return out
+}
+
 // WriteIOSBundleResources plans dir to contain exactly files: each file is
 // written (only when its bytes differ) and anything else in dir is removed,
 // so a plugin dropped from the project, including mid-watch-session, takes
@@ -82,10 +94,28 @@ func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
 // resources into the bundle root, so the second would shadow the first.
 // Returns written and removed paths.
 func WriteIOSBundleResources(cs *Changeset, dir string, files []BundleFile) ([]string, error) {
+	return syncDir(cs, dir, files, "iOS bundle resource")
+}
+
+// WriteAndroidPluginConfigs plans dir, the Drift-owned asset directory
+// (protocol.AndroidPluginConfigAssetDir), to hold exactly each plugin's
+// config, as WriteIOSBundleResources does for the bundle, so a dropped
+// plugin's config goes with it.
+func WriteAndroidPluginConfigs(cs *Changeset, dir string, ops []*protocol.OpAndroidPluginConfig) ([]string, error) {
+	files := make([]BundleFile, 0, len(ops))
+	for _, op := range ops {
+		files = append(files, BundleFile{Name: path.Base(protocol.AndroidPluginConfigAsset(op.PluginID())), Content: []byte(op.Config), Plugin: op.PluginPackage()})
+	}
+	return syncDir(cs, dir, files, "Android plugin config")
+}
+
+// syncDir plans Drift-owned dir to contain exactly files, named what in
+// errors: see WriteIOSBundleResources.
+func syncDir(cs *Changeset, dir string, files []BundleFile, what string) ([]string, error) {
 	want := make(map[string]BundleFile, len(files))
 	for _, f := range files {
 		if prev, dup := want[f.Name]; dup {
-			return nil, fmt.Errorf("iOS bundle resource %q is provided by both %s and %s", f.Name, pluginLabel(prev.Plugin), pluginLabel(f.Plugin))
+			return nil, fmt.Errorf("%s %q is provided by both %s and %s", what, f.Name, pluginLabel(prev.Plugin), pluginLabel(f.Plugin))
 		}
 		want[f.Name] = f
 	}
@@ -108,7 +138,7 @@ func WriteIOSBundleResources(cs *Changeset, dir string, files []BundleFile) ([]s
 		dest := filepath.Join(dir, name)
 		ch, err := cs.WriteFile(dest, f.Content)
 		if err != nil {
-			return changed, fmt.Errorf("iOS bundle resource %s: %w", name, err)
+			return changed, fmt.Errorf("%s %s: %w", what, name, err)
 		}
 		if ch {
 			changed = append(changed, dest)

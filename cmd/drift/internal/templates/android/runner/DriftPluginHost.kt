@@ -40,6 +40,14 @@ interface DriftPluginHost {
     val context: Context
 
     /**
+     * The plugin's config, as its build half recorded it with
+     * ctx.NativeConfig: JSON-like values (whole numbers are Int or Long,
+     * others Double), empty when it recorded none. Fixed for the life of
+     * the process.
+     */
+    val config: Map<String, Any?>
+
+    /**
      * Registers the channel [name] and its methods, declared in [declare]:
      *
      * ```
@@ -50,7 +58,10 @@ interface DriftPluginHost {
      * ```
      *
      * See [DriftChannel] for how each kind of method replies. Declare every
-     * method inside the block; the channel is fixed once it returns.
+     * method inside the block; the channel is fixed once it returns. Name
+     * it `<vendor>/<feature>`; `drift/` is reserved for Drift and its
+     * first-party plugins, and registering a name there, or a name twice,
+     * crashes.
      */
     fun registerChannel(name: String, declare: DriftChannel.() -> Unit)
 

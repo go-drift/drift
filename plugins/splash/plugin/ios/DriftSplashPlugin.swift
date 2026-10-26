@@ -40,6 +40,8 @@ public final class DriftSplashPlugin: DriftPlugin {
     /// The splash has gone for this process and never comes back.
     private var dismissed = false
     private var overlay: DriftSplashOverlayView?
+    /// The build's config, read at registration.
+    private var config: SplashConfig!
 
     /// The splash waits for content (a slow App.OnInit keeps it up) and the
     /// timeout overrides only a missed Remove; the ceiling overrides both,
@@ -51,6 +53,7 @@ public final class DriftSplashPlugin: DriftPlugin {
     public init() {}
 
     public func register(host: DriftPluginHost) {
+        config = SplashConfig(host.config)
         host.registerChannel("drift/splash") { channel in
             channel.method("preserve") { [self] _ in
                 guard !dismissed else {
@@ -83,7 +86,7 @@ public final class DriftSplashPlugin: DriftPlugin {
             dismissed = true
             return
         }
-        let view = DriftSplashOverlayView()
+        let view = DriftSplashOverlayView(config)
         view.install(in: binding.overlayView)
         overlay = view
     }
@@ -96,20 +99,20 @@ public final class DriftSplashPlugin: DriftPlugin {
     private func startTimers() {
         guard !timersStarted else { return }
         timersStarted = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.maxDurationMs)) { [self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(config.maxDurationMs)) { [self] in
             timedOut = true
             guard !dismissed, preserveCount > 0 else { return }
             os_log("splash held past max_duration_ms=%d by %d Preserve without Remove; ignoring them",
                    log: splashLog, type: .error,
-                   DriftSplashConfig.maxDurationMs, preserveCount)
+                   config.maxDurationMs, preserveCount)
             reconcile()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.ceilingMs)) { [self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(config.ceilingMs)) { [self] in
             ceilingReached = true
             guard !dismissed else { return }
             os_log("splash still up %d ms after the window appeared (first frame drawn: %{public}@); dismissing it",
                    log: splashLog, type: .error,
-                   DriftSplashConfig.ceilingMs, contentShown ? "yes" : "no")
+                   config.ceilingMs, contentShown ? "yes" : "no")
             reconcile()
         }
     }
@@ -122,6 +125,6 @@ public final class DriftSplashPlugin: DriftPlugin {
         dismissed = true
         guard let current = overlay else { return }
         overlay = nil
-        current.fadeOut(durationMs: DriftSplashConfig.fadeDurationMs) {}
+        current.fadeOut(durationMs: config.fadeDurationMs) {}
     }
 }

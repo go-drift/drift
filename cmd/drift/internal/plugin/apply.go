@@ -71,6 +71,7 @@ type opBag struct {
 	iosBundle     []*protocol.OpIOSAddBundleResource
 	iosSPM        []*protocol.OpIOSAddPackageDependency
 	iosPlugins    []*protocol.OpIOSPlugin
+	iosConfigs    []*protocol.OpIOSPluginConfig
 	manifest      mutate.ManifestOps
 	colors        []*protocol.OpAndroidColorSet
 	strings       []*protocol.OpAndroidStringSet
@@ -81,6 +82,7 @@ type opBag struct {
 	gradleDeps    []*protocol.OpAndroidGradleAddDependency
 	appModule     []*protocol.OpAndroidAddAppModuleFile
 	gradlePlugins []*protocol.OpAndroidGradleApplyPlugin
+	configs       []*protocol.OpAndroidPluginConfig
 }
 
 func bundleByPlatform(ops []protocol.Op, platform string) *opBag {
@@ -141,6 +143,8 @@ func bundleIOSOp(bag *opBag, op protocol.Op) bool {
 	case *protocol.OpIOSPlugin:
 		// Rendered by WriteRegistrant; Apply only checks it has a module.
 		bag.iosPlugins = append(bag.iosPlugins, v)
+	case *protocol.OpIOSPluginConfig:
+		bag.iosConfigs = append(bag.iosConfigs, v)
 	default:
 		return false
 	}
@@ -179,6 +183,8 @@ func bundleAndroidOp(bag *opBag, op protocol.Op) bool {
 		bag.appModule = append(bag.appModule, v)
 	case *protocol.OpAndroidGradleApplyPlugin:
 		bag.gradlePlugins = append(bag.gradlePlugins, v)
+	case *protocol.OpAndroidPluginConfig:
+		bag.configs = append(bag.configs, v)
 	case *protocol.OpAndroidPlugin:
 		// Consumed by WriteRegistrant, not Apply.
 	default:
@@ -221,6 +227,7 @@ func applyIOSOps(cs *mutate.Changeset, bag *opBag, buildDir, platform string) ([
 	if err != nil {
 		return changed, err
 	}
+	bundleFiles = append(bundleFiles, mutate.PluginConfigBundleFiles(bag.iosConfigs)...)
 	if platform == "xtool" {
 		// FUTURE(xtool#219): write image sets with mutate.WriteIOSAssets into
 		// a Drift-owned Assets.xcassets (listed under xtool.yml
@@ -392,6 +399,13 @@ func applyAndroidOps(cs *mutate.Changeset, bag *opBag, buildDir string, replace 
 			changed = append(changed, path)
 		}
 	}
+
+	// Always synced, even with zero configs, so a removed plugin's goes.
+	paths, err := mutate.WriteAndroidPluginConfigs(cs, androidPluginConfigDir(buildDir), bag.configs)
+	if err != nil {
+		return changed, err
+	}
+	changed = append(changed, paths...)
 
 	if len(bag.appModule) > 0 {
 		paths, err := mutate.WriteAndroidAppModuleFiles(cs, androidAppDir(buildDir), bag.appModule)
@@ -590,6 +604,12 @@ func templateDefault(projectDir, platform, path string) ([]byte, error) {
 // into Runner_Runner.bundle, invisible to Bundle.main); xtool.yml's
 // `resources:` list copies them into the app bundle root instead.
 const xtoolPluginResourcesDir = "PluginResources"
+
+// androidPluginConfigDir is the Drift-owned asset directory of plugin
+// configs (protocol.AndroidPluginConfigAssetDir).
+func androidPluginConfigDir(buildDir string) string {
+	return filepath.Join(buildDir, "app", "src", "main", "assets", filepath.FromSlash(protocol.AndroidPluginConfigAssetDir))
+}
 
 // iosBundleResourcesDir is the Drift-owned directory for files destined for
 // the root of the app bundle (OpIOSAddBundleResource, plus image sets on

@@ -68,6 +68,7 @@ func (s splash) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("splash: %w", err)
 	}
+	ctx.NativeConfig(newNativeConfig(r))
 	emitIOS(ctx, r)
 	emitAndroid(ctx, r)
 	return nil
@@ -77,7 +78,6 @@ func emitIOS(ctx *driftplugin.BuildCtx, r resolvedConfig) {
 	ctx.IOS.Assets.AddImageSet("DriftSplash", r.Image)
 	ctx.IOS.Storyboards.ReplaceLaunchScreen(generateLaunchStoryboard(r))
 	ctx.IOS.Sources.AddFS("Splash", iosSources, "ios")
-	ctx.IOS.Sources.AddFile("Splash", "SplashConfig.swift", []byte(generateSplashConfigSwift(r)))
 	ctx.IOS.Plugin("DriftSplashPlugin")
 }
 
@@ -100,8 +100,6 @@ func emitAndroid(ctx *driftplugin.BuildCtx, r resolvedConfig) {
 	ctx.Android.Manifest.SetActivityTheme(".MainActivity", "@style/Drift.Splash")
 
 	ctx.Android.Sources.AddFS(androidPackage, androidSources, "android")
-	ctx.Android.Sources.AddFile(androidPackage, "SplashConfig.kt",
-		[]byte(generateSplashConfigKotlin(r)))
 	ctx.Android.Plugin(androidPackage + ".DriftSplashPlugin")
 }
 

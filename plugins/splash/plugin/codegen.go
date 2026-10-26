@@ -14,16 +14,10 @@ import (
 //go:embed templates
 var templatesFS embed.FS
 
-// Each generated artifact lives as a .tmpl under templates/ so the file
-// extension reflects the target language and editors syntax-highlight
-// accordingly. The Go-side codegen here is a thin Execute over the
-// embedded templates with the resolved-config view object.
-
-var (
-	tmplStoryboard = mustParseTemplate("templates/LaunchScreen.storyboard.tmpl")
-	tmplSwiftCfg   = mustParseTemplate("templates/SplashConfig.swift.tmpl")
-	tmplKotlinCfg  = mustParseTemplate("templates/SplashConfig.kt.tmpl")
-)
+// The launch storyboard lives as a .tmpl under templates/ so editors
+// highlight it as XML. The codegen here is a thin Execute over it with the
+// resolved-config view object.
+var tmplStoryboard = mustParseTemplate("templates/LaunchScreen.storyboard.tmpl")
 
 func mustParseTemplate(path string) *template.Template {
 	data, err := templatesFS.ReadFile(path)
@@ -62,38 +56,32 @@ func generateLaunchStoryboard(cfg resolvedConfig) string {
 	})
 }
 
-// generateSplashConfigSwift returns SplashConfig.swift: the resolved
-// configuration as static constants. The native splash needs these values
-// before any Go code runs (the launch screen is the literal first surface),
-// so config is baked into the binary rather than fetched over the channel.
-func generateSplashConfigSwift(cfg resolvedConfig) string {
-	c := cfg.BackgroundColor
-	return renderTemplate(tmplSwiftCfg, struct {
-		Red, Green, Blue, Alpha string
-		Width, Height           string
-		FadeDurationMs          int
-		MaxDurationMs           int
-		CeilingMs               int
-	}{
-		Red: component(c.R), Green: component(c.G), Blue: component(c.B), Alpha: component(c.A),
-		Width:          formatLength(cfg.ImageSize.Width),
-		Height:         formatLength(cfg.ImageSize.Height),
-		FadeDurationMs: cfg.FadeDurationMs,
-		MaxDurationMs:  cfg.MaxDurationMs,
-		CeilingMs:      cfg.CeilingMs,
-	})
+// nativeConfig is what the native halves read as host.config
+// (plugin/ios/SplashConfig.swift, plugin/android/SplashConfig.kt): the
+// resolved config, rounded as the launch storyboard writes it, so the
+// overlay that takes over from the launch screen matches it exactly.
+type nativeConfig struct {
+	// BackgroundColor is red, green, blue and alpha, each 0 to 1 (iOS).
+	BackgroundColor [4]float64 `json:"backgroundColor"`
+	// ImageWidth and ImageHeight are the image's size in points (iOS).
+	ImageWidth  float64 `json:"imageWidth"`
+	ImageHeight float64 `json:"imageHeight"`
+	// The durations, in milliseconds, both platforms use.
+	FadeDurationMs int `json:"fadeDurationMs"`
+	MaxDurationMs  int `json:"maxDurationMs"`
+	CeilingMs      int `json:"ceilingMs"`
 }
 
-// generateSplashConfigKotlin returns SplashConfig.kt: the Kotlin twin of
-// SplashConfig.swift.
-func generateSplashConfigKotlin(cfg resolvedConfig) string {
-	return renderTemplate(tmplKotlinCfg, struct {
-		FadeDurationMs, MaxDurationMs, CeilingMs int
-	}{
-		FadeDurationMs: cfg.FadeDurationMs,
-		MaxDurationMs:  cfg.MaxDurationMs,
-		CeilingMs:      cfg.CeilingMs,
-	})
+func newNativeConfig(cfg resolvedConfig) nativeConfig {
+	c := cfg.BackgroundColor
+	return nativeConfig{
+		BackgroundColor: [4]float64{fraction(c.R), fraction(c.G), fraction(c.B), fraction(c.A)},
+		ImageWidth:      roundLength(cfg.ImageSize.Width),
+		ImageHeight:     roundLength(cfg.ImageSize.Height),
+		FadeDurationMs:  cfg.FadeDurationMs,
+		MaxDurationMs:   cfg.MaxDurationMs,
+		CeilingMs:       cfg.CeilingMs,
+	}
 }
 
 // storyboardColor returns the Interface Builder colour attributes for c.
@@ -102,13 +90,24 @@ func storyboardColor(c driftplugin.Color) string {
 		component(c.R), component(c.G), component(c.B), component(c.A))
 }
 
-// component formats an 8-bit colour channel as a 0-1 fraction.
-func component(v uint8) string {
-	return strconv.FormatFloat(float64(v)/255, 'f', 4, 64)
+// fraction is an 8-bit colour channel as a 0-1 fraction, to four
+// decimals.
+func fraction(v uint8) float64 {
+	return math.Round(float64(v)/255*10000) / 10000
 }
 
-// formatLength formats a length in points / dp for XML and Swift, with at
-// most two decimals.
+// component formats an 8-bit colour channel as a 0-1 fraction for XML.
+func component(v uint8) string {
+	return strconv.FormatFloat(fraction(v), 'f', 4, 64)
+}
+
+// roundLength rounds a length in points / dp to two decimals.
+func roundLength(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+// formatLength formats a length in points / dp for XML, with at most two
+// decimals.
 func formatLength(v float64) string {
-	return strconv.FormatFloat(math.Round(v*100)/100, 'f', -1, 64)
+	return strconv.FormatFloat(roundLength(v), 'f', -1, 64)
 }

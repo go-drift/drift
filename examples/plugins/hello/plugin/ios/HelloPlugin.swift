@@ -13,7 +13,7 @@ public final class HelloPlugin: DriftPlugin {
     public func register(host: DriftPluginHost) {
         host.registerChannel("example/hello") { channel in
             channel.method("greeting") { _ in
-                Bundle.main.object(forInfoDictionaryKey: "HelloGreeting") as? String
+                host.config["greeting"] as? String
             }
         }
     }

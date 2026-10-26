@@ -39,7 +39,7 @@ func TestBuildDeclaresConfiguredKindsOnly(t *testing.T) {
 	plist := map[string]string{}
 	var perms []string
 	var maxSDK = map[string]int{}
-	var swiftCfg, kotlinCfg string
+	var iosCfg, androidCfg string
 	for _, op := range ops {
 		switch o := op.(type) {
 		case *protocol.OpPlistSetString:
@@ -47,16 +47,10 @@ func TestBuildDeclaresConfiguredKindsOnly(t *testing.T) {
 		case *protocol.OpAndroidManifestAddPermission:
 			perms = append(perms, o.Name)
 			maxSDK[o.Name] = o.MaxSDK
-		case *protocol.OpAddIOSSource:
-			if o.RelPath == "PermissionsConfig.swift" {
-				content, _ := protocol.DecodeContent(o.Content)
-				swiftCfg = string(content)
-			}
-		case *protocol.OpAddKotlinSource:
-			if o.RelPath == "PermissionsConfig.kt" {
-				content, _ := protocol.DecodeContent(o.Content)
-				kotlinCfg = string(content)
-			}
+		case *protocol.OpIOSPluginConfig:
+			iosCfg = o.Config
+		case *protocol.OpAndroidPluginConfig:
+			androidCfg = o.Config
 		}
 	}
 	if plist["NSContactsUsageDescription"] != "Finds friends." || plist["NSPhotoLibraryUsageDescription"] != "Picks a profile photo." {
@@ -76,8 +70,8 @@ func TestBuildDeclaresConfiguredKindsOnly(t *testing.T) {
 	if maxSDK["android.permission.READ_EXTERNAL_STORAGE"] != 32 {
 		t.Errorf("READ_EXTERNAL_STORAGE max SDK = %d, want 32", maxSDK["android.permission.READ_EXTERNAL_STORAGE"])
 	}
-	if !strings.Contains(swiftCfg, `["contacts", "photos"]`) || !strings.Contains(kotlinCfg, `setOf("contacts", "photos")`) {
-		t.Errorf("generated config:\n%s\n%s", swiftCfg, kotlinCfg)
+	if want := `{"kinds":["contacts","photos"]}`; iosCfg != want || androidCfg != want {
+		t.Errorf("native config = %s (iOS), %s (Android), want %s", iosCfg, androidCfg, want)
 	}
 }
 
