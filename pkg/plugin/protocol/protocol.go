@@ -15,6 +15,15 @@ import "encoding/json"
 // api_version differs.
 const APIVersion = 1
 
+// DriftModulePath is the module path of the Drift framework. The bridge
+// reports the version of this module it was compiled with.
+const DriftModulePath = "github.com/go-drift/drift"
+
+// DevelVersion is the DriftVersion of a bridge compiled against a local
+// Drift checkout (a directory replace or a workspace module), whose source
+// no version names.
+const DevelVersion = "(devel)"
+
 // Envelope is the JSON object the Drift CLI sends on the bridge stdin.
 type Envelope struct {
 	APIVersion  int    `json:"api_version"`
@@ -36,9 +45,12 @@ type EnvelopePlugin struct {
 
 // Response is the JSON object the bridge writes to the response file.
 type Response struct {
-	APIVersion int                     `json:"api_version"`
-	Ops        []json.RawMessage       `json:"ops,omitempty"`
-	Schemas    map[string]PluginSchema `json:"schemas,omitempty"`
-	Version    string                  `json:"version,omitempty"`
-	Error      string                  `json:"error,omitempty"`
+	APIVersion int `json:"api_version"`
+	// DriftVersion is the version of DriftModulePath the bridge was compiled
+	// with, and so of its pkg/plugin and op set: a module version (v0.27.0,
+	// or a pseudo-version) or DevelVersion. Set on every response.
+	DriftVersion string                  `json:"drift_version"`
+	Ops          []json.RawMessage       `json:"ops,omitempty"`
+	Schemas      map[string]PluginSchema `json:"schemas,omitempty"`
+	Error        string                  `json:"error,omitempty"`
 }

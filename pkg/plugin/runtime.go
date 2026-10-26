@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
@@ -41,22 +42,59 @@ func Main(bindings ...Binding) {
 		fatal("api version mismatch: bridge=%d cli=%d", protocol.APIVersion, env.APIVersion)
 	}
 
-	resp := protocol.Response{APIVersion: protocol.APIVersion}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		fatal("no build info: the bridge must be built in module mode")
+	}
+	drift, err := driftVersion(info)
+	if err != nil {
+		fatal("%v", err)
+	}
 
+	var resp protocol.Response
 	switch env.Cmd {
 	case "build":
 		resp = doBuild(env, bindings)
 	case "schema":
 		resp = doSchema(bindings)
-	case "version":
-		resp.Version = fmt.Sprintf("drift-plugin-bridge api=%d", protocol.APIVersion)
 	default:
-		resp.Error = fmt.Sprintf("unknown cmd %q", env.Cmd)
+		resp = protocol.Response{APIVersion: protocol.APIVersion, Error: fmt.Sprintf("unknown cmd %q", env.Cmd)}
 	}
+	resp.DriftVersion = drift
 
 	if err := writeResponse(responseFile, resp); err != nil {
 		fatal("write response: %v", err)
 	}
+}
+
+// driftVersion returns the version of protocol.DriftModulePath the bridge
+// was compiled with: the selected module version, the version a replace
+// substitutes, or protocol.DevelVersion for a local checkout (a directory
+// replace, a workspace module, or drift itself as the main module).
+func driftVersion(info *debug.BuildInfo) (string, error) {
+	mod := &info.Main
+	if mod.Path != protocol.DriftModulePath {
+		mod = nil
+		for _, dep := range info.Deps {
+			if dep.Path == protocol.DriftModulePath {
+				mod = dep
+				break
+			}
+		}
+	}
+	if mod == nil {
+		return "", fmt.Errorf("build info lists no %s module", protocol.DriftModulePath)
+	}
+	if mod.Replace != nil {
+		if mod.Replace.Version == "" {
+			return protocol.DevelVersion, nil
+		}
+		return mod.Replace.Version, nil
+	}
+	if mod.Version == "" || mod.Version == protocol.DevelVersion {
+		return protocol.DevelVersion, nil
+	}
+	return mod.Version, nil
 }
 
 func checkBindings(bindings []Binding) {

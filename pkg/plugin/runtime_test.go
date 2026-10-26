@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -80,6 +81,10 @@ func TestMainBuildRoundTrip(t *testing.T) {
 	if resp.Error != "" {
 		t.Errorf("unexpected error: %s", resp.Error)
 	}
+	// Built from this checkout, so drift is the main module.
+	if resp.DriftVersion != protocol.DevelVersion {
+		t.Errorf("drift version %q, want %q", resp.DriftVersion, protocol.DevelVersion)
+	}
 	if len(resp.Ops) != 1 {
 		t.Fatalf("expected 1 op, got %d (%s)", len(resp.Ops), string(data))
 	}
@@ -128,6 +133,35 @@ func main() {
 	driftplugin.Main(driftplugin.Bind("github.com/example/p", Plug{}))
 }
 `
+
+func TestDriftVersion(t *testing.T) {
+	const drift = protocol.DriftModulePath
+	app := debug.Module{Path: "example.com/app", Version: protocol.DevelVersion}
+	tests := []struct {
+		name string
+		info debug.BuildInfo
+		want string
+	}{
+		{"release", debug.BuildInfo{Main: app, Deps: []*debug.Module{{Path: drift, Version: "v0.27.0"}}}, "v0.27.0"},
+		{"pseudo-version", debug.BuildInfo{Main: app, Deps: []*debug.Module{{Path: drift, Version: "v0.27.1-0.20261026120000-abcdef123456"}}}, "v0.27.1-0.20261026120000-abcdef123456"},
+		{"directory replace", debug.BuildInfo{Main: app, Deps: []*debug.Module{{Path: drift, Version: "v0.26.1", Replace: &debug.Module{Path: "../drift"}}}}, protocol.DevelVersion},
+		{"version replace", debug.BuildInfo{Main: app, Deps: []*debug.Module{{Path: drift, Version: "v0.26.1", Replace: &debug.Module{Path: "example.com/fork", Version: "v0.27.2"}}}}, "v0.27.2"},
+		{"workspace module", debug.BuildInfo{Main: app, Deps: []*debug.Module{{Path: drift, Version: protocol.DevelVersion}}}, protocol.DevelVersion},
+		{"drift is main", debug.BuildInfo{Main: debug.Module{Path: drift, Version: protocol.DevelVersion}}, protocol.DevelVersion},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := driftVersion(&tt.info)
+			if err != nil || got != tt.want {
+				t.Errorf("driftVersion = %q, %v; want %q", got, err, tt.want)
+			}
+		})
+	}
+
+	if _, err := driftVersion(&debug.BuildInfo{Main: app}); err == nil {
+		t.Error("driftVersion without drift in build info: want error")
+	}
+}
 
 func TestMainPanicsOnDuplicatePackage(t *testing.T) {
 	defer func() {
