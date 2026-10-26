@@ -293,7 +293,8 @@ func (c *EventChannel) removeSubscription(sub *Subscription) {
 // streamCancel, when an event channel gains its first subscriber and loses
 // its last; native runs the stream handler declared on the channel of the
 // same name. Each request carries the channel and a generation, newest
-// wins. Native answers at once.
+// wins. Native answers on the main thread, and starts or stops the stream
+// after replying.
 const (
 	streamsChannel = "drift/streams"
 	streamListen   = "listen"
@@ -307,8 +308,8 @@ func (c *EventChannel) nextGenerationLocked() int64 {
 }
 
 // tellNative sends a listen or cancel request for the channel, without
-// holding mu, so a caller on the UI thread, which native answers in place,
-// never waits on a lock a goroutine holds. Before native is connected the
+// holding mu: a call from a goroutine waits for the main thread, whose Go
+// code may need mu, and a call from the UI thread is answered in place. Before native is connected the
 // request fails with ErrPlatformUnavailable; [HandleNativeConnected]
 // replays what is due then.
 func (c *EventChannel) tellNative(method string, generation int64) {

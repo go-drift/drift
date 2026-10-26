@@ -187,10 +187,6 @@ extension Optional: BoxedOptional {
 
 // MARK: - Platform Channel Manager
 
-/// Handler for a built-in channel: synchronous, run on the calling (Go)
-/// thread. Plugins declare their methods on a `DriftChannel` instead.
-typealias MethodHandler = (String, Any?) -> (Any?, Error?)
-
 /// Manages platform channel handlers and dispatches calls between Go and iOS.
 ///
 /// Adopts `DriftPluginHost` so third-party plugins can register channels and
@@ -203,14 +199,9 @@ typealias MethodHandler = (String, Any?) -> (Any?, Error?)
 final class PlatformChannelManager: DriftPluginHost {
     static let shared = PlatformChannelManager()
 
-    /// A registered channel: a built-in's handler runs on the calling
-    /// thread, a plugin's declared methods on the main thread.
-    private enum Channel {
-        case builtIn(MethodHandler)
-        case plugin(DriftChannel)
-    }
-
-    private var channels: [String: Channel] = [:]
+    /// Registered channels, Drift's and plugins' alike: their declared
+    /// methods run on the main thread.
+    private var channels: [String: DriftChannel] = [:]
     private let channelsLock = NSLock()
     /// Go's interest in each event stream, by channel name.
     private let streams = StreamLifecycle()
@@ -222,21 +213,17 @@ final class PlatformChannelManager: DriftPluginHost {
         registerBuiltInChannels()
     }
 
-    /// Registers a built-in channel handler.
-    func register(channel: String, handler: @escaping MethodHandler) {
-        add(channel, .builtIn(handler))
-    }
-
     /// `DriftPluginHost`: Drift's own channels have no plugin config; each
     /// plugin sees its own through a `PluginHost` (DriftPlugins.swift).
     var config: [String: Any] { [:] }
 
-    /// `DriftPluginHost`: register a plugin channel and its methods.
+    /// `DriftPluginHost`: register a channel and its methods. Drift's own
+    /// channels register here too, before any plugin's.
     func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void) {
         let channel = DriftChannel(name: name)
         declare(channel)
         channel.seal()
-        add(name, .plugin(channel))
+        add(name, channel)
         if channel.declaredStream != nil {
             // Go may have subscribed already (package init). Applied after
             // the registering plugin finishes, so its handlers see it set up.
@@ -251,7 +238,7 @@ final class PlatformChannelManager: DriftPluginHost {
         channelsLock.lock()
         let registered = channels[name]
         channelsLock.unlock()
-        guard case .plugin(let channel)? = registered, let stream = channel.declaredStream,
+        guard let stream = registered?.declaredStream,
               let start = streams.transition(name) else {
             return
         }
@@ -267,7 +254,7 @@ final class PlatformChannelManager: DriftPluginHost {
         }
     }
 
-    private func add(_ name: String, _ channel: Channel) {
+    private func add(_ name: String, _ channel: DriftChannel) {
         channelsLock.lock()
         defer { channelsLock.unlock() }
         if channels[name] != nil {
@@ -315,7 +302,7 @@ final class PlatformChannelManager: DriftPluginHost {
     /// Handles a method call from Go, answering through `reply` exactly
     /// once with the encoded result or an error.
     ///
-    /// Go calls on its own thread. A plugin method runs on the main thread:
+    /// Go calls on its own thread. A method runs on the main thread:
     /// in place when Go called from it, otherwise queued there with the
     /// reply coming later. The main thread is then blocked in Go until this
     /// returns, so a method that replies asynchronously is refused there
@@ -347,36 +334,26 @@ final class PlatformChannelManager: DriftPluginHost {
             args = codec.decode(argsData)
         }
 
-        switch registered {
-        case .builtIn(let handler):
-            let (value, error) = handler(method, args)
-            if let error = error {
-                answer(.failure(error))
+        switch registered.lookup(method) {
+        case nil:
+            answer(.failure(unknownMethod(channel, method)))
+        case .sync(let handler)?:
+            let run = { answer(Result(catching: { try handler(args) })) }
+            if Thread.isMainThread {
+                run()
             } else {
-                answer(.success(value))
+                DispatchQueue.main.async(execute: run)
             }
-        case .plugin(let declared):
-            switch declared.lookup(method) {
-            case nil:
-                answer(.failure(unknownMethod(channel, method)))
-            case .sync(let handler)?:
-                let run = { answer(Result(catching: { try handler(args) })) }
-                if Thread.isMainThread {
-                    run()
-                } else {
-                    DispatchQueue.main.async(execute: run)
-                }
-            case .async(let handler)?:
-                guard !Thread.isMainThread else {
-                    answer(.failure(DriftCallError(
-                        "blocks_ui_thread",
-                        "drift: \(channel).\(method) replies asynchronously; Go must call it from a goroutine, not the UI thread"
-                    )))
-                    return
-                }
-                DispatchQueue.main.async {
-                    handler(args, DriftResult(call: "\(channel).\(method)", deliver: answer))
-                }
+        case .async(let handler)?:
+            guard !Thread.isMainThread else {
+                answer(.failure(DriftCallError(
+                    "blocks_ui_thread",
+                    "drift: \(channel).\(method) replies asynchronously; Go must call it from a goroutine, not the UI thread"
+                )))
+                return
+            }
+            DispatchQueue.main.async {
+                handler(args, DriftResult(call: "\(channel).\(method)", deliver: answer))
             }
         }
     }
@@ -465,40 +442,21 @@ final class PlatformChannelManager: DriftPluginHost {
 
     // MARK: - Built-in Channels
 
+    /// Registers Drift's own channels, before any plugin's, through the
+    /// same `registerChannel` plugins use, so their methods run on the main
+    /// thread.
     private func registerBuiltInChannels() {
-        // Clipboard channel
-        register(channel: "drift/clipboard") { method, args in
-            return ClipboardHandler.handle(method: method, args: args)
-        }
-
-        // Haptics channel
-        register(channel: "drift/haptics") { method, args in
-            return HapticsHandler.handle(method: method, args: args)
-        }
-
-        // Share channel
-        register(channel: "drift/share") { method, args in
-            return ShareHandler.handle(method: method, args: args)
-        }
-
-        // Lifecycle channel
-        register(channel: "drift/lifecycle") { method, args in
-            return LifecycleHandler.handle(method: method, args: args)
-        }
-
-        // System UI channel
-        register(channel: "drift/system_ui") { method, args in
-            return SystemUIHandler.handle(method: method, args: args)
-        }
+        ClipboardHandler.start(host: self)
+        HapticsHandler.start(host: self)
+        ShareHandler.start(host: self)
+        LifecycleHandler.start(host: self)
+        SystemUIHandler.start(host: self)
 
         // The notification-center delegate, which offers notifications to
         // plugins
         NotificationHandler.start()
 
-        // Deep links channel
-        register(channel: "drift/deeplinks") { method, args in
-            return DeepLinkHandler.handle(method: method, args: args)
-        }
+        DeepLinkHandler.start(host: self)
 
         // Platform Views channel and Drift's own view types
         PlatformViewHandler.start(host: self)
@@ -508,39 +466,26 @@ final class PlatformChannelManager: DriftPluginHost {
         PermissionHandler.start(host: self)
 
         StorageHandler.start(host: self)
-
-        // Accessibility channel
-        register(channel: "drift/accessibility") { method, args in
-            return AccessibilityHandler.handle(method: method, args: args)
-        }
-
-        // Preferences channel
-        register(channel: "drift/preferences") { method, args in
-            return PreferencesHandler.handle(method: method, args: args)
-        }
-
+        AccessibilityHandler.start(host: self)
+        PreferencesHandler.start(host: self)
         DatePickerHandler.start(host: self)
         TimePickerHandler.start(host: self)
-
-        // URL Launcher channel
-        register(channel: "drift/url_launcher") { method, args in
-            return URLLauncherHandler.handle(method: method, args: args)
-        }
+        URLLauncherHandler.start(host: self)
 
         // Go's first-subscriber and last-unsubscriber requests for event
-        // streams (pkg/platform streamsChannel)
-        register(channel: "drift/streams") { [self] method, args in
-            guard let dict = args as? [String: Any], let name = dict["channel"] as? String,
-                  let generation = (dict["generation"] as? NSNumber)?.int64Value else {
-                return (nil, DriftCallError.invalidArguments("drift/streams needs channel and generation"))
-            }
-            switch method {
-            case "listen", "cancel":
-                streams.request(name, listen: method == "listen", generation: generation)
-                DispatchQueue.main.async { self.applyStream(name) }
-                return (nil, nil)
-            default:
-                return (nil, unknownMethod("drift/streams", method))
+        // streams (pkg/platform streamsChannel). The stream starts or stops
+        // after Go has the reply, so its first events follow Listen.
+        registerChannel("drift/streams") { channel in
+            for listen in [true, false] {
+                channel.method(listen ? "listen" : "cancel") { args in
+                    guard let dict = args as? [String: Any], let name = dict["channel"] as? String,
+                          let generation = (dict["generation"] as? NSNumber)?.int64Value else {
+                        throw DriftCallError.invalidArguments("drift/streams needs channel and generation")
+                    }
+                    self.streams.request(name, listen: listen, generation: generation)
+                    DispatchQueue.main.async { self.applyStream(name) }
+                    return nil
+                }
             }
         }
     }
@@ -549,29 +494,22 @@ final class PlatformChannelManager: DriftPluginHost {
 // MARK: - Clipboard Handler
 
 enum ClipboardHandler {
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "getText":
-            let text = UIPasteboard.general.string ?? ""
-            return (["text": text], nil)
-
-        case "setText":
-            guard let dict = args as? [String: Any],
-                  let text = dict["text"] as? String else {
-                return (nil, DriftCallError.invalidArguments("Missing text argument"))
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/clipboard") { channel in
+            channel.method("getText") { _ in ["text": UIPasteboard.general.string ?? ""] }
+            channel.method("setText") { args in
+                guard let dict = args as? [String: Any],
+                      let text = dict["text"] as? String else {
+                    throw DriftCallError.invalidArguments("Missing text argument")
+                }
+                UIPasteboard.general.string = text
+                return nil
             }
-            UIPasteboard.general.string = text
-            return (nil, nil)
-
-        case "hasText":
-            return (UIPasteboard.general.hasStrings, nil)
-
-        case "clear":
-            UIPasteboard.general.items = []
-            return (nil, nil)
-
-        default:
-            return (nil, unknownMethod("drift/clipboard", method))
+            channel.method("hasText") { _ in UIPasteboard.general.hasStrings }
+            channel.method("clear") { _ in
+                UIPasteboard.general.items = []
+                return nil
+            }
         }
     }
 }
@@ -585,42 +523,43 @@ enum HapticsHandler {
     private static let selectionGenerator = UISelectionFeedbackGenerator()
     private static let notificationGenerator = UINotificationFeedbackGenerator()
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "impact":
-            guard let dict = args as? [String: Any],
-                  let style = dict["style"] as? String else {
-                return (nil, DriftCallError.invalidArguments("Missing style argument"))
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/haptics") { channel in
+            channel.method("impact") { args in
+                guard let dict = args as? [String: Any],
+                      let style = dict["style"] as? String else {
+                    throw DriftCallError.invalidArguments("Missing style argument")
+                }
+                impact(style)
+                return nil
             }
-
-            switch style {
-            case "light":
-                lightGenerator.impactOccurred()
-            case "medium":
-                mediumGenerator.impactOccurred()
-            case "heavy":
-                heavyGenerator.impactOccurred()
-            case "selection":
-                selectionGenerator.selectionChanged()
-            case "success":
-                notificationGenerator.notificationOccurred(.success)
-            case "warning":
-                notificationGenerator.notificationOccurred(.warning)
-            case "error":
-                notificationGenerator.notificationOccurred(.error)
-            default:
-                mediumGenerator.impactOccurred()
+            channel.method("vibrate") { _ in
+                // iOS has no general vibrate API like Android's; play the
+                // system vibration.
+                AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+                return nil
             }
-            return (nil, nil)
+        }
+    }
 
-        case "vibrate":
-            // iOS doesn't have a general vibrate API like Android
-            // Use AudioServicesPlaySystemSound for a simple vibration
-            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
-            return (nil, nil)
-
+    private static func impact(_ style: String) {
+        switch style {
+        case "light":
+            lightGenerator.impactOccurred()
+        case "medium":
+            mediumGenerator.impactOccurred()
+        case "heavy":
+            heavyGenerator.impactOccurred()
+        case "selection":
+            selectionGenerator.selectionChanged()
+        case "success":
+            notificationGenerator.notificationOccurred(.success)
+        case "warning":
+            notificationGenerator.notificationOccurred(.warning)
+        case "error":
+            notificationGenerator.notificationOccurred(.error)
         default:
-            return (nil, unknownMethod("drift/haptics", method))
+            mediumGenerator.impactOccurred()
         }
     }
 }
@@ -628,13 +567,15 @@ enum HapticsHandler {
 // MARK: - Share Handler
 
 enum ShareHandler {
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        guard method == "share" else {
-            return (nil, unknownMethod("drift/share", method))
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/share") { channel in
+            channel.method("share") { args in try share(args) }
         }
+    }
 
+    private static func share(_ args: Any?) throws -> Any? {
         guard let dict = args as? [String: Any] else {
-            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
+            throw DriftCallError.invalidArguments("Invalid arguments")
         }
 
         var items: [Any] = []
@@ -661,10 +602,11 @@ enum ShareHandler {
         }
 
         guard !items.isEmpty else {
-            return (["result": "unavailable"], nil)
+            return ["result": "unavailable"]
         }
 
-        // Share must be done on main thread
+        // Presented after Go has the reply, so UIKit's callbacks do not
+        // reach Go while it waits in this call.
         DispatchQueue.main.async {
             let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
 
@@ -690,7 +632,7 @@ enum ShareHandler {
             }
         }
 
-        return (["result": "success"], nil)
+        return ["result": "success"]
     }
 }
 
@@ -707,33 +649,27 @@ struct SystemUIStyle {
 }
 
 enum SystemUIHandler {
-    static var currentStyle = SystemUIStyle.default
+    /// Main thread only.
+    static private(set) var currentStyle = SystemUIStyle.default
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        guard method == "setStyle" else {
-            return (nil, unknownMethod("drift/system_ui", method))
-        }
-
-        guard let dict = args as? [String: Any] else {
-            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
-        }
-
-        let statusBarHidden = dict["statusBarHidden"] as? Bool ?? false
-        let statusBarStyle = parseStatusBarStyle(dict["statusBarStyle"] as? String)
-
-        let style = SystemUIStyle(
-            statusBarHidden: statusBarHidden,
-            statusBarStyle: statusBarStyle
-        )
-
-        apply(style)
-        return (nil, nil)
-    }
-
-    static func apply(_ style: SystemUIStyle) {
-        currentStyle = style
-        DispatchQueue.main.async {
-            applyToActiveController(style)
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/system_ui") { channel in
+            channel.method("setStyle") { args in
+                guard let dict = args as? [String: Any] else {
+                    throw DriftCallError.invalidArguments("Invalid arguments")
+                }
+                currentStyle = SystemUIStyle(
+                    statusBarHidden: dict["statusBarHidden"] as? Bool ?? false,
+                    statusBarStyle: parseStatusBarStyle(dict["statusBarStyle"] as? String)
+                )
+                // Applied after Go has the reply, so UIKit's layout callbacks
+                // do not reach Go while it waits in this call.
+                let style = currentStyle
+                DispatchQueue.main.async {
+                    applyToActiveController(style)
+                }
+                return nil
+            }
         }
     }
 
@@ -840,17 +776,17 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
 // MARK: - Deep Link Handler
 
 enum DeepLinkHandler {
+    /// Main thread only, like everything in this enum.
     private static var initialLink: [String: Any]? = nil
     private static var lastLink: String? = nil
 
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "getInitial":
-            let link = initialLink
-            initialLink = nil
-            return (link, nil)
-        default:
-            return (nil, unknownMethod("drift/deeplinks", method))
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/deeplinks") { channel in
+            channel.method("getInitial") { _ in
+                let link = initialLink
+                initialLink = nil
+                return link
+            }
         }
     }
 
@@ -877,24 +813,22 @@ enum DeepLinkHandler {
 // MARK: - Lifecycle Handler
 
 enum LifecycleHandler {
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "getState":
-            let state: String
-            switch UIApplication.shared.applicationState {
-            case .active:
-                state = "resumed"
-            case .inactive:
-                state = "inactive"
-            case .background:
-                state = "paused"
-            @unknown default:
-                state = "detached"
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/lifecycle") { channel in
+            channel.method("getState") { _ in
+                let state: String
+                switch UIApplication.shared.applicationState {
+                case .active:
+                    state = "resumed"
+                case .inactive:
+                    state = "inactive"
+                case .background:
+                    state = "paused"
+                @unknown default:
+                    state = "detached"
+                }
+                return ["state": state]
             }
-            return (["state": state], nil)
-
-        default:
-            return (nil, unknownMethod("drift/lifecycle", method))
         }
     }
 
@@ -931,39 +865,39 @@ enum SafeAreaHandler {
 // MARK: - URL Launcher Handler
 
 enum URLLauncherHandler {
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "openURL":
-            guard let dict = args as? [String: Any],
-                  let urlString = dict["url"] as? String,
-                  let url = URL(string: urlString) else {
-                return (nil, DriftCallError.invalidArguments("Missing or invalid url argument"))
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/url_launcher") { channel in
+            channel.method("openURL") { args in
+                let url = try url(args)
+                // Opened after Go has the reply, so the scene callbacks
+                // opening fires do not reach Go while it waits in this call.
+                DispatchQueue.main.async {
+                    UIApplication.shared.open(url)
+                }
+                return nil
             }
-            DispatchQueue.main.async {
-                UIApplication.shared.open(url)
+            channel.method("canOpenURL") { args in
+                ["canOpen": UIApplication.shared.canOpenURL(try url(args))]
             }
-            return (nil, nil)
-
-        case "canOpenURL":
-            guard let dict = args as? [String: Any],
-                  let urlString = dict["url"] as? String,
-                  let url = URL(string: urlString) else {
-                return (nil, DriftCallError.invalidArguments("Missing or invalid url argument"))
-            }
-            return (["canOpen": UIApplication.shared.canOpenURL(url)], nil)
-
-        default:
-            return (nil, unknownMethod("drift/url_launcher", method))
         }
+    }
+
+    private static func url(_ args: Any?) throws -> URL {
+        guard let dict = args as? [String: Any],
+              let urlString = dict["url"] as? String,
+              let url = URL(string: urlString) else {
+            throw DriftCallError.invalidArguments("Missing or invalid url argument")
+        }
+        return url
     }
 }
 
 // MARK: - Stream Lifecycle
 
 /// Go's interest in each event stream and whether its declared stream runs.
-/// Go numbers its requests, which can arrive out of order from different
-/// threads; the newest wins. Requests are recorded on the calling thread,
-/// transitions made on the main thread.
+/// Go numbers its requests, which can leave different goroutines in any
+/// order; the newest wins. Requests and transitions happen on the main
+/// thread; a stream can end (`sendEventDone`) from any thread.
 final class StreamLifecycle {
     private struct State {
         var generation: Int64 = 0
@@ -1050,7 +984,7 @@ private func encodeErrorPayload(_ error: Error) -> String {
     }
 }
 
-/// The error a built-in channel answers for a method it does not have.
-func unknownMethod(_ channel: String, _ method: String) -> DriftCallError {
+/// The error a channel answers for a method it does not declare.
+private func unknownMethod(_ channel: String, _ method: String) -> DriftCallError {
     DriftCallError("method_not_found", "\(channel) has no method \(method)")
 }

@@ -38,29 +38,25 @@ final class AccessibilityHandler {
         notifyAccessibilityState()
     }
 
-    /// Handles platform channel method calls.
-    static func handle(method: String, args: Any?) -> (Any?, Error?) {
-        switch method {
-        case "updateSemantics":
-            return shared.updateSemantics(args: args)
-        case "announce":
-            return shared.announce(args: args)
-        case "setAccessibilityFocus":
-            return shared.setAccessibilityFocus(args: args)
-        case "clearAccessibilityFocus":
-            return shared.clearAccessibilityFocus()
-        case "isAccessibilityEnabled":
-            return shared.isAccessibilityEnabled()
-        default:
-            return (nil, unknownMethod("drift/accessibility", method))
+    /// Registers the drift/accessibility channel.
+    static func start(host: DriftPluginHost) {
+        host.registerChannel("drift/accessibility") { channel in
+            channel.method("updateSemantics") { args in try shared.updateSemantics(args: args) }
+            channel.method("announce") { args in try shared.announce(args: args) }
+            channel.method("setAccessibilityFocus") { args in try shared.setAccessibilityFocus(args: args) }
+            channel.method("clearAccessibilityFocus") { _ in
+                shared.bridge?.clearAccessibilityFocus()
+                return nil
+            }
+            channel.method("isAccessibilityEnabled") { _ in ["enabled": isEnabled] }
         }
     }
 
     // MARK: - Method Handlers
 
-    private func updateSemantics(args: Any?) -> (Any?, Error?) {
+    private func updateSemantics(args: Any?) throws -> Any? {
         guard let dict = args as? [String: Any] else {
-            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
+            throw DriftCallError.invalidArguments("Invalid arguments")
         }
 
         let updates = dict["updates"] as? [[String: Any]] ?? []
@@ -72,40 +68,34 @@ final class AccessibilityHandler {
         } ?? []
 
         bridge?.updateSemantics(updates: updates, removals: removals)
-        return (nil, nil)
+        return nil
     }
 
-    private func announce(args: Any?) -> (Any?, Error?) {
+    private func announce(args: Any?) throws -> Any? {
         guard let dict = args as? [String: Any],
               let message = dict["message"] as? String else {
-            return (nil, DriftCallError.invalidArguments("Missing message"))
+            throw DriftCallError.invalidArguments("Missing message")
         }
 
         let politeness = dict["politeness"] as? String ?? "polite"
         bridge?.announce(message: message, politeness: politeness)
-        return (nil, nil)
+        return nil
     }
 
-    private func setAccessibilityFocus(args: Any?) -> (Any?, Error?) {
+    private func setAccessibilityFocus(args: Any?) throws -> Any? {
         guard let dict = args as? [String: Any],
               let nodeId = (dict["nodeId"] as? NSNumber)?.int64Value else {
-            return (nil, DriftCallError.invalidArguments("Missing nodeId"))
+            throw DriftCallError.invalidArguments("Missing nodeId")
         }
 
         bridge?.setAccessibilityFocus(nodeId: nodeId)
-        return (nil, nil)
+        return nil
     }
 
-    private func clearAccessibilityFocus() -> (Any?, Error?) {
-        bridge?.clearAccessibilityFocus()
-        return (nil, nil)
-    }
-
-    private func isAccessibilityEnabled() -> (Any?, Error?) {
-        let enabled = UIAccessibility.isVoiceOverRunning ||
-                      UIAccessibility.isSwitchControlRunning ||
-                      UIAccessibility.isSpeakScreenEnabled
-        return (["enabled": enabled], nil)
+    private static var isEnabled: Bool {
+        UIAccessibility.isVoiceOverRunning ||
+            UIAccessibility.isSwitchControlRunning ||
+            UIAccessibility.isSpeakScreenEnabled
     }
 
     // MARK: - Notifications
@@ -115,13 +105,9 @@ final class AccessibilityHandler {
     }
 
     private func notifyAccessibilityState() {
-        let enabled = UIAccessibility.isVoiceOverRunning ||
-                      UIAccessibility.isSwitchControlRunning ||
-                      UIAccessibility.isSpeakScreenEnabled
-
         PlatformChannelManager.shared.sendEvent(
             channel: "drift/accessibility/state",
-            data: ["enabled": enabled]
+            data: ["enabled": Self.isEnabled]
         )
     }
 }

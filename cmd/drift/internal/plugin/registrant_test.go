@@ -153,16 +153,6 @@ func TestEnsureRunnerSupportMatchesTemplates(t *testing.T) {
 	}
 }
 
-// Built-in channels register a synchronous MethodHandler that
-// PlatformChannel.kt calls as handler(method, args), which needs the
-// operator form.
-func TestBuiltInMethodHandlerUsesOperatorInvoke(t *testing.T) {
-	content := templateText(t, "android/java/PlatformChannel.kt")
-	if !strings.Contains(content, "operator fun invoke(method: String, args: Any?)") {
-		t.Errorf("PlatformChannel.kt's MethodHandler must declare `operator fun invoke(...)`")
-	}
-}
-
 // The ejected-project checks demand exactly the wiring the templates have.
 // If a template stops making a call, the check would reject projects the
 // scaffold itself produces. xtool is never ejected, but its templates must

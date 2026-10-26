@@ -39,15 +39,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Handler for a built-in channel: synchronous, run on the calling (Go)
- * thread. Plugins declare methods on a com.drift.runner.DriftChannel
- * instead.
- */
-fun interface MethodHandler {
-    operator fun invoke(method: String, args: Any?): Pair<Any?, Exception?>
-}
-
-/**
  * Manages platform channel handlers and dispatches calls between Go and Android.
  *
  * Adopts com.drift.runner.DriftPluginHost so third-party plugins can register
@@ -59,16 +50,11 @@ object PlatformChannelManager : DriftPluginHost {
     private var view: View? = null
     private var currentActivity: Activity? = null
     /**
-     * A registered channel: a built-in's handler runs on the calling (Go)
-     * thread; a plugin's declared methods run on the main thread.
+     * Registered channels, Drift's and plugins' alike: their declared
+     * methods run on the main thread. Written on the main thread during
+     * registration, read from Go threads.
      */
-    private sealed interface Channel {
-        class BuiltIn(val handler: MethodHandler) : Channel
-        class Plugin(val channel: DriftChannel) : Channel
-    }
-
-    // Written on the main thread during registration, read from Go threads.
-    private val channels = ConcurrentHashMap<String, Channel>()
+    private val channels = ConcurrentHashMap<String, DriftChannel>()
 
     /** Go's interest in each event stream, by channel name. */
     private val streams = StreamLifecycle()
@@ -123,11 +109,6 @@ object PlatformChannelManager : DriftPluginHost {
      */
     override val config: Map<String, Any?> get() = emptyMap()
 
-    /** Registers a built-in channel handler. */
-    fun register(channel: String, handler: MethodHandler) {
-        add(channel, Channel.BuiltIn(handler))
-    }
-
     /** DriftPluginHost: register a platform view type. */
     override fun registerPlatformView(type: String, factory: DriftPlatformViewFactory) {
         PlatformViewHandler.register(type, factory)
@@ -138,12 +119,15 @@ object PlatformChannelManager : DriftPluginHost {
         PermissionHandler.register(kind, permission)
     }
 
-    /** DriftPluginHost: register a channel and its methods from a plugin source. */
+    /**
+     * DriftPluginHost: register a channel and its methods. Drift's own
+     * channels register here too, before any plugin's.
+     */
     override fun registerChannel(name: String, declare: DriftChannel.() -> Unit) {
         val channel = DriftChannel(name)
         channel.declare()
         channel.seal()
-        add(name, Channel.Plugin(channel))
+        add(name, channel)
         if (channel.declaredStream != null) {
             // Go may have subscribed already. Applied after the registering
             // plugin finishes, so its handlers see it set up.
@@ -156,7 +140,7 @@ object PlatformChannelManager : DriftPluginHost {
      * thread, to match Go's latest request.
      */
     private fun applyStream(name: String) {
-        val stream = (channels[name] as? Channel.Plugin)?.channel?.declaredStream ?: return
+        val stream = channels[name]?.declaredStream ?: return
         val start = streams.transition(name) ?: return
         if (start) {
             try {
@@ -170,7 +154,7 @@ object PlatformChannelManager : DriftPluginHost {
         }
     }
 
-    private fun add(name: String, channel: Channel) {
+    private fun add(name: String, channel: DriftChannel) {
         if (channels.putIfAbsent(name, channel) != null) {
             throw IllegalStateException(
                 "drift: platform channel \"$name\" is already registered. " +
@@ -200,7 +184,7 @@ object PlatformChannelManager : DriftPluginHost {
         try {
             handleMethodCall(channel, method, argsData, reply)
         } catch (e: Exception) {
-            // A built-in handler or argument decoding threw before replying.
+            // Argument decoding threw before replying.
             reply(null, e)
         }
     }
@@ -229,11 +213,10 @@ object PlatformChannelManager : DriftPluginHost {
      * Dispatches a method call from Go, on the calling thread, and replies
      * through [reply] exactly once.
      *
-     * A built-in runs in place. A plugin method runs on the main thread: in
-     * place when Go called from it, otherwise posted there. Go never waits
-     * on the main thread: a call made there is answered before this returns,
-     * so an asynchronous plugin method called there fails at once with
-     * blocks_ui_thread instead of running.
+     * A method runs on the main thread: in place when Go called from it,
+     * otherwise posted there. Go never waits on the main thread: a call made
+     * there is answered before this returns, so an asynchronous method
+     * called there fails at once with blocks_ui_thread instead of running.
      */
     private fun handleMethodCall(
         channel: String,
@@ -250,42 +233,34 @@ object PlatformChannelManager : DriftPluginHost {
             null
         }
 
-        when (registered) {
-            is Channel.BuiltIn -> {
-                val (value, error) = registered.handler(method, args)
-                reply(value, error)
-            }
-            is Channel.Plugin -> {
-                val onMainThread = Looper.myLooper() == Looper.getMainLooper()
-                when (val m = registered.channel.lookup(method)) {
-                    null -> reply(null, unknownMethod(channel, method))
-                    is DriftChannel.Method.Sync -> {
-                        fun run() {
-                            val value = try {
-                                m.handler(args)
-                            } catch (e: Exception) {
-                                return reply(null, e)
-                            }
-                            reply(value, null)
-                        }
-                        if (onMainThread) run() else mainHandler.post { run() }
+        val onMainThread = Looper.myLooper() == Looper.getMainLooper()
+        when (val m = registered.lookup(method)) {
+            null -> reply(null, unknownMethod(channel, method))
+            is DriftChannel.Method.Sync -> {
+                fun run() {
+                    val value = try {
+                        m.handler(args)
+                    } catch (e: Exception) {
+                        return reply(null, e)
                     }
-                    is DriftChannel.Method.Async -> {
-                        if (onMainThread) {
-                            return reply(null, DriftCallError(
-                                "blocks_ui_thread",
-                                "drift: $channel.$method replies asynchronously; Go must call it " +
-                                    "from a goroutine, not the UI thread",
-                            ))
-                        }
-                        mainHandler.post {
-                            val result = DriftResult("$channel.$method", reply)
-                            try {
-                                m.handler(args, result)
-                            } catch (e: Exception) {
-                                result.errorIfPending(e)
-                            }
-                        }
+                    reply(value, null)
+                }
+                if (onMainThread) run() else mainHandler.post { run() }
+            }
+            is DriftChannel.Method.Async -> {
+                if (onMainThread) {
+                    return reply(null, DriftCallError(
+                        "blocks_ui_thread",
+                        "drift: $channel.$method replies asynchronously; Go must call it " +
+                            "from a goroutine, not the UI thread",
+                    ))
+                }
+                mainHandler.post {
+                    val result = DriftResult("$channel.$method", reply)
+                    try {
+                        m.handler(args, result)
+                    } catch (e: Exception) {
+                        result.errorIfPending(e)
                     }
                 }
             }
@@ -414,36 +389,17 @@ object PlatformChannelManager : DriftPluginHost {
         }
     }
 
+    /**
+     * Registers Drift's own channels, before any plugin's, through the same
+     * registerChannel plugins use, so their methods run on the main thread.
+     */
     private fun registerBuiltInChannels() {
-        // Clipboard channel
-        register("drift/clipboard") { method, args ->
-            ClipboardHandler.handle(context, method, args)
-        }
-
-        // Haptics channel
-        register("drift/haptics") { method, args ->
-            HapticsHandler.handle(context, view, method, args)
-        }
-
-        // Share channel
-        register("drift/share") { method, args ->
-            ShareHandler.handle(context, method, args)
-        }
-
-        // Lifecycle channel
-        register("drift/lifecycle") { method, args ->
-            LifecycleHandler.handle(method, args)
-        }
-
-        // System UI channel
-        register("drift/system_ui") { method, args ->
-            SystemUIHandler.handle(method, args)
-        }
-
-        // Deep links channel
-        register("drift/deeplinks") { method, args ->
-            DeepLinkHandler.handle(method, args)
-        }
+        ClipboardHandler.start(this)
+        HapticsHandler.start(this) { view }
+        ShareHandler.start(this)
+        LifecycleHandler.start(this)
+        SystemUIHandler.start(this)
+        DeepLinkHandler.start(this)
 
         // Platform Views channel and Drift's own view types
         PlatformViewHandler.start(this)
@@ -453,40 +409,28 @@ object PlatformChannelManager : DriftPluginHost {
         PermissionHandler.start(this)
 
         StorageHandler.start(this)
-
-        // Accessibility channel
-        register("drift/accessibility") { method, args ->
-            AccessibilityHandler.handle(context, method, args)
-        }
-
-        // Preferences channel
-        register("drift/preferences") { method, args ->
-            PreferencesHandler.handle(context, method, args)
-        }
-
+        AccessibilityHandler.start(this)
+        PreferencesHandler.start(this)
         DatePickerHandler.start(this)
         TimePickerHandler.start(this)
-
-        // URL Launcher channel
-        register("drift/url_launcher") { method, args ->
-            URLLauncherHandler.handle(context, method, args)
-        }
+        URLLauncherHandler.start(this)
 
         // Go's first-subscriber and last-unsubscriber requests for event
-        // streams (pkg/platform streamsChannel)
-        register("drift/streams") { method, args ->
-            val argsMap = args as? Map<*, *>
-            val name = argsMap?.get("channel") as? String
-            val generation = (argsMap?.get("generation") as? Number)?.toLong()
-            when {
-                name == null || generation == null ->
-                    Pair(null, IllegalArgumentException("drift/streams needs channel and generation"))
-                method == "listen" || method == "cancel" -> {
-                    streams.request(name, listen = method == "listen", generation = generation)
+        // streams (pkg/platform streamsChannel). The stream starts or stops
+        // after Go has the reply, so its first events follow Listen.
+        registerChannel("drift/streams") {
+            for (listen in listOf(true, false)) {
+                method(if (listen) "listen" else "cancel") { args ->
+                    val argsMap = args as? Map<*, *>
+                    val name = argsMap?.get("channel") as? String
+                    val generation = (argsMap?.get("generation") as? Number)?.toLong()
+                    if (name == null || generation == null) {
+                        throw IllegalArgumentException("drift/streams needs channel and generation")
+                    }
+                    streams.request(name, listen = listen, generation = generation)
                     mainHandler.post { applyStream(name) }
-                    Pair(null, null)
+                    null
                 }
-                else -> Pair(null, unknownMethod("drift/streams", method))
             }
         }
     }
@@ -525,9 +469,9 @@ object PlatformChannelManager : DriftPluginHost {
 
 /**
  * Go's interest in each event stream and whether its declared stream runs.
- * Go numbers its requests, which can arrive out of order from different
- * threads; the newest wins. Requests are recorded on the calling thread,
- * transitions made on the main thread.
+ * Go numbers its requests, which can leave different goroutines in any
+ * order; the newest wins. Requests and transitions happen on the main
+ * thread; a stream can end (sendEventDone) from any thread.
  */
 class StreamLifecycle {
     private class State {
@@ -580,35 +524,25 @@ class StreamLifecycle {
 // MARK: - Clipboard Handler
 
 object ClipboardHandler {
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-
-        return when (method) {
-            "getText" -> {
-                val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                Pair(mapOf("text" to text), null)
+    fun start(host: DriftPluginHost) {
+        val clipboard = host.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        host.registerChannel("drift/clipboard") {
+            method("getText") {
+                mapOf("text" to (clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""))
             }
-
-            "setText" -> {
-                val argsMap = args as? Map<*, *>
-                val text = argsMap?.get("text") as? String
-                    ?: return Pair(null, IllegalArgumentException("Missing text argument"))
-
-                val clip = ClipData.newPlainText("text", text)
-                clipboard.setPrimaryClip(clip)
-                Pair(null, null)
+            method("setText") { args ->
+                val text = (args as? Map<*, *>)?.get("text") as? String
+                    ?: throw IllegalArgumentException("Missing text argument")
+                clipboard.setPrimaryClip(ClipData.newPlainText("text", text))
+                null
             }
-
-            "hasText" -> {
-                Pair(clipboard.hasPrimaryClip() && clipboard.primaryClip?.getItemAt(0)?.text != null, null)
+            method("hasText") {
+                clipboard.hasPrimaryClip() && clipboard.primaryClip?.getItemAt(0)?.text != null
             }
-
-            "clear" -> {
+            method("clear") {
                 clipboard.clearPrimaryClip()
-                Pair(null, null)
+                null
             }
-
-            else -> Pair(null, unknownMethod("drift/clipboard", method))
         }
     }
 }
@@ -616,26 +550,21 @@ object ClipboardHandler {
 // MARK: - Haptics Handler
 
 object HapticsHandler {
-    fun handle(context: Context, view: View?, method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "impact" -> {
-                val argsMap = args as? Map<*, *>
-                val style = argsMap?.get("style") as? String
-                    ?: return Pair(null, IllegalArgumentException("Missing style argument"))
-
-                performHaptic(context, view, style)
-                Pair(null, null)
+    /** [view] is the view that performs haptic feedback, if one is attached. */
+    fun start(host: DriftPluginHost, view: () -> View?) {
+        val context = host.context
+        host.registerChannel("drift/haptics") {
+            method("impact") { args ->
+                val style = (args as? Map<*, *>)?.get("style") as? String
+                    ?: throw IllegalArgumentException("Missing style argument")
+                performHaptic(context, view(), style)
+                null
             }
-
-            "vibrate" -> {
-                val argsMap = args as? Map<*, *>
-                val duration = (argsMap?.get("duration") as? Number)?.toLong() ?: 100L
-
+            method("vibrate") { args ->
+                val duration = ((args as? Map<*, *>)?.get("duration") as? Number)?.toLong() ?: 100L
                 vibrate(context, duration)
-                Pair(null, null)
+                null
             }
-
-            else -> Pair(null, unknownMethod("drift/haptics", method))
         }
     }
 
@@ -678,13 +607,15 @@ object HapticsHandler {
 // MARK: - Share Handler
 
 object ShareHandler {
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        if (method != "share") {
-            return Pair(null, unknownMethod("drift/share", method))
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/share") {
+            method("share") { args -> share(host.context, args) }
         }
+    }
 
+    private fun share(context: Context, args: Any?): Map<String, Any> {
         val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
+            ?: throw IllegalArgumentException("Invalid arguments")
 
         val intent = Intent(Intent.ACTION_SEND).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -757,25 +688,24 @@ object ShareHandler {
         }
         context.startActivity(chooser)
 
-        return Pair(mapOf("result" to "success"), null)
+        return mapOf("result" to "success")
     }
 }
 
 // MARK: - Deep Link Handler
 
 object DeepLinkHandler {
+    /** Main thread only, like everything in this object. */
     private var initialLink: Map<String, Any>? = null
     private var lastLink: String? = null
 
-    @Suppress("UNUSED_PARAMETER")
-    fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "getInitial" -> {
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/deeplinks") {
+            method("getInitial") {
                 val link = initialLink
                 initialLink = null
-                Pair(link, null)
+                link
             }
-            else -> Pair(null, unknownMethod("drift/deeplinks", method))
         }
     }
 
@@ -804,13 +734,12 @@ object DeepLinkHandler {
 // MARK: - Lifecycle Handler
 
 object LifecycleHandler {
+    /** Main thread only: Activity callbacks write it, getState reads it. */
     private var currentState = "resumed"
 
-    @Suppress("UNUSED_PARAMETER")
-    fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "getState" -> Pair(mapOf("state" to currentState), null)
-            else -> Pair(null, unknownMethod("drift/lifecycle", method))
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/lifecycle") {
+            method("getState") { mapOf("state" to currentState) }
         }
     }
 
@@ -832,23 +761,22 @@ object LifecycleHandler {
 object SystemUIHandler {
     private data class Style(val statusBarHidden: Boolean, val statusBarStyle: String)
 
-    @Volatile
+    /** Main thread only. */
     private var current = Style(statusBarHidden = false, statusBarStyle = "default")
 
-    fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
-        if (method != "setStyle") {
-            return Pair(null, unknownMethod("drift/system_ui", method))
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/system_ui") {
+            method("setStyle") { args ->
+                val argsMap = args as? Map<*, *>
+                    ?: throw IllegalArgumentException("Invalid arguments")
+                current = Style(
+                    statusBarHidden = argsMap["statusBarHidden"] as? Boolean ?: false,
+                    statusBarStyle = argsMap["statusBarStyle"] as? String ?: "default",
+                )
+                PlatformChannelManager.currentActivity()?.let { apply(it) }
+                null
+            }
         }
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        current = Style(
-            statusBarHidden = argsMap["statusBarHidden"] as? Boolean ?: false,
-            statusBarStyle = argsMap["statusBarStyle"] as? String ?: "default",
-        )
-        PlatformChannelManager.currentActivity()?.let { activity ->
-            activity.runOnUiThread { apply(activity) }
-        }
-        return Pair(null, null)
     }
 
     /** Applies the current style to activity's window. Main thread. */
@@ -893,37 +821,33 @@ object SafeAreaHandler {
 // MARK: - URL Launcher Handler
 
 object URLLauncherHandler {
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "openURL" -> {
-                val argsMap = args as? Map<*, *>
-                val url = argsMap?.get("url") as? String
-                    ?: return Pair(null, IllegalArgumentException("Missing url argument"))
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                    Pair(null, null)
-                } catch (e: android.content.ActivityNotFoundException) {
-                    Pair(null, IllegalArgumentException("No application can handle this URL: $url"))
+    fun start(host: DriftPluginHost) {
+        val context = host.context
+        host.registerChannel("drift/url_launcher") {
+            method("openURL") { args ->
+                val url = url(args)
+                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                try {
+                    context.startActivity(intent)
+                } catch (e: android.content.ActivityNotFoundException) {
+                    throw IllegalArgumentException("No application can handle this URL: $url")
+                }
+                null
             }
-
-            "canOpenURL" -> {
-                val argsMap = args as? Map<*, *>
-                val url = argsMap?.get("url") as? String
-                    ?: return Pair(null, IllegalArgumentException("Missing url argument"))
-                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                val canOpen = intent.resolveActivity(context.packageManager) != null
-                Pair(mapOf("canOpen" to canOpen), null)
+            method("canOpenURL") { args ->
+                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url(args)))
+                mapOf("canOpen" to (intent.resolveActivity(context.packageManager) != null))
             }
-
-            else -> Pair(null, unknownMethod("drift/url_launcher", method))
         }
     }
+
+    private fun url(args: Any?): String =
+        (args as? Map<*, *>)?.get("url") as? String
+            ?: throw IllegalArgumentException("Missing url argument")
 }
 
-/** The error a built-in channel answers for a method it does not have. */
-internal fun unknownMethod(channel: String, method: String) =
+/** The error a channel answers for a method it does not declare. */
+private fun unknownMethod(channel: String, method: String) =
     DriftCallError("method_not_found", "$channel has no method $method")

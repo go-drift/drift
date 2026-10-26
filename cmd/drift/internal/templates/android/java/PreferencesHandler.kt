@@ -5,6 +5,7 @@
 package {{.PackageName}}
 
 import android.content.Context
+import com.drift.runner.DriftPluginHost
 
 object PreferencesHandler {
     // A dedicated SharedPreferences file isolates drift keys from the rest of
@@ -12,70 +13,32 @@ object PreferencesHandler {
     // UserDefaults.standard app-wide and therefore prefixes every key).
     private const val PREFS_NAME = "drift_preferences"
 
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "set" -> set(context, args)
-            "get" -> get(context, args)
-            "delete" -> delete(context, args)
-            "contains" -> contains(context, args)
-            "getAllKeys" -> getAllKeys(context)
-            "deleteAll" -> deleteAll(context)
-            else -> Pair(null, unknownMethod("drift/preferences", method))
+    fun start(host: DriftPluginHost) {
+        val prefs = host.context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        host.registerChannel("drift/preferences") {
+            method("set") { args ->
+                val key = key(args)
+                val value = (args as Map<*, *>)["value"] as? String
+                    ?: throw IllegalArgumentException("Missing value")
+                prefs.edit().putString(key, value).apply()
+                null
+            }
+            method("get") { args -> mapOf("value" to prefs.getString(key(args), null)) }
+            method("delete") { args ->
+                prefs.edit().remove(key(args)).apply()
+                null
+            }
+            method("contains") { args -> mapOf("exists" to prefs.contains(key(args))) }
+            method("getAllKeys") { mapOf("keys" to prefs.all.keys.toList()) }
+            method("deleteAll") {
+                prefs.edit().clear().apply()
+                null
+            }
         }
     }
 
-    private fun set(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val key = argsMap["key"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing key"))
-        val value = argsMap["value"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing value"))
-
-        getPrefs(context).edit().putString(key, value).apply()
-        return Pair(null, null)
+    private fun key(args: Any?): String {
+        val argsMap = args as? Map<*, *> ?: throw IllegalArgumentException("Invalid arguments")
+        return argsMap["key"] as? String ?: throw IllegalArgumentException("Missing key")
     }
-
-    private fun get(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val key = argsMap["key"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing key"))
-
-        val value = getPrefs(context).getString(key, null)
-        return Pair(mapOf("value" to value), null)
-    }
-
-    private fun delete(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val key = argsMap["key"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing key"))
-
-        getPrefs(context).edit().remove(key).apply()
-        return Pair(null, null)
-    }
-
-    private fun contains(context: Context, args: Any?): Pair<Any?, Exception?> {
-        val argsMap = args as? Map<*, *>
-            ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val key = argsMap["key"] as? String
-            ?: return Pair(null, IllegalArgumentException("Missing key"))
-
-        val exists = getPrefs(context).contains(key)
-        return Pair(mapOf("exists" to exists), null)
-    }
-
-    private fun getAllKeys(context: Context): Pair<Any?, Exception?> {
-        val keys = getPrefs(context).all.keys.toList()
-        return Pair(mapOf("keys" to keys), null)
-    }
-
-    private fun deleteAll(context: Context): Pair<Any?, Exception?> {
-        getPrefs(context).edit().clear().apply()
-        return Pair(null, null)
-    }
-
-    private fun getPrefs(context: Context) =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 }

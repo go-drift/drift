@@ -8,6 +8,7 @@ import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import com.drift.runner.DriftPluginHost
 
 object AccessibilityHandler {
     private var bridge: AccessibilityBridge? = null
@@ -68,61 +69,46 @@ object AccessibilityHandler {
         }
     }
 
-    /**
-     * Handles platform channel method calls.
-     */
-    fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
-        return when (method) {
-            "updateSemantics" -> updateSemantics(args)
-            "announce" -> announce(args)
-            "setAccessibilityFocus" -> setAccessibilityFocus(args)
-            "clearAccessibilityFocus" -> clearAccessibilityFocus()
-            "isAccessibilityEnabled" -> isAccessibilityEnabled()
-            else -> Pair(null, unknownMethod("drift/accessibility", method))
-        }
-    }
+    fun start(host: DriftPluginHost) {
+        host.registerChannel("drift/accessibility") {
+            method("updateSemantics") { args ->
+                val map = args as? Map<*, *> ?: throw IllegalArgumentException("Invalid arguments")
 
-    private fun updateSemantics(args: Any?): Pair<Any?, Exception?> {
-        val map = args as? Map<*, *> ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
+                @Suppress("UNCHECKED_CAST")
+                val updates = (map["updates"] as? List<Map<String, Any?>>) ?: emptyList()
+                val removals = (map["removals"] as? List<*>)?.mapNotNull {
+                    when (it) {
+                        is Number -> it.toLong()
+                        else -> null
+                    }
+                } ?: emptyList()
 
-        @Suppress("UNCHECKED_CAST")
-        val updates = (map["updates"] as? List<Map<String, Any?>>) ?: emptyList()
-        val removals = (map["removals"] as? List<*>)?.mapNotNull {
-            when (it) {
-                is Number -> it.toLong()
-                else -> null
+                bridge?.updateSemantics(updates, removals)
+                null
             }
-        } ?: emptyList()
+            method("announce") { args ->
+                val map = args as? Map<*, *> ?: throw IllegalArgumentException("Invalid arguments")
+                val message = map["message"] as? String ?: throw IllegalArgumentException("Missing message")
+                val politeness = map["politeness"] as? String ?: "polite"
 
-        bridge?.updateSemantics(updates, removals)
-        return Pair(null, null)
-    }
+                bridge?.announce(message, politeness)
+                null
+            }
+            method("setAccessibilityFocus") { args ->
+                val map = args as? Map<*, *> ?: throw IllegalArgumentException("Invalid arguments")
+                val nodeId = (map["nodeId"] as? Number)?.toLong() ?: throw IllegalArgumentException("Missing nodeId")
 
-    private fun announce(args: Any?): Pair<Any?, Exception?> {
-        val map = args as? Map<*, *> ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val message = map["message"] as? String ?: return Pair(null, IllegalArgumentException("Missing message"))
-        val politeness = map["politeness"] as? String ?: "polite"
-
-        bridge?.announce(message, politeness)
-        return Pair(null, null)
-    }
-
-    private fun setAccessibilityFocus(args: Any?): Pair<Any?, Exception?> {
-        val map = args as? Map<*, *> ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
-        val nodeId = (map["nodeId"] as? Number)?.toLong() ?: return Pair(null, IllegalArgumentException("Missing nodeId"))
-
-        bridge?.setAccessibilityFocus(nodeId)
-        return Pair(null, null)
-    }
-
-    private fun clearAccessibilityFocus(): Pair<Any?, Exception?> {
-        bridge?.clearAccessibilityFocus()
-        return Pair(null, null)
-    }
-
-    private fun isAccessibilityEnabled(): Pair<Any?, Exception?> {
-        val enabled = accessibilityManager?.isEnabled ?: false
-        return Pair(mapOf("enabled" to enabled), null)
+                bridge?.setAccessibilityFocus(nodeId)
+                null
+            }
+            method("clearAccessibilityFocus") {
+                bridge?.clearAccessibilityFocus()
+                null
+            }
+            method("isAccessibilityEnabled") {
+                mapOf("enabled" to (accessibilityManager?.isEnabled ?: false))
+            }
+        }
     }
 
     private fun notifyAccessibilityState() {
