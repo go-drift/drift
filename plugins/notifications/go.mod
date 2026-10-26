@@ -2,7 +2,7 @@ module github.com/go-drift/drift/plugins/notifications
 
 go 1.24.0
 
-require github.com/go-drift/drift v0.0.0
+require github.com/go-drift/drift v0.26.1
 
 replace github.com/go-drift/drift => ../..
 

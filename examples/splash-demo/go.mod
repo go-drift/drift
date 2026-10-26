@@ -3,8 +3,8 @@ module github.com/go-drift/drift/examples/splash-demo
 go 1.24.0
 
 require (
-	github.com/go-drift/drift v0.0.0
-	github.com/go-drift/drift/plugins/splash v0.0.0
+	github.com/go-drift/drift v0.26.1
+	github.com/go-drift/drift/plugins/splash v0.26.1
 )
 
 replace (

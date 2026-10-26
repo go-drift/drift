@@ -3,7 +3,7 @@ module github.com/go-drift/drift/plugins/firebase
 go 1.24.0
 
 require (
-	github.com/go-drift/drift v0.0.0
+	github.com/go-drift/drift v0.26.1
 	howett.net/plist v1.0.1
 )
 
