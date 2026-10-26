@@ -30,10 +30,10 @@ First-party plugins live in the Drift repository:
 
 ### Adding a plugin
 
-Add the module to your app, then list the build half in `drift.yaml`:
+Add the module to your app at your CLI's version (`drift version` prints it; see [Versions](#versions)), then list the build half in `drift.yaml`:
 
 ```bash
-go get github.com/go-drift/drift/plugins/splash
+go get github.com/go-drift/drift/plugins/splash@<version>
 ```
 
 ```yaml
@@ -64,6 +64,25 @@ drift plugin list --json
 ```
 
 `drift plugin sync` exits nonzero on invalid config, so CI can run it.
+
+### Versions
+
+First-party plugins are released with Drift: each Drift release tags every plugin under `plugins/` at the same version. Use the plugins, the `github.com/go-drift/drift` module and the `drift` CLI at one version, and upgrade them together; for example, to v0.28.0:
+
+```bash
+go install github.com/go-drift/drift/cmd/drift@v0.28.0
+go get github.com/go-drift/drift@v0.28.0 github.com/go-drift/drift/plugins/splash@v0.28.0
+```
+
+A plugin's native code compiles against the plugin API the CLI ships, so a release CLI checks every build and stops on a mismatch, naming the versions involved:
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| Plugins require a newer drift than this CLI | A plugin's `go.mod` requires a newer Drift than the CLI, so its native code may use API the CLI lacks | Install the CLI the error names |
+| Plugins were written for an older plugin API | A plugin requires a Drift older than the oldest plugin API the CLI still serves | Update the plugin, or use the CLI it was written for |
+| The app builds with drift X, but this CLI is Y | The app's `go.mod` selects a Drift whose major.minor differs from the CLI's | Install the CLI matching the app, or change the app's Drift version |
+
+Development builds of the CLI (built from a checkout) skip these checks.
 
 ### Removing a plugin
 
@@ -443,6 +462,8 @@ hello/
     ├── hello.go
     └── hello_test.go
 ```
+
+The `github.com/go-drift/drift` version the plugin's `go.mod` requires declares the plugin API its native code is written against: require the oldest Drift release whose API the plugin uses. A release CLI refuses a plugin requiring a newer Drift than itself, or one older than the oldest plugin API it still serves (see [Versions](#versions)). Version the plugin itself however you like.
 
 The build half compiles into the bridge, the runtime half into the app. Keep them in separate packages so neither pulls in the other's dependencies.
 

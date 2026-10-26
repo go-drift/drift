@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging; then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (6.1 done, see [6.1 status](#61-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -340,8 +340,8 @@ What the migration built in core: the permission registry (plugins register kind
 
 1. ~~On the Mac: run `examples/plugins/hello` and `examples/firebase-demo` on the iOS Simulator, and the Phase 5 plugins.~~ Done 2026-10-21 (Second review, Phase 5 status).
 2. Do Phase 6 on `feat/plugins-release`, branched from `feat/core-plugins`, in the order below.
-3. Rebase `feat/plugins-release` onto `master`. Rerun `go vet`/`go test` in the root, every `plugins/*` module and `examples/plugins/hello`. Then one combined device pass: the 6.3 checks on the iOS Simulator (see the Mac Simulator notes in the session memory, or run on the Mac directly), the 6.1 install check from an app outside the repo, and a smoke run of splash-demo and firebase-demo on the emulator and Simulator.
-4. Fast-forward `master` to `feat/plugins-release` (`feat/plugins` and `feat/core-plugins` are its ancestors; delete them afterwards), tag the release with the 6.1 scheme, and repeat the 6.1 install check against the real tags.
+3. Rebase `feat/plugins-release` onto `master`. Rerun `go vet`/`go test` in the root, every `plugins/*` module and `examples/plugins/hello`. Then one combined device pass: the 6.3 checks on the iOS Simulator (see the Mac Simulator notes in the session memory, or run on the Mac directly), the 6.1 install check (`scripts/install-check.sh --build android,xtool v0.27.0`), and a smoke run of splash-demo and firebase-demo on the emulator and Simulator.
+4. Fast-forward `master` to `feat/plugins-release` (`feat/plugins` and `feat/core-plugins` are its ancestors; delete them afterwards). Release: `scripts/release.sh prepare v0.27.0`, push the release commit, `scripts/release.sh v0.27.0` (the workflow tags the root and every plugin). Then `scripts/install-check.sh --real --build android,xtool v0.27.0` against the real tags.
 
 ### Phase 6: release readiness
 
@@ -355,12 +355,31 @@ Runs before merge, on `feat/plugins-release` (see [Release sequence](#release-se
 - **Do:** tag each plugin module as `plugins/<name>/vX.Y.Z` from the release script; require a real drift version in each plugin's `go.mod` (keep the `replace` for in-repo development through a `go.work` instead); have the bridge report the `pkg/plugin` version it was built with and the CLI fail with a clear message on a mismatch that the `DriftPluginAPI` templates cannot serve. Decide whether plugins version in lockstep with drift (simplest) or independently.
 - **Done when:** an app outside the repo can `go get github.com/go-drift/drift/plugins/splash@<version>` and build on Android and xtool; a deliberately mismatched plugin fails the build with a message naming both versions. Before merge, test with the pushed branch (`@feat/plugins-release` resolves to a pseudo-version) or a local `GOPROXY`; after tagging, repeat with the real tags (Release sequence step 4).
 
+##### 6.1 status
+
+Done (`fddeba4`..`7118e69`). Decisions (2026-10-26):
+- **Lockstep.** First-party plugins release with Drift: one version, tagged `vX.Y.Z` and `plugins/<name>/vX.Y.Z` on one commit, in one atomic push. Third-party plugins version freely; their contract is the drift version their `go.mod` requires.
+- **`replace`, not `go.work`.** Every in-repo module requires the last released drift (now `v0.26.1`) and keeps its `replace`; the release commit (`release.sh prepare`) bumps the requirements. Consumers ignore a dependency's `replace`; `go.work` would break `go mod tidy` in plugin modules (tidy ignores it and would fetch a drift tag lacking new packages) and errors on the existing replaces.
+- **Skew check** (answers Unresolved question 4; `APIVersion` stays the wire format). A release CLI refuses a plugin requiring a drift newer than the CLI or older than `templates.PluginAPIFloor` (`v0.27.0`), and a bridge (which now reports `drift_version`) on another drift major.minor. Development CLIs skip it. Fatal only on the plugin path; apps without plugins keep the `CheckVersionMismatch` warning.
+
+| Commit | Content |
+|--------|---------|
+| `fddeba4` | In-repo modules require drift `v0.26.1` (was `v0.0.0`), keeping their `replace` |
+| `8e93629` | Bridge responses carry `drift_version` from build info; the unused `version` command is gone |
+| `0881edc` | `compat.go`: per-plugin required drift vs the CLI and `PluginAPIFloor` (`VersionSkewError`, every offender listed), bridge drift vs the CLI; run from `EnsureBridge`/`RunBridge`, so build, run, sync and list check |
+| `97c99c3` | `scripts/releasetool` (bump, check, tags, proxy), `release.sh prepare`, `release-tags.sh` (atomic push; a rebuild tags nothing), workflow checks modules before the Skia build |
+| `b8ae4dc` | `drift init` requires the CLI's own drift version (was `@latest`, which the bridge check would then refuse) |
+| `7118e69` | `scripts/install-check.sh`: release rehearsal through a file `GOPROXY`, `--real` for published tags |
+
+**Verified (Linux):** `go vet`/`go test` in the root and every module; `scripts/install-check.sh --build android,xtool v0.27.0`: the CLI installed at `v0.27.0` from the rehearsal proxy, `drift init` outside the repo, `plugins/splash@v0.27.0` with no `replace`, `drift build android` and `drift build xtool` succeed; a plugin requiring `v0.28.0` fails naming it, `v0.28.0` and the CLI's `v0.27.0`; an app on drift `v0.28.0` fails naming both. Still to do: the pushed-branch check and, after tagging, `--real`.
+
 #### 6.2 Ejected projects
 
 - **A plugin upgrade looks like a removal.** Lock keys include target content (for example the Gradle coordinate with its version), so a version bump fails the next ejected build once with "plugins removed ... left these edits" and leaves the old line next to the new one. Key the lock on the target without content.
 - **The lock can delete a file the same build just wrote.** If a CLI upgrade renames an op type or changes its targets, the old key disappears while the hash still matches, so `SyncEjectedLock` deletes the path after `Apply` wrote it (reproduced with `app/google-services.json`; the next build recovers). Never delete a path a current op owns.
 - **Plugins can overwrite user files.** `Apply` writes owned files unconditionally and `WriteXML` only reserves Drift's `plugin_*` values files, so a plugin can replace `drawable/launch_background.xml`, `values/styles.xml`, a user's image set or a Kotlin file in `com.drift.runner`; the lock then records Drift's hash and a later removal deletes it. In ejected mode, refuse to overwrite an existing file that is not in the previous lock and differs; reserve template resource paths and the `com.drift.runner` package.
 - **The lock file is written non-atomically** (`lock.go`), so a crash mid-write fails every later build; paths read from it are not confined to the project.
+- **Re-checked at `bd08dd7`** (all four hold). Also: content in the lock key hits `add_intent_filter` too (its XML hash is the member); `apply_plugin` keys carry no version, but in an ejected project a version bump fails `ApplyGradleProjectPlugins` on every build (Drift's own earlier line reads as a user conflict); a key whose path changed leaks the old path; every mutator writes non-atomically, not only the lock; `TestSyncEjectedLockContentChangeIsNotRemoval` covers only an owner op.
 - **Done when:** a test ejects a project, upgrades a plugin version (lock unchanged, no "removed" error), renames an op type between two runs (nothing deleted), plants a user file at a plugin's path (build refuses with the path named), and interrupts a lock write (next build recovers).
 
 #### 6.3 iOS lifecycle
@@ -371,6 +390,7 @@ Runs before merge, on `feat/plugins-release` (see [Release sequence](#release-se
 
 **iOS detach and leaks**
 - **Detach never runs on scene disconnect.** `CADisplayLink(target: self)` (`DriftViewController.swift`) holds the view controller strongly until `viewDidDisappear`, `SceneDelegate` has no `sceneDidDisconnect`, and detach depends on `deinit`. Plugins stay attached to a dead controller and the controller, Metal view and display link leak, even when no plugin retains the binding (`DriftViewBinding` also holds the controller strongly). Detach explicitly in `sceneDidDisconnect` and give the display link a weak proxy target.
+- **Re-checked at `bd08dd7`** (all hold). Android arms the splash timer in `onRegister` (`Application.onCreate`) too, so a process started for a push has the same bug. iOS `first_frame` moved to `DriftRenderer.swift` (the `nextDrawable` guard is in `DriftMetalView.swift`); `firstFrameRendered` is set before the presented/completed handler fires, so a drawable never presented also loses it. xtool's `DriftApp` has no `dismantleUIViewController`. Android already detaches from `MainActivity.onDestroy`.
 - **Done when:** on the Simulator, a background launch followed by opening the app after `max_duration_ms` still honours Preserve; a forced `first_frame` miss dismisses at the ceiling; disconnecting the scene (App Switcher, or multiple windows on iPad) calls `detach` and Instruments shows no leaked `DriftViewController`.
 
 #### 6.4 Author experience
@@ -453,4 +473,4 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 1. ~~Per-plugin SwiftPM targets / Gradle modules, or loose sources?~~ iOS: per-plugin SwiftPM targets (shipped). Android: loose sources for v1.
 2. ~~Do local notifications stay core until a `notifications` plugin exists, or move with push?~~ Stay core until Phase 5 (see Phase 3 decisions).
 3. ~~Keep the xcodeproj/xtool dual path, or declare some plugins xcodeproj-only?~~ Dual path; no plugin is xcodeproj-only (Phase 4 decisions).
-4. Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew (today `APIVersion` stays `1`)? Answer in Phase 6.1, together with lockstep vs independent plugin versions.
+4. ~~Plugin compatibility metadata: should the bridge report its `pkg/plugin` version so the CLI can hard-fail on skew?~~ Yes, plus a per-plugin check against the drift its `go.mod` requires; plugins version in lockstep (see [6.1 status](#61-status)).
