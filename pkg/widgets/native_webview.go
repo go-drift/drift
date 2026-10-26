@@ -12,9 +12,10 @@ import (
 // Create a [platform.WebViewController] with [core.UseDisposable] and pass
 // it to this widget:
 //
-//	s.web = platform.NewWebViewController()
+//	s.web, err = platform.NewWebViewController()
+//	...
 //	core.UseDisposable(s, s.web)
-//	s.web.OnPageFinished = func(url string) { ... }
+//	core.UseListenable(s, s.web.Page()) // rebuild as pages load
 //	s.web.Load("https://example.com")
 //
 //	// in Build:

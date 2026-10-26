@@ -19,20 +19,8 @@ func (nativeWebViewFactory) Create(viewID int64, params map[string]any) (Platfor
 
 type nativeWebView struct {
 	PlatformViewBase
-	mu sync.RWMutex
-
-	// OnPageStarted is called when a page starts loading.
-	// Called on the UI thread via [Dispatch].
-	OnPageStarted func(url string)
-
-	// OnPageFinished is called when a page finishes loading.
-	// Called on the UI thread via [Dispatch].
-	OnPageFinished func(url string)
-
-	// OnError is called when a loading error occurs.
-	// The code parameter is one of the ErrCodeNetworkError, ErrCodeSSLError,
-	// or ErrCodeLoadFailed constants. Called on the UI thread via [Dispatch].
-	OnError func(code, message string)
+	mu         sync.RWMutex
+	controller *WebViewController // guarded by mu; nil until set
 }
 
 func (v *nativeWebView) Create(params map[string]any) error {
@@ -41,43 +29,11 @@ func (v *nativeWebView) Create(params map[string]any) error {
 
 func (v *nativeWebView) Dispose() {}
 
-// handlePageStarted processes page start events from native.
-func (v *nativeWebView) handlePageStarted(url string) {
-	v.mu.RLock()
-	cb := v.OnPageStarted
-	v.mu.RUnlock()
-
-	if cb != nil {
-		Dispatch(func() {
-			cb(url)
-		})
-	}
-}
-
-// handlePageFinished processes page finish events from native.
-func (v *nativeWebView) handlePageFinished(url string) {
-	v.mu.RLock()
-	cb := v.OnPageFinished
-	v.mu.RUnlock()
-
-	if cb != nil {
-		Dispatch(func() {
-			cb(url)
-		})
-	}
-}
-
-// handleError processes error events from native.
-func (v *nativeWebView) handleError(code, message string) {
-	v.mu.RLock()
-	cb := v.OnError
-	v.mu.RUnlock()
-
-	if cb != nil {
-		Dispatch(func() {
-			cb(code, message)
-		})
-	}
+// setController sets the controller the view's events go to.
+func (v *nativeWebView) setController(c *WebViewController) {
+	v.mu.Lock()
+	v.controller = c
+	v.mu.Unlock()
 }
 
 func init() {
@@ -93,10 +49,8 @@ func (v *nativeWebView) HandleEvent(method string, args map[string]any) error {
 		if err != nil {
 			return err
 		}
-		if method == "onPageStarted" {
-			v.handlePageStarted(url)
-		} else {
-			v.handlePageFinished(url)
+		if c := v.controllerOrNil(); c != nil {
+			c.setPage(WebPage{URL: url, Loading: method == "onPageStarted"})
 		}
 	case "onWebViewError":
 		code, err := requireString(method, args, "code")
@@ -107,9 +61,17 @@ func (v *nativeWebView) HandleEvent(method string, args map[string]any) error {
 		if err != nil {
 			return err
 		}
-		v.handleError(code, message)
+		if c := v.controllerOrNil(); c != nil {
+			c.errors.Emit(webViewErrorCodes.NewError(code, message))
+		}
 	default:
 		return fmt.Errorf("%s: %w", method, ErrMethodNotFound)
 	}
 	return nil
+}
+
+func (v *nativeWebView) controllerOrNil() *WebViewController {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.controller
 }

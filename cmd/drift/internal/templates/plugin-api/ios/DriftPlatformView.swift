@@ -12,7 +12,8 @@
 ///
 /// A view outlives the view controller that hosts it: when the scene
 /// reconnects, Drift moves it into the new Drift view. Do not keep the
-/// hosting view controller; reach the current one through `view.window`.
+/// hosting view controller; reach the current one through `view.window`,
+/// and rebuild what was built for the old one in `onHostChanged()`.
 
 import UIKit
 
@@ -32,10 +33,18 @@ public protocol DriftPlatformView: AnyObject {
 
     /// Called after Drift moved or resized the view.
     func onGeometryChanged()
+
+    /// Called after Drift moved the view to another host: into the Drift
+    /// view of a scene that connected, or out of one that disconnected.
+    /// Rebuild anything the view built for the old window or scene (a
+    /// presented view controller, say). Views holding none need not
+    /// implement it.
+    func onHostChanged()
 }
 
 public extension DriftPlatformView {
     func onGeometryChanged() {}
+    func onHostChanged() {}
 }
 
 /// Sends a view's events to its Go view (`PlatformView.HandleEvent`).

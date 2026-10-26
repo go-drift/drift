@@ -305,10 +305,11 @@ enum PlatformViewHandler {
         precondition(overlayView.superview === view, "drift: platform view overlay must be a subview of the host view")
         hostView = view
         self.overlayView = overlayView
-        for interceptor in interceptors.values {
+        for (viewId, interceptor) in interceptors {
             interceptor.removeFromSuperview()
             interceptor.isHidden = true
             view.insertSubview(interceptor, belowSubview: overlayView)
+            views[viewId]?.onHostChanged()
         }
     }
 
@@ -318,8 +319,9 @@ enum PlatformViewHandler {
     static func removeHostView(_ view: UIView) {
         dispatchPrecondition(condition: .onQueue(.main))
         guard hostView === view else { return }
-        for interceptor in interceptors.values {
+        for (viewId, interceptor) in interceptors {
             interceptor.removeFromSuperview()
+            views[viewId]?.onHostChanged()
         }
         hostView = nil
         overlayView = nil

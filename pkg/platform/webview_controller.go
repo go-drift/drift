@@ -4,92 +4,92 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-drift/drift/pkg/errors"
+	"github.com/go-drift/drift/pkg/core"
 )
 
+// WebPage is what a web view shows.
+type WebPage struct {
+	// URL is the page's URL, "" before the first load.
+	URL string
+	// Loading reports whether the page is still loading.
+	Loading bool
+}
+
 // WebViewController provides control over a native web browser view.
-// The controller creates its platform view eagerly, so methods and callbacks
-// work immediately after construction.
+// The controller creates its platform view eagerly, so its methods work
+// right after construction.
 //
-// Create with [NewWebViewController] and manage lifecycle with
+// Create with [NewWebViewController] and manage its lifetime with
 // [core.UseDisposable]:
 //
-//	s.web = platform.NewWebViewController()
+//	s.web, err = platform.NewWebViewController()
+//	...
 //	core.UseDisposable(&s.StateBase, s.web)
-//	s.web.OnPageFinished = func(url string) { ... }
+//	core.UseListenable(&s.StateBase, s.web.Page())
 //	s.web.Load("https://example.com")
 //
 // Pass the controller to a [widgets.NativeWebView] widget to embed the native
-// surface in the widget tree.
-//
-// Set callback fields before calling [WebViewController.Load] to ensure
-// no events are missed.
+// surface in the widget tree. The controller publishes the page as state,
+// [WebViewController.Page], and load failures as the
+// [WebViewController.Errors] stream; subscribe to Errors before Load so no
+// failure is missed.
 //
 // All methods are safe for concurrent use.
 type WebViewController struct {
 	mu     sync.RWMutex
-	view   *nativeWebView // guarded by mu
-	viewID int64          // guarded by mu
+	viewID int64 // guarded by mu
 
-	// OnPageStarted is called when a page starts loading.
-	// Called on the UI thread.
-	OnPageStarted func(url string)
-
-	// OnPageFinished is called when a page finishes loading.
-	// Called on the UI thread.
-	OnPageFinished func(url string)
-
-	// OnError is called when a loading error occurs.
-	// The code parameter is one of [ErrCodeNetworkError], [ErrCodeSSLError],
-	// or [ErrCodeLoadFailed]. Called on the UI thread.
-	OnError func(code, message string)
+	page     *core.Signal[WebPage]
+	readPage *core.Derived[WebPage]
+	errors   *Emitter[error]
 }
 
-// NewWebViewController creates a new web view controller.
-// The underlying platform view is created eagerly so methods and callbacks
-// work immediately.
-func NewWebViewController() *WebViewController {
-	c := &WebViewController{}
-
+// NewWebViewController creates a web view controller and its native web
+// view. It fails if the native view cannot be created.
+func NewWebViewController() (*WebViewController, error) {
+	page := core.NewSignal(WebPage{})
+	c := &WebViewController{
+		page:     page,
+		readPage: core.NewDerived(page.Value, page),
+		errors:   NewEmitter[error]("platform.WebViewController"),
+	}
 	view, err := GetPlatformViewRegistry().Create("native_webview", map[string]any{})
 	if err != nil {
-		errors.Report(&errors.DriftError{
-			Op:  "NewWebViewController",
-			Err: fmt.Errorf("failed to create webview: %w", err),
-		})
-		return c
+		return nil, fmt.Errorf("web view: create: %w", err)
 	}
-
 	webView, ok := view.(*nativeWebView)
 	if !ok {
-		errors.Report(&errors.DriftError{
-			Op:  "NewWebViewController",
-			Err: fmt.Errorf("unexpected view type: %T", view),
-		})
-		return c
+		GetPlatformViewRegistry().Dispose(view.ViewID())
+		return nil, fmt.Errorf("web view: create: unexpected view type %T", view)
 	}
-
-	c.view = webView
+	webView.setController(c)
 	c.viewID = webView.ViewID()
+	return c, nil
+}
 
-	// Wire view callbacks to controller callback fields.
-	webView.OnPageStarted = func(url string) {
-		if c.OnPageStarted != nil {
-			c.OnPageStarted(url)
-		}
-	}
-	webView.OnPageFinished = func(url string) {
-		if c.OnPageFinished != nil {
-			c.OnPageFinished(url)
-		}
-	}
-	webView.OnError = func(code, message string) {
-		if c.OnError != nil {
-			c.OnError(code, message)
-		}
-	}
+// Page is the page the web view shows: its URL, and whether it is still
+// loading. It changes on the UI thread, so a widget can rebuild on it with
+// [core.UseListenable]. Each load sets Loading, then clears it when the page
+// finishes.
+func (c *WebViewController) Page() *core.Derived[WebPage] {
+	return c.readPage
+}
 
-	return c
+// Errors streams load failures, each matching [ErrWebViewNetwork],
+// [ErrWebViewSSL] or [ErrWebViewLoadFailed] under [errors.Is]. Like any
+// stream, its handlers run off the UI thread: update widgets inside
+// drift.Dispatch.
+func (c *WebViewController) Errors() *Stream[error] {
+	return c.errors.Stream()
+}
+
+// setPage sets the page on the UI thread, where its listeners may rebuild
+// widgets. Without a UI thread (tests), it sets it at once.
+func (c *WebViewController) setPage(page WebPage) {
+	set := func() { c.page.Set(page) }
+	if !Dispatch(set) {
+		set()
+	}
 }
 
 // ViewID returns the platform view ID, or 0 if the view was not created.
@@ -156,7 +156,6 @@ func (c *WebViewController) Reload() error {
 func (c *WebViewController) Dispose() {
 	c.mu.Lock()
 	id := c.viewID
-	c.view = nil
 	c.viewID = 0
 	c.mu.Unlock()
 	if id != 0 {

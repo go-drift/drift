@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
@@ -17,30 +18,55 @@ func buildWebViewPage(_ core.BuildContext) core.Widget { return webViewPage{} }
 type webViewState struct {
 	core.StateBase
 	controller *platform.WebViewController
-	status     *core.Signal[string]
+	createErr  error
+	// failure is the last load failure, cleared when a page loads.
+	failure *core.Signal[string]
 }
 
 func (s *webViewState) InitState() {
-	s.status = core.NewSignal("Idle")
-	s.controller = platform.NewWebViewController()
+	s.controller, s.createErr = platform.NewWebViewController()
+	if s.createErr != nil {
+		return
+	}
 	core.UseDisposable(s, s.controller)
-	core.UseListenable(s, s.status)
-
-	s.controller.OnPageStarted = func(url string) {
-		s.status.Set("Loading: " + url)
-	}
-	s.controller.OnPageFinished = func(url string) {
-		s.status.Set("Loaded: " + url)
-	}
-	s.controller.OnError = func(code, message string) {
-		s.status.Set("Error (" + code + "): " + message)
-	}
+	core.UseListenable(s, s.controller.Page())
+	s.failure = core.NewSignal("")
+	core.UseListenable(s, s.failure)
+	s.OnDispose(s.controller.Errors().Listen(platform.StreamHandler[error]{
+		OnEvent: func(err error) {
+			drift.Dispatch(func() { s.failure.Set(err.Error()) })
+		},
+	}))
+	s.OnDispose(s.controller.Page().AddListener(func() {
+		if s.controller.Page().Value().Loading {
+			s.failure.Set("")
+		}
+	}))
 
 	s.controller.Load("https://www.google.com")
 }
 
+// status describes the page for the status card.
+func (s *webViewState) status() string {
+	if failure := s.failure.Value(); failure != "" {
+		return "Error: " + failure
+	}
+	page := s.controller.Page().Value()
+	switch {
+	case page.URL == "":
+		return "Idle"
+	case page.Loading:
+		return "Loading: " + page.URL
+	default:
+		return "Loaded: " + page.URL
+	}
+}
+
 func (s *webViewState) Build(ctx core.BuildContext) core.Widget {
 	colors := theme.ColorsOf(ctx)
+	if s.createErr != nil {
+		return demoPage(ctx, "WebView", statusCard("Error: "+s.createErr.Error(), colors))
+	}
 
 	return demoPage(ctx, "WebView",
 		widgets.Text{
@@ -85,7 +111,7 @@ func (s *webViewState) Build(ctx core.BuildContext) core.Widget {
 			Height:     420,
 		},
 		widgets.VSpace(8),
-		statusCard(s.status.Value(), colors),
+		statusCard(s.status(), colors),
 		widgets.VSpace(40),
 	)
 }
