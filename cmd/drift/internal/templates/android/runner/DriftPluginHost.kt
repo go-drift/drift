@@ -54,6 +54,11 @@ interface DriftPluginHost {
      */
     fun registerChannel(name: String, declare: DriftChannel.() -> Unit)
 
+    /**
+     * Sends [data] (JSON-like, or null) to Go's listeners on [channel],
+     * whether or not Go is listening. A value that is not JSON-like is
+     * logged and reaches Go as a `not_encodable` stream error instead.
+     */
     fun sendEvent(channel: String, data: Any?)
     fun sendEventError(channel: String, code: String, message: String)
     fun sendEventDone(channel: String)

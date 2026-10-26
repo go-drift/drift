@@ -15,6 +15,8 @@ plugins:
 
 and import its Go API as `media "github.com/go-drift/drift/plugins/media/runtime"`. The [plugin's section](/docs/guides/plugins#media) lists its config (DASH on Android).
 
+Up to Drift v0.26 these types were core: `platform.VideoPlayerController`, `platform.NewVideoPlayerController`, `platform.AudioPlayerController`, `platform.NewAudioPlayerController`, `platform.PlaybackState` (and its `PlaybackState*` values), the `platform.ErrCode*` error codes and the `widgets.VideoPlayer` widget. They keep their names, methods, fields and callbacks in the `media` package, so moving to the plugin means adding it to `drift.yaml` and replacing the `platform.` and `widgets.` prefixes with `media.`.
+
 The plugin has two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI. Audio and video controllers share the same method set but are separate types. The video controller creates its native surface eagerly on construction, while the audio controller defers native player creation until the first method call.
 
 Both APIs deliver callbacks on the UI thread, so you can update widget state directly without wrapping calls in `drift.Dispatch`.

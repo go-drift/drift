@@ -23,10 +23,11 @@
 // On Android, values last as long as the install that wrote them: Auto
 // Backup and device transfer copy the encrypted files but not the Android
 // Keystore key that decrypts them (it never leaves the device), and
-// uninstalling deletes the key. A store restored without its key opens empty (the plugin resets it and logs a warning), so keep
-// what it holds recoverable, such as a token the user gets back by signing
-// in again. On iOS, Keychain items move with an encrypted backup or device
-// transfer unless their Accessibility is a ThisDeviceOnly one.
+// uninstalling deletes the key. A store restored without its key opens
+// empty (the plugin resets it and logs a warning), so keep what it holds
+// recoverable, such as a token the user gets back by signing in again. On
+// iOS, Keychain items move with an encrypted backup or device transfer
+// unless their Accessibility is a ThisDeviceOnly one.
 //
 // # Platform support
 //

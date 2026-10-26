@@ -15,7 +15,9 @@ import (
 // Image renders a bitmap image onto the canvas with configurable sizing and scaling.
 //
 // Image accepts a Go [image.Image] as its Source. The image is rendered using
-// the specified Fit mode to control scaling behavior.
+// the specified Fit mode to control scaling behavior. Decode photos, files
+// and assets with Decode from github.com/go-drift/drift/pkg/image, which
+// applies a JPEG's EXIF orientation so the image is upright.
 //
 // # Creation Pattern
 //

@@ -222,6 +222,8 @@ Permissions are attached to the features that use them. Each feature service pro
 
 Drift owns the request mechanism; the plugin providing a feature registers its permission kind and declares what the platform needs (Android manifest permissions, iOS usage strings). A plugin's runtime package exposes its permissions, built with `platform.NewPermission(kind)`. Calling a permission whose plugin is missing from `drift.yaml` fails with `platform.ErrPermissionNotRegistered`; on Android, one whose manifest permission no plugin declares fails with `platform.ErrPermissionNotDeclared`.
 
+One prompt per permission shows at a time: a `Request` made while that permission's prompt is up waits for it and returns the same answer.
+
 ### Notification Permissions
 
 Drift provides the notification permission, which the notifications and Firebase plugins share; on Android those plugins declare `POST_NOTIFICATIONS`, and without one of them the permission fails with `platform.ErrPermissionNotDeclared`. It supports iOS-specific options via `RequestWithOptions`:
@@ -243,9 +245,19 @@ result, err := platform.Notifications.Permission.RequestWithOptions(ctx,
 )
 ```
 
+A `RequestWithOptions` made while a notification prompt is up returns that prompt's answer; its own options are not used.
+
 ### Plugin Permissions
 
 Permissions for features that live in plugins come from those plugins: location from the [location plugin](/docs/guides/plugins#location), and contacts, calendar, microphone and photos from the [permissions plugin](/docs/guides/plugins#permissions). They are `platform.Permission` values like the ones above.
+
+Up to Drift v0.26, these permissions were fields of core services. Each now comes with its plugin in `drift.yaml`:
+
+| Up to v0.26 | Now |
+|-------------|-----|
+| `platform.Location.Permission.WhenInUse`, `.Always` | `location.Permission.WhenInUse`, `location.Permission.Always` (`github.com/go-drift/drift/plugins/location/runtime`); `Always` needs the plugin's `always` config |
+| `platform.Contacts.Permission`, `platform.Calendar.Permission`, `platform.Microphone.Permission`, `platform.Photos.Permission` | `permissions.Contacts`, `permissions.Calendar`, `permissions.Microphone`, `permissions.Photos` (`github.com/go-drift/drift/plugins/permissions/runtime`), each with its section in the plugin's config |
+| `platform.Camera.Permission` | None: `imagepicker.Capture` asks for camera access itself where the platform needs it, and fails with `imagepicker.ErrPermissionDenied` when denied |
 
 ### Open App Settings
 
@@ -271,13 +283,55 @@ platform.OpenAppSettings()
 
 Taking photos and picking images is a plugin: see [Image picker](/docs/guides/plugins#image-picker) in the plugins guide.
 
+Up to Drift v0.26 this was `platform.Camera`. Apps moving to the plugin use its runtime (`imagepicker`, `github.com/go-drift/drift/plugins/imagepicker/runtime`):
+
+| Up to v0.26 | Now |
+|-------------|-----|
+| `CapturePhoto(ctx, platform.CapturePhotoOptions{UseFrontCamera: ...})` | `imagepicker.Capture(ctx, imagepicker.CaptureOptions{FrontCamera: ...})`, from a goroutine: the `*imagepicker.Image` taken, or nil if the user canceled |
+| `PickFromGallery(ctx, platform.PickFromGalleryOptions{AllowMultiple: ...})` | `imagepicker.Pick(ctx, imagepicker.PickOptions{Multiple: ...})`, from a goroutine: the `[]imagepicker.Image` picked, empty if the user canceled; iOS also picks several |
+| `CameraResult` (`Media`, `MediaList`, `Cancelled`, `Error`) | The return values above; failures are the returned error |
+| `CapturedMedia` | `imagepicker.Image`, with the same fields; `Width` and `Height` are as displayed. Decode the file with `image.Decode` from `github.com/go-drift/drift/pkg/image` |
+| `ErrCameraBusy` | `imagepicker.ErrBusy` |
+| `Permission` | See [Plugin Permissions](#plugin-permissions) |
+
 ## Location
 
 Location is a plugin: see [Location](/docs/guides/plugins#location) in the plugins guide.
 
+Up to Drift v0.26 this was `platform.Location`. Apps moving to the plugin use its runtime (`location`, `github.com/go-drift/drift/plugins/location/runtime`):
+
+| Up to v0.26 | Now |
+|-------------|-----|
+| `GetCurrent(platform.LocationOptions{...})` | `location.Current(ctx, location.Options{...})`, from a goroutine; returns a `location.Update`, not a pointer |
+| `LastKnown()`, `IsEnabled()` | `location.LastKnown(ctx)`, `location.IsEnabled(ctx)`, from a goroutine |
+| `StartUpdates(platform.LocationOptions{...})` | `location.StartUpdates(location.UpdateOptions{Options: location.Options{...}})`; `Background: true` keeps updates coming in the background |
+| `StopUpdates()`, `Updates()` | `location.StopUpdates()`, `location.Updates()` |
+| `LocationUpdate`, `LocationOptions` | `location.Update`, `location.Options`, with the same fields |
+| `Permission.WhenInUse`, `Permission.Always` | See [Plugin Permissions](#plugin-permissions) |
+
 ## Notifications
 
 Local notifications are a plugin: see [Notifications](/docs/guides/plugins#notifications) in the plugins guide; push notifications come from the [Firebase plugin](/docs/guides/plugins#firebase). Both use Drift's [notification permission](#notification-permissions).
+
+Up to Drift v0.26, `platform.Notifications` also scheduled notifications and handled push. Apps moving to the plugins replace those calls with the notifications runtime (`notifications`, `github.com/go-drift/drift/plugins/notifications/runtime`) and Firebase messaging (`messaging`, `github.com/go-drift/drift/plugins/firebase/runtime/messaging`):
+
+| Up to v0.26 | Now |
+|-------------|-----|
+| `platform.Notifications.Permission` | Unchanged |
+| `Schedule(platform.NotificationRequest{...})` | `notifications.Schedule(ctx, notifications.Request{...})`, from a goroutine; `IntervalSeconds` is now `Interval`, a `time.Duration` |
+| `Cancel(id)`, `CancelAll()`, `SetBadge(n)` | `notifications.Cancel(id)`, `notifications.CancelAll()`, `notifications.SetBadge(n)` |
+| `Settings()` | `notifications.CurrentSettings(ctx)`, from a goroutine; the permission's status is `platform.Notifications.Permission.Status()` |
+| `Deliveries()`, `Opens()` | Local notifications: `notifications.Deliveries()`, `notifications.Opens()`. Push: `messaging.Messages()`, `messaging.Opens()` |
+| `RegisterForPush()` | Not needed: the Firebase plugin registers at launch |
+| `Tokens()`, `GetPushToken()` | `messaging.Token()`, a `*core.Derived[string]`: `Value()` reads it, `AddListener` follows changes |
+| `SubscribeToTopic(topic)`, `UnsubscribeFromTopic(topic)` | `messaging.SubscribeToTopic(ctx, topic)`, `messaging.UnsubscribeFromTopic(ctx, topic)`, from a goroutine |
+| `DeletePushToken()` | `messaging.DeleteToken(ctx)`, from a goroutine |
+| `Errors()` | Each call returns its own error; push registration and token failures are logged natively |
+| `NotificationRequest`, `NotificationEvent`, `NotificationOpen`, `NotificationSettings` | `notifications.Request`, `notifications.Notification`, `notifications.Open`, `notifications.Settings`; push messages and taps are `messaging.Message` |
+
+## Background Tasks
+
+Up to Drift v0.26, `platform.Background` scheduled background tasks (`Schedule`, `Cancel`, `CancelAll`, `CancelByTag`, `Complete`, `IsRefreshAvailable`, `Events`). It is removed, with no replacement: it never ran the app's Go code in the background.
 
 ## Share
 
@@ -393,7 +447,7 @@ the saved file, each `""` if canceled.
 
 ## Preferences
 
-Store simple, unencrypted key-value data using platform-native storage (UserDefaults on iOS, SharedPreferences on Android). For sensitive data, use SecureStorage instead.
+Store simple, unencrypted key-value data using platform-native storage (UserDefaults on iOS, SharedPreferences on Android). For sensitive data, use [secure storage](#secure-storage) instead.
 
 ```go
 import "github.com/go-drift/drift/pkg/platform"
@@ -420,6 +474,22 @@ err = platform.Preferences.DeleteAll()
 ## Secure Storage
 
 Encrypted storage, with optional biometric protection, is a plugin: see [Secure storage](/docs/guides/plugins#secure-storage) in the plugins guide. For values that need no protection, use [Preferences](#preferences).
+
+Up to Drift v0.26 this was `platform.SecureStorage`. Apps moving to the plugin use its runtime (`securestorage`, `github.com/go-drift/drift/plugins/securestorage/runtime`). Every call now takes a `ctx` and waits for the platform, so call them from a goroutine:
+
+| Up to v0.26 | Now |
+|-------------|-----|
+| `Set(key, value, opts)` | `securestorage.Set(ctx, key, value, opts)` |
+| `Get(key, opts)`: `""` for a missing key | `securestorage.Get(ctx, key, opts)`: the value and whether there is one |
+| `Delete`, `Contains`, `DeleteAll` | `securestorage.Delete`, `securestorage.Contains`, `securestorage.DeleteAll`, each with `ctx` first |
+| `GetAllKeys(opts)` | `securestorage.Keys(ctx, opts)` |
+| `GetBiometricType()`, `IsBiometricAvailable()` | `securestorage.AvailableBiometric(ctx)`; none available is `securestorage.BiometricNone` |
+| `ErrAuthPending`, `Listen()` | Removed: `Get` waits for the biometric prompt and returns its result |
+| `SecureStorageError` codes `auth_failed`, `auth_cancelled`, `biometric_not_available`, `biometric_not_enrolled` | `securestorage.ErrAuthFailed`, `securestorage.ErrAuthCanceled`, `securestorage.ErrBiometricsUnavailable` (both of the last two), under `errors.Is` |
+| `ErrPlatformNotSupported` | Removed: every Android version Drift supports has secure storage |
+| `SecureStorageOptions{KeychainAccessibility, RequireBiometric, BiometricPrompt, Service}` | `securestorage.Options{Accessibility, RequireBiometric, BiometricPrompt, Service}`; `RequireBiometric` needs the plugin's `biometrics` config |
+| `KeychainAccessibility` (`AccessibleWhenUnlocked`, ...) | `securestorage.Accessibility` (`securestorage.WhenUnlocked`, `AfterFirstUnlock`, `WhenUnlockedThisDeviceOnly`, `AfterFirstUnlockThisDeviceOnly`) |
+| `BiometricType` (`BiometricTypeFaceID`, ...) | `securestorage.Biometric` (`securestorage.BiometricFaceID`, `BiometricTouchID`, `BiometricFingerprint`, `BiometricFace`, `BiometricNone`; also `BiometricOpticID`) |
 
 ## Thread Safety
 

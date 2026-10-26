@@ -480,7 +480,7 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 **Correctness, low severity**
 - **`theme` vs `android:theme` do not conflict.** `SetActivityAttr.Targets()` uses the raw attribute name, while `setNSAttr` adds the `android:` prefix; normalise in `Targets()`.
 - **Bitmap target key names the wrong directory.** It claims `drawable/<stem>` but writes `drawable-nodpi/`, missing a real clash and reporting a false one. `WriteXML` into `values*/` claims only the file, so duplicate resource names inside it surface only in Gradle.
-- **Android string values are not escaped** (`mutate/xml.go`), so an apostrophe fails aapt.
+- ~~**Android string values are not escaped** (`mutate/xml.go`), so an apostrophe fails aapt.~~ Fixed in `cef0167`: values are escaped for aapt2, and marked `formatted="false"` when they contain `%`.
 - **`drift plugin sync`'s schema pass does not type-check scalars** (`n: notanint` for an int field passes it; the `Build` pass that follows reports the decode error); a null optional struct is reported as "must be a mapping".
 - **Intent-filter dedup ignores the filter's own attributes** (`canonicalIntent`), so `autoVerify` is lost if an equivalent filter exists.
 - **The same package listed twice in drift.yaml** gives a duplicate-import Go error instead of a clear message.

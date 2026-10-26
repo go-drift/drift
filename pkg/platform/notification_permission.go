@@ -9,7 +9,9 @@ type NotificationPermission interface {
 	// RequestWithOptions prompts for notification permission with iOS-specific options.
 	// Uses the provided values verbatim - zero values mean that capability is NOT requested.
 	// For default behavior (Alert, Sound, Badge all enabled), use Request() instead.
-	// Options are ignored on Android.
+	// Options are ignored on Android. Like Request, it waits for the user,
+	// and a call made while a notification prompt is up returns that
+	// prompt's answer without using its own options.
 	RequestWithOptions(ctx context.Context, opts NotificationPermissionOptions) (PermissionResult, error)
 }
 

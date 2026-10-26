@@ -151,6 +151,9 @@ public protocol DriftPluginHost: AnyObject {
     /// See `DriftChannel` for how each kind of method replies. Declare every
     /// method inside the closure; the channel is fixed once it returns.
     func registerChannel(_ name: String, _ declare: (DriftChannel) -> Void)
+    /// Sends `data` (JSON-like, or nil) to Go's listeners on `channel`,
+    /// whether or not Go is listening. A value that is not JSON-like is
+    /// logged and reaches Go as a `not_encodable` stream error instead.
     func sendEvent(_ channel: String, data: Any?)
     func sendEventError(_ channel: String, code: String, message: String)
     func sendEventDone(_ channel: String)

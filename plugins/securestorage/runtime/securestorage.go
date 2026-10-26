@@ -20,6 +20,10 @@
 // control); on Android by the plugin, before it decrypts the value
 // (BiometricPrompt without a CryptoObject), so it guards against another
 // person using the unlocked device, not against code running as the app.
+//
+// On Android, values do not survive a backup restore or device transfer:
+// a restored store opens empty (see the plugin package's Backup and
+// restore), so keep what it holds recoverable.
 package runtime
 
 import (
