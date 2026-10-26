@@ -297,7 +297,7 @@ err := location.StartUpdates(location.UpdateOptions{
 
 Functions that wait must be called from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`. Failures match `location.ErrPermissionDenied`, `location.ErrDisabled` (location services off) and `location.ErrUnavailable` (no fix, Android) under `errors.Is`.
 
-On iOS, Always can be requested only after WhenInUse is granted, and iOS asks at most once. On Android, Always is granted in Settings, where the request takes the user. Supported on iOS, xtool and Android (Google Play services).
+On iOS, Always can be requested only after WhenInUse is granted, and iOS asks at most once: once asked, Always reads `PermissionPermanentlyDenied` until the user grants it in Settings. On Android, Always is granted in Settings, where the request takes the user. Supported on iOS, xtool and Android (Google Play services).
 
 #### Background updates
 

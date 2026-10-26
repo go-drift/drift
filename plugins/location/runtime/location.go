@@ -102,7 +102,9 @@ type Permissions struct {
 	// in the background, as background updates (UpdateOptions.Background)
 	// need. It needs the plugin's always: config; without it, its calls
 	// fail with platform.ErrPermissionNotRegistered. On iOS, WhenInUse
-	// must be granted first; on Android, the user grants it in Settings.
+	// must be granted first, and iOS asks once: after that, Always reads
+	// platform.PermissionPermanentlyDenied until granted in Settings. On
+	// Android, the user grants it in Settings.
 	Always platform.Permission
 }
 

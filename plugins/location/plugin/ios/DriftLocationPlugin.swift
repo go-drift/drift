@@ -191,10 +191,26 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
 }
 
 /// When-in-use or Always location access, on its own main-thread manager.
+///
+/// A request waits for the user's answer, and finishes at once when iOS
+/// can show no prompt; it never guesses from timing, since a prompt does
+/// not always make the app inactive while it is up.
+///   - From not determined, both kinds prompt, and every answer changes
+///     the status, which the delegate reports.
+///   - From When In Use, iOS asks to upgrade to Always only on the app's
+///     first requestAlwaysAuthorization call, which the user defaults
+///     remember; once asked, Always reads permanently denied. "Change to
+///     Always Allow" changes the status. "Keep Only While Using" leaves it
+///     and iOS reports nothing, but the app goes inactive around the
+///     prompt, so that answer is read when the app is active again.
+///     After Allow Once, iOS shows no upgrade prompt and says nothing; the
+///     request then finishes in the same way, or when that access ends.
+///   - No prompt can change any other status (PermissionHandler does not
+///     request those).
 final class LocationPermission: NSObject, DriftPermission, CLLocationManagerDelegate {
-    /// How long to wait for the app to go inactive behind a prompt before
-    /// concluding iOS showed none.
-    private static let promptGrace: TimeInterval = 1
+    /// Set once the app has called requestAlwaysAuthorization: iOS ignores
+    /// later calls, so it shows the Always upgrade prompt at most once.
+    private static let alwaysRequestedKey = "drift.location.alwaysRequested"
 
     private let always: Bool
     private lazy var manager: CLLocationManager = {
@@ -202,8 +218,9 @@ final class LocationPermission: NSObject, DriftPermission, CLLocationManagerDele
         manager.delegate = self
         return manager
     }()
-    private var pending: [(DriftPermissionStatus) -> Void] = []
-    private var statusAtRequest: CLAuthorizationStatus = .notDetermined
+    /// The open request. PermissionHandler sends one per kind at a time and
+    /// joins later ones to it.
+    private var pending: (statusAtRequest: CLAuthorizationStatus, completion: (DriftPermissionStatus) -> Void)?
     private var observers: [NSObjectProtocol] = []
 
     init(always: Bool) {
@@ -215,54 +232,77 @@ final class LocationPermission: NSObject, DriftPermission, CLLocationManagerDele
     }
 
     func request(options: [String: Any], completion: @escaping (DriftPermissionStatus) -> Void) {
-        pending.append(completion)
-        guard pending.count == 1 else { return } // A prompt is already up.
-        statusAtRequest = manager.authorizationStatus
-        if always {
-            manager.requestAlwaysAuthorization()
-        } else {
-            manager.requestWhenInUseAuthorization()
-        }
-        // iOS sends no callback when it shows no prompt (it already asked),
-        // or when the user keeps the current level (upgrading to Always).
-        // A prompt makes the app inactive: finish when it is active again,
-        // or shortly after the request if it never went inactive.
-        let center = NotificationCenter.default
-        var prompted = false
-        observers.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
-            prompted = true
-        })
-        observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.finish()
-        })
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.promptGrace) { [weak self] in
-            if !prompted { self?.finish() }
+        precondition(pending == nil, "drift: location permission requested while its request is open")
+        let current = manager.authorizationStatus
+        switch current {
+        case .notDetermined:
+            pending = (current, completion)
+            if always {
+                requestAlways()
+            } else {
+                // Back at not determined (Allow Once expired, or a reset
+                // in Settings), iOS has forgotten any earlier Always
+                // request.
+                UserDefaults.standard.removeObject(forKey: Self.alwaysRequestedKey)
+                manager.requestWhenInUseAuthorization()
+            }
+        case .authorizedWhenInUse where always && !Self.alwaysRequested:
+            pending = (current, completion)
+            finishWhenActiveAgain()
+            requestAlways()
+        default:
+            completion(map(current))
         }
     }
 
+    private static var alwaysRequested: Bool {
+        UserDefaults.standard.bool(forKey: alwaysRequestedKey)
+    }
+
+    private func requestAlways() {
+        UserDefaults.standard.set(true, forKey: Self.alwaysRequestedKey)
+        manager.requestAlwaysAuthorization()
+    }
+
+    /// Finishes the open request when the app becomes active after going
+    /// inactive. The upgrade prompt makes it inactive while it is up, or on
+    /// recent iOS only briefly as it closes.
+    private func finishWhenActiveAgain() {
+        let center = NotificationCenter.default
+        var wentInactive = false
+        observers = [
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+                wentInactive = true
+            },
+            center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                if wentInactive { self?.finish() }
+            },
+        ]
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        // The delegate also reports the status it starts with; only a change
-        // answers a request.
-        if !pending.isEmpty, manager.authorizationStatus != statusAtRequest {
+        // The delegate also reports the status the manager starts with;
+        // only a change answers a request.
+        if let pending, manager.authorizationStatus != pending.statusAtRequest {
             finish()
         }
     }
 
     private func finish() {
-        guard !pending.isEmpty else { return }
+        guard let completion = pending?.completion else { return }
+        pending = nil
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         observers.removeAll()
-        let status = status()
-        let completions = pending
-        pending.removeAll()
-        completions.forEach { $0(status) }
+        completion(status())
     }
 
     private func map(_ status: CLAuthorizationStatus) -> DriftPermissionStatus {
         switch status {
         case .authorizedAlways: return .granted
-        // When-in-use can still be upgraded to Always.
-        case .authorizedWhenInUse: return always ? .denied : .granted
+        // A request joining an open upgrade prompt still sees denied.
+        case .authorizedWhenInUse where always:
+            return pending == nil && Self.alwaysRequested ? .permanentlyDenied : .denied
+        case .authorizedWhenInUse: return .granted
         case .denied: return .permanentlyDenied
         case .restricted: return .restricted
         case .notDetermined: return .notDetermined
