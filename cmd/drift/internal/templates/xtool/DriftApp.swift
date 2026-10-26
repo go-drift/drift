@@ -49,4 +49,11 @@ struct DriftViewControllerRepresentable: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: DriftViewController, context: Context) {
         // No updates needed
     }
+
+    /// SwiftUI removes the controller when its scene goes away: stop
+    /// rendering and detach plugins (SceneDelegate.sceneDidDisconnect on
+    /// the xcodeproj path).
+    static func dismantleUIViewController(_ uiViewController: DriftViewController, coordinator: ()) {
+        uiViewController.tearDown()
+    }
 }

@@ -33,9 +33,14 @@
 ///   is idle, matching the Android embedder's on-demand pattern.
 ///
 /// Lifecycle:
-///   - viewDidLoad: Creates the display link (paused) and registers callbacks
+///   - viewDidLoad: Creates the display link (paused), registers callbacks
+///     and attaches plugins
 ///   - viewWillAppear: Unpauses after reappearing (e.g. modal dismissal)
 ///   - viewDidDisappear: Invalidates the display link to save resources
+///   - tearDown: When the scene disconnects (SceneDelegate; DriftApp's
+///     dismantle on xtool), stops rendering and detaches plugins, so they
+///     drop the controller and it can be released. The display link holds
+///     the controller only weakly, through DisplayLinkProxy.
 
 import UIKit
 
@@ -113,8 +118,17 @@ final class DriftViewController: UIViewController {
         DriftPlugins.shared.attach(self, overlayView: overlayView)
     }
 
-    deinit {
+    /// Stops rendering and detaches plugins, for a scene that disconnected.
+    /// Idempotent; deinit does the same in case no one called it.
+    func tearDown() {
+        stopDisplayLink()
         DriftPlugins.shared.detach(from: ObjectIdentifier(self))
+    }
+
+    deinit {
+        displayLink?.invalidate()
+        DriftPlugins.shared.detach(from: ObjectIdentifier(self))
+        DriftLog.general.debug("DriftViewController released")
     }
 
     /// Tracks whether the initial safe area insets have been sent to the Go side.
@@ -184,7 +198,9 @@ final class DriftViewController: UIViewController {
     /// It's added to the main run loop in `.common` mode so it continues
     /// running even during UI tracking (e.g., scrolling).
     private func startDisplayLink() {
-        let link = CADisplayLink(target: self, selector: #selector(drawFrame))
+        // CADisplayLink retains its target; a weak proxy keeps it from
+        // keeping the controller alive.
+        let link = CADisplayLink(target: DisplayLinkProxy(self), selector: #selector(DisplayLinkProxy.tick))
         if #available(iOS 15.0, *) {
             link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 60, preferred: 60)
         } else {
@@ -225,11 +241,25 @@ final class DriftViewController: UIViewController {
     /// After rendering, pauses the display link if no more frames are needed
     /// (e.g. animations have finished). The link will be unpaused again when
     /// the Go engine calls the schedule-frame callback.
-    @objc private func drawFrame() {
+    fileprivate func drawFrame() {
         metalView.renderFrame()
         if DriftNeedsFrame() == 0 {
             displayLink?.isPaused = true
         }
+    }
+}
+
+/// The display link's target, holding the controller weakly.
+private final class DisplayLinkProxy: NSObject {
+    private weak var controller: DriftViewController?
+
+    init(_ controller: DriftViewController) {
+        self.controller = controller
+        super.init()
+    }
+
+    @objc func tick() {
+        controller?.drawFrame()
     }
 }
 

@@ -25,10 +25,8 @@
 ///   - scene(_:willConnectTo:options:): Initial scene setup, creates window
 ///   - sceneDidBecomeActive: App became foreground (could resume rendering)
 ///   - sceneWillResignActive: App going to background (could pause rendering)
-///   - sceneDidDisconnect: Scene destroyed (cleanup resources)
-///
-/// For this demo, we only implement the initial connection since the
-/// DriftViewController handles display link lifecycle automatically.
+///   - sceneDidDisconnect: Scene released by the system (or closed by the
+///     user); stops rendering and detaches plugins, then drops the window
 
 import UIKit
 
@@ -136,5 +134,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// normal operation.
     func sceneWillEnterForeground(_ scene: UIScene) {
         LifecycleHandler.notifyStateChange("inactive")
+    }
+
+    /// Called when the system releases the scene: closed in the App
+    /// Switcher, or discarded in the background to free memory. The
+    /// process may live on (and connect a new scene later), so plugins are
+    /// detached here rather than waiting for the controller's deinit.
+    func sceneDidDisconnect(_ scene: UIScene) {
+        (window?.rootViewController as? DriftViewController)?.tearDown()
+        window = nil
     }
 }

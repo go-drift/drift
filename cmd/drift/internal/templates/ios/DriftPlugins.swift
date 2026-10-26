@@ -62,7 +62,9 @@ final class DriftPlugins {
         }
     }
 
-    /// Detaches every plugin if they are attached to viewController.
+    /// Detaches every plugin if they are attached to viewController. Called
+    /// from DriftViewController.tearDown when its scene disconnects, and
+    /// from its deinit.
     func detach(from viewController: ObjectIdentifier) {
         guard attachedTo == viewController else { return }
         detachAll()
