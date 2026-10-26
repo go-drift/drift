@@ -109,7 +109,7 @@ func rewriteGradle(path string, edit func([]byte) ([]byte, error)) (bool, error)
 	if bytes.Equal(updated, data) {
 		return false, nil
 	}
-	if err := os.WriteFile(path, updated, 0o644); err != nil {
+	if err := WriteFileAtomic(path, updated); err != nil {
 		return false, fmt.Errorf("write %s: %w", path, err)
 	}
 	return true, nil

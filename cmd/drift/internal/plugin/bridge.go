@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
+	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
@@ -100,8 +101,8 @@ func writeBridgeSource(projectRoot string, plugins []ConfiguredPlugin) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	if err := writeBridgeFileAtomic(filepath.Join(projectRoot, BridgeFilePath), src); err != nil {
-		return nil, err
+	if _, err := mutate.WriteIfDifferent(filepath.Join(projectRoot, BridgeFilePath), src); err != nil {
+		return nil, fmt.Errorf("write bridge tool: %w", err)
 	}
 	return src, nil
 }
@@ -341,32 +342,6 @@ func sanitizeAlias(s string) string {
 		return "plugin"
 	}
 	return strings.ToLower(out)
-}
-
-func writeBridgeFileAtomic(path string, content []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create bridge tool dir: %w", err)
-	}
-	existing, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(existing, content) {
-		return nil
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".bridge-*.go.tmp")
-	if err != nil {
-		return fmt.Errorf("temp bridge file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(content); err != nil {
-		tmp.Close()
-		return fmt.Errorf("write temp bridge: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp bridge: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("rename temp bridge: %w", err)
-	}
-	return nil
 }
 
 func decorateBuildError(projectRoot, stderr string, err error) error {

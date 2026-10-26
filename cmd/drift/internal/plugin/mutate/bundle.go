@@ -106,7 +106,7 @@ func WriteIOSBundleResources(dir string, files []BundleFile) ([]string, error) {
 		f := want[name]
 		maybeWarnLargeResource(f.Plugin, f.Name, len(f.Content))
 		dest := filepath.Join(dir, name)
-		ch, err := writeIfDifferent(dest, f.Content)
+		ch, err := WriteIfDifferent(dest, f.Content)
 		if err != nil {
 			return changed, fmt.Errorf("write iOS bundle resource %s: %w", name, err)
 		}

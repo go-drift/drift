@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,7 +98,7 @@ func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	if bytes.Equal(out, original) {
 		return false, nil
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	if err := WriteFileAtomic(path, out); err != nil {
 		return false, fmt.Errorf("write AndroidManifest: %w", err)
 	}
 	return true, nil
@@ -285,7 +284,7 @@ func writeValuesXML(path, kind string, entries int, fill func(root *etree.Elemen
 	if err != nil {
 		return path, false, fmt.Errorf("serialize %s: %w", kind, err)
 	}
-	ch, err := writeIfDifferent(path, out)
+	ch, err := WriteIfDifferent(path, out)
 	if err != nil {
 		return path, false, fmt.Errorf("write %s: %w", kind, err)
 	}
@@ -360,18 +359,4 @@ func loadXML(path string) (*etree.Document, []byte, error) {
 		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return doc, data, nil
-}
-
-func writeIfDifferent(path string, content []byte) (bool, error) {
-	existing, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(existing, content) {
-		return false, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(path, content, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
 }

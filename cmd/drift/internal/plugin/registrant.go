@@ -1,9 +1,7 @@
 package plugin
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -174,15 +172,12 @@ func ensureAndroidRunnerSupport(buildDir string) ([]string, error) {
 }
 
 func writeIfDifferentSingle(path string, content []byte) ([]string, error) {
-	existing, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(existing, content) {
-		return nil, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir for %s: %w", path, err)
-	}
-	if err := os.WriteFile(path, content, 0o644); err != nil {
+	changed, err := mutate.WriteIfDifferent(path, content)
+	if err != nil {
 		return nil, fmt.Errorf("write %s: %w", path, err)
+	}
+	if !changed {
+		return nil, nil
 	}
 	return []string{path}, nil
 }

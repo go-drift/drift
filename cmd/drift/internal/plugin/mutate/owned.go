@@ -83,7 +83,7 @@ func AppModuleFile(appDir string, op *protocol.OpAndroidAddAppModuleFile) (Owned
 func writeOwned(files ...OwnedFile) ([]string, error) {
 	var changed []string
 	for _, f := range files {
-		ch, err := writeIfDifferent(f.Path, f.Content)
+		ch, err := WriteIfDifferent(f.Path, f.Content)
 		if err != nil {
 			return changed, fmt.Errorf("write %s: %w", f.Path, err)
 		}

@@ -75,7 +75,7 @@ func ApplyPlist(path string, ops []protocol.PlistOp) (bool, error) {
 	if bytes.Equal(out, data) {
 		return false, nil
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	if err := WriteFileAtomic(path, out); err != nil {
 		return false, fmt.Errorf("write %s: %w", name, err)
 	}
 	return true, nil

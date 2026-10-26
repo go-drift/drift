@@ -84,7 +84,7 @@ func WritePluginPackage(root string, pkg PluginPackage) ([]string, error) {
 	var changed []string
 	for _, rel := range slices.Sorted(maps.Keys(files)) {
 		p := filepath.Join(root, rel)
-		ch, err := writeIfDifferent(p, files[rel])
+		ch, err := WriteIfDifferent(p, files[rel])
 		if err != nil {
 			return changed, fmt.Errorf("write %s: %w", p, err)
 		}

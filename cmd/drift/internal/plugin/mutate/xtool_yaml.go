@@ -68,7 +68,7 @@ func SetXtoolResources(xtoolYmlPath string, resources []string) (bool, error) {
 	if err := enc.Close(); err != nil {
 		return false, fmt.Errorf("encode %s: %w", xtoolYmlPath, err)
 	}
-	return writeIfDifferent(xtoolYmlPath, buf.Bytes())
+	return WriteIfDifferent(xtoolYmlPath, buf.Bytes())
 }
 
 // mappingKeyIndex returns the index of key's key node in mapping m's

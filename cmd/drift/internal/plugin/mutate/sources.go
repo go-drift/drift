@@ -47,7 +47,7 @@ func ensureAssetsRoot(dir string) error {
   }
 }
 `)
-	return os.WriteFile(rootContents, root, 0o644)
+	return WriteFileAtomic(rootContents, root)
 }
 
 func imagesetContentsJSON(filename string) ([]byte, error) {
@@ -71,7 +71,7 @@ func imagesetContentsJSON(filename string) ([]byte, error) {
 // ReplaceLaunchScreen writes a new LaunchScreen.storyboard at path. Returns
 // the path and a changed flag.
 func ReplaceLaunchScreen(path string, op *protocol.OpIOSReplaceLaunchScreen) (string, bool, error) {
-	ch, err := writeIfDifferent(path, []byte(op.Content))
+	ch, err := WriteIfDifferent(path, []byte(op.Content))
 	if err != nil {
 		return path, false, fmt.Errorf("write LaunchScreen: %w", err)
 	}
