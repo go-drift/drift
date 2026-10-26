@@ -99,7 +99,7 @@ Plugins work in [ejected](/docs/guides/eject) projects too, applied to your file
 
 Plugins also edit shared files: `Info.plist`, `Runner.entitlements`, `AndroidManifest.xml`, `build.gradle`, resource values. Drift records what it applied in `.drift/plugins.lock.json` in each platform project; commit it.
 
-When you remove a plugin, Drift deletes the files it owned (unless you changed them) and fails the next build once with a list of the edits it made inside shared files, such as an `Info.plist` key or a manifest permission. Drift cannot tell those apart from your own edits, so you remove them, or keep them if you still want them.
+When you remove a plugin, Drift deletes the files it owned (unless you changed them) and the next build warns with a list of the edits it made inside shared files, such as an `Info.plist` key or a manifest permission. Drift cannot tell those apart from your own edits, so you remove them, or keep them if you still want them. The build still succeeds; commit the updated lock, or each build from a checkout of the old one warns again.
 
 When a plugin upgrade changes a Gradle dependency's version or a Gradle plugin's version, Drift updates the line it wrote in place. If you changed that line yourself, Drift leaves it and adds its own.
 

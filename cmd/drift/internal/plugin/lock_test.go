@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -14,22 +15,22 @@ import (
 
 // syncLock reconciles dir the way an ejected build does: the lock from the
 // previous build, then SyncEjectedLock, committed. Returns the deleted
-// paths and the dropped-edits or commit error.
-func syncLock(t *testing.T, dir string, ops []protocol.Op) ([]string, error) {
+// paths, the dropped edits, and the planning or commit error.
+func syncLock(t *testing.T, dir string, ops []protocol.Op) (deleted, dropped []string, err error) {
 	t.Helper()
 	prev, err := ReadLock(dir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cs := mutate.NewChangeset()
-	deleted, dropped, err := SyncEjectedLock(cs, dir, "android", ops, prev)
+	deleted, dropped, err = SyncEjectedLock(cs, dir, "android", ops, prev)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := cs.Commit(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return deleted, dropped
+	return deleted, dropped, nil
 }
 
 func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
@@ -55,7 +56,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 		}
 	}
 	writeFiles()
-	if _, err := syncLock(t, dir, ops); err != nil {
+	if _, _, err := syncLock(t, dir, ops); err != nil {
 		t.Fatalf("first build: %v", err)
 	}
 	lock := filepath.Join(dir, filepath.FromSlash(LockFile))
@@ -64,7 +65,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	}
 
 	// Unchanged ops: nothing to clean up.
-	if deleted, err := syncLock(t, dir, ops); err != nil || len(deleted) != 0 {
+	if deleted, _, err := syncLock(t, dir, ops); err != nil || len(deleted) != 0 {
 		t.Fatalf("rebuild: deleted=%v err=%v", deleted, err)
 	}
 
@@ -73,7 +74,14 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	if err := os.WriteFile(drawablePath, []byte("edited"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	deleted, err := syncLock(t, dir, nil)
+	stale, err := os.ReadFile(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted, dropped, err := syncLock(t, dir, nil)
+	if err != nil {
+		t.Fatalf("build after removal: %v", err)
+	}
 	srcPath := filepath.Join(dir, "app/src/main/java/com/acme/camera/CameraPlugin.kt")
 	if len(deleted) != 1 || deleted[0] != srcPath {
 		t.Errorf("deleted = %v, want only the unmodified source", deleted)
@@ -84,16 +92,26 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	if _, err := os.Stat(drawablePath); err != nil {
 		t.Errorf("modified drawable should be kept: %v", err)
 	}
-	if err == nil || !strings.Contains(err.Error(), "android.permission.CAMERA") || !strings.Contains(err.Error(), "github.com/acme/camera") {
-		t.Fatalf("want an error listing the manifest edit, got %v", err)
-	}
-	if strings.Contains(err.Error(), "Info.plist") {
-		t.Errorf("an Android project must not list iOS edits: %v", err)
+	// Only the manifest edit: an Android project must not list iOS edits.
+	if len(dropped) != 1 || !strings.Contains(dropped[0], "android.permission.CAMERA") || !strings.Contains(dropped[0], "(from github.com/acme/camera)") {
+		t.Fatalf("dropped = %v, want only the manifest edit", dropped)
 	}
 
-	// The list is shown once.
-	if _, err := syncLock(t, dir, nil); err != nil {
-		t.Errorf("second build after removal should pass: %v", err)
+	// The lock now records no ops, so the next build lists nothing.
+	if deleted, dropped, err := syncLock(t, dir, nil); err != nil || len(deleted) != 0 || len(dropped) != 0 {
+		t.Errorf("next build: deleted=%v dropped=%v err=%v; want nothing", deleted, dropped, err)
+	}
+
+	// A fresh checkout with the stale lock committed builds the same way.
+	if err := os.WriteFile(lock, stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, again, err := syncLock(t, dir, nil)
+	if err != nil {
+		t.Fatalf("build from the stale lock: %v", err)
+	}
+	if !reflect.DeepEqual(again, dropped) {
+		t.Errorf("build from the stale lock: dropped = %v, want %v", again, dropped)
 	}
 }
 
@@ -106,11 +124,11 @@ func TestSyncEjectedLockContentChangeIsNotRemoval(t *testing.T) {
 	}
 	path := filepath.Join(dir, "app/google-services.json")
 	writeTree(t, dir, map[string]string{"app/google-services.json": "v1"})
-	if _, err := syncLock(t, dir, mk("v1")); err != nil {
+	if _, _, err := syncLock(t, dir, mk("v1")); err != nil {
 		t.Fatal(err)
 	}
 	writeTree(t, dir, map[string]string{"app/google-services.json": "v2"})
-	if deleted, err := syncLock(t, dir, mk("v2")); err != nil || len(deleted) != 0 {
+	if deleted, _, err := syncLock(t, dir, mk("v2")); err != nil || len(deleted) != 0 {
 		t.Fatalf("deleted=%v err=%v", deleted, err)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -160,7 +178,7 @@ func TestSyncEjectedLockRenamedOpIsNotRemoval(t *testing.T) {
 	perm := &protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"}
 	ops := []protocol.Op{file, perm}
 	writeTree(t, dir, map[string]string{"app/p-services.json": "{}"})
-	if _, err := syncLock(t, dir, ops); err != nil {
+	if _, _, err := syncLock(t, dir, ops); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,9 +196,9 @@ func TestSyncEjectedLockRenamedOpIsNotRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deleted, err := syncLock(t, dir, ops)
-	if err != nil || len(deleted) != 0 {
-		t.Fatalf("deleted=%v err=%v; want nothing deleted and no edits listed", deleted, err)
+	deleted, dropped, err := syncLock(t, dir, ops)
+	if err != nil || len(deleted) != 0 || len(dropped) != 0 {
+		t.Fatalf("deleted=%v dropped=%v err=%v; want nothing deleted and no edits listed", deleted, dropped, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "app/p-services.json")); err != nil {
 		t.Errorf("file owned by the renamed op was removed: %v", err)
@@ -195,11 +213,11 @@ func TestSyncEjectedLockRemovesMovedFile(t *testing.T) {
 		return []protocol.Op{&protocol.OpAndroidWriteResourceXML{Base: protocol.Base{Pkg: "p"}, RelPath: name, Content: "<config/>"}}
 	}
 	writeTree(t, dir, map[string]string{"app/src/main/res/xml/p_old.xml": "<config/>"})
-	if _, err := syncLock(t, dir, mk("xml/p_old.xml")); err != nil {
+	if _, _, err := syncLock(t, dir, mk("xml/p_old.xml")); err != nil {
 		t.Fatal(err)
 	}
 	writeTree(t, dir, map[string]string{"app/src/main/res/xml/p_new.xml": "<config/>"})
-	deleted, err := syncLock(t, dir, mk("xml/p_new.xml"))
+	deleted, _, err := syncLock(t, dir, mk("xml/p_new.xml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +267,7 @@ func TestSyncEjectedLockRecoversFromAFailedWrite(t *testing.T) {
 		return []protocol.Op{&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "p"}, Name: "p.json", Content: b64.StdEncoding.EncodeToString([]byte(body))}}
 	}
 	writeTree(t, dir, map[string]string{"app/p.json": "v1"})
-	if _, err := syncLock(t, dir, mk("v1")); err != nil {
+	if _, _, err := syncLock(t, dir, mk("v1")); err != nil {
 		t.Fatal(err)
 	}
 	lock := filepath.Join(dir, filepath.FromSlash(LockFile))
@@ -261,7 +279,7 @@ func TestSyncEjectedLockRecoversFromAFailedWrite(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chmod(lockDir, 0o755) })
 	writeTree(t, dir, map[string]string{"app/p.json": "v2"})
-	if _, err := syncLock(t, dir, mk("v2")); err == nil {
+	if _, _, err := syncLock(t, dir, mk("v2")); err == nil {
 		t.Fatal("lock write into a read-only directory succeeded")
 	}
 	if after, _ := os.ReadFile(lock); string(after) != string(before) {
@@ -270,7 +288,7 @@ func TestSyncEjectedLockRecoversFromAFailedWrite(t *testing.T) {
 	if err := os.Chmod(lockDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := syncLock(t, dir, mk("v2")); err != nil {
+	if _, _, err := syncLock(t, dir, mk("v2")); err != nil {
 		t.Fatalf("next build: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "app/p.json")); err != nil {

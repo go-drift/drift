@@ -65,7 +65,7 @@ func TestApplyUpdatesOnlyUnchangedPluginFiles(t *testing.T) {
 	if _, err := apply(t, v1, dir, "android", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := syncLock(t, dir, v1); err != nil {
+	if _, _, err := syncLock(t, dir, v1); err != nil {
 		t.Fatal(err)
 	}
 	prev, err := ReadLock(dir)

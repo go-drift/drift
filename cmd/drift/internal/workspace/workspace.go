@@ -364,9 +364,11 @@ func newPluginOps(ops []protocol.Op) (pluginOps, error) {
 // plugin-generated output (bundle resources, the SwiftPM sidecar) so the
 // project compiles. Ejected projects are checked for plugin wiring first;
 // output from plugins removed since the last build is cleaned up and the
-// lock rewritten (see SyncEjectedLock), and the modified files are
-// summarised. Every step plans into one changeset, committed only once all
-// have succeeded, so a failing op leaves the project as it was.
+// lock rewritten (see SyncEjectedLock), the modified files are
+// summarised, and edits inside shared files that no plugin makes any more
+// are listed in a warning; the build still succeeds. Every step plans
+// into one changeset, committed only once all have succeeded, so a
+// failing op leaves the project as it was.
 func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	platformDir := platformProjectDir(ws, ws.Platform)
 	platform := ws.Platform
@@ -406,7 +408,7 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	}
 	changed = append(changed, registrant...)
 
-	var dropped error
+	var dropped []string
 	if ws.Ejected {
 		var deleted []string
 		deleted, dropped, err = driftpluginCLI.SyncEjectedLock(cs, platformDir, platform, ops.ops, prevLock)
@@ -420,9 +422,20 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	}
 	if ws.Ejected {
 		reportChangedFiles(changed, ws.Root)
+		warnDroppedEdits(dropped, platformDir)
 	}
 	ws.pluginOps = ops
-	return dropped
+	return nil
+}
+
+// warnDroppedEdits names the edits Drift made inside an ejected project's
+// shared files that no plugin makes any more, for the user to undo or keep.
+func warnDroppedEdits(dropped []string, platformDir string) {
+	if len(dropped) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "drift: plugins no longer make these edits Drift made in the ejected project at %s; "+
+		"remove the ones you no longer need:\n  - %s\n", platformDir, strings.Join(dropped, "\n  - "))
 }
 
 func reportChangedFiles(changed []string, root string) {

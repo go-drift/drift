@@ -25,7 +25,8 @@ func ejectedAndroid(t *testing.T) string {
 }
 
 // ejectedBuild applies ops to dir the way an ejected build does: Apply and
-// SyncEjectedLock plan, then one commit.
+// SyncEjectedLock plan, then one commit. An upgrade drops no edit, so a
+// dropped edit fails the test.
 func ejectedBuild(t *testing.T, dir string, ops ...protocol.Op) error {
 	t.Helper()
 	prev, err := ReadLock(dir)
@@ -43,7 +44,10 @@ func ejectedBuild(t *testing.T, dir string, ops ...protocol.Op) error {
 	if err := cs.Commit(); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
-	return dropped
+	if len(dropped) > 0 {
+		t.Errorf("upgrade dropped edits: %v", dropped)
+	}
+	return nil
 }
 
 func lockKeys(t *testing.T, dir string) []string {

@@ -384,7 +384,7 @@ Done (`fddeba4`..`7118e69`). Decisions (2026-10-26):
 
 ##### 6.2 status
 
-Done (`01a7136`..`596bd02`). Decisions (2026-10-26): removal follows what the project holds (paths, edits), not op identity; versioned Gradle lines Drift wrote are updated in place on a plugin upgrade (other shared-file edits are still never undone); the overwrite guard covers managed builds too (template collisions); a removed plugin's leftover edits still fail the build once.
+Done (`01a7136`..`596bd02`). Decisions (2026-10-26): removal follows what the project holds (paths, edits), not op identity; versioned Gradle lines Drift wrote are updated in place on a plugin upgrade (other shared-file edits are still never undone); the overwrite guard covers managed builds too (template collisions); a removed plugin's leftover edits still fail the build once. (Changed later on 2026-10-26: they are listed in a warning and the build succeeds, since failing once made the outcome depend on whether the previous lock was committed, so every fresh checkout of a stale lock failed.)
 
 | Commit | Content |
 |--------|---------|

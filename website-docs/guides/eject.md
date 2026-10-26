@@ -148,7 +148,7 @@ Do not place custom native libraries in `app/src/main/jniLibs/` as Drift overwri
 
 Plugins in `drift.yaml` keep working after ejecting: each build applies them to the ejected project, editing `Info.plist`, `Runner.entitlements`, `AndroidManifest.xml`, Gradle files and resources, and writing the plugins' own files. Drift records what it applied in `.drift/plugins.lock.json` inside each platform project; commit it.
 
-When you remove a plugin, Drift deletes the files it owned (unless you changed them) and fails the next build once with a list of the edits it made inside your files, for you to undo or keep. If the project is missing the calls plugins need, the build names the file and call to restore. See [Plugins](/docs/guides/plugins#ejected-projects).
+When you remove a plugin, Drift deletes the files it owned (unless you changed them) and the next build warns with a list of the edits it made inside your files, for you to undo or keep. If the project is missing the calls plugins need, the build names the file and call to restore. See [Plugins](/docs/guides/plugins#ejected-projects).
 
 iOS projects ejected before plugins could claim URLs fail to build with plugins until `SceneDelegate.swift` offers URLs and user activities to `DriftPlugins.shared.openURL` / `continueUserActivity` before `DeepLinkHandler`; the error names the calls, and a freshly ejected project shows them in place.
 

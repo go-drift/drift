@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"encoding/base64"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -121,6 +122,79 @@ func TestApplyPluginOpsWritesNothingWhenAnOpFails(t *testing.T) {
 	if gradle, _ := os.ReadFile(filepath.Join(dir, "app", "build.gradle")); !strings.Contains(string(gradle), "com.acme:push:1.0") {
 		t.Errorf("app/build.gradle lacks the dependency:\n%s", gradle)
 	}
+}
+
+// An edit a removed plugin made inside a shared file is a warning, not a
+// failure, so the build's outcome does not depend on whether the previous
+// lock was committed: a fresh checkout with the stale lock builds and
+// warns the same way.
+func TestApplyPluginOpsWarnsAboutDroppedEdits(t *testing.T) {
+	root := t.TempDir()
+	if err := scaffold.WriteAndroid(root, scaffold.Settings{AppName: "App", AppID: "com.example.app", Bundle: "com.example.app", Orientation: "portrait"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "android")
+	ws := &Workspace{Root: root, AndroidDir: dir, Platform: "android", Ejected: true}
+	build := func(ops ...protocol.Op) (stderr string) {
+		t.Helper()
+		p, err := newPluginOps(ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stderr = captureStderr(t, func() { err = applyPluginOps(ws, p) })
+		if err != nil {
+			t.Fatalf("build: %v", err)
+		}
+		return stderr
+	}
+
+	perm := &protocol.OpAndroidManifestAddPermission{Base: protocol.Base{Pkg: "github.com/acme/camera"}, Name: "android.permission.CAMERA"}
+	if out := build(perm); out != "" {
+		t.Errorf("first build warned: %q", out)
+	}
+	lockPath := filepath.Join(dir, filepath.FromSlash(driftpluginCLI.LockFile))
+	stale, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	warning := build()
+	for _, want := range []string{"plugins no longer make these edits", dir, "android.permission.CAMERA", "(from github.com/acme/camera)"} {
+		if !strings.Contains(warning, want) {
+			t.Errorf("warning lacks %q:\n%s", want, warning)
+		}
+	}
+	if out := build(); out != "" {
+		t.Errorf("build after the lock was updated warned: %q", out)
+	}
+
+	if err := os.WriteFile(lockPath, stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if again := build(); again != warning {
+		t.Errorf("build from the stale lock warned %q, want %q", again, warning)
+	}
+}
+
+// captureStderr returns what fn writes to os.Stderr.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+	out := make(chan string)
+	go func() {
+		data, _ := io.ReadAll(r)
+		out <- string(data)
+	}()
+	fn()
+	w.Close()
+	return <-out
 }
 
 // snapshotTree maps every file and directory under dir, relative, to its

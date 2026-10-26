@@ -63,13 +63,14 @@ type lockedFile struct {
 //     names it;
 //   - an edit prev made inside a shared file (Info.plist, the manifest,
 //     build.gradle) that no current op makes, under the same key or as the
-//     same edit, cannot be undone safely, so it is listed in the returned
-//     dropped error, to report once cs is committed. The commit writes the
-//     new lock, so the list is shown once and the next build proceeds.
+//     same edit, cannot be undone safely, so it is returned in dropped,
+//     sorted, as "<edit> (from <plugin>)", for the caller to warn about
+//     once cs is committed. It is not an error: a build's outcome must not
+//     depend on whether the previous build's lock was committed.
 //
-// Returns the paths the commit deletes. err is a failure to plan, after
-// which cs must not be committed.
-func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []protocol.Op, prev *Lock) (deleted []string, dropped error, err error) {
+// Returns the paths the commit deletes and the dropped edits. err is a
+// failure to plan, after which cs must not be committed.
+func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []protocol.Op, prev *Lock) (deleted, dropped []string, err error) {
 	cur, err := lockFor(ops, projectDir, platform)
 	if err != nil {
 		return nil, nil, err
@@ -85,7 +86,6 @@ func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []pr
 			curFiles[f.Path] = true
 		}
 	}
-	var edits []string
 	for _, o := range prev.ops() {
 		for _, f := range o.Files {
 			if curFiles[f.Path] {
@@ -104,7 +104,7 @@ func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []pr
 			}
 		}
 		if o.Edit != "" && !curKeys[o.Key] && !curEdits[o.Edit] {
-			edits = append(edits, fmt.Sprintf("%s (from %s)", o.Edit, o.Plugin))
+			dropped = append(dropped, fmt.Sprintf("%s (from %s)", o.Edit, o.Plugin))
 		}
 	}
 
@@ -116,13 +116,8 @@ func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []pr
 		return nil, nil, err
 	}
 
-	if len(edits) > 0 {
-		sort.Strings(edits)
-		return deleted, fmt.Errorf("plugins no longer make these edits Drift made in the ejected project at %s; "+
-			"remove the ones you no longer need, then build again (this list is shown once):\n  - %s",
-			projectDir, strings.Join(edits, "\n  - ")), nil
-	}
-	return deleted, nil, nil
+	sort.Strings(dropped)
+	return deleted, dropped, nil
 }
 
 func lockPath(projectDir string) string {
