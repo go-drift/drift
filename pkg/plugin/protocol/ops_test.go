@@ -375,6 +375,8 @@ func invalidOps() []Op {
 		&OpAndroidWriteResourceXML{Base: base, RelPath: "../raw/foo.xml", Content: "<x/>"},
 		&OpAndroidWriteResourceXML{Base: base, RelPath: AndroidPluginColorsFile, Content: "<resources/>"},
 		&OpAddKotlinSource{Base: base, Package: "com.foo", RelPath: "/abs/Foo.kt"},
+		&OpAddKotlinSource{Base: base, Package: "com.drift.runner", RelPath: "Foo.kt", Content: "AA=="},
+		&OpAddKotlinSource{Base: base, Package: "com.drift.runner.extra", RelPath: "Foo.kt", Content: "AA=="},
 		&OpAndroidPlugin{Base: base, Class: "FooPlugin"},
 		&OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "a:b:1.0'); evil('"},
 	}

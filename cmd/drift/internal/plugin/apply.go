@@ -1,9 +1,14 @@
 package plugin
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
@@ -14,9 +19,17 @@ import (
 // Apply mutates the rendered project at buildDir according to the validated
 // op list. Returns the list of files whose bytes actually changed.
 //
+// prev is the ejected project's lock from its previous build (ReadLock),
+// nil for a managed build. Apply never overwrites a file Drift did not
+// write: before changing anything, it fails with a *ForeignFileError if an
+// op would replace a file that prev does not record as Drift's, unchanged.
+//
 // Apply skips ops that do not match the target platform; plugins may
 // unconditionally emit ops for every platform.
-func Apply(ops []protocol.Op, buildDir, platform string) ([]string, error) {
+func Apply(ops []protocol.Op, buildDir, platform string, prev *Lock) ([]string, error) {
+	if err := checkOwnedWrites(ops, buildDir, platform, prev); err != nil {
+		return nil, err
+	}
 	bag := bundleByPlatform(ops, platform)
 
 	changed := make(map[string]bool)
@@ -435,6 +448,70 @@ func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, 
 		return one(mutate.AppModuleFile(androidAppDir(buildDir), v))
 	}
 	return nil, nil
+}
+
+// ForeignFile is a file a plugin op would overwrite although Drift did not
+// write it, or it changed since Drift did.
+type ForeignFile struct {
+	Path   string // slash-separated, relative to the project
+	Plugin string
+}
+
+// ForeignFileError lists every ForeignFile in a build.
+type ForeignFileError struct {
+	Files []ForeignFile
+}
+
+func (e *ForeignFileError) Error() string {
+	var sb strings.Builder
+	sb.WriteString("plugins would overwrite files Drift did not write, or that changed since it did:\n")
+	for _, f := range e.Files {
+		fmt.Fprintf(&sb, "  - %s (from %s)\n", f.Path, f.Plugin)
+	}
+	sb.WriteString("In an ejected project, move your file aside (or undo your change) and build again to let the plugin write it, " +
+		"or remove the plugin from drift.yaml. Otherwise the plugin collides with a file in Drift's project template and must write another path.")
+	return sb.String()
+}
+
+// checkOwnedWrites returns a *ForeignFileError naming every whole file an
+// op would write over an existing file holding other content, unless prev
+// records that content as what Drift wrote there.
+func checkOwnedWrites(ops []protocol.Op, buildDir, platform string, prev *Lock) error {
+	var foreign []ForeignFile
+	for _, op := range ops {
+		if !opAppliesTo(op, platform) {
+			continue
+		}
+		files, err := OwnedFiles(op, buildDir, platform)
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			existing, err := os.ReadFile(f.Path)
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(existing, f.Content) {
+				continue
+			}
+			rel, err := filepath.Rel(buildDir, f.Path)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			if prev.wrote(rel, existing) {
+				continue
+			}
+			foreign = append(foreign, ForeignFile{Path: rel, Plugin: op.PluginPackage()})
+		}
+	}
+	if len(foreign) > 0 {
+		return &ForeignFileError{Files: foreign}
+	}
+	return nil
 }
 
 func androidAppDir(buildDir string) string { return filepath.Join(buildDir, "app") }

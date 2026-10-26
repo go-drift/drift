@@ -159,6 +159,25 @@ func (l *Lock) ops() []lockedOp {
 	return l.Ops
 }
 
+// wrote reports whether the lock records content as what Drift wrote at
+// path (slash-separated, relative to the project).
+func (l *Lock) wrote(path string, content []byte) bool {
+	sum := sha256Hex(content)
+	for _, o := range l.ops() {
+		for _, f := range o.Files {
+			if f.Path == path && f.SHA256 == sum {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
 func lockFor(ops []protocol.Op, projectDir, platform string) (Lock, error) {
 	l := Lock{Version: 1, Ops: []lockedOp{}}
 	for _, op := range ops {
@@ -175,8 +194,7 @@ func lockFor(ops []protocol.Op, projectDir, platform string) (Lock, error) {
 			if err != nil {
 				return l, err
 			}
-			sum := sha256.Sum256(f.Content)
-			entry.Files = append(entry.Files, lockedFile{Path: filepath.ToSlash(rel), SHA256: hex.EncodeToString(sum[:])})
+			entry.Files = append(entry.Files, lockedFile{Path: filepath.ToSlash(rel), SHA256: sha256Hex(f.Content)})
 		}
 		l.Ops = append(l.Ops, entry)
 	}
@@ -242,8 +260,7 @@ func deleteIfUnchanged(path, sum string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	got := sha256.Sum256(data)
-	if hex.EncodeToString(got[:]) != sum {
+	if sha256Hex(data) != sum {
 		return false, nil
 	}
 	if err := os.Remove(path); err != nil {

@@ -943,11 +943,19 @@ func (o *OpAddKotlinSource) Validate() error {
 	if err := checkMatch(dottedIdentRe, "Kotlin package", o.Package); err != nil {
 		return err
 	}
+	if o.Package == AndroidRunnerPackage || strings.HasPrefix(o.Package, AndroidRunnerPackage+".") {
+		return fmt.Errorf("Kotlin package %s is reserved for Drift's Android runner; use the plugin's own package", o.Package)
+	}
 	if err := checkRelPath("source path", o.RelPath); err != nil {
 		return err
 	}
 	return checkContent("source content", o.Content, false)
 }
+
+// AndroidRunnerPackage is the Kotlin package of Drift's Android host
+// support files and generated registrant, which Drift rewrites every build.
+// Plugin sources may not use it.
+const AndroidRunnerPackage = "com.drift.runner"
 
 // OpAndroidPlugin names a Kotlin class, implementing
 // com.drift.runner.DriftPlugin, that the generated DriftPluginRegistrant

@@ -122,7 +122,7 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 		&protocol.OpAndroidWriteResourceXML{Base: base, RelPath: "xml/p_config.xml", Content: "<config/>"},
 		&protocol.OpAndroidAddAppModuleFile{Base: base, Name: "p-services.json", Content: enc("{}")},
 	}
-	if _, err := Apply(ops, dir, "android"); err != nil {
+	if _, err := Apply(ops, dir, "android", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	for _, op := range ops {

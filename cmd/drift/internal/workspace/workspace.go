@@ -386,7 +386,7 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	}
 
 	var changed []string
-	applied, err := driftpluginCLI.Apply(ops.ops, platformDir, platform)
+	applied, err := driftpluginCLI.Apply(ops.ops, platformDir, platform, prevLock)
 	if err != nil {
 		return err
 	}

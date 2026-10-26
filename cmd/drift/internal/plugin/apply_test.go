@@ -21,7 +21,7 @@ func TestApplyWritesKotlinSources(t *testing.T) {
 			Content: base64(body),
 		},
 	}
-	changed, err := Apply(ops, dir, "android")
+	changed, err := Apply(ops, dir, "android", nil)
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestApplySkipsOtherPlatformOps(t *testing.T) {
 		&protocol.OpAndroidManifestAddPermission{Base: protocol.Base{Pkg: "p"}, Name: "android.permission.CAMERA"},
 	}
 	// Targeting iOS but op is android: should be skipped without error.
-	if _, err := Apply(ops, dir, "ios"); err != nil {
+	if _, err := Apply(ops, dir, "ios", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 }
@@ -72,7 +72,7 @@ func TestApplyIOSBundleResourcesLandInPluginResources(t *testing.T) {
 	ops := []protocol.Op{
 		&protocol.OpIOSAddBundleResource{Base: protocol.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
 	}
-	if _, err := Apply(ops, dir, "ios"); err != nil {
+	if _, err := Apply(ops, dir, "ios", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "Runner", "PluginResources", "GoogleService-Info.plist"))
@@ -94,7 +94,7 @@ func TestApplyXtoolBundleResourcesAndImageSets(t *testing.T) {
 		&protocol.OpIOSAddBundleResource{Base: protocol.Base{Pkg: "fb"}, Path: "GoogleService-Info.plist", Content: base64("plist")},
 		&protocol.OpIOSAssetsAddImageSet{Base: protocol.Base{Pkg: "splash"}, Name: "DriftSplash", Image: base64("png")},
 	}
-	if _, err := Apply(ops, dir, "xtool"); err != nil {
+	if _, err := Apply(ops, dir, "xtool", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	for name, want := range map[string]string{"GoogleService-Info.plist": "plist", "DriftSplash.png": "png"} {
@@ -114,7 +114,7 @@ func TestApplyXtoolBundleResourcesAndImageSets(t *testing.T) {
 	}
 
 	// Removing the plugins prunes their files and the xtool.yml entries.
-	if _, err := Apply(nil, dir, "xtool"); err != nil {
+	if _, err := Apply(nil, dir, "xtool", nil); err != nil {
 		t.Fatalf("Apply(nil): %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "PluginResources")); !os.IsNotExist(err) {
@@ -131,7 +131,7 @@ func TestApplyAndroidAppModuleFile(t *testing.T) {
 	ops := []protocol.Op{
 		&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "fb"}, Name: "google-services.json", Content: base64("{}")},
 	}
-	if _, err := Apply(ops, dir, "android"); err != nil {
+	if _, err := Apply(ops, dir, "android", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, "app", "google-services.json")); err != nil || string(got) != "{}" {
@@ -165,7 +165,7 @@ func TestApplyEntitlementsAndInfoPlistAreSeparateFiles(t *testing.T) {
 					Value:      false,
 				},
 			}
-			if _, err := Apply(ops, dir, platform); err != nil {
+			if _, err := Apply(ops, dir, platform, nil); err != nil {
 				t.Fatalf("Apply: %v", err)
 			}
 			entitlements := readFile(t, filepath.Join(dir, "Runner.entitlements"))
