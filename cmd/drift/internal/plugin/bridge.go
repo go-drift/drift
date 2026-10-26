@@ -30,6 +30,9 @@ const BridgeFilePath = "tools/drift-plugins/main.go"
 // Bridge is the resolved bridge binary.
 type Bridge struct {
 	BinaryPath string
+	// cliRelease is the CLI's release version, empty for a development
+	// build, which skips version checks (see compat.go).
+	cliRelease string
 }
 
 // EnsureBridge generates tools/drift-plugins/main.go from the plugin list,
@@ -46,6 +49,10 @@ type Bridge struct {
 func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, infos []*PackageInfo) (*Bridge, error) {
 	if len(plugins) != len(infos) {
 		return nil, fmt.Errorf("EnsureBridge: plugin/info length mismatch")
+	}
+	cliRelease := cache.NormalizeVersion(cliVersion)
+	if err := checkPluginCompat(cliRelease, plugins, infos); err != nil {
+		return nil, err
 	}
 	src, err := writeBridgeSource(projectRoot, plugins)
 	if err != nil {
@@ -75,7 +82,7 @@ func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, in
 		}
 		binPath = filepath.Join(cacheBridgesRoot(), key, binName)
 		if info, err := os.Stat(binPath); err == nil && info.Mode().IsRegular() {
-			return &Bridge{BinaryPath: binPath}, nil
+			return &Bridge{BinaryPath: binPath, cliRelease: cliRelease}, nil
 		}
 	}
 
@@ -83,7 +90,7 @@ func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, in
 	if err := buildBridge(projectRoot, binPath); err != nil {
 		return nil, err
 	}
-	return &Bridge{BinaryPath: binPath}, nil
+	return &Bridge{BinaryPath: binPath, cliRelease: cliRelease}, nil
 }
 
 // writeBridgeSource writes tools/drift-plugins/main.go for plugins (only
@@ -449,6 +456,9 @@ func RunBridge(b *Bridge, env protocol.Envelope, logDir string) (*protocol.Respo
 	}
 	if resp.APIVersion != protocol.APIVersion {
 		return nil, fmt.Errorf("bridge API version %d does not match CLI %d", resp.APIVersion, protocol.APIVersion)
+	}
+	if err := checkBridgeDrift(b.cliRelease, resp.DriftVersion); err != nil {
+		return nil, err
 	}
 	if resp.Error != "" {
 		return nil, fmt.Errorf("plugin bridge: %s", resp.Error)

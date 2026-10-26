@@ -25,6 +25,25 @@ type ModuleInfo struct {
 	Path    string
 	Version string
 	Replace *Replace
+	// Main is set for the main module (the app itself).
+	Main bool
+	// GoMod is the module's go.mod file: in the module cache, or in the
+	// local directory of a replaced or workspace module.
+	GoMod string
+}
+
+// String names the module and where its source comes from.
+func (m *ModuleInfo) String() string {
+	switch {
+	case m.Replace != nil && m.Replace.Version == "":
+		return m.Path + " => " + m.Replace.Path
+	case m.Replace != nil:
+		return m.Path + " => " + m.Replace.Path + "@" + m.Replace.Version
+	case m.Version == "":
+		return m.Path + " (local)"
+	default:
+		return m.Path + "@" + m.Version
+	}
 }
 
 // Replace mirrors the Module.Replace structure from go list.
@@ -65,6 +84,8 @@ func parseGoList(data []byte) (*PackageInfo, error) {
 		Module *struct {
 			Path    string
 			Version string
+			Main    bool
+			GoMod   string
 			Replace *struct {
 				Path    string
 				Version string
@@ -79,7 +100,12 @@ func parseGoList(data []byte) (*PackageInfo, error) {
 		info.Error = raw.Error.Err
 	}
 	if raw.Module != nil {
-		info.Module = &ModuleInfo{Path: raw.Module.Path, Version: raw.Module.Version}
+		info.Module = &ModuleInfo{
+			Path:    raw.Module.Path,
+			Version: raw.Module.Version,
+			Main:    raw.Module.Main,
+			GoMod:   raw.Module.GoMod,
+		}
 		if raw.Module.Replace != nil {
 			info.Module.Replace = &Replace{
 				Path:    raw.Module.Replace.Path,

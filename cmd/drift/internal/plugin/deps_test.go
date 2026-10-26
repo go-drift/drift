@@ -76,6 +76,7 @@ func TestParseGoListOutput(t *testing.T) {
 		"Module": {
 			"Path": "github.com/foo/p",
 			"Version": "v0.1.0",
+			"GoMod": "/src/local/p/go.mod",
 			"Replace": {"Path": "../local/p", "Version": ""}
 		}
 	}`)
@@ -88,5 +89,8 @@ func TestParseGoListOutput(t *testing.T) {
 	}
 	if info.Module.Replace.Path != "../local/p" {
 		t.Errorf("replace path wrong: %q", info.Module.Replace.Path)
+	}
+	if info.Module.GoMod != "/src/local/p/go.mod" || info.Module.Main {
+		t.Errorf("GoMod = %q, Main = %v; want /src/local/p/go.mod, false", info.Module.GoMod, info.Module.Main)
 	}
 }

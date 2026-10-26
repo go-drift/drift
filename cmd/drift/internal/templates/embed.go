@@ -20,6 +20,14 @@ var FS embed.FS
 // is Vulkan-only, whose drivers on older releases are unreliable.
 const AndroidMinSDK = 31
 
+// PluginAPIFloor is the oldest drift version whose plugin native API these
+// templates still serve: DriftPluginAPI (plugin-api/ios), com.drift.runner
+// (android/runner) and the channel semantics plugin code relies on. A
+// plugin declares the API it was written against by the drift version its
+// go.mod requires, and the CLI refuses one requiring an older version.
+// Raise it to the release that makes a change breaking plugin native code.
+const PluginAPIFloor = "v0.27.0"
+
 // TemplateInput holds the caller-provided values for template rendering.
 type TemplateInput struct {
 	AppName        string
