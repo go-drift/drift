@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
@@ -40,6 +41,9 @@ type lockedOp struct {
 	Plugin string       `json:"plugin"`
 	Files  []lockedFile `json:"files,omitempty"`
 	Edit   string       `json:"edit,omitempty"`
+	// Line is the exact line a versioned Gradle op wrote (a dependency, a
+	// plugin declaration), so a later version replaces it in place.
+	Line string `json:"line,omitempty"`
 }
 
 type lockedFile struct {
@@ -188,7 +192,7 @@ func lockFor(ops []protocol.Op, projectDir, platform string) (Lock, error) {
 		if err != nil {
 			return l, err
 		}
-		entry := lockedOp{Key: lockKey(op), Plugin: op.PluginPackage(), Edit: describeEdit(op, platform)}
+		entry := lockedOp{Key: lockKey(op), Plugin: op.PluginPackage(), Edit: describeEdit(op, platform), Line: gradleLine(op)}
 		for _, f := range files {
 			rel, err := filepath.Rel(projectDir, f.Path)
 			if err != nil {
@@ -202,11 +206,52 @@ func lockFor(ops []protocol.Op, projectDir, platform string) (Lock, error) {
 }
 
 func lockKey(op protocol.Op) string {
+	if dep, ok := op.(*protocol.OpAndroidGradleAddDependency); ok {
+		// Its target member is the full coordinate, so that plugins
+		// pinning different versions both keep theirs; across builds the
+		// version is content, or an upgrade would read as a removal.
+		return dep.Type() + " gradle-dep:" + dep.Configuration + " [" + dep.Artifact() + "]"
+	}
 	parts := []string{op.Type()}
 	for _, t := range op.Targets() {
 		parts = append(parts, t.String())
 	}
 	return strings.Join(parts, " ")
+}
+
+// gradleLine is the line a versioned Gradle op writes, or "".
+func gradleLine(op protocol.Op) string {
+	switch v := op.(type) {
+	case *protocol.OpAndroidGradleAddDependency:
+		return mutate.GradleDependencyLine(v)
+	case *protocol.OpAndroidGradleApplyPlugin:
+		if v.Version != "" {
+			return mutate.GradlePluginDeclaration(v)
+		}
+	}
+	return ""
+}
+
+// gradleReplacements maps the line each versioned Gradle op in ops writes
+// to the different line the lock records for the same op (same plugin and
+// key): the line Drift wrote at the previous version, to update in place.
+// Two plugins pinning one artifact share a key but each keep their line.
+func (l *Lock) gradleReplacements(ops []protocol.Op) map[string]string {
+	type id struct{ plugin, key string }
+	prev := make(map[id]string)
+	for _, o := range l.ops() {
+		if o.Line != "" {
+			prev[id{o.Plugin, o.Key}] = o.Line
+		}
+	}
+	replace := make(map[string]string)
+	for _, op := range ops {
+		line := gradleLine(op)
+		if old, ok := prev[id{op.PluginPackage(), lockKey(op)}]; ok && line != "" && old != line {
+			replace[line] = old
+		}
+	}
+	return replace
 }
 
 // describeEdit names the edit op makes inside a shared file, or "" if it

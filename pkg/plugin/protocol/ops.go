@@ -1001,6 +1001,18 @@ func (o *OpAndroidGradleAddDependency) Platform() string { return "android" }
 func (o *OpAndroidGradleAddDependency) Targets() []Target {
 	return []Target{member("gradle-dep:"+o.Configuration, o.Coord)}
 }
+
+// Artifact is the dependency's coordinate without its version
+// (group:artifact[:classifier]): what stays the same when a plugin moves
+// to another version.
+func (o *OpAndroidGradleAddDependency) Artifact() string {
+	parts := strings.Split(o.Coord, ":")
+	if len(parts) > 2 {
+		parts = append(parts[:2], parts[3:]...)
+	}
+	return strings.Join(parts, ":")
+}
+
 func (o *OpAndroidGradleAddDependency) Validate() error {
 	if err := checkMatch(identRe, "gradle configuration", o.Configuration); err != nil {
 		return err

@@ -50,7 +50,7 @@ func Apply(ops []protocol.Op, buildDir, platform string, prev *Lock) ([]string, 
 		record(ios...)
 	}
 	if platform == "android" {
-		droid, err := applyAndroidOps(bag, buildDir)
+		droid, err := applyAndroidOps(bag, buildDir, prev.gradleReplacements(ops))
 		if err != nil {
 			return changedSorted(changed), err
 		}
@@ -319,7 +319,9 @@ func pluginPackage(bag *opBag) (mutate.PluginPackage, error) {
 // module's sources.
 const pluginAPITemplates = "plugin-api/ios"
 
-func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
+// replace maps Gradle lines to the lines Drift wrote for them at an earlier
+// version (Lock.gradleReplacements).
+func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]string, error) {
 	var changed []string
 	manifestPath := filepath.Join(buildDir, "app", "src", "main", "AndroidManifest.xml")
 	if !bag.manifest.Empty() {
@@ -381,7 +383,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 
 	if len(bag.gradleDeps) > 0 {
 		gradlePath := filepath.Join(buildDir, "app", "build.gradle")
-		path, ch, err := mutate.ApplyGradleAddDependencies(gradlePath, bag.gradleDeps)
+		path, ch, err := mutate.ApplyGradleAddDependencies(gradlePath, bag.gradleDeps, replace)
 		if err != nil {
 			return changed, err
 		}
@@ -408,7 +410,7 @@ func applyAndroidOps(bag *opBag, buildDir string) ([]string, error) {
 			changed = append(changed, path)
 		}
 		projectGradle := filepath.Join(buildDir, "build.gradle")
-		path, ch, err = mutate.ApplyGradleProjectPlugins(projectGradle, bag.gradlePlugins)
+		path, ch, err = mutate.ApplyGradleProjectPlugins(projectGradle, bag.gradlePlugins, replace)
 		if err != nil {
 			return changed, err
 		}

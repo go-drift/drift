@@ -50,13 +50,28 @@ func ApplyGradleApplyPlugins(appGradlePath string, ops []*protocol.OpAndroidGrad
 // declared at a different version is an error: Gradle loads one version
 // per plugin id, and silently keeping the scaffold's version would hand the
 // plugin a version it did not ask for.
-func ApplyGradleProjectPlugins(projectGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin) (string, bool, error) {
+//
+// replace maps a declaration to the one Drift wrote for the same id at an
+// earlier version (an ejected project's lock): if the project still holds
+// that line as written, it is updated in place rather than reported as a
+// mismatch.
+func ApplyGradleProjectPlugins(projectGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin, replace map[string]string) (string, bool, error) {
 	if len(ops) == 0 {
 		return projectGradlePath, false, nil
 	}
 	changed, err := rewriteGradle(projectGradlePath, func(src []byte) ([]byte, error) {
 		blk, err := findTopLevelBlock(src, "plugins")
 		if err != nil {
+			return nil, err
+		}
+		var wanted []string
+		for _, op := range ops {
+			if op.Version != "" {
+				wanted = append(wanted, GradlePluginDeclaration(op))
+			}
+		}
+		src = replaceBlockLines(src, blk, staleLines(wanted, replace))
+		if blk, err = findTopLevelBlock(src, "plugins"); err != nil {
 			return nil, err
 		}
 		declared := projectPluginVersions(blk.body(src))
@@ -73,11 +88,17 @@ func ApplyGradleProjectPlugins(projectGradlePath string, ops []*protocol.OpAndro
 				continue
 			}
 			declared[op.ID] = op.Version
-			toInsert = append(toInsert, fmt.Sprintf("    id \"%s\" version \"%s\" apply false", op.ID, op.Version))
+			toInsert = append(toInsert, GradlePluginDeclaration(op))
 		}
 		return insertBeforeClose(src, blk.closeIdx, toInsert), nil
 	})
 	return projectGradlePath, changed, err
+}
+
+// GradlePluginDeclaration is the line ApplyGradleProjectPlugins writes for
+// op, which has a Version.
+func GradlePluginDeclaration(op *protocol.OpAndroidGradleApplyPlugin) string {
+	return fmt.Sprintf("    id \"%s\" version \"%s\" apply false", op.ID, op.Version)
 }
 
 // applyPluginIDRE matches `apply plugin: "<id>"` and `apply plugin: '<id>'`.

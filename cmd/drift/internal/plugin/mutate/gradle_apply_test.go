@@ -143,7 +143,7 @@ func TestApplyGradleProjectPluginsInsertsIntoExistingBlock(t *testing.T) {
 	path := writeAppGradle(t, baseProjectGradle)
 	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestApplyGradleProjectPluginsIdempotent(t *testing.T) {
 	path := writeAppGradle(t, preDeclared)
 	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.0"),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestApplyGradleProjectPluginsSkipsEmptyVersion(t *testing.T) {
 	path := writeAppGradle(t, baseProjectGradle)
 	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("on.gradle.portal", ""),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestApplyGradleProjectPluginsRejectsVersionMismatch(t *testing.T) {
 	path := writeAppGradle(t, preDeclared)
 	_, _, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("com.google.gms.google-services", "4.4.2"),
-	})
+	}, nil)
 	if err == nil || !strings.Contains(err.Error(), "4.4.2") {
 		t.Fatalf("expected version-mismatch error naming both versions, got %v", err)
 	}
@@ -210,7 +210,7 @@ func TestApplyGradleProjectPluginsIgnoresTrailingComment(t *testing.T) {
 	path := writeAppGradle(t, commented)
 	_, changed, err := ApplyGradleProjectPlugins(path, []*protocol.OpAndroidGradleApplyPlugin{
 		op("foo.plugin", "1.0"),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestFirebaseShapedIntegration(t *testing.T) {
 		{Base: protocol.Base{Pkg: "fb"}, Configuration: "implementation", Coord: "com.google.firebase:firebase-bom:33.0.0"},
 		{Base: protocol.Base{Pkg: "fb"}, Configuration: "implementation", Coord: "com.google.firebase:firebase-analytics-ktx"},
 	}
-	if _, _, err := ApplyGradleAddDependencies(app, depOps); err != nil {
+	if _, _, err := ApplyGradleAddDependencies(app, depOps, nil); err != nil {
 		t.Fatalf("add deps: %v", err)
 	}
 	pluginOps := []*protocol.OpAndroidGradleApplyPlugin{
@@ -240,7 +240,7 @@ func TestFirebaseShapedIntegration(t *testing.T) {
 	if _, _, err := ApplyGradleApplyPlugins(app, pluginOps); err != nil {
 		t.Fatalf("apply plugins: %v", err)
 	}
-	if _, _, err := ApplyGradleProjectPlugins(project, pluginOps); err != nil {
+	if _, _, err := ApplyGradleProjectPlugins(project, pluginOps, nil); err != nil {
 		t.Fatalf("project plugins: %v", err)
 	}
 

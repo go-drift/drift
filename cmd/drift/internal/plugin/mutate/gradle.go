@@ -18,25 +18,34 @@ var errKotlinDSL = fmt.Errorf(
 	"plugin requires Groovy DSL build.gradle (found build.gradle.kts). " +
 		"Convert to Groovy or open an issue for Kotlin DSL support.")
 
+// GradleDependencyLine is the line ApplyGradleAddDependencies writes for
+// op. The format mirrors the scaffold: four spaces of indent inside the
+// block, a double-quoted coordinate.
+func GradleDependencyLine(op *protocol.OpAndroidGradleAddDependency) string {
+	return fmt.Sprintf("    %s \"%s\"", op.Configuration, op.Coord)
+}
+
 // ApplyGradleAddDependencies inserts each requested dependency line into the
 // Groovy DSL `dependencies { ... }` block of app/build.gradle. Already-
 // present byte-identical lines are skipped (no-op). Returns (path, changed,
 // err).
 //
+// replace maps a line to the line Drift wrote for the same dependency at
+// an earlier version (an ejected project's lock): that line, if still
+// present as written, is replaced instead of keeping both.
+//
 // Idempotent: re-runs of `drift build` against an unchanged project produce
 // no Gradle file modifications. This is what makes the plugin pipeline cheap
 // to re-run in watch mode without invalidating Gradle's incremental cache.
-func ApplyGradleAddDependencies(gradlePath string, ops []*protocol.OpAndroidGradleAddDependency) (string, bool, error) {
+func ApplyGradleAddDependencies(gradlePath string, ops []*protocol.OpAndroidGradleAddDependency, replace map[string]string) (string, bool, error) {
 	if len(ops) == 0 {
 		return gradlePath, false, nil
 	}
 
-	// Build the set of lines to insert. Format mirrors the existing
-	// scaffold (four spaces of indent inside the block, double-quoted coord).
 	desired := make([]string, 0, len(ops))
 	seen := make(map[string]bool, len(ops))
 	for _, op := range ops {
-		line := fmt.Sprintf("    %s \"%s\"", op.Configuration, op.Coord)
+		line := GradleDependencyLine(op)
 		if seen[line] {
 			continue
 		}
@@ -45,9 +54,56 @@ func ApplyGradleAddDependencies(gradlePath string, ops []*protocol.OpAndroidGrad
 	}
 
 	changed, err := rewriteGradle(gradlePath, func(src []byte) ([]byte, error) {
+		blk, err := findTopLevelBlock(src, "dependencies")
+		if err != nil {
+			return nil, err
+		}
+		src = replaceBlockLines(src, blk, staleLines(desired, replace))
 		return insertIntoDependenciesBlock(src, desired)
 	})
 	return gradlePath, changed, err
+}
+
+// staleLines maps each old line in replace whose new line is wanted to
+// that new line, by trimmed text.
+func staleLines(wanted []string, replace map[string]string) map[string]string {
+	stale := make(map[string]string)
+	for _, line := range wanted {
+		if old, ok := replace[line]; ok && strings.TrimSpace(old) != strings.TrimSpace(line) {
+			stale[strings.TrimSpace(old)] = line
+		}
+	}
+	return stale
+}
+
+// replaceBlockLines replaces each line of blk whose trimmed text is a key
+// of stale with that key's value, or drops it when the block already holds
+// that value.
+func replaceBlockLines(src []byte, blk gradleBlock, stale map[string]string) []byte {
+	if len(stale) == 0 {
+		return src
+	}
+	lines := strings.Split(blk.body(src), "\n")
+	present := make(map[string]bool, len(lines))
+	for _, l := range lines {
+		present[strings.TrimSpace(l)] = true
+	}
+	out := lines[:0]
+	for _, l := range lines {
+		line, ok := stale[strings.TrimSpace(l)]
+		switch {
+		case !ok:
+			out = append(out, l)
+		case !present[strings.TrimSpace(line)]:
+			present[strings.TrimSpace(line)] = true
+			out = append(out, line)
+		}
+	}
+	var b bytes.Buffer
+	b.Write(src[:blk.bodyStart])
+	b.WriteString(strings.Join(out, "\n"))
+	b.Write(src[blk.closeIdx:])
+	return b.Bytes()
 }
 
 // insertIntoDependenciesBlock inserts new lines at the end of the top-level

@@ -42,7 +42,7 @@ func TestApplyGradleAddDependencies_InsertsIntoExistingBlock(t *testing.T) {
 			Coord:         "androidx.core:core-splashscreen:1.0.1",
 		},
 	}
-	wrote, changed, err := ApplyGradleAddDependencies(path, ops)
+	wrote, changed, err := ApplyGradleAddDependencies(path, ops, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -68,10 +68,10 @@ func TestApplyGradleAddDependencies_IdempotentReapply(t *testing.T) {
 			Coord:         "androidx.core:core-splashscreen:1.0.1",
 		},
 	}
-	if _, _, err := ApplyGradleAddDependencies(path, ops); err != nil {
+	if _, _, err := ApplyGradleAddDependencies(path, ops, nil); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	_, changed, err := ApplyGradleAddDependencies(path, ops)
+	_, changed, err := ApplyGradleAddDependencies(path, ops, nil)
 	if err != nil {
 		t.Fatalf("second apply: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestApplyGradleAddDependencies_DedupesIdenticalInOpList(t *testing.T) {
 		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 		{Base: protocol.Base{Pkg: "b"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
-	if _, _, err := ApplyGradleAddDependencies(path, ops); err != nil {
+	if _, _, err := ApplyGradleAddDependencies(path, ops, nil); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
@@ -100,7 +100,7 @@ func TestApplyGradleAddDependencies_PreservesExistingFormat(t *testing.T) {
 	ops := []*protocol.OpAndroidGradleAddDependency{
 		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
-	if _, _, err := ApplyGradleAddDependencies(path, ops); err != nil {
+	if _, _, err := ApplyGradleAddDependencies(path, ops, nil); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
@@ -126,7 +126,7 @@ func TestApplyGradleAddDependencies_RejectsKotlinDSL(t *testing.T) {
 	ops := []*protocol.OpAndroidGradleAddDependency{
 		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
-	_, _, err := ApplyGradleAddDependencies(gradlePath, ops)
+	_, _, err := ApplyGradleAddDependencies(gradlePath, ops, nil)
 	if !errors.Is(err, errKotlinDSL) {
 		t.Errorf("expected Kotlin DSL error, got %v", err)
 	}
@@ -134,7 +134,7 @@ func TestApplyGradleAddDependencies_RejectsKotlinDSL(t *testing.T) {
 
 func TestApplyGradleAddDependencies_EmptyOpsIsNoOp(t *testing.T) {
 	path := writeGradle(t, baseGradle)
-	_, changed, err := ApplyGradleAddDependencies(path, nil)
+	_, changed, err := ApplyGradleAddDependencies(path, nil, nil)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -162,7 +162,7 @@ android {
 	ops := []*protocol.OpAndroidGradleAddDependency{
 		{Base: protocol.Base{Pkg: "a"}, Configuration: "implementation", Coord: "com.foo:bar:1.0.0"},
 	}
-	_, _, err := ApplyGradleAddDependencies(path, ops)
+	_, _, err := ApplyGradleAddDependencies(path, ops, nil)
 	if err == nil {
 		t.Fatal("expected error for missing dependencies block")
 	}
