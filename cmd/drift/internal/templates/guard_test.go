@@ -12,7 +12,9 @@ import (
 // The app templates are the baseline every Drift app ships. Permissions,
 // usage strings, background modes, entitlements and heavy dependencies
 // come from plugins listed in drift.yaml, never from the templates (Play
-// and App Review reject apps that declare what they do not use). These
+// and App Review reject apps that declare what they do not use). The
+// exceptions are the normal (install-time, promptless) permissions core
+// features need: network access and vibration (platform.Haptics). These
 // tests keep it that way.
 
 // renderAll renders path with every TemplateData combination that changes
@@ -43,7 +45,7 @@ func renderAll(t *testing.T, path string) []string {
 	return out
 }
 
-func TestManifestDeclaresOnlyNetworkPermissions(t *testing.T) {
+func TestManifestDeclaresOnlyCorePermissions(t *testing.T) {
 	for _, manifest := range renderAll(t, "android/AndroidManifest.xml.tmpl") {
 		var permissions, forbidden []string
 		decoder := xml.NewDecoder(strings.NewReader(manifest))
@@ -71,7 +73,7 @@ func TestManifestDeclaresOnlyNetworkPermissions(t *testing.T) {
 			}
 		}
 		slices.Sort(permissions)
-		want := []string{"android.permission.ACCESS_NETWORK_STATE", "android.permission.INTERNET"}
+		want := []string{"android.permission.ACCESS_NETWORK_STATE", "android.permission.INTERNET", "android.permission.VIBRATE"}
 		if !slices.Equal(permissions, want) {
 			t.Errorf("manifest permissions = %v, want %v", permissions, want)
 		}

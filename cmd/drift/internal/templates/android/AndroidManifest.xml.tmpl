@@ -3,6 +3,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Haptics: platform.Haptics.Vibrate, and the vibrator fallback of its
+         impacts when no view can give haptic feedback. A normal permission,
+         granted at install. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- Package visibility for canOpenURL (required on API 30+).
          Custom schemes (geo:, market:, etc.) need an entry here or
          resolveActivity will return null. -->

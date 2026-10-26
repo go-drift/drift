@@ -215,6 +215,10 @@ drift eject --force ios
 
 The backup is saved as `platform/ios.backup.<timestamp>/`.
 
+An ejected project keeps the template it was ejected from. Changes to the template since then reach it only through a re-eject or by hand:
+
+- Android projects ejected before Drift declared `android.permission.VIBRATE` lack it in `AndroidManifest.xml`, so `platform.Haptics.Vibrate` fails with a `SecurityException` (and impacts do when no view gives haptic feedback). Add `<uses-permission android:name="android.permission.VIBRATE" />`, as a freshly ejected project has.
+
 ## Undoing Eject
 
 To return to managed mode, delete the platform directory:
