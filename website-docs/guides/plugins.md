@@ -81,7 +81,7 @@ A plugin's native code compiles against the plugin API the CLI ships, so a relea
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| Plugins require a newer drift than this CLI | A plugin's `go.mod` requires a newer Drift than the CLI, so its native code may use API the CLI lacks | Install the CLI the error names |
+| Plugins require a newer drift than this CLI | A plugin's `go.mod` requires a newer Drift minor release than the CLI's (v0.28.x against a v0.27.x CLI), so its native code may use API the CLI lacks; patch releases do not change the plugin API | Install the CLI the error names |
 | Plugins were written for an older plugin API | A plugin requires a Drift older than the oldest plugin API the CLI still serves | Update the plugin, or use the CLI it was written for |
 | The app builds with drift X, but this CLI is Y | The app's `go.mod` selects a Drift whose major.minor differs from the CLI's | Install the CLI matching the app, or change the app's Drift version |
 
@@ -641,7 +641,7 @@ hello/
     └── hello_test.go
 ```
 
-The `github.com/go-drift/drift` version the plugin's `go.mod` requires declares the plugin API its native code is written against: require the oldest Drift release whose API the plugin uses. A release CLI refuses a plugin requiring a newer Drift than itself, or one older than the oldest plugin API it still serves (see [Versions](#versions)). Version the plugin itself however you like.
+The `github.com/go-drift/drift` version the plugin's `go.mod` requires declares the plugin API its native code is written against: require the oldest Drift release whose API the plugin uses. A release CLI refuses a plugin requiring a newer Drift minor release than its own (patch releases do not change the plugin API), or one older than the oldest plugin API it still serves (see [Versions](#versions)). Version the plugin itself however you like.
 
 The build half compiles into the bridge, the runtime half into the app. Keep them in separate packages so neither pulls in the other's dependencies.
 

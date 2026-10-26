@@ -17,10 +17,12 @@ import (
 // A plugin's native code is compiled against the CLI's plugin API templates
 // (DriftPluginAPI on iOS, com.drift.runner on Android), and its ops are
 // decoded by the CLI. A plugin declares the API it was written against by
-// the drift version its go.mod requires. The CLI serves a plugin when that
-// version is neither newer than the CLI nor older than
-// templates.PluginAPIFloor, and serves a bridge compiled with its own drift
-// major.minor. A development CLI (not a release version) skips these checks.
+// the drift version its go.mod requires. The plugin API changes only in a
+// minor release, so versions compare by major.minor: the CLI serves a
+// plugin whose required major.minor is neither newer than the CLI's nor
+// older than templates.PluginAPIFloor's, and a bridge compiled with its own
+// drift major.minor. A development CLI (not a release version) skips these
+// checks.
 
 // PluginRequirement is a configured plugin and the drift version its module
 // requires.
@@ -38,11 +40,11 @@ func (r PluginRequirement) String() string {
 // one of TooNew and TooOld is non-empty.
 type VersionSkewError struct {
 	CLI string // the CLI's release version
-	// TooNew require a drift newer than the CLI: their native code may use
-	// plugin API the CLI's templates lack.
+	// TooNew require a drift major.minor newer than the CLI's: their native
+	// code may use plugin API the CLI's templates lack.
 	TooNew []PluginRequirement
-	// TooOld require a drift older than templates.PluginAPIFloor: the plugin
-	// API changed incompatibly since.
+	// TooOld require a drift major.minor older than
+	// templates.PluginAPIFloor's: the plugin API changed incompatibly since.
 	TooOld []PluginRequirement
 }
 
@@ -93,10 +95,10 @@ func checkPluginCompat(cli string, plugins []ConfiguredPlugin, infos []*PackageI
 			return fmt.Errorf("plugin %s: %w", p.Package, err)
 		}
 		r := PluginRequirement{Package: p.Package, Module: mod.String(), Drift: req}
-		switch {
-		case semver.Compare(req, cli) > 0:
+		switch api := semver.MajorMinor(req); {
+		case semver.Compare(api, semver.MajorMinor(cli)) > 0:
 			skew.TooNew = append(skew.TooNew, r)
-		case semver.Compare(req, templates.PluginAPIFloor) < 0:
+		case semver.Compare(api, semver.MajorMinor(templates.PluginAPIFloor)) < 0:
 			skew.TooOld = append(skew.TooOld, r)
 		}
 	}

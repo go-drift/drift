@@ -56,7 +56,7 @@ The other modules in the repository (examples, showcase) are not released. Each 
 
 A release CLI checks compatibility (`cmd/drift/internal/plugin/compat.go`); a development build (`cache.NormalizeVersion` empty) skips it:
 
-- **Per plugin**, in `EnsureBridge` before building: the drift version the plugin module's `go.mod` requires (read from `go list`'s `Module.GoMod`) is the plugin API it was written against. Newer than the CLI, or older than `templates.PluginAPIFloor`, fails with a `VersionSkewError` naming every offending plugin. Plugins in the main module or in the drift module (first-party) are left to the next check.
+- **Per plugin**, in `EnsureBridge` before building: the drift version the plugin module's `go.mod` requires (read from `go list`'s `Module.GoMod`) is the plugin API it was written against. The plugin API changes only in a minor release, so versions compare by major.minor: a major.minor newer than the CLI's, or older than `templates.PluginAPIFloor`'s, fails with a `VersionSkewError` naming every offending plugin. Plugins in the main module or in the drift module (first-party) are left to the next check.
 - **Bridge**, in `RunBridge`: a `drift_version` whose major.minor differs from the CLI's fails, since its op set and the app's runtime may not match the templates.
 
 Raise `PluginAPIFloor` in the release that breaks plugin native code (`plugin-api/ios`, `android/runner`, channel semantics).

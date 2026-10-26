@@ -41,9 +41,11 @@ func TestCheckPluginCompat(t *testing.T) {
 		{"same version", cli, false, false},
 		{"older patch, same minor", "v0.28.0", false, false},
 		{"at the floor", templates.PluginAPIFloor, false, false},
-		{"newer patch", "v0.28.2", true, false},
+		{"newer patch, same minor", "v0.28.2", false, false},
+		{"pseudo-version past the CLI, same minor", "v0.28.2-0.20261026120000-abcdef123456", false, false},
 		{"newer minor", "v0.29.0", true, false},
-		{"pseudo-version past the CLI", "v0.28.2-0.20261026120000-abcdef123456", true, false},
+		{"pseudo-version of the next minor", "v0.29.0-0.20261026120000-abcdef123456", true, false},
+		{"newer major", "v1.0.0", true, false},
 		{"below the floor", "v0.26.1", false, true},
 	}
 	for _, tt := range tests {
