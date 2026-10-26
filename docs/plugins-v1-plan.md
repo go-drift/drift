@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (Phase 6 done, see [6.1 status](#61-status), [6.2 status](#62-status), [6.3 status](#63-status), [6.4 status](#64-status), [6.5 status](#65-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guides [plugins.md](../website-docs/guides/plugins.md), [plugin-catalog.md](../website-docs/guides/plugin-catalog.md) and [plugin-authoring.md](../website-docs/guides/plugin-authoring.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (Phase 6 done, see [6.1 status](#61-status), [6.2 status](#62-status), [6.3 status](#63-status), [6.4 status](#64-status), [6.5 status](#65-status), [6.6 status](#66-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -503,6 +503,37 @@ Emulator, showcase: video plays on through two dark-mode recreations, in place, 
 
 **Wire contract generation** (not built): after these changes each channel has, on both sides, one name carrying its methods, an optional stream with a lifecycle, and one declared table of error codes (`ErrorCodes` in Go, `DriftCallError` codes natively). A declaration of methods, codes and stream could generate stubs over these primitives without changing them; the native code strings would become generated constants.
 
+#### 6.6 Internal refactors
+
+Plugin-system internals that change no author-facing API, landed after 6.5 and before the Release sequence:
+
+1. **One dispatch tier.** Drift's own channels used a second tier (`MethodHandler`, `Channel.BuiltIn`) whose handlers ran on whichever Go thread called, so iOS touched UIKit off the main thread (`applicationState`, feedback generators, `canOpenURL`) and statics raced (`DeepLinkHandler.initialLink`, the system UI style).
+2. **Op registry.** Adding an op touched the bag and parallel switches in `apply.go` and `lock.go`, and project paths were spelled out in four files.
+3. **Fewer op types.** One op type per recorder (29).
+4. **Guide split.** One long guide page for users and authors alike.
+
+##### 6.6 status
+
+Done. Decisions (2026-10-26):
+- Every Drift channel registers through `registerChannel` with `method`s; none needs `asyncMethod`. A goroutine calling one waits about one turn of the main queue, and the UI thread is still answered in place. No Go code holds a lock across such a call (checked: the per-frame `drift/accessibility` calls and its setup run on the UI thread; `tellNative` and the deep-link controller hold none). A calling-thread method kind was rejected: it would bring back UIKit off the main thread.
+- `drift/streams` replies, then starts or stops the stream (posted), so its first events still follow `Listen`; share, `openURL` and the iOS status bar style still apply after the reply.
+- One `opKind` per op type (`opkinds.go`) and one `project` (`project.go`) holding every location; the registry, not the op count, was the goal.
+- Op types 29 to 20: `ios.plist.set` (any plist value), `android.manifest.add_component` (service or receiver, the element's root decides), `file.add` at a `FileLocation` (bundle resource, drawable, resource XML, app module file, either plugin config). Nothing else merged: a kind switch over fields that differ is a sum type hidden in one struct. `protocol.APIVersion` is 2.
+- Op struct types change freely before v0.27.0; from then on they are author-facing API (authors' tests switch on them, and the guide quotes such a test), which the guide's Testing section says. No assertion layer for tests.
+- Guide pages `plugins` (using), `plugin-catalog`, `plugin-authoring` (with the op reference); ejected-project plugin output moves to the eject guide; the media player guide stays, linked from the catalogue and listed under Plugins. docgen documents `pkg/plugin` and the plugins' runtime packages, not `pkg/plugin/protocol` (the wire contract).
+
+| Commit | Content |
+|--------|---------|
+| `f409b98` | Drift's channels declare methods on `DriftChannel`; the built-in tier is gone on both platforms; `TestTemplatesRegisterEveryDriftChannel` checks every channel `pkg/platform` calls is registered on both |
+| `af18084` | `opKind` registry and `project`; `Apply` writes owned files exactly as the lock records them; per-op writers in `mutate` replaced by `WriteOwned` |
+| `88da4bd` | Op collapse, `APIVersion` 2; the op reference test checks both ways and every recorder |
+| `c5742f3` | Guide split, sidebar Plugins category, docgen API pages for `pkg/plugin` and the plugin runtimes |
+
+**Verified:** `go vet ./...` and `go test ./...` in the root and `examples/plugins/hello`; `make cli`; `go run cmd/docgen/main.go` and a Docusaurus build with no broken guide links or anchors. splash-demo (splash held, then the app) and firebase-demo (FCM token, notification permission, a foreground message: FCM on the API 36 emulator, `simctl push` on the Simulator) on the emulator and the iOS Simulator (Xcode 27.1, iPhone 17 / iOS 26.5); `drift build xtool` of both, whose output carries `<false/>` for `FirebaseAppDelegateProxyEnabled`, `aps-environment` and the bundle resources. A scratch probe app called every Drift channel method from the UI thread and from a goroutine on both: clipboard, haptics, lifecycle `getState`, system UI, deep links, accessibility (`updateSemantics`, focus, announce), preferences, URL launcher `canOpenURL`, `drift/streams`, storage (`blocks_ui_thread` from the UI thread, file round trip from a goroutine), an unknown method (`ErrMethodNotFound`) and bad arguments (`ErrInvalidArguments`); all passed except Android `vibrate` (below). Showcase on both, pages opened by deep link: clipboard copy and read, preferences save and get, the share sheet, form submit (haptics), the date and time pickers returning their values, and the file picker cancelled. On the Simulator, taps came from an XCUITest helper with coordinate taps and drags (`~/drift-ios-verify/tapper66` on the Mac). The first tap after a deep link's "Open" prompt is sometimes lost while the app reactivates; repeating it works. Restarting the helper once crashed SpringBoard inside XCTest's automation support and wedged the Simulator (no app would launch); `simctl shutdown`/`boot` cleared it, and the showcase runs again.
+
+**Found:** Android `drift/haptics` `vibrate` fails with a `SecurityException`: the app template does not declare `android.permission.VIBRATE`. The same before 6.6 (the old handler made the same call); `impact` works through the view's haptic feedback. See Backlog.
+
+
 ## Verification matrix (merge gate)
 
 Cells give status. "Accepted" cells were not run on hardware; they rest on the emulator and Simulator runs (Phase 4 decisions).
@@ -535,6 +566,7 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 - **Go's `time.Local` is UTC on iOS and Android**, so times formatted in Go show UTC (the location page's timestamp reads an hour behind under BST). Set `time.Local` from the platform's zone at startup.
 - **iOS `SaveFile` returns the temporary copy's path**, not where the user saved it (the share sheet does not report the destination). Use `UIDocumentPickerViewController(forExporting:)` to get the destination, or document that the path is not the saved file.
 - **Secure storage biometric prompt on a device.** Untested: the Simulator does not enforce keychain biometric access control.
+- **Android `Haptics.Vibrate` needs `VIBRATE`.** The template declares only `INTERNET` and `ACCESS_NETWORK_STATE` (the template guard test), so `vibrate` fails with a `SecurityException`; `impact` works through `performHapticFeedback`. Declare `VIBRATE` in the template (a normal permission, granted at install, not a store review flag) and allow it in the guard test, or fall back to `performHapticFeedback`.
 - **Optional hardware features.** Google Play infers required features from permissions (location permissions imply `android.hardware.location`; `RECORD_AUDIO` implies `android.hardware.microphone`), which hides the app from devices without them. A plugin cannot mark them optional: add an `android.manifest.add_uses_feature` op when one needs it.
 
 - **A permission's `max_sdk` change does not reach an existing declaration** in an ejected project: `ensurePermission` keeps the declaration it finds, so a plugin upgrade changing `max_sdk` leaves the old value.
@@ -571,7 +603,7 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 - **The `drift/` channel prefix** is documented as reserved but not enforced. Android's `internal constructor` on host types protects nothing (plugin sources compile into the app module), and `@_spi(DriftHost)` is cosmetic on iOS.
 - **Emulator Play services**: the `pixel_8` google_apis image warns its Play services (25.26) is older than firebase-messaging 25.1.3 asks for (26.12); FCM works anyway.
 - **Engine test races.** `go test -race ./pkg/engine` fails in older `init_test.go` tests (also on `master`): leaked OnInit goroutines dispatch to the global `app` after `swapApp` restores it.
-- **Stale comments and files:** `init/gitignore.tmpl` still mentions `Empty.swift` and `tools/drift-plugins/bridge`; `DriftPlugins.swift` says plugins can use `PlatformChannelManager`; `DriftPluginHost.swift` says the module depends only on Foundation and UIKit; `protocol/ops.go` mentions the deleted pre-activity hook; `ejected.go` has a stale hint.
+- **Stale comments and files:** `init/gitignore.tmpl` still mentions `Empty.swift` and `tools/drift-plugins/bridge`; `DriftPlugins.swift` says plugins can use `PlatformChannelManager`; `DriftPluginHost.swift` says the module depends only on Foundation and UIKit; `ejected.go` has a stale hint.
 
 ## Unresolved questions
 
