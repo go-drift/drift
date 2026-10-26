@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/go-drift/drift/cmd/drift/internal/cache"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 )
 
@@ -85,7 +86,7 @@ func runInit(args []string) error {
 
 	// Resolve Go dependencies
 	fmt.Println("  Adding drift dependency...")
-	getCmd := exec.Command("go", "get", "github.com/go-drift/drift@latest")
+	getCmd := exec.Command("go", "get", driftDependency(cache.NormalizeVersion(Version)))
 	getCmd.Dir = dir
 	getCmd.Stdout = os.Stdout
 	getCmd.Stderr = os.Stderr
@@ -110,6 +111,16 @@ func runInit(args []string) error {
 	fmt.Printf("  drift run ios        # Run on iOS (macOS only)\n")
 
 	return nil
+}
+
+// driftDependency is the drift module query a new project requires: the
+// CLI's own version for a release CLI, whose templates and plugin API
+// match it, or latest for a development build.
+func driftDependency(cliRelease string) string {
+	if cliRelease == "" {
+		return "github.com/go-drift/drift@latest"
+	}
+	return "github.com/go-drift/drift@" + cliRelease
 }
 
 // scaffoldProject creates the project directory and writes the template files.

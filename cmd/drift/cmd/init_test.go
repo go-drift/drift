@@ -8,6 +8,15 @@ import (
 	"testing"
 )
 
+func TestDriftDependency(t *testing.T) {
+	if got := driftDependency("v0.27.0"); got != "github.com/go-drift/drift@v0.27.0" {
+		t.Errorf("release CLI: got %q", got)
+	}
+	if got := driftDependency(""); got != "github.com/go-drift/drift@latest" {
+		t.Errorf("development CLI: got %q", got)
+	}
+}
+
 func TestValidateDirectory(t *testing.T) {
 	type tc struct {
 		name    string
