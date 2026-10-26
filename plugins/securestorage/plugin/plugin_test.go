@@ -76,3 +76,11 @@ func TestBuildWithBiometrics(t *testing.T) {
 		t.Error("the BiometricPrompt Biometrics.kt is not shipped")
 	}
 }
+
+func TestBuildRejectsEmptyFaceIDDescription(t *testing.T) {
+	err := driftplugin.Bind("github.com/go-drift/drift/plugins/securestorage/plugin", Plugin).
+		Build(driftplugin.NewTestCtx(), []byte("biometrics:\n  face_id_description: \" \"\n"))
+	if err == nil || !strings.Contains(err.Error(), "biometrics.face_id_description: must not be empty") {
+		t.Errorf("err = %v, want biometrics.face_id_description: must not be empty", err)
+	}
+}

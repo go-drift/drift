@@ -36,8 +36,6 @@ package plugin
 
 import (
 	"embed"
-	"fmt"
-	"strings"
 
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
 )
@@ -79,10 +77,6 @@ type secureStorage struct{}
 func (secureStorage) Name() string { return "securestorage" }
 
 func (secureStorage) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-	if cfg.Biometrics != nil && strings.TrimSpace(cfg.Biometrics.FaceIDDescription) == "" {
-		return fmt.Errorf("securestorage: biometrics.face_id_description must not be empty")
-	}
-
 	if cfg.Biometrics != nil {
 		// The native plugin allows RequireBiometric only when this key is
 		// present.

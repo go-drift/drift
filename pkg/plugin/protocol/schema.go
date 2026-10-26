@@ -30,7 +30,8 @@ type SchemaField struct {
 	// "struct", or "[]"/"map[..]" compositions of those.
 	Type string `json:"type"`
 	// Required is true if the field has the `required` tag: the key must be
-	// present in the config mapping (an explicit zero value counts).
+	// present in the config mapping. An explicit zero value counts, except
+	// for a string, which must not be empty or only whitespace.
 	Required bool `json:"required"`
 	// Default is the literal from `default=...`, applied when the key is
 	// absent. Empty means no default.
@@ -266,6 +267,11 @@ func (v *configValidator) value(p string, f SchemaField, val any) {
 			v.mapping(ep+".", f.Fields, m)
 		}
 		return
+	case "string":
+		if s, isString := val.(string); f.Required && (val == nil || isString && strings.TrimSpace(s) == "") {
+			v.report(p, "must not be empty")
+			return
+		}
 	}
 	for _, name := range f.Validators {
 		if msg := runValidator(name, val, v.projectRoot); msg != "" {

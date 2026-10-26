@@ -701,7 +701,7 @@ var Plugin driftplugin.Plugin[Config] = hello{}
 
 | Tag | Meaning |
 |-----|---------|
-| `required` | The key must be present (an explicit `false` or `""` counts) |
+| `required` | The key must be present (an explicit `false` or `0` counts); a string must not be empty or only whitespace |
 | `default=<value>` | Used when the key is absent. Scalars only; not with `required` |
 | `hex` | A `#RRGGBB` or `#RRGGBBAA` colour, alpha last |
 | `asset` | A project-relative path to an existing file |

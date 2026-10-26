@@ -94,12 +94,10 @@ type location struct{}
 func (location) Name() string { return "location" }
 
 func (location) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
-	if strings.TrimSpace(cfg.WhenInUseDescription) == "" {
-		return fmt.Errorf("location: when_in_use_description must not be empty")
-	}
 	if a := cfg.Always; a != nil {
+		// Defaulted, so not required: an explicit empty value is caught
+		// here.
 		for _, field := range []struct{ key, value string }{
-			{"description", a.Description},
 			{"notification_title", a.NotificationTitle},
 			{"notification_text", a.NotificationText},
 		} {

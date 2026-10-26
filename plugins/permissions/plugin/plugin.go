@@ -103,9 +103,6 @@ func (permissions) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 		if k.cfg == nil {
 			continue
 		}
-		if strings.TrimSpace(k.cfg.Description) == "" {
-			return fmt.Errorf("permissions: %s.description must not be empty", k.name)
-		}
 		enabled = append(enabled, k.name)
 		for _, key := range k.iosKeys {
 			ctx.IOS.Info.SetString(key, k.cfg.Description)

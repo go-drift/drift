@@ -90,7 +90,7 @@ import (
 )
 
 type Config struct {
-	Description string ` + "`yaml:\"description\" drift:\"required\"`" + `
+	Description string ` + "`yaml:\"description\"`" + `
 }
 
 type blank struct{}

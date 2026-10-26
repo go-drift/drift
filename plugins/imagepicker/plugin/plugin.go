@@ -24,8 +24,6 @@ package plugin
 
 import (
 	"embed"
-	"fmt"
-	"strings"
 
 	driftplugin "github.com/go-drift/drift/pkg/plugin"
 )
@@ -58,9 +56,6 @@ func (imagePicker) Name() string { return "imagepicker" }
 
 func (imagePicker) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 	if cfg.Camera != nil {
-		if strings.TrimSpace(cfg.Camera.Description) == "" {
-			return fmt.Errorf("imagepicker: camera.description must not be empty")
-		}
 		// The native plugin captures only when this key is present.
 		ctx.IOS.Info.SetString("NSCameraUsageDescription", cfg.Camera.Description)
 	}
