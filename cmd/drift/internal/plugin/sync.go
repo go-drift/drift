@@ -15,7 +15,8 @@ import (
 type SyncOptions struct {
 	ProjectRoot string
 	CLIVersion  string
-	// Tidy runs go mod tidy after bridge regeneration.
+	// Tidy runs go mod tidy after regenerating the bridge source, before
+	// anything reads the module graph.
 	Tidy bool
 }
 
@@ -32,7 +33,7 @@ type SyncResult struct {
 // tools/drift-plugins/main.go, rebuilds the cached bridge if needed, runs
 // schema validation against drift.yaml. It never edits go.mod or go.sum on
 // its own; with Tidy it runs `go mod tidy` after regenerating the bridge
-// source and before building it.
+// source and before resolving the plugins.
 func Sync(opts SyncOptions) (*SyncResult, error) {
 	plugins, err := LoadFromDriftYAML(opts.ProjectRoot)
 	if err != nil {
@@ -52,6 +53,22 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		return res, nil
 	}
 
+	if opts.Tidy {
+		// Tidy against the regenerated bridge source, before resolving the
+		// plugins and building the bridge: both run -mod=readonly and need
+		// the entries tidy adds for a plugin just required.
+		if _, err := writeBridgeSource(opts.ProjectRoot, plugins); err != nil {
+			return res, err
+		}
+		cmd := exec.Command("go", "mod", "tidy")
+		cmd.Dir = opts.ProjectRoot
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return res, fmt.Errorf("go mod tidy: %w", err)
+		}
+	}
+
 	resolver := NewGoListResolver(opts.ProjectRoot)
 	// Walk all plugins individually so a single missing entry doesn't mask
 	// the others: users get one `go get` line per missing package.
@@ -69,21 +86,6 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 	}
 	if len(res.Missing) > 0 {
 		return res, &MissingPluginError{Packages: res.Missing}
-	}
-
-	if opts.Tidy {
-		// Tidy against the regenerated bridge source, before building it:
-		// the build is -mod=readonly and needs the entries tidy adds.
-		if _, err := writeBridgeSource(opts.ProjectRoot, plugins); err != nil {
-			return res, err
-		}
-		cmd := exec.Command("go", "mod", "tidy")
-		cmd.Dir = opts.ProjectRoot
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return res, fmt.Errorf("go mod tidy: %w", err)
-		}
 	}
 
 	bridge, err := EnsureBridge(opts.ProjectRoot, opts.CLIVersion, plugins, infos)

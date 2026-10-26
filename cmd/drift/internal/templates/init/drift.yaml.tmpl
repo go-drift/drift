@@ -1,8 +1,9 @@
 app:
   name: {{.AppName}}
 
-# Drift plugins are Go modules. To install one:
-#   1. go get github.com/foo/drift-splash/plugin@latest
-#   2. add an entry below
-#   3. commit drift.yaml AND tools/drift-plugins/main.go together
+# Drift plugins are Go modules. To add one:
+#   1. go get <module>@<version>
+#   2. add its package (usually <module>/plugin) and config below
+#   3. drift plugin sync --tidy
+#   4. commit drift.yaml, go.mod, go.sum and tools/drift-plugins/main.go
 plugins: []
