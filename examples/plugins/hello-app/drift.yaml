@@ -1,0 +1,8 @@
+app:
+  name: HelloApp
+  id: com.example.helloapp
+
+plugins:
+  - package: github.com/go-drift/drift/examples/plugins/hello/plugin
+    config:
+      greeting: Hello from drift.yaml
