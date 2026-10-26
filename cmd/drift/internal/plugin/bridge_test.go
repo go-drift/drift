@@ -1,12 +1,15 @@
 package plugin
 
 import (
+	"fmt"
 	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -230,5 +233,70 @@ func TestGeneratedBridgeParses(t *testing.T) {
 	}
 	if _, err := parser.ParseFile(token.NewFileSet(), "main.go", src, 0); err != nil {
 		t.Fatalf("generated bridge does not parse: %v\n%s", err, src)
+	}
+}
+
+// The cache keeps the maxCachedBridges most recently used bridges, keyed
+// and local alike, and a directory still being built counts as just used.
+func TestPruneBridgeCacheKeepsMostRecentlyUsed(t *testing.T) {
+	root := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	bridge := func(dir string, age int) string {
+		t.Helper()
+		path := filepath.Join(root, dir)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		bin := filepath.Join(path, "bridge")
+		if err := os.WriteFile(bin, nil, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		used := base.Add(-time.Duration(age) * time.Minute)
+		if err := os.Chtimes(bin, used, used); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	var oldest []string
+	for i := range maxCachedBridges + 2 {
+		dir := fmt.Sprintf("key%02d", i)
+		if i%2 == 1 {
+			dir = filepath.Join("local", dir)
+		}
+		path := bridge(dir, i)
+		if i >= maxCachedBridges-1 {
+			oldest = append(oldest, path)
+		}
+	}
+	// A build in progress: a fresh directory with only a temporary file.
+	building := filepath.Join(root, "building")
+	if err := os.MkdirAll(building, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := pruneBridgeCache(root, "bridge"); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range oldest {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s kept, want removed (least recently used)", path)
+		}
+	}
+	for _, path := range []string{building, filepath.Join(root, "key00"), filepath.Join(root, "local")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s removed, want kept", path)
+		}
+	}
+	var kept int
+	for _, parent := range []string{root, filepath.Join(root, "local")} {
+		dirs, _ := os.ReadDir(parent)
+		for _, d := range dirs {
+			if d.Name() != "local" {
+				kept++
+			}
+		}
+	}
+	if kept != maxCachedBridges {
+		t.Errorf("%d bridges kept, want %d", kept, maxCachedBridges)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/format"
 	"go/token"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
 	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
@@ -75,14 +77,17 @@ func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, in
 	}
 	var binPath string
 	if local {
-		binPath = filepath.Join(cacheBridgesRoot(), "local", sha256hex([]byte(projectRoot))[:12], binName)
+		binPath = filepath.Join(BridgeCacheDir(), "local", sha256hex([]byte(projectRoot))[:12], binName)
 	} else {
 		key, err := bridgeCacheKey(projectRoot, cliVersion, env, plugins, infos, src)
 		if err != nil {
 			return nil, err
 		}
-		binPath = filepath.Join(cacheBridgesRoot(), key, binName)
+		binPath = filepath.Join(BridgeCacheDir(), key, binName)
 		if info, err := os.Stat(binPath); err == nil && info.Mode().IsRegular() {
+			// The modification time records the last use (pruneBridgeCache).
+			now := time.Now()
+			_ = os.Chtimes(binPath, now, now)
 			return &Bridge{BinaryPath: binPath, cliRelease: cliRelease}, nil
 		}
 	}
@@ -91,7 +96,59 @@ func EnsureBridge(projectRoot, cliVersion string, plugins []ConfiguredPlugin, in
 	if err := buildBridge(projectRoot, binPath); err != nil {
 		return nil, err
 	}
+	if err := pruneBridgeCache(BridgeCacheDir(), binName); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: prune plugin bridge cache: %v\n", err)
+	}
 	return &Bridge{BinaryPath: binPath, cliRelease: cliRelease}, nil
+}
+
+// maxCachedBridges bounds the bridge cache, which every project shares:
+// past it, the least recently used bridges are removed after each build.
+// A bridge is a few MB, and a removed one is rebuilt on its next use.
+const maxCachedBridges = 16
+
+// pruneBridgeCache removes all but the maxCachedBridges most recently used
+// bridges under root: the keyed directories and those under local/, each
+// holding one binary named binName, last used at its modification time.
+// A directory without one (a build in progress, which links to a temporary
+// name) counts as used when the directory last changed, so another
+// process's build is not removed from under it.
+func pruneBridgeCache(root, binName string) error {
+	type entry struct {
+		dir  string
+		used time.Time
+	}
+	var entries []entry
+	for _, parent := range []string{root, filepath.Join(root, "local")} {
+		dirs, err := os.ReadDir(parent)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		for _, d := range dirs {
+			if !d.IsDir() || (parent == root && d.Name() == "local") {
+				continue
+			}
+			dir := filepath.Join(parent, d.Name())
+			info, err := os.Stat(filepath.Join(dir, binName))
+			if err != nil {
+				if info, err = d.Info(); err != nil {
+					continue // removed meanwhile
+				}
+			}
+			entries = append(entries, entry{dir: dir, used: info.ModTime()})
+		}
+	}
+	if len(entries) <= maxCachedBridges {
+		return nil
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].used.After(entries[j].used) })
+	var errs []error
+	for _, e := range entries[maxCachedBridges:] {
+		if err := os.RemoveAll(e.dir); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // writeBridgeSource writes tools/drift-plugins/main.go for plugins (only
@@ -137,7 +194,9 @@ func buildBridge(projectRoot, binPath string) error {
 	return nil
 }
 
-func cacheBridgesRoot() string {
+// BridgeCacheDir is the directory holding every project's built plugin
+// bridges.
+func BridgeCacheDir() string {
 	root, err := cache.Root()
 	if err != nil || root == "" {
 		root = filepath.Join(os.TempDir(), "drift")

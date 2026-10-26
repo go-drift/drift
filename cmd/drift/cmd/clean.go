@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
+	"github.com/go-drift/drift/cmd/drift/internal/plugin"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
 )
 
@@ -18,6 +19,7 @@ func init() {
 This command deletes:
   - Drift build cache for this project
   - Generated Android/iOS workspaces
+  - Built plugin bridges (shared by all projects; rebuilt on next use)
 
 Use this when you want to do a completely fresh build.`,
 		Usage: "drift clean",
@@ -50,11 +52,12 @@ func runClean(args []string) error {
 		}
 	}
 
-	cacheDir := filepath.Join(root, "build")
-	if _, err := os.Stat(cacheDir); err == nil {
-		fmt.Printf("  Removing %s/\n", cacheDir)
-		if err := os.RemoveAll(cacheDir); err != nil {
-			fmt.Printf("  Warning: could not remove %s: %v\n", cacheDir, err)
+	for _, dir := range []string{filepath.Join(root, "build"), plugin.BridgeCacheDir()} {
+		if _, err := os.Stat(dir); err == nil {
+			fmt.Printf("  Removing %s/\n", dir)
+			if err := os.RemoveAll(dir); err != nil {
+				fmt.Printf("  Warning: could not remove %s: %v\n", dir, err)
+			}
 		}
 	}
 
