@@ -4,17 +4,22 @@
 //
 //	import notifications "github.com/go-drift/drift/plugins/notifications/runtime"
 //
-//	err := notifications.Schedule(notifications.Request{
-//	    ID:    "reminder",
-//	    Title: "Stand up",
-//	    At:    time.Now().Add(time.Hour),
-//	    Data:  map[string]any{"route": "/reminders"},
-//	})
+//	go func() {
+//	    err := notifications.Schedule(ctx, notifications.Request{
+//	        ID:    "reminder",
+//	        Title: "Stand up",
+//	        At:    time.Now().Add(time.Hour),
+//	        Data:  map[string]any{"route": "/reminders"},
+//	    })
+//	    ...
+//	}()
 //
 //	notifications.Opens().Listen(func(o notifications.Open) {
 //	    drift.Dispatch(func() { navigate(o.Data["route"]) })
 //	})
 //
+// Schedule and CurrentSettings wait for the platform, so call them from a
+// goroutine; from the UI thread they fail with platform.ErrBlocksUIThread.
 // Showing notifications needs the user's permission:
 // platform.Notifications.Permission. Notifications are shown in the
 // foreground too, and reported on Deliveries. Only this plugin's
@@ -109,9 +114,11 @@ type Open struct {
 	Data map[string]any
 }
 
-// Schedule schedules req, replacing any notification with the same ID.
-// Any goroutine may call it.
-func Schedule(req Request) error {
+// Schedule schedules req, replacing any notification with the same ID. It
+// waits for the platform to accept the request, so call it from a
+// goroutine; from the UI thread it fails with [platform.ErrBlocksUIThread].
+// A request the platform rejects fails with the platform's error.
+func Schedule(ctx context.Context, req Request) error {
 	if err := req.validate(); err != nil {
 		return fmt.Errorf("notifications schedule: %w", err)
 	}
@@ -131,7 +138,7 @@ func Schedule(req Request) error {
 	if req.Badge != nil {
 		args["badge"] = *req.Badge
 	}
-	if _, err := channel.Invoke(context.Background(), "schedule", args); err != nil {
+	if _, err := channel.Invoke(ctx, "schedule", args); err != nil {
 		return fmt.Errorf("notifications schedule: %w", err)
 	}
 	return nil

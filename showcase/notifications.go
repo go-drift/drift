@@ -161,10 +161,14 @@ func (s *notificationsState) scheduleLocal() {
 		},
 	}
 
-	if err := notifications.Schedule(request); err != nil {
-		s.receivedText.Set("Schedule error: " + err.Error())
-		return
-	}
-
-	s.receivedText.Set("Scheduled local notification.")
+	go func() {
+		err := notifications.Schedule(context.Background(), request)
+		drift.Dispatch(func() {
+			if err != nil {
+				s.receivedText.Set("Schedule error: " + err.Error())
+				return
+			}
+			s.receivedText.Set("Scheduled local notification.")
+		})
+	}()
 }

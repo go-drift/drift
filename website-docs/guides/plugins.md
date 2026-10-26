@@ -317,13 +317,16 @@ import notifications "github.com/go-drift/drift/plugins/notifications/runtime"
 // Ask once, from a goroutine.
 go platform.Notifications.Permission.Request(ctx)
 
-err := notifications.Schedule(notifications.Request{
-    ID:    "standup",
-    Title: "Stand-up",
-    Body:  "In five minutes",
-    At:    time.Now().Add(55 * time.Minute),
-    Data:  map[string]any{"route": "/meetings"},
-})
+go func() {
+    err := notifications.Schedule(ctx, notifications.Request{
+        ID:    "standup",
+        Title: "Stand-up",
+        Body:  "In five minutes",
+        At:    time.Now().Add(55 * time.Minute),
+        Data:  map[string]any{"route": "/meetings"},
+    })
+    ...
+}()
 
 // A tap on one of the app's notifications, including the one that launched it.
 notifications.Opens().Listen(func(o notifications.Open) {
@@ -333,7 +336,7 @@ notifications.Opens().Listen(func(o notifications.Open) {
 
 | Function | Notes |
 |----------|-------|
-| `Schedule(req)` | Scheduling an `ID` again replaces it. `At` is when; without it, after `Interval`. `Repeats` shows it every `Interval` (at least a minute) from now, and cannot be combined with `At` |
+| `Schedule(ctx, req)` | Scheduling an `ID` again replaces it. `At` is when; without it, after `Interval`. `Repeats` shows it every `Interval` (at least a minute) from now, and cannot be combined with `At`. Waits for the platform to accept the request, so call it from a goroutine; a request the platform rejects fails with its error |
 | `Cancel(id)`, `CancelAll()` | Remove scheduled and shown notifications; `CancelAll` leaves other plugins' (push) alone |
 | `SetBadge(n)` | iOS app icon badge; Android launchers show their own |
 | `CurrentSettings(ctx)` | Whether alerts, sounds and badges are on; waits for the platform, so call it from a goroutine |

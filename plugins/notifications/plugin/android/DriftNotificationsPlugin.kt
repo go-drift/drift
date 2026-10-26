@@ -36,9 +36,11 @@ class DriftNotificationsPlugin : DriftPlugin {
         registered = this
         val context = host.context
         host.registerChannel(CHANNEL) {
-            method("schedule") { args ->
+            // Async to match iOS, where scheduling replies from a
+            // completion handler: Go calls it from a goroutine on both.
+            asyncMethod("schedule") { args, result ->
                 schedule(context, Notification.fromArgs(args))
-                null
+                result.success(null)
             }
             method("cancel") { args ->
                 val id = (args as? Map<*, *>)?.get("id") as? String

@@ -29,9 +29,23 @@ public final class DriftNotificationsPlugin: DriftPlugin {
     public func register(host: DriftPluginHost) {
         self.host = host
         host.registerChannel(Self.channel) { channel in
-            channel.method("schedule") { [self] args in
-                try schedule(args as? [String: Any] ?? [:])
-                return nil
+            // Async: UNUserNotificationCenter reports a failed add only
+            // through its completion handler.
+            channel.asyncMethod("schedule") { [self] args, result in
+                let request: UNNotificationRequest
+                do {
+                    request = try Self.request(args as? [String: Any] ?? [:])
+                } catch {
+                    result.error(error)
+                    return
+                }
+                center.add(request) { error in
+                    if let error {
+                        result.error(error)
+                    } else {
+                        result.success(nil)
+                    }
+                }
             }
             channel.method("cancel") { [self] args in
                 guard let id = (args as? [String: Any])?["id"] as? String else {
@@ -92,9 +106,10 @@ public final class DriftNotificationsPlugin: DriftPlugin {
 
     // MARK: - Scheduling
 
-    private func schedule(_ args: [String: Any]) throws {
+    /// The request scheduling args describes.
+    private static func request(_ args: [String: Any]) throws -> UNNotificationRequest {
         guard let id = args["id"] as? String, !id.isEmpty else {
-            throw Self.invalid("schedule needs an id")
+            throw invalid("schedule needs an id")
         }
         let content = UNMutableNotificationContent()
         content.title = args["title"] as? String ?? ""
@@ -108,7 +123,7 @@ public final class DriftNotificationsPlugin: DriftPlugin {
             content.sound = .default
         }
         var userInfo = args["data"] as? [String: Any] ?? [:]
-        userInfo[Self.markerKey] = id
+        userInfo[markerKey] = id
         content.userInfo = userInfo
 
         // Go checked the combinations: At wins; Repeats has no At and an
@@ -123,7 +138,7 @@ public final class DriftNotificationsPlugin: DriftPlugin {
         }
         // A time-interval trigger needs a positive interval.
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(delay, 1), repeats: repeats)
-        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+        return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
     }
 
     /// Removes this plugin's notifications only; others (push) stay.

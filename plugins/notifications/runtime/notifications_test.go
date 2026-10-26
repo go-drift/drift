@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,9 +11,10 @@ import (
 )
 
 // fakeNative records each call's method and arguments and answers with
-// reply.
+// reply, or fails with fail when set.
 type fakeNative struct {
 	reply any
+	fail  error
 	calls []call
 }
 
@@ -25,6 +27,10 @@ func (f *fakeNative) InvokeMethod(_, method string, args []byte, reply func([]by
 	decoded, _ := platform.DefaultCodec.Decode(args)
 	m, _ := decoded.(map[string]any)
 	f.calls = append(f.calls, call{method, m})
+	if f.fail != nil {
+		reply(nil, f.fail)
+		return
+	}
 	reply(platform.DefaultCodec.Encode(f.reply))
 }
 
@@ -43,7 +49,7 @@ func TestScheduleSendsRequest(t *testing.T) {
 	useNative(t, native)
 	at := time.UnixMilli(1_900_000_000_000)
 	badge := 3
-	err := Schedule(Request{ID: "r1", Title: "T", Body: "B", Data: map[string]any{"route": "/x"}, At: at, Badge: &badge})
+	err := Schedule(context.Background(), Request{ID: "r1", Title: "T", Body: "B", Data: map[string]any{"route": "/x"}, At: at, Badge: &badge})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +77,23 @@ func TestScheduleRejects(t *testing.T) {
 		{Request{ID: "a", Repeats: true, Interval: 30 * time.Second}, "at least"},
 		{Request{ID: "a", Repeats: true, Interval: time.Minute, At: time.Now()}, "At"},
 	} {
-		if err := Schedule(tc.req); err == nil || !strings.Contains(err.Error(), tc.want) {
+		if err := Schedule(context.Background(), tc.req); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("Schedule(%+v) = %v, want an error mentioning %q", tc.req, err, tc.want)
 		}
 	}
 	if len(native.calls) != 0 {
 		t.Errorf("native called for invalid requests: %+v", native.calls)
+	}
+}
+
+// A request the platform rejects fails Schedule with the platform's error.
+func TestScheduleReportsPlatformError(t *testing.T) {
+	rejected := platform.NewChannelError("UNErrorDomain", "Notifications are not allowed for this application")
+	useNative(t, &fakeNative{fail: rejected})
+	err := Schedule(context.Background(), Request{ID: "r1"})
+	var got *platform.ChannelError
+	if !errors.As(err, &got) || got != rejected {
+		t.Errorf("Schedule = %v, want the platform's %v", err, rejected)
 	}
 }
 
