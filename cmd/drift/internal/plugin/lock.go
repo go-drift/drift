@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,7 +22,10 @@ import (
 // it is removed from drift.yaml.
 const LockFile = ".drift/plugins.lock.json"
 
-type pluginLock struct {
+// Lock is the plugin output an ejected project recorded at its last build.
+// A nil *Lock is empty: a managed build, which regenerates its project, or
+// an ejected project's first build with plugins.
+type Lock struct {
 	Version int        `json:"version"`
 	Ops     []lockedOp `json:"ops"`
 }
@@ -44,37 +48,42 @@ type lockedFile struct {
 }
 
 // SyncEjectedLock reconciles an ejected project with the ops just applied
-// to it, using the lock from the previous build, then records ops as the
-// new lock. For each op that is gone:
-//   - files it owned are deleted, unless they changed since Drift wrote
-//     them, in which case they stay and a warning names them;
-//   - an edit it made inside a shared file (Info.plist, the manifest,
-//     build.gradle) cannot be undone safely, so it is listed in the
-//     returned error. The new lock is written first, so the list is shown
-//     once and the next build proceeds.
+// to it, using prev, the lock from the previous build (ReadLock), then
+// records ops as the new lock. What the project holds decides, not which
+// op made it, so an op renamed or retargeted by a CLI upgrade is neither a
+// removal nor an addition:
+//   - a file prev owned that no current op owns is deleted, unless it
+//     changed since Drift wrote it, in which case it stays and a warning
+//     names it;
+//   - an edit prev made inside a shared file (Info.plist, the manifest,
+//     build.gradle) that no current op makes, under the same key or as the
+//     same edit, cannot be undone safely, so it is listed in the returned
+//     error. The new lock is written first, so the list is shown once and
+//     the next build proceeds.
 //
 // Returns the deleted paths.
-func SyncEjectedLock(projectDir, platform string, ops []protocol.Op) ([]string, error) {
-	lockPath := filepath.Join(projectDir, filepath.FromSlash(LockFile))
-	prev, err := readLock(lockPath)
-	if err != nil {
-		return nil, err
-	}
+func SyncEjectedLock(projectDir, platform string, ops []protocol.Op, prev *Lock) ([]string, error) {
 	cur, err := lockFor(ops, projectDir, platform)
 	if err != nil {
 		return nil, err
 	}
 
-	current := make(map[string]bool, len(cur.Ops))
+	curKeys := make(map[string]bool, len(cur.Ops))
+	curEdits := make(map[string]bool)
+	curFiles := make(map[string]bool)
 	for _, o := range cur.Ops {
-		current[o.Key] = true
+		curKeys[o.Key] = true
+		curEdits[o.Edit] = true
+		for _, f := range o.Files {
+			curFiles[f.Path] = true
+		}
 	}
 	var deleted, edits []string
-	for _, o := range prev.Ops {
-		if current[o.Key] {
-			continue
-		}
+	for _, o := range prev.ops() {
 		for _, f := range o.Files {
+			if curFiles[f.Path] {
+				continue
+			}
 			path := filepath.Join(projectDir, filepath.FromSlash(f.Path))
 			gone, err := deleteIfUnchanged(path, f.SHA256)
 			if err != nil {
@@ -84,10 +93,10 @@ func SyncEjectedLock(projectDir, platform string, ops []protocol.Op) ([]string, 
 				deleted = append(deleted, path)
 				removeEmptyParents(filepath.Dir(path), projectDir)
 			} else if _, statErr := os.Stat(path); statErr == nil {
-				fmt.Fprintf(os.Stderr, "drift: kept %s from removed plugin %s: it changed since Drift wrote it\n", f.Path, o.Plugin)
+				fmt.Fprintf(os.Stderr, "drift: kept %s from plugin %s: it changed since Drift wrote it\n", f.Path, o.Plugin)
 			}
 		}
-		if o.Edit != "" {
+		if o.Edit != "" && !curKeys[o.Key] && !curEdits[o.Edit] {
 			edits = append(edits, fmt.Sprintf("%s (from %s)", o.Edit, o.Plugin))
 		}
 	}
@@ -96,39 +105,62 @@ func SyncEjectedLock(projectDir, platform string, ops []protocol.Op) ([]string, 
 	if err != nil {
 		return deleted, err
 	}
-	if _, err := writeIfDifferentSingle(lockPath, append(data, '\n')); err != nil {
+	if _, err := writeIfDifferentSingle(lockPath(projectDir), append(data, '\n')); err != nil {
 		return deleted, err
 	}
 
 	if len(edits) > 0 {
 		sort.Strings(edits)
-		return deleted, fmt.Errorf("plugins removed from drift.yaml left these edits in the ejected project at %s; "+
+		return deleted, fmt.Errorf("plugins no longer make these edits Drift made in the ejected project at %s; "+
 			"remove the ones you no longer need, then build again (this list is shown once):\n  - %s",
 			projectDir, strings.Join(edits, "\n  - "))
 	}
 	return deleted, nil
 }
 
-func readLock(path string) (pluginLock, error) {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return pluginLock{Version: 1}, nil
-	}
-	if err != nil {
-		return pluginLock{}, err
-	}
-	var l pluginLock
-	if err := json.Unmarshal(data, &l); err != nil {
-		return pluginLock{}, fmt.Errorf("parse %s: %w", path, err)
-	}
-	if l.Version != 1 {
-		return pluginLock{}, fmt.Errorf("%s: unsupported version %d", path, l.Version)
-	}
-	return l, nil
+func lockPath(projectDir string) string {
+	return filepath.Join(projectDir, filepath.FromSlash(LockFile))
 }
 
-func lockFor(ops []protocol.Op, projectDir, platform string) (pluginLock, error) {
-	l := pluginLock{Version: 1, Ops: []lockedOp{}}
+// ReadLock reads the lock an ejected project at projectDir recorded at its
+// last build; a project without one has an empty lock. Every path in it
+// must stay inside the project, since Drift deletes files it names.
+func ReadLock(projectDir string) (*Lock, error) {
+	path := lockPath(projectDir)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return &Lock{Version: 1}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var l Lock
+	if err := json.Unmarshal(data, &l); err != nil {
+		return nil, fmt.Errorf("parse %s: %w\nResolve any merge conflict in it, or delete it: Drift then treats plugin files as new", path, err)
+	}
+	if l.Version != 1 {
+		return nil, fmt.Errorf("%s: unsupported version %d", path, l.Version)
+	}
+	for _, o := range l.Ops {
+		for _, f := range o.Files {
+			if !filepath.IsLocal(filepath.FromSlash(f.Path)) || pathpkg.Clean(f.Path) != f.Path {
+				return nil, fmt.Errorf("%s: path %q is not inside the project", path, f.Path)
+			}
+		}
+	}
+	return &l, nil
+}
+
+// ops returns the recorded ops; none for a nil lock.
+func (l *Lock) ops() []lockedOp {
+	if l == nil {
+		return nil
+	}
+	return l.Ops
+}
+
+func lockFor(ops []protocol.Op, projectDir, platform string) (Lock, error) {
+	l := Lock{Version: 1, Ops: []lockedOp{}}
 	for _, op := range ops {
 		if !opAppliesTo(op, platform) {
 			continue
@@ -180,7 +212,7 @@ func describeEdit(op protocol.Op, platform string) string {
 		}
 		return fmt.Sprintf("%s: <uses-permission android:name=%q>", manifest, v.Name)
 	case *protocol.OpAndroidManifestAddIntentFilter:
-		return fmt.Sprintf("%s: an <intent-filter> on activity %s", manifest, v.Activity)
+		return fmt.Sprintf("%s: %s on activity %s", manifest, strings.Join(strings.Fields(v.XML), " "), v.Activity)
 	case *protocol.OpAndroidManifestSetActivityAttr:
 		return fmt.Sprintf("%s: %s=%q on activity %s", manifest, v.Attr, v.Value, v.Activity)
 	case *protocol.OpAndroidManifestAddService:

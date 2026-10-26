@@ -2,6 +2,7 @@ package plugin
 
 import (
 	b64 "encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,17 @@ import (
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
+
+// syncLock reconciles dir the way an ejected build does: the lock from the
+// previous build, then SyncEjectedLock.
+func syncLock(t *testing.T, dir string, ops []protocol.Op) ([]string, error) {
+	t.Helper()
+	prev, err := ReadLock(dir)
+	if err != nil {
+		return nil, err
+	}
+	return SyncEjectedLock(dir, "android", ops, prev)
+}
 
 func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	dir := t.TempDir()
@@ -33,7 +45,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 		}
 	}
 	writeFiles()
-	if _, err := SyncEjectedLock(dir, "android", ops); err != nil {
+	if _, err := syncLock(t, dir, ops); err != nil {
 		t.Fatalf("first build: %v", err)
 	}
 	lock := filepath.Join(dir, filepath.FromSlash(LockFile))
@@ -42,7 +54,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	}
 
 	// Unchanged ops: nothing to clean up.
-	if deleted, err := SyncEjectedLock(dir, "android", ops); err != nil || len(deleted) != 0 {
+	if deleted, err := syncLock(t, dir, ops); err != nil || len(deleted) != 0 {
 		t.Fatalf("rebuild: deleted=%v err=%v", deleted, err)
 	}
 
@@ -51,7 +63,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	if err := os.WriteFile(drawablePath, []byte("edited"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	deleted, err := SyncEjectedLock(dir, "android", nil)
+	deleted, err := syncLock(t, dir, nil)
 	srcPath := filepath.Join(dir, "app/src/main/java/com/acme/camera/CameraPlugin.kt")
 	if len(deleted) != 1 || deleted[0] != srcPath {
 		t.Errorf("deleted = %v, want only the unmodified source", deleted)
@@ -70,7 +82,7 @@ func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
 	}
 
 	// The list is shown once.
-	if _, err := SyncEjectedLock(dir, "android", nil); err != nil {
+	if _, err := syncLock(t, dir, nil); err != nil {
 		t.Errorf("second build after removal should pass: %v", err)
 	}
 }
@@ -84,11 +96,11 @@ func TestSyncEjectedLockContentChangeIsNotRemoval(t *testing.T) {
 	}
 	path := filepath.Join(dir, "app/google-services.json")
 	writeTree(t, dir, map[string]string{"app/google-services.json": "v1"})
-	if _, err := SyncEjectedLock(dir, "android", mk("v1")); err != nil {
+	if _, err := syncLock(t, dir, mk("v1")); err != nil {
 		t.Fatal(err)
 	}
 	writeTree(t, dir, map[string]string{"app/google-services.json": "v2"})
-	if deleted, err := SyncEjectedLock(dir, "android", mk("v2")); err != nil || len(deleted) != 0 {
+	if deleted, err := syncLock(t, dir, mk("v2")); err != nil || len(deleted) != 0 {
 		t.Fatalf("deleted=%v err=%v", deleted, err)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -126,5 +138,132 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 		if string(got) != string(files[0].Content) {
 			t.Errorf("%s: %s content differs", op.Type(), files[0].Path)
 		}
+	}
+}
+
+// A CLI upgrade that renames an op type changes its key, but the op still
+// owns its file and makes its edit: nothing is deleted or reported.
+func TestSyncEjectedLockRenamedOpIsNotRemoval(t *testing.T) {
+	dir := t.TempDir()
+	base := protocol.Base{Pkg: "p"}
+	file := &protocol.OpAndroidAddAppModuleFile{Base: base, Name: "p-services.json", Content: b64.StdEncoding.EncodeToString([]byte("{}"))}
+	perm := &protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.CAMERA"}
+	ops := []protocol.Op{file, perm}
+	writeTree(t, dir, map[string]string{"app/p-services.json": "{}"})
+	if _, err := syncLock(t, dir, ops); err != nil {
+		t.Fatal(err)
+	}
+
+	// The lock as an older CLI wrote it, under other op type names.
+	lock := filepath.Join(dir, filepath.FromSlash(LockFile))
+	data, err := os.ReadFile(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renamed := strings.NewReplacer(file.Type(), "android.app_module.write", perm.Type(), "android.manifest.permission").Replace(string(data))
+	if renamed == string(data) {
+		t.Fatal("test did not rename the op types")
+	}
+	if err := os.WriteFile(lock, []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := syncLock(t, dir, ops)
+	if err != nil || len(deleted) != 0 {
+		t.Fatalf("deleted=%v err=%v; want nothing deleted and no edits listed", deleted, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "app/p-services.json")); err != nil {
+		t.Errorf("file owned by the renamed op was removed: %v", err)
+	}
+}
+
+// An op that keeps its key but writes another path leaves the old file
+// behind unless the lock removes it.
+func TestSyncEjectedLockRemovesMovedFile(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(name string) []protocol.Op {
+		return []protocol.Op{&protocol.OpAndroidWriteResourceXML{Base: protocol.Base{Pkg: "p"}, RelPath: name, Content: "<config/>"}}
+	}
+	writeTree(t, dir, map[string]string{"app/src/main/res/xml/p_old.xml": "<config/>"})
+	if _, err := syncLock(t, dir, mk("xml/p_old.xml")); err != nil {
+		t.Fatal(err)
+	}
+	writeTree(t, dir, map[string]string{"app/src/main/res/xml/p_new.xml": "<config/>"})
+	deleted, err := syncLock(t, dir, mk("xml/p_new.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deleted) != 1 || !strings.HasSuffix(deleted[0], "p_old.xml") {
+		t.Errorf("deleted = %v, want the old path", deleted)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "app/src/main/res/xml/p_new.xml")); err != nil {
+		t.Errorf("new file removed: %v", err)
+	}
+}
+
+// Drift deletes files the lock names, so a lock naming a path outside the
+// project fails the build before anything is deleted.
+func TestReadLockRejectsPathsOutsideTheProject(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "platform", "android")
+	outside := filepath.Join(root, "precious.txt")
+	writeTree(t, root, map[string]string{"precious.txt": "x"})
+	for _, path := range []string{"../../precious.txt", outside, "app/../../x", ""} {
+		data := fmt.Sprintf(`{"version":1,"ops":[{"key":"k","plugin":"p","files":[{"path":%q,"sha256":"2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"}]}]}`, filepath.ToSlash(path))
+		writeTree(t, dir, map[string]string{LockFile: data})
+		if _, err := ReadLock(dir); err == nil || !strings.Contains(err.Error(), "not inside the project") {
+			t.Errorf("path %q: err = %v, want a path error", path, err)
+		}
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("file outside the project touched: %v", err)
+	}
+}
+
+func TestReadLockExplainsAParseFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{LockFile: "<<<<<<< HEAD\n{}"})
+	if _, err := ReadLock(dir); err == nil || !strings.Contains(err.Error(), "or delete it") {
+		t.Errorf("err = %v, want the recovery steps", err)
+	}
+}
+
+// A lock write that fails (a crash, a full disk) leaves the previous lock
+// whole, and the next build recovers.
+func TestSyncEjectedLockRecoversFromAFailedWrite(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	dir := t.TempDir()
+	mk := func(body string) []protocol.Op {
+		return []protocol.Op{&protocol.OpAndroidAddAppModuleFile{Base: protocol.Base{Pkg: "p"}, Name: "p.json", Content: b64.StdEncoding.EncodeToString([]byte(body))}}
+	}
+	writeTree(t, dir, map[string]string{"app/p.json": "v1"})
+	if _, err := syncLock(t, dir, mk("v1")); err != nil {
+		t.Fatal(err)
+	}
+	lock := filepath.Join(dir, filepath.FromSlash(LockFile))
+	before, _ := os.ReadFile(lock)
+
+	lockDir := filepath.Dir(lock)
+	if err := os.Chmod(lockDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(lockDir, 0o755) })
+	writeTree(t, dir, map[string]string{"app/p.json": "v2"})
+	if _, err := syncLock(t, dir, mk("v2")); err == nil {
+		t.Fatal("lock write into a read-only directory succeeded")
+	}
+	if after, _ := os.ReadFile(lock); string(after) != string(before) {
+		t.Fatalf("failed write changed the lock:\n%s", after)
+	}
+	if err := os.Chmod(lockDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncLock(t, dir, mk("v2")); err != nil {
+		t.Fatalf("next build: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "app/p.json")); err != nil {
+		t.Errorf("plugin file lost: %v", err)
 	}
 }

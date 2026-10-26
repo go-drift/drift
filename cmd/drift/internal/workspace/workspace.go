@@ -367,8 +367,13 @@ func newPluginOps(ops []protocol.Op) (pluginOps, error) {
 func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	platformDir := platformProjectDir(ws, ws.Platform)
 	platform := ws.Platform
+	var prevLock *driftpluginCLI.Lock
 	if ws.Ejected {
 		var err error
+		prevLock, err = driftpluginCLI.ReadLock(platformDir)
+		if err != nil {
+			return err
+		}
 		switch platform {
 		case "ios":
 			err = driftpluginCLI.CheckEjectedIOS(platformDir, ops.ops)
@@ -400,7 +405,7 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	var lockErr error
 	if ws.Ejected {
 		var deleted []string
-		deleted, lockErr = driftpluginCLI.SyncEjectedLock(platformDir, platform, ops.ops)
+		deleted, lockErr = driftpluginCLI.SyncEjectedLock(platformDir, platform, ops.ops, prevLock)
 		changed = append(changed, deleted...)
 		reportChangedFiles(changed, ws.Root)
 	}
