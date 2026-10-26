@@ -141,19 +141,20 @@ func doBuild(env protocol.Envelope, bindings []Binding) protocol.Response {
 			return resp
 		}
 		ctx := newBuildCtx(b.Package, b.Name, env)
-		if err := b.Build(ctx, []byte(ep.ConfigYAML)); err != nil {
-			resp.Error = fmt.Sprintf("plugin %s build: %v", b.Package, err)
+		fail := func(err error) protocol.Response {
+			resp.PluginError = &protocol.PluginError{Plugin: b.Package, Message: err.Error()}
 			return resp
 		}
+		if err := b.Build(ctx, []byte(ep.ConfigYAML)); err != nil {
+			return fail(err)
+		}
 		if err := ctx.Err(); err != nil {
-			resp.Error = fmt.Sprintf("plugin %s build: %v", b.Package, err)
-			return resp
+			return fail(err)
 		}
 		for _, op := range ctx.ops {
 			raw, err := protocol.MarshalOp(op)
 			if err != nil {
-				resp.Error = fmt.Sprintf("plugin %s op encode: %v", b.Package, err)
-				return resp
+				return fail(fmt.Errorf("op encode: %w", err))
 			}
 			allOps = append(allOps, raw)
 		}

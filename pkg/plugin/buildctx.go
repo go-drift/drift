@@ -92,8 +92,10 @@ func (b *BuildCtx) Plugin() string { return b.pluginPackage }
 func (b *BuildCtx) PluginName() string { return b.pluginName }
 
 // Platform returns the platform being built: "android", "ios" (xcodeproj)
-// or "xtool". Test contexts from NewTestCtx and NewTestCtxAt return "all"
-// (record for every platform); most plugins never need to branch on it.
+// or "xtool". drift plugin sync, which checks config without building, and
+// test contexts from NewTestCtx and NewTestCtxAt return "all": record for
+// every platform the config enables. Most plugins never need to branch on
+// it.
 func (b *BuildCtx) Platform() string { return b.platform }
 
 // AppID returns the app's identifier from drift.yaml (app.id): the iOS
@@ -104,7 +106,8 @@ func (b *BuildCtx) AppID() string { return b.appID }
 // ProjectRoot returns the absolute path of the user's project root.
 func (b *BuildCtx) ProjectRoot() string { return b.projectRoot }
 
-// BuildDir returns the absolute build directory (managed or ejected).
+// BuildDir returns the absolute build directory (managed or ejected);
+// empty under drift plugin sync, which builds nothing.
 func (b *BuildCtx) BuildDir() string { return b.buildDir }
 
 // ResolveAsset reads an asset at a path relative to the project root. Plugin

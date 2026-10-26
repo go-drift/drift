@@ -43,6 +43,7 @@ Watch mode: `Refresh` re-runs `resolvePluginOps` and, when the hash of the op li
 - When any source is local (a plugin in the main module, a directory `replace`, including a local `github.com/go-drift/drift`, or a multi-module `go.work`), the key cannot see edits, so the bridge is rebuilt every time into a fixed per-project path; the Go build cache keeps that cheap.
 - The bridge refuses an envelope whose `APIVersion` differs, and the CLI refuses a response whose does. An op type the CLI does not know fails decoding.
 - Every response carries `drift_version`: the `github.com/go-drift/drift` version the bridge was compiled with, from its build info (`(devel)` for a local checkout). See [Versions](#versions).
+- `drift plugin sync` (`Sync`) checks config without a build: the `schema` command and `ValidateConfig`, then, if those pass, a `build` envelope per plugin with platform `"all"` and no build dir (`checkBuilds`), discarding the ops. A plugin's failed `Build` comes back as the response's `plugin_error` (`protocol.PluginError`), which sync reports as a diagnostic; `error` is for requests the bridge cannot serve.
 - The bridge panics at start on an invalid `Name()` or a malformed `drift` tag (`Bind`) and on a duplicate plugin name or package (`Main`), so author errors surface on the first build.
 
 ## Versions

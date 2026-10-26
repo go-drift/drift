@@ -56,14 +56,14 @@ Drift runs build halves through a small generated program, `tools/drift-plugins/
 Drift never edits `go.mod` or `go.sum` during a build. If an entry is missing, the build stops and tells you to run `go mod tidy` (or `go get` for a plugin that is not a dependency yet; for a first-party plugin, a release CLI names its own version, see [Versions](#versions)).
 
 ```bash
-drift plugin sync          # regenerate the bridge, validate drift.yaml
+drift plugin sync          # regenerate the bridge, check drift.yaml
 drift plugin sync --tidy   # same, running go mod tidy first
 drift plugin list          # configured plugins
 drift plugin list --resolve  # with module versions and status
 drift plugin list --json
 ```
 
-`drift plugin sync` exits nonzero on invalid config, so CI can run it.
+`drift plugin sync` checks each plugin's config against its schema and then runs the plugin's `Build` without building the app, so it rejects the config a build would. It exits nonzero on invalid config, so CI can run it.
 
 ### Versions
 
@@ -636,7 +636,7 @@ var Plugin driftplugin.Plugin[Config] = hello{}
 - `Name()` is a short lowercase identifier, unique among the app's plugins. It names the plugin's iOS Swift module (`DriftPlugin_hello`).
 - `var Plugin` must have the typed form `driftplugin.Plugin[Config]`.
 - `Build` only records ops on `ctx`; it must not write files. Drift validates the full op list from every plugin before touching the project.
-- Record ops for every platform unconditionally; Drift applies the ones for the platform being built. `ctx.Platform()` (`"ios"`, `"xtool"` or `"android"`) is for the rare plugin whose ops must differ between them.
+- Record ops for every platform unconditionally; Drift applies the ones for the platform being built. `ctx.Platform()` (`"ios"`, `"xtool"` or `"android"`) is for the rare plugin whose ops must differ between them. Under `drift plugin sync` it is `"all"`: record for every platform the config enables, and check the config they need.
 - Support xtool. It is how iOS apps are developed on Linux, so a plugin that rejects it blocks development of every app that uses it. If something cannot work there (for example, a capability xtool cannot sign), build anyway and document what is missing.
 
 ### Config
@@ -658,7 +658,7 @@ Combine them with commas: `drift:"required,asset"`. Optional sections are pointe
 - `ctx.AppID()` is `drift.yaml`'s `app.id` (the iOS bundle ID and Android application ID), for checking SDK config files that name the app.
 - `driftplugin.ParseColor` parses a `hex` value into RGBA components, for platform files the plugin generates itself.
 
-Further checks belong in `Build`: return an error naming the key, such as `fmt.Errorf("image_width must be positive, got %d", w)`.
+Further checks belong in `Build`: return an error naming the key, such as `fmt.Errorf("image_width must be positive, got %d", w)`. `drift plugin sync` runs `Build` too, so these fail it as well as the build.
 
 ### Recording ops
 

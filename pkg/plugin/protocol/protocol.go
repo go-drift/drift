@@ -8,7 +8,11 @@
 // inspect recorded ops in tests (BuildCtx.Ops).
 package protocol
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+)
 
 // APIVersion is the major version of the plugin protocol shared by the Drift
 // CLI and the generated bridge binary. The CLI refuses bridge responses whose
@@ -26,8 +30,11 @@ const DevelVersion = "(devel)"
 
 // Envelope is the JSON object the Drift CLI sends on the bridge stdin.
 type Envelope struct {
-	APIVersion  int    `json:"api_version"`
-	Cmd         string `json:"cmd"`
+	APIVersion int    `json:"api_version"`
+	Cmd        string `json:"cmd"`
+	// Platform is the platform being built: "android", "ios" or "xtool",
+	// or "all" from drift plugin sync, which checks config for every
+	// platform and builds none (so BuildDir is empty).
 	Platform    string `json:"platform,omitempty"`
 	ProjectRoot string `json:"project_root,omitempty"`
 	BuildDir    string `json:"build_dir,omitempty"`
@@ -52,5 +59,33 @@ type Response struct {
 	DriftVersion string                  `json:"drift_version"`
 	Ops          []json.RawMessage       `json:"ops,omitempty"`
 	Schemas      map[string]PluginSchema `json:"schemas,omitempty"`
-	Error        string                  `json:"error,omitempty"`
+	// Error reports a request the bridge could not serve, such as an
+	// envelope naming an unbound plugin.
+	Error string `json:"error,omitempty"`
+	// PluginError reports the plugin whose Build failed; the build stops
+	// at it.
+	PluginError *PluginError `json:"plugin_error,omitempty"`
+}
+
+// Err returns the response's failure, or nil.
+func (r *Response) Err() error {
+	if r.PluginError != nil {
+		return r.PluginError
+	}
+	if r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return nil
+}
+
+// PluginError is a plugin's failed Build: its config did not decode, Build
+// returned an error, a recorder rejected its input, or an op did not
+// encode.
+type PluginError struct {
+	Plugin  string `json:"plugin"`
+	Message string `json:"message"`
+}
+
+func (e *PluginError) Error() string {
+	return fmt.Sprintf("plugin %s build: %s", e.Plugin, e.Message)
 }

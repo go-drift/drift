@@ -78,8 +78,8 @@ func TestMainBuildRoundTrip(t *testing.T) {
 	if resp.APIVersion != protocol.APIVersion {
 		t.Errorf("api version %d, want %d", resp.APIVersion, protocol.APIVersion)
 	}
-	if resp.Error != "" {
-		t.Errorf("unexpected error: %s", resp.Error)
+	if err := resp.Err(); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 	// Built from this checkout, so drift is the main module.
 	if resp.DriftVersion != protocol.DevelVersion {
@@ -370,8 +370,8 @@ func TestDoBuildFollowsEnvelopeOrder(t *testing.T) {
 		AppID:      TestAppID,
 		Plugins:    []protocol.EnvelopePlugin{{Package: "github.com/z/plugin"}, {Package: "github.com/a/plugin"}},
 	}, bindings)
-	if resp.Error != "" {
-		t.Fatal(resp.Error)
+	if err := resp.Err(); err != nil {
+		t.Fatal(err)
 	}
 	ops, err := protocol.DecodeOps(resp.Ops)
 	if err != nil {
@@ -405,8 +405,8 @@ func TestDoBuildPassesAppID(t *testing.T) {
 		AppID:      "com.example.real",
 		Plugins:    []protocol.EnvelopePlugin{{Package: "github.com/a/plugin"}},
 	}, bindings)
-	if resp.Error != "" {
-		t.Fatal(resp.Error)
+	if err := resp.Err(); err != nil {
+		t.Fatal(err)
 	}
 	if got != "com.example.real" {
 		t.Errorf("ctx.AppID() = %q, want com.example.real", got)
@@ -420,3 +420,30 @@ func (p appIDPlugin) Build(ctx *BuildCtx, _ struct{}) error {
 	*p.got = ctx.AppID()
 	return nil
 }
+
+// A failing Build comes back as a PluginError naming the plugin, which the
+// CLI tells apart from a malformed request; the build stops at it.
+func TestDoBuildReportsPluginError(t *testing.T) {
+	bindings := []Binding{
+		Bind[struct{}]("github.com/a/plugin", failPlugin{}),
+		Bind[struct{}]("github.com/z/plugin", orderPlugin{name: "z"}),
+	}
+	resp := doBuild(protocol.Envelope{
+		APIVersion: protocol.APIVersion,
+		Cmd:        "build",
+		AppID:      TestAppID,
+		Plugins:    []protocol.EnvelopePlugin{{Package: "github.com/a/plugin"}, {Package: "github.com/z/plugin"}},
+	}, bindings)
+	want := protocol.PluginError{Plugin: "github.com/a/plugin", Message: "bad config"}
+	if resp.PluginError == nil || *resp.PluginError != want {
+		t.Fatalf("PluginError = %+v, want %+v", resp.PluginError, want)
+	}
+	if resp.Error != "" || len(resp.Ops) != 0 {
+		t.Errorf("Error = %q, ops = %d; want only the PluginError", resp.Error, len(resp.Ops))
+	}
+}
+
+type failPlugin struct{}
+
+func (failPlugin) Name() string                    { return "fail" }
+func (failPlugin) Build(*BuildCtx, struct{}) error { return fmt.Errorf("bad config") }

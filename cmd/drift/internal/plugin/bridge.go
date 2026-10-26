@@ -435,8 +435,8 @@ func RunBridge(b *Bridge, env protocol.Envelope, logDir string) (*protocol.Respo
 	if err := checkBridgeDrift(b.cliRelease, resp.DriftVersion); err != nil {
 		return nil, err
 	}
-	if resp.Error != "" {
-		return nil, fmt.Errorf("plugin bridge: %s", resp.Error)
+	if err := resp.Err(); err != nil {
+		return nil, fmt.Errorf("plugin bridge: %w", err)
 	}
 	return &resp, nil
 }

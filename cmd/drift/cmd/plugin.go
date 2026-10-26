@@ -15,7 +15,8 @@ func init() {
 		Long: `Drift plugin subcommands.
 
   sync   Regenerate the plugin bridge, validate drift.yaml against schemas,
-         and optionally run go mod tidy.
+         run each plugin's Build to check its config, and optionally run
+         go mod tidy.
   list   Print installed plugins, versions, and status.`,
 		Usage: "drift plugin <subcommand> [flags]",
 		Run:   runPlugin,
@@ -72,7 +73,7 @@ func runPluginSync(args []string) error {
 	if len(res.Diagnostics) > 0 {
 		// CI relies on a nonzero exit to gate merges; a successful Sync with
 		// validation errors would let invalid drift.yaml ship.
-		return fmt.Errorf("plugin schema validation failed: %d diagnostic(s)", len(res.Diagnostics))
+		return fmt.Errorf("plugin config validation failed: %d diagnostic(s)", len(res.Diagnostics))
 	}
 	fmt.Printf("Synced %d plugin(s).\n", len(res.Plugins))
 	return nil

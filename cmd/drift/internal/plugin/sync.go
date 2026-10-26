@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
@@ -32,9 +33,10 @@ type SyncResult struct {
 
 // Sync implements the drift plugin sync command. It regenerates
 // tools/drift-plugins/main.go, rebuilds the cached bridge if needed, runs
-// schema validation against drift.yaml. It never edits go.mod or go.sum on
-// its own; with Tidy it runs `go mod tidy` after regenerating the bridge
-// source and before resolving the plugins.
+// schema validation against drift.yaml and, if that passes, every plugin's
+// Build (see checkBuilds). It never edits go.mod or go.sum on its own; with
+// Tidy it runs `go mod tidy` after regenerating the bridge source and
+// before resolving the plugins.
 func Sync(opts SyncOptions) (*SyncResult, error) {
 	plugins, err := LoadFromDriftYAML(opts.ProjectRoot)
 	if err != nil {
@@ -115,8 +117,48 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		}
 		res.Diagnostics = append(res.Diagnostics, schema.ValidateConfig(cfg, opts.ProjectRoot)...)
 	}
+	if len(res.Diagnostics) > 0 {
+		return res, nil
+	}
 
-	return res, nil
+	cfg, err := config.Resolve(opts.ProjectRoot)
+	if err != nil {
+		return res, err
+	}
+	res.Diagnostics, err = checkBuilds(bridge, opts.ProjectRoot, cfg.AppID, plugins)
+	return res, err
+}
+
+// checkBuilds runs each plugin's Build, as a build would, and returns its
+// failures as diagnostics: schema-valid config can still fail a plugin's
+// own checks. The platform is "all", so Build checks the config for every
+// platform it configures without the sync choosing one; the ops are
+// discarded. Each plugin gets its own envelope, so one failure does not
+// mask the next.
+func checkBuilds(bridge *Bridge, projectRoot, appID string, plugins []ConfiguredPlugin) ([]protocol.ValidationDiagnostic, error) {
+	var diags []protocol.ValidationDiagnostic
+	for _, p := range plugins {
+		y, err := p.ConfigYAML()
+		if err != nil {
+			return nil, err
+		}
+		_, err = RunBridge(bridge, protocol.Envelope{
+			APIVersion:  protocol.APIVersion,
+			Cmd:         "build",
+			Platform:    "all",
+			ProjectRoot: projectRoot,
+			AppID:       appID,
+			Plugins:     []protocol.EnvelopePlugin{{Package: p.Package, ConfigYAML: y}},
+		}, "")
+		var pluginErr *protocol.PluginError
+		switch {
+		case errors.As(err, &pluginErr):
+			diags = append(diags, protocol.ValidationDiagnostic{Plugin: pluginErr.Plugin, Message: pluginErr.Message})
+		case err != nil:
+			return nil, err
+		}
+	}
+	return diags, nil
 }
 
 // ListResult is the result of drift plugin list.
