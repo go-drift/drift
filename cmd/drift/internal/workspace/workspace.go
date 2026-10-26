@@ -410,12 +410,12 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 
 	var dropped []string
 	if ws.Ejected {
-		var deleted []string
-		deleted, dropped, err = driftpluginCLI.SyncEjectedLock(cs, platformDir, platform, ops.ops, prevLock)
+		var reverted []string
+		reverted, dropped, err = driftpluginCLI.SyncEjectedLock(cs, platformDir, platform, ops.ops, prevLock)
 		if err != nil {
 			return err
 		}
-		changed = append(changed, deleted...)
+		changed = append(changed, reverted...)
 	}
 	if err := cs.Commit(); err != nil {
 		return err

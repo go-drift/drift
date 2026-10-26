@@ -71,14 +71,14 @@ func imagesetContentsJSON(filename string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ReplaceLaunchScreen plans a new LaunchScreen.storyboard at path. Returns
-// the path and a changed flag.
-func ReplaceLaunchScreen(cs *Changeset, path string, op *protocol.OpIOSReplaceLaunchScreen) (string, bool, error) {
-	ch, err := cs.WriteFile(path, []byte(op.Content))
+// ReplaceLaunchScreen plans op's LaunchScreen.storyboard at path. Returns
+// the path if its bytes change.
+func ReplaceLaunchScreen(cs *Changeset, path string, op *protocol.OpIOSReplaceLaunchScreen) ([]string, error) {
+	changed, err := writeOwned(cs, LaunchScreenFile(path, op))
 	if err != nil {
-		return path, false, fmt.Errorf("LaunchScreen: %w", err)
+		return changed, fmt.Errorf("LaunchScreen: %w", err)
 	}
-	return path, ch, nil
+	return changed, nil
 }
 
 // WriteKotlinSources plans Kotlin sources under

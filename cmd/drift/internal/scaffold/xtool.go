@@ -63,10 +63,7 @@ func WriteXtool(root string, settings Settings) error {
 		return err
 	}
 
-	// Write LaunchScreen.storyboard to resources
-	if err := templates.CopyTree("ios", resourcesDir, tmplData, func(name string) bool {
-		return name == "LaunchScreen.storyboard"
-	}); err != nil {
+	if err := writeLaunchScreen(resourcesDir); err != nil {
 		return err
 	}
 

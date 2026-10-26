@@ -24,7 +24,8 @@ import (
 // prev is the ejected project's lock from its previous build (ReadLock),
 // nil for a managed build. Apply never overwrites a file Drift did not
 // write: it fails with a *ForeignFileError if an op would replace a file
-// that prev does not record as Drift's, unchanged.
+// that prev does not record as Drift's, unchanged, and that does not hold
+// the template's content (templateDefault).
 //
 // Apply skips ops that do not match the target platform; plugins may
 // unconditionally emit ops for every platform.
@@ -239,12 +240,10 @@ func applyIOSOps(cs *mutate.Changeset, bag *opBag, buildDir, platform string) ([
 	}
 
 	if len(bag.iosLaunch) > 0 {
-		path, ch, err := mutate.ReplaceLaunchScreen(cs, iosLaunchScreenPath(buildDir, platform), bag.iosLaunch[0])
+		paths, err := mutate.ReplaceLaunchScreen(cs, iosLaunchScreenPath(buildDir, platform), bag.iosLaunch[0])
+		changed = append(changed, paths...)
 		if err != nil {
 			return changed, err
-		}
-		if ch {
-			changed = append(changed, path)
 		}
 	}
 
@@ -425,10 +424,11 @@ func applyAndroidOps(cs *mutate.Changeset, bag *opBag, buildDir string, replace 
 }
 
 // OwnedFiles returns the whole files op writes into the project at buildDir
-// (see mutate.OwnedFile), computed exactly as Apply writes them. Ops that
-// only edit shared files, or whose output Drift regenerates wholesale every
-// build (registrants, values files, bundle resources, the Drift/Plugins
-// package with plugins' Swift sources), own none.
+// (see mutate.OwnedFile), computed exactly as Apply writes them, including
+// a template file it replaces (templateDefault). Ops that only edit shared
+// files, or whose output Drift regenerates wholesale every build
+// (registrants, values files, bundle resources, the Drift/Plugins package
+// with plugins' Swift sources), own none.
 func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, error) {
 	one := func(f mutate.OwnedFile, err error) ([]mutate.OwnedFile, error) {
 		if err != nil {
@@ -437,6 +437,8 @@ func OwnedFiles(op protocol.Op, buildDir, platform string) ([]mutate.OwnedFile, 
 		return []mutate.OwnedFile{f}, nil
 	}
 	switch v := op.(type) {
+	case *protocol.OpIOSReplaceLaunchScreen:
+		return one(mutate.LaunchScreenFile(iosLaunchScreenPath(buildDir, platform), v), nil)
 	case *protocol.OpIOSAssetsAddImageSet:
 		if platform == "xtool" {
 			return nil, nil // a loose bundle PNG, pruned with the bundle resources
@@ -479,7 +481,8 @@ func (e *ForeignFileError) Error() string {
 
 // checkOwnedWrites returns a *ForeignFileError naming every whole file an
 // op would write over an existing file holding other content, unless prev
-// records that content as what Drift wrote there.
+// records that content as what Drift wrote there, or it is the template's
+// (templateDefault).
 func checkOwnedWrites(ops []protocol.Op, buildDir, platform string, prev *Lock) error {
 	var foreign []ForeignFile
 	for _, op := range ops {
@@ -499,6 +502,13 @@ func checkOwnedWrites(ops []protocol.Op, buildDir, platform string, prev *Lock) 
 				return err
 			}
 			if bytes.Equal(existing, f.Content) {
+				continue
+			}
+			def, err := templateDefault(buildDir, platform, f.Path)
+			if err != nil {
+				return err
+			}
+			if def != nil && bytes.Equal(existing, def) {
 				continue
 			}
 			rel, err := filepath.Rel(buildDir, f.Path)
@@ -560,6 +570,18 @@ func iosLaunchScreenPath(buildDir, platform string) string {
 		return filepath.Join(buildDir, "Sources", "Runner", "Resources", "LaunchScreen.storyboard")
 	}
 	return filepath.Join(buildDir, "Runner", "LaunchScreen.storyboard")
+}
+
+// templateDefault returns the project template's content for path if path
+// is a template file a plugin op replaces whole (the launch screen), or
+// nil. While the file holds that content it is Drift's: an op may replace
+// it, and once no op does, SyncEjectedLock restores it rather than
+// deleting it, since the project references it (UILaunchStoryboardName).
+func templateDefault(projectDir, platform, path string) ([]byte, error) {
+	if (platform == "ios" || platform == "xtool") && path == iosLaunchScreenPath(projectDir, platform) {
+		return templates.DefaultLaunchScreen()
+	}
+	return nil, nil
 }
 
 // xtoolPluginResourcesDir is the Drift-owned directory, relative to the

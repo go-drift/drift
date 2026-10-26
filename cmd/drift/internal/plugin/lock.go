@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -58,9 +59,10 @@ type lockedFile struct {
 // output it records. What the project holds
 // decides, not which op made it, so an op renamed or retargeted by a CLI
 // upgrade is neither a removal nor an addition:
-//   - a file prev owned that no current op owns is deleted, unless it
-//     changed since Drift wrote it, in which case it stays and a warning
-//     names it;
+//   - a file prev owned that no current op owns is deleted, or, for a
+//     template file a plugin replaced (templateDefault), restored to the
+//     template's content, unless it changed since Drift wrote it, in which
+//     case it stays and a warning names it;
 //   - an edit prev made inside a shared file (Info.plist, the manifest,
 //     build.gradle) that no current op makes, under the same key or as the
 //     same edit, cannot be undone safely, so it is returned in dropped,
@@ -68,9 +70,9 @@ type lockedFile struct {
 //     once cs is committed. It is not an error: a build's outcome must not
 //     depend on whether the previous build's lock was committed.
 //
-// Returns the paths the commit deletes and the dropped edits. err is a
-// failure to plan, after which cs must not be committed.
-func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []protocol.Op, prev *Lock) (deleted, dropped []string, err error) {
+// Returns the paths the commit deletes or restores, and the dropped edits.
+// err is a failure to plan, after which cs must not be committed.
+func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []protocol.Op, prev *Lock) (reverted, dropped []string, err error) {
 	cur, err := lockFor(ops, projectDir, platform)
 	if err != nil {
 		return nil, nil, err
@@ -92,14 +94,21 @@ func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []pr
 				continue
 			}
 			path := filepath.Join(projectDir, filepath.FromSlash(f.Path))
-			gone, err := deleteIfUnchanged(cs, path, f.SHA256)
+			def, err := templateDefault(projectDir, platform, path)
 			if err != nil {
 				return nil, nil, err
 			}
-			if gone {
-				deleted = append(deleted, path)
-				removeEmptyParents(cs, filepath.Dir(path), projectDir)
-			} else if _, statErr := os.Stat(path); statErr == nil {
+			planned, kept, err := revertIfUnchanged(cs, path, f.SHA256, def)
+			if err != nil {
+				return nil, nil, err
+			}
+			if planned {
+				reverted = append(reverted, path)
+				if def == nil {
+					removeEmptyParents(cs, filepath.Dir(path), projectDir)
+				}
+			}
+			if kept {
 				fmt.Fprintf(os.Stderr, "drift: kept %s from plugin %s: it changed since Drift wrote it\n", f.Path, o.Plugin)
 			}
 		}
@@ -117,7 +126,7 @@ func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []pr
 	}
 
 	sort.Strings(dropped)
-	return deleted, dropped, nil
+	return reverted, dropped, nil
 }
 
 func lockPath(projectDir string) string {
@@ -255,18 +264,12 @@ func (l *Lock) gradleReplacements(ops []protocol.Op) map[string]string {
 // describeEdit names the edit op makes inside a shared file, or "" if it
 // makes none (it owns whole files, or writes output Drift regenerates).
 func describeEdit(op protocol.Op, platform string) string {
-	launch := "Runner/LaunchScreen.storyboard"
-	if platform == "xtool" {
-		launch = "Sources/Runner/Resources/LaunchScreen.storyboard"
-	}
 	const manifest = "app/src/main/AndroidManifest.xml"
 	switch v := op.(type) {
 	case *protocol.OpPlistAppendArrayItem:
 		return fmt.Sprintf("%s: %q in array %s", iosPlistRelPath(platform, v.File), v.Value, v.Key)
 	case protocol.PlistOp:
 		return fmt.Sprintf("%s: key %s", iosPlistRelPath(platform, v.PlistFile()), v.PlistKey())
-	case *protocol.OpIOSReplaceLaunchScreen:
-		return fmt.Sprintf("%s: replaced; restore your own launch screen", launch)
 	case *protocol.OpAndroidManifestAddPermission:
 		if v.MaxSDK > 0 {
 			return fmt.Sprintf("%s: <uses-permission android:name=%q android:maxSdkVersion=\"%d\">", manifest, v.Name, v.MaxSDK)
@@ -293,20 +296,30 @@ func describeEdit(op protocol.Op, platform string) string {
 	return ""
 }
 
-// deleteIfUnchanged plans the removal of path if its content still hashes
-// to sum. Reports whether it planned one.
-func deleteIfUnchanged(cs *mutate.Changeset, path, sum string) (bool, error) {
+// revertIfUnchanged plans the undoing of a file Drift wrote at path, if its
+// content still hashes to sum: its removal, or, for a template file, its
+// restoration to the template's content def (templateDefault). Reports
+// whether it planned that, or kept the file because it changed since.
+func revertIfUnchanged(cs *mutate.Changeset, path, sum string, def []byte) (reverted, kept bool, err error) {
 	data, err := cs.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return false, false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
-	if sha256Hex(data) != sum {
-		return false, nil
+	switch {
+	case def != nil && bytes.Equal(data, def):
+		return false, false, nil // already the template's
+	case sha256Hex(data) != sum:
+		return false, true, nil
+	case def != nil:
+		_, err := cs.WriteFile(path, def)
+		return err == nil, false, err
+	default:
+		gone, err := cs.Remove(path)
+		return gone, false, err
 	}
-	return cs.Remove(path)
 }
 
 // removeEmptyParents plans the removal of dir and its ancestors while they

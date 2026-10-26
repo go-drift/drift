@@ -9,8 +9,9 @@ import (
 )
 
 // OwnedFile is a whole file a plugin op writes into the project, with the
-// bytes it writes. Drift creates and owns these files, unlike edits inside
-// files the scaffold or the user owns (Info.plist, AndroidManifest.xml,
+// bytes it writes. Drift creates and owns these files, or, for the launch
+// screen, takes over the template's file whole, unlike edits inside files
+// the scaffold or the user owns (Info.plist, AndroidManifest.xml,
 // build.gradle). The writers below and the ejected-project lock both use
 // these functions, so the lock records exactly what was written.
 type OwnedFile struct {
@@ -34,6 +35,12 @@ func ImageSetFiles(assetsRoot string, op *protocol.OpIOSAssetsAddImageSet) ([]Ow
 		{Path: filepath.Join(dir, op.Name+".png"), Content: image},
 		{Path: filepath.Join(dir, "Contents.json"), Content: contents},
 	}, nil
+}
+
+// LaunchScreenFile is the storyboard an OpIOSReplaceLaunchScreen writes at
+// path, in place of the project template's.
+func LaunchScreenFile(path string, op *protocol.OpIOSReplaceLaunchScreen) OwnedFile {
+	return OwnedFile{Path: path, Content: []byte(op.Content)}
 }
 
 // KotlinSourceFile is the source an OpAddKotlinSource writes under

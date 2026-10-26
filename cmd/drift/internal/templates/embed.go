@@ -180,6 +180,24 @@ func CopyTree(srcDir, destDir string, data *TemplateData, filter func(name strin
 	})
 }
 
+// DefaultLaunchScreen returns the LaunchScreen.storyboard the iOS project
+// templates write, on both build paths. A plugin may replace it
+// (ios.storyboards.replace_launch_screen), and Drift restores it in an
+// ejected project once none does, so it takes no TemplateData: every
+// project's default is the same, and a template field in it fails here.
+func DefaultLaunchScreen() ([]byte, error) {
+	const path = "ios/LaunchScreen.storyboard"
+	content, err := FS.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	out, err := ProcessTemplate(string(content), nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s must not depend on template data: %w", path, err)
+	}
+	return []byte(out), nil
+}
+
 // ReadFile reads a file from the embedded filesystem.
 func ReadFile(path string) ([]byte, error) {
 	return FS.ReadFile(path)

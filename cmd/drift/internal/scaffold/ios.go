@@ -2,6 +2,7 @@ package scaffold
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -38,10 +39,12 @@ func WriteIOSProject(dir string, data *templates.TemplateData, projectRoot, icon
 	isIOSFile := func(name string) bool {
 		return strings.HasSuffix(name, ".swift") ||
 			strings.HasSuffix(name, ".swift.tmpl") ||
-			name == "LaunchScreen.storyboard" ||
 			name == "Info.plist.tmpl"
 	}
 	if err := templates.CopyTree("ios", runnerDir, data, isIOSFile); err != nil {
+		return err
+	}
+	if err := writeLaunchScreen(runnerDir); err != nil {
 		return err
 	}
 
@@ -71,4 +74,17 @@ func copyEntitlements(dir string, data *templates.TemplateData) error {
 	return templates.CopyTree("ios", dir, data, func(name string) bool {
 		return name == "Runner.entitlements"
 	})
+}
+
+// writeLaunchScreen writes the template's LaunchScreen.storyboard into dir,
+// the resources folder of an iOS build path.
+func writeLaunchScreen(dir string) error {
+	content, err := templates.DefaultLaunchScreen()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "LaunchScreen.storyboard"), content, 0o644)
 }
