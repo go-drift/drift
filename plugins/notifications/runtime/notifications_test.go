@@ -119,14 +119,14 @@ func TestOpensQueueUntilListened(t *testing.T) {
 	}
 
 	var got []Open
-	unsub := Opens().Listen(func(o Open) { got = append(got, o) })
+	unsub := Opens().Listen(platform.StreamHandler[Open]{OnEvent: func(o Open) { got = append(got, o) }})
 	defer unsub()
 	if len(got) != 1 || got[0].ID != "n1" || got[0].Data["route"] != "/inbox" {
 		t.Fatalf("first listener got %+v, want the queued tap n1", got)
 	}
 
 	var later []Open
-	unsubLater := Opens().Listen(func(o Open) { later = append(later, o) })
+	unsubLater := Opens().Listen(platform.StreamHandler[Open]{OnEvent: func(o Open) { later = append(later, o) }})
 	defer unsubLater()
 	if len(later) != 0 {
 		t.Errorf("later listener got %+v, want nothing (queued taps are delivered once)", later)

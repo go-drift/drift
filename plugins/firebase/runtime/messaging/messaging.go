@@ -15,15 +15,15 @@
 //	})
 //
 //	// A message received while the app runs.
-//	unsub := messaging.Messages().Listen(func(m messaging.Message) {
+//	unsub := messaging.Messages().Listen(platform.StreamHandler[messaging.Message]{OnEvent: func(m messaging.Message) {
 //	    drift.Dispatch(func() { showBanner(m) })
-//	})
+//	}})
 //
 //	// A notification the user tapped, including the one that launched the
 //	// app: taps are queued until the app listens.
-//	messaging.Opens().Listen(func(m messaging.Message) {
+//	messaging.Opens().Listen(platform.StreamHandler[messaging.Message]{OnEvent: func(m messaging.Message) {
 //	    drift.Dispatch(func() { navigate(m.Data["route"]) })
-//	})
+//	}})
 //
 //	// Messages sent to a topic.
 //	go func() {
@@ -99,12 +99,39 @@ var (
 
 func init() {
 	tokens := platform.NewStream(tokenChannel, platform.NewEventChannel(tokenChannel), parseToken)
-	tokens.Listen(token.Set)
+	tokens.Listen(platform.StreamHandler[string]{OnEvent: setToken})
+}
+
+// setToken sets token on the UI thread, where listeners such as
+// core.UseListenable may rebuild widgets. Before the app runs there is no
+// UI thread to wait for, so it sets token at once.
+func setToken(t string) {
+	if !platform.Dispatch(func() { token.Set(t) }) {
+		token.Set(t)
+	}
+}
+
+// waitForToken returns once every token change dispatched so far is set:
+// the dispatch queue runs in order, so a later callback marks it. It stops
+// waiting when ctx is done.
+func waitForToken(ctx context.Context) error {
+	done := make(chan struct{})
+	if !platform.Dispatch(func() { close(done) }) {
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Token is this installation's FCM registration token, "" while there is
 // none: until Firebase issues one, and after DeleteToken. It changes when
-// Firebase rotates it; listen to send the new one to your server.
+// Firebase rotates it; listen to send the new one to your server. It
+// changes on the UI thread, so a widget can rebuild on it with
+// core.UseListenable.
 func Token() *core.Derived[string] {
 	return readToken
 }
@@ -146,12 +173,20 @@ func UnsubscribeFromTopic(ctx context.Context, topic string) error {
 // starts, which Token reports like any new token; send it to your server,
 // and subscribe to the user's topics again, only once a user logs in.
 //
-// It waits for Firebase's servers, so call it from a goroutine. On ctx
-// cancellation it returns ctx's error; the deletion may still complete.
+// It waits for Firebase's servers, then for the UI thread to apply the
+// change, so call it from a goroutine. On ctx cancellation it returns ctx's
+// error; the deletion may still complete.
 func DeleteToken(ctx context.Context) error {
-	// The native half sends "" on tokenChannel before replying, so Token is
-	// "" on return and orders before any token Firebase issues after.
-	return invoke(ctx, "deleteToken", nil)
+	// The native half sends "" on tokenChannel before replying, so once the
+	// change it dispatched is set, Token is "", ordered before any token
+	// Firebase issues after.
+	if err := invoke(ctx, "deleteToken", nil); err != nil {
+		return err
+	}
+	if err := waitForToken(ctx); err != nil {
+		return fmt.Errorf("messaging deleteToken: %w", err)
+	}
+	return nil
 }
 
 func topicCall(ctx context.Context, method, topic string) error {

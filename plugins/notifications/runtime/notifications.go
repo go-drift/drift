@@ -14,9 +14,9 @@
 //	    ...
 //	}()
 //
-//	notifications.Opens().Listen(func(o notifications.Open) {
+//	notifications.Opens().Listen(platform.StreamHandler[notifications.Open]{OnEvent: func(o notifications.Open) {
 //	    drift.Dispatch(func() { navigate(o.Data["route"]) })
-//	})
+//	}})
 //
 // Schedule and CurrentSettings wait for the platform, so call them from a
 // goroutine; from the UI thread they fail with platform.ErrBlocksUIThread.

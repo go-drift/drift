@@ -74,7 +74,7 @@ typedef void (*DriftPlatformHandleEventFn)(const char *channel, const void *data
  * Function pointer type for DriftPlatformHandleEventError.
  * Matches the signature exported by Go.
  */
-typedef void (*DriftPlatformHandleEventErrorFn)(const char *channel, const char *code, const char *message);
+typedef void (*DriftPlatformHandleEventErrorFn)(const char *channel, const char *errorJSON);
 
 /**
  * Function pointer type for DriftPlatformHandleEventDone.
@@ -592,15 +592,15 @@ Java_{{.JNIPackage}}_NativeBridge_platformReply(
 /**
  * JNI implementation for NativeBridge.platformHandleEventError().
  *
- * Sends an error to Go event listeners.
+ * Sends a stream error, as a failed call's JSON error payload, to Go event
+ * listeners.
  */
 JNIEXPORT void JNICALL
 Java_{{.JNIPackage}}_NativeBridge_platformHandleEventError(
     JNIEnv *env,
     jclass clazz,
     jstring channel,
-    jstring code,
-    jstring message
+    jstring errorJSON
 ) {
     (void)clazz;
 
@@ -609,15 +609,13 @@ Java_{{.JNIPackage}}_NativeBridge_platformHandleEventError(
     }
 
     const char *channelStr = (*env)->GetStringUTFChars(env, channel, NULL);
-    const char *codeStr = (*env)->GetStringUTFChars(env, code, NULL);
-    const char *messageStr = (*env)->GetStringUTFChars(env, message, NULL);
+    const char *errorStr = (*env)->GetStringUTFChars(env, errorJSON, NULL);
 
-    if (channelStr && codeStr && messageStr) {
-        drift_platform_event_error(channelStr, codeStr, messageStr);
+    if (channelStr && errorStr) {
+        drift_platform_event_error(channelStr, errorStr);
     }
 
-    if (messageStr) (*env)->ReleaseStringUTFChars(env, message, messageStr);
-    if (codeStr) (*env)->ReleaseStringUTFChars(env, code, codeStr);
+    if (errorStr) (*env)->ReleaseStringUTFChars(env, errorJSON, errorStr);
     if (channelStr) (*env)->ReleaseStringUTFChars(env, channel, channelStr);
 }
 

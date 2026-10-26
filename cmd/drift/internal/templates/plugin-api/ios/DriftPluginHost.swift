@@ -153,7 +153,12 @@ public protocol DriftPluginHost: AnyObject {
     /// whether or not Go is listening. A value that is not JSON-like is
     /// logged and reaches Go as a `not_encodable` stream error instead.
     func sendEvent(_ channel: String, data: Any?)
-    func sendEventError(_ channel: String, code: String, message: String)
+    /// Fails Go's stream on `channel` with `error`: its subscribers'
+    /// `OnError` receive it, a `DriftCallError` with its code, message and
+    /// details, any other error as `native_error`, as for a failed call.
+    /// The stream continues; send later events as usual.
+    func sendEventError(_ channel: String, _ error: Error)
+    /// Ends Go's stream on `channel`: its subscriptions end.
     func sendEventDone(_ channel: String)
 
     /// Subscribes to events posted on `channel` via the host's `sendEvent`

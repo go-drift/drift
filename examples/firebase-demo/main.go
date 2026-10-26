@@ -52,12 +52,12 @@ func (s *demoState) InitState() {
 		logToken()
 	}
 	unsubToken := messaging.Token().AddListener(logToken)
-	unsubMessages := messaging.Messages().Listen(func(m messaging.Message) {
+	unsubMessages := messaging.Messages().Listen(platform.StreamHandler[messaging.Message]{OnEvent: func(m messaging.Message) {
 		s.record(fmt.Sprintf("received (foreground=%t)", m.Foreground), m)
-	})
-	unsubOpens := messaging.Opens().Listen(func(m messaging.Message) {
+	}})
+	unsubOpens := messaging.Opens().Listen(platform.StreamHandler[messaging.Message]{OnEvent: func(m messaging.Message) {
 		s.record("tapped", m)
-	})
+	}})
 	s.OnDispose(func() {
 		unsubToken()
 		unsubMessages()

@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/platform"
 )
 
@@ -19,46 +18,30 @@ func init() {
 
 // VideoPlayerController controls a native video player (ExoPlayer on
 // Android, AVPlayer on iOS) shown by a [VideoPlayer] widget. It creates the
-// native view at once, so its methods and callbacks work right after
-// construction; manage its lifetime with core.UseDisposable.
-//
-// Set the callbacks before Load so no event is missed. They run on the UI
-// thread.
+// native view at once, so its methods work right after construction;
+// manage its lifetime with core.UseDisposable. Subscribe to State, Progress
+// and Errors before Load so no change is missed.
 type VideoPlayerController struct {
+	playback
 	mu   sync.RWMutex
-	view *videoView // nil once disposed, or if creation failed
-
-	state    PlaybackState
-	position time.Duration
-	duration time.Duration
-	buffered time.Duration
-
-	// OnPlaybackStateChanged is called when the playback state changes.
-	OnPlaybackStateChanged func(PlaybackState)
-	// OnPositionChanged is called about every 250ms while media is loaded.
-	OnPositionChanged func(position, duration, buffered time.Duration)
-	// OnError is called on a playback error; code is one of the ErrCode
-	// constants.
-	OnError func(code, message string)
+	view *videoView // nil once disposed
 }
 
-// NewVideoPlayerController creates a controller and its native player.
-func NewVideoPlayerController() *VideoPlayerController {
-	c := &VideoPlayerController{}
+// NewVideoPlayerController creates a controller and its native player. It
+// fails if the native player cannot be created, for example when the media
+// plugin is missing from drift.yaml.
+func NewVideoPlayerController() (*VideoPlayerController, error) {
 	view, err := platform.GetPlatformViewRegistry().Create(videoViewType, map[string]any{})
 	if err != nil {
-		errors.Report(&errors.DriftError{
-			Op:  "media.NewVideoPlayerController",
-			Err: fmt.Errorf("create the video view: %w", err),
-		})
-		return c
+		return nil, fmt.Errorf("media video: create the player: %w", err)
 	}
+	c := &VideoPlayerController{playback: newPlayback("media.VideoPlayerController")}
 	v := view.(*videoView)
 	v.mu.Lock()
 	v.controller = c
 	v.mu.Unlock()
 	c.view = v
-	return c
+	return c, nil
 }
 
 // ViewID returns the native view's ID, 0 once disposed.
@@ -69,34 +52,6 @@ func (c *VideoPlayerController) ViewID() int64 {
 		return 0
 	}
 	return c.view.ViewID()
-}
-
-// State returns the current playback state.
-func (c *VideoPlayerController) State() PlaybackState {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.state
-}
-
-// Position returns the current playback position.
-func (c *VideoPlayerController) Position() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.position
-}
-
-// Duration returns the media's duration.
-func (c *VideoPlayerController) Duration() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.duration
-}
-
-// Buffered returns how far the media is buffered.
-func (c *VideoPlayerController) Buffered() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.buffered
 }
 
 // Load loads url for playback; Play starts it.
@@ -197,13 +152,7 @@ func (v *videoView) HandleEvent(method string, args map[string]any) error {
 		if !ok {
 			return fmt.Errorf("%s: state %v is not an integer", method, args["state"])
 		}
-		c.mu.Lock()
-		c.state = PlaybackState(state)
-		cb := c.OnPlaybackStateChanged
-		c.mu.Unlock()
-		if cb != nil {
-			platform.Dispatch(func() { cb(PlaybackState(state)) })
-		}
+		c.setState(PlaybackState(state))
 	case "onPositionChanged":
 		var ms [3]int64
 		for i, key := range []string{"positionMs", "durationMs", "bufferedMs"} {
@@ -213,28 +162,18 @@ func (v *videoView) HandleEvent(method string, args map[string]any) error {
 			}
 			ms[i] = value
 		}
-		position := time.Duration(ms[0]) * time.Millisecond
-		duration := time.Duration(ms[1]) * time.Millisecond
-		buffered := time.Duration(ms[2]) * time.Millisecond
-		c.mu.Lock()
-		c.position, c.duration, c.buffered = position, duration, buffered
-		cb := c.OnPositionChanged
-		c.mu.Unlock()
-		if cb != nil {
-			platform.Dispatch(func() { cb(position, duration, buffered) })
-		}
+		c.setProgress(Progress{
+			Position: time.Duration(ms[0]) * time.Millisecond,
+			Duration: time.Duration(ms[1]) * time.Millisecond,
+			Buffered: time.Duration(ms[2]) * time.Millisecond,
+		})
 	case "onVideoError":
 		code, ok1 := stringArg(args, "code")
 		message, ok2 := stringArg(args, "message")
 		if !ok1 || !ok2 {
 			return fmt.Errorf("%s: want string code and message, got %v", method, args)
 		}
-		c.mu.RLock()
-		cb := c.OnError
-		c.mu.RUnlock()
-		if cb != nil {
-			platform.Dispatch(func() { cb(code, message) })
-		}
+		c.fail(code, message)
 	default:
 		return fmt.Errorf("%s: %w", method, platform.ErrMethodNotFound)
 	}

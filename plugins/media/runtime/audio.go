@@ -28,66 +28,27 @@ var (
 
 // AudioPlayerController controls a native audio player without a view;
 // build the UI around it. Several can play at once. Call Dispose to
-// release the native player.
-//
-// Set the callbacks before Load so no event is missed. They run on the UI
-// thread.
+// release the native player. Subscribe to State, Progress and Errors before
+// Load so no change is missed.
 type AudioPlayerController struct {
+	playback
 	mu   sync.RWMutex
 	id   int64 // 0 once disposed
 	subs []*platform.Subscription
-
-	state    PlaybackState
-	position time.Duration
-	duration time.Duration
-	buffered time.Duration
-
-	// OnPlaybackStateChanged is called when the playback state changes.
-	OnPlaybackStateChanged func(PlaybackState)
-	// OnPositionChanged is called about every 250ms while media is loaded.
-	OnPositionChanged func(position, duration, buffered time.Duration)
-	// OnError is called on a playback error; code is one of the ErrCode
-	// constants.
-	OnError func(code, message string)
 }
 
 // NewAudioPlayerController creates a controller; its native player is
-// created on first use.
+// created on first use, so creation itself cannot fail.
 func NewAudioPlayerController() *AudioPlayerController {
-	c := &AudioPlayerController{id: nextAudioID.Add(1)}
+	c := &AudioPlayerController{
+		playback: newPlayback("media.AudioPlayerController"),
+		id:       nextAudioID.Add(1),
+	}
 	c.subs = []*platform.Subscription{
 		audioEvents.Listen(platform.EventHandler{OnEvent: c.handleEvent, OnError: reportAudioStreamError}),
 		audioErrors.Listen(platform.EventHandler{OnEvent: c.handleError, OnError: reportAudioStreamError}),
 	}
 	return c
-}
-
-// State returns the current playback state.
-func (c *AudioPlayerController) State() PlaybackState {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.state
-}
-
-// Position returns the current playback position.
-func (c *AudioPlayerController) Position() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.position
-}
-
-// Duration returns the media's duration.
-func (c *AudioPlayerController) Duration() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.duration
-}
-
-// Buffered returns how far the media is buffered.
-func (c *AudioPlayerController) Buffered() time.Duration {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.buffered
 }
 
 // Load loads url for playback; Play starts it.
@@ -180,24 +141,11 @@ func (c *AudioPlayerController) handleEvent(data any) {
 	positionMs, _ := intArg(m, "positionMs")
 	durationMs, _ := intArg(m, "durationMs")
 	bufferedMs, _ := intArg(m, "bufferedMs")
-	position := time.Duration(positionMs) * time.Millisecond
-	duration := time.Duration(durationMs) * time.Millisecond
-	buffered := time.Duration(bufferedMs) * time.Millisecond
-
-	c.mu.Lock()
-	changed := PlaybackState(state) != c.state
-	c.state = PlaybackState(state)
-	c.position, c.duration, c.buffered = position, duration, buffered
-	onState, onPosition := c.OnPlaybackStateChanged, c.OnPositionChanged
-	c.mu.Unlock()
-
-	platform.Dispatch(func() {
-		if changed && onState != nil {
-			onState(PlaybackState(state))
-		}
-		if onPosition != nil {
-			onPosition(position, duration, buffered)
-		}
+	c.setState(PlaybackState(state))
+	c.setProgress(Progress{
+		Position: time.Duration(positionMs) * time.Millisecond,
+		Duration: time.Duration(durationMs) * time.Millisecond,
+		Buffered: time.Duration(bufferedMs) * time.Millisecond,
 	})
 }
 
@@ -208,12 +156,7 @@ func (c *AudioPlayerController) handleError(data any) {
 	}
 	code, _ := stringArg(m, "code")
 	message, _ := stringArg(m, "message")
-	c.mu.RLock()
-	onError := c.OnError
-	c.mu.RUnlock()
-	if onError != nil {
-		platform.Dispatch(func() { onError(code, message) })
-	}
+	c.fail(code, message)
 }
 
 func reportAudioStreamError(err error) {

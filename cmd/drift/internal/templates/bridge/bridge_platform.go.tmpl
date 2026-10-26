@@ -191,15 +191,13 @@ func DriftPlatformHandleEvent(channelPtr *C.char, dataPtr unsafe.Pointer, dataLe
 	platform.HandleEvent(channel, data)
 }
 
-// DriftPlatformHandleEventError is called by native when an event stream has an error.
+// DriftPlatformHandleEventError is called by native when an event stream
+// has an error: errorJSON is the same payload a failed call replies with
+// (see DriftPlatformReply).
 //
 //export DriftPlatformHandleEventError
-func DriftPlatformHandleEventError(channelPtr *C.char, codePtr *C.char, messagePtr *C.char) {
-	channel := C.GoString(channelPtr)
-	code := C.GoString(codePtr)
-	message := C.GoString(messagePtr)
-
-	platform.HandleEventError(channel, code, message)
+func DriftPlatformHandleEventError(channelPtr *C.char, errorJSON *C.char) {
+	platform.HandleEventError(C.GoString(channelPtr), decodeNativeError(C.GoString(errorJSON)))
 }
 
 // DriftPlatformHandleEventDone is called by native when an event stream ends.
@@ -230,14 +228,16 @@ func DriftPlatformFree(ptr unsafe.Pointer) {
 	C.free(ptr)
 }
 
-func decodeNativeError(message string) error {
-	var payload platform.ChannelError
-	if err := json.Unmarshal([]byte(message), &payload); err == nil {
-		if payload.Code != "" || payload.Message != "" {
-			return &payload
+// decodeNativeError decodes native's JSON error payload, or keeps payload
+// as the message of a native_error if it is not one.
+func decodeNativeError(payload string) *platform.ChannelError {
+	var decoded platform.ChannelError
+	if err := json.Unmarshal([]byte(payload), &decoded); err == nil {
+		if decoded.Code != "" || decoded.Message != "" {
+			return &decoded
 		}
 	}
-	return platform.NewChannelError("native_error", message)
+	return platform.NewChannelError("native_error", payload)
 }
 
 func encodeErrorPayload(err error) string {

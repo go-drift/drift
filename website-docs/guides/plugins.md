@@ -193,14 +193,14 @@ messaging.Token().AddListener(func() {
 })
 
 // A message received while the app runs.
-messaging.Messages().Listen(func(m messaging.Message) {
+messaging.Messages().Listen(platform.StreamHandler[messaging.Message]{OnEvent: func(m messaging.Message) {
     drift.Dispatch(func() { showBanner(m) })
-})
+}})
 
 // A notification the user tapped, including the one that launched the app.
-messaging.Opens().Listen(func(m messaging.Message) {
+messaging.Opens().Listen(platform.StreamHandler[messaging.Message]{OnEvent: func(m messaging.Message) {
     drift.Dispatch(func() { navigate(m.Data["route"]) })
-})
+}})
 ```
 
 Nothing here blocks. Messages and taps that arrive before the app listens are queued for its first listener. Showing notifications needs the user's permission (`platform.Notifications.Permission.Request`).
@@ -282,9 +282,9 @@ go func() {
 }()
 
 // A stream of updates while StartUpdates is in effect.
-unsubscribe := location.Updates().Listen(func(u location.Update) {
+unsubscribe := location.Updates().Listen(platform.StreamHandler[location.Update]{OnEvent: func(u location.Update) {
     drift.Dispatch(func() { moveMarker(u) })
-})
+}})
 err := location.StartUpdates(location.UpdateOptions{
     Options: location.Options{HighAccuracy: true, DistanceFilter: 10},
 })
@@ -383,9 +383,9 @@ go func() {
 }()
 
 // A tap on one of the app's notifications, including the one that launched it.
-notifications.Opens().Listen(func(o notifications.Open) {
+notifications.Opens().Listen(platform.StreamHandler[notifications.Open]{OnEvent: func(o notifications.Open) {
     drift.Dispatch(func() { navigate(o.Data["route"]) })
-})
+}})
 ```
 
 | Function | Notes |
@@ -496,16 +496,17 @@ HLS is always supported. `android.dash` adds media3's DASH module; iOS has no DA
 import media "github.com/go-drift/drift/plugins/media/runtime"
 
 // In InitState:
-s.video = media.NewVideoPlayerController()
+s.video, err = media.NewVideoPlayerController()
+...
 core.UseDisposable(s, s.video)
-s.video.OnPlaybackStateChanged = func(state media.PlaybackState) { ... }
+core.UseListenable(s, s.video.State()) // rebuild on playback state changes
 s.video.Load(url)
 
 // In Build:
 media.VideoPlayer{Controller: s.video, Height: 225}
 ```
 
-`media.NewAudioPlayerController()` has the same methods and callbacks without a view; several can play at once. The [Media Player](/docs/guides/media-player) guide covers both. Playback stops when the app goes to the background. Supported on iOS, xtool and Android.
+Controllers publish `State()` and `Progress()` as `*core.Derived` values that change on the UI thread, and playback failures on the `Errors()` stream (`media.ErrSource`, `ErrDecoder`, `ErrPlaybackFailed`). `media.NewAudioPlayerController()` has the same methods without a view; several can play at once. The [Media Player](/docs/guides/media-player) guide covers both. Playback stops when the app goes to the background. Supported on iOS, xtool and Android.
 
 ## Authoring plugins
 
@@ -801,7 +802,7 @@ App events are offered to plugins in `drift.yaml` order. A hook that returns `tr
 |--------|---------|
 | `registerChannel(name) { ... }` | Handle method calls from Go, declaring each method in the block |
 | `sendEvent(channel, data)` | Send an event to Go |
-| `sendEventError(channel, code, message)` / `sendEventDone(channel)` | Report a stream error or end |
+| `sendEventError(channel, error)` / `sendEventDone(channel)` | Fail Go's stream with an error (a `DriftCallError`, or any error as `native_error`), which reaches its subscribers' `OnError`; or end it |
 | `observeEvent(channel, handler)` | Receive events sent on a channel by any native module, such as the engine's `first_frame` on `drift/rendering/frame_events`; returns a subscription to cancel |
 | `registerPermission(kind, permission)` | Provide a runtime permission kind (see [Providing permissions](#providing-permissions)) |
 | `registerPlatformView(type, factory)` | Provide a native view type to embed in widgets (see [Platform views](#platform-views)) |
@@ -974,7 +975,11 @@ For events from native code, pick the channel kind by what a late subscriber sho
 
 Native code is not told when Go subscribes or cancels; it sends events whenever it has them. Start and stop native work with method calls, as the location plugin's `StartUpdates` and `StopUpdates` do.
 
-Wrap a channel in `platform.NewStream(name, channel, parse)` to give apps typed events; parse errors are reported through Drift's error handling instead of reaching listeners. Expose state the native side pushes as a `*core.Derived[T]` fed by a `core.Signal[T]`, as the Firebase plugin does for the FCM token. Apps subscribe with `Listen`/`AddListener` and update widgets inside `drift.Dispatch`.
+Wrap a channel in `platform.NewStream(name, channel, parse)` to give apps typed events. Apps subscribe with `Listen(platform.StreamHandler[T]{OnEvent: ..., OnError: ...})`: `OnError` receives the errors the native side sends (`sendEventError`), matching the channel's `ErrorCodes`, such as a permission revoked mid-stream; without one, they are reported through Drift's error handling. An event the parser rejects is malformed native data: it is reported, never delivered. Handlers run off the UI thread, so update widgets inside `drift.Dispatch`.
+
+Events that reach the runtime half some other way (one platform view's, one player's) are republished with a `platform.NewEmitter[T](name)`: `Emit` and `Error` feed its `Stream()`.
+
+Expose state the native side pushes as a `*core.Derived[T]` fed by a `core.Signal[T]` that the runtime half sets on the UI thread (inside `platform.Dispatch`), as the Firebase plugin does for the FCM token and the media plugin for playback state; widgets then rebuild on it with `core.UseListenable`.
 
 ### Testing
 

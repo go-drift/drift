@@ -278,7 +278,7 @@ object PlatformChannelManager : DriftPluginHost {
             is JsonCodec.Encoded.Unencodable -> {
                 val message = notEncodableMessage("an event on $channel", encoded)
                 Log.e("PlatformChannel", message)
-                sendEventError(channel, NOT_ENCODABLE, message)
+                sendEventError(channel, DriftCallError(NOT_ENCODABLE, message))
             }
         }
         onFrameNeeded?.invoke()
@@ -332,10 +332,11 @@ object PlatformChannelManager : DriftPluginHost {
     }
 
     /**
-     * Sends an error to Go event listeners.
+     * DriftPluginHost: fails Go's stream on channel with error, encoded as a
+     * failed call's error is ([errorPayload]).
      */
-    override fun sendEventError(channel: String, code: String, message: String) {
-        NativeBridge.platformHandleEventError(channel, code, message)
+    override fun sendEventError(channel: String, error: Exception) {
+        NativeBridge.platformHandleEventError(channel, errorPayload(error))
     }
 
     /**

@@ -68,7 +68,7 @@ var (
 	// ErrDisabled indicates the user turned location services off.
 	ErrDisabled = errors.New("location services are turned off")
 
-	// ErrUnavailable indicates no fix could be obtained (Android).
+	// ErrUnavailable indicates no fix could be obtained.
 	ErrUnavailable = errors.New("no location fix available")
 
 	// ErrBackgroundNotConfigured indicates background updates were

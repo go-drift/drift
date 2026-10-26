@@ -14,9 +14,10 @@ import (
 // Create a [VideoPlayerController] with core.UseDisposable and pass it to
 // this widget:
 //
-//	s.video = media.NewVideoPlayerController()
+//	s.video, err = media.NewVideoPlayerController()
+//	...
 //	core.UseDisposable(s, s.video)
-//	s.video.OnPlaybackStateChanged = func(state media.PlaybackState) { ... }
+//	core.UseListenable(s, s.video.State())
 //	s.video.Load(url)
 //
 //	// in Build:

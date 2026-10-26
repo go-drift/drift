@@ -15,23 +15,29 @@ plugins:
 
 and import its Go API as `media "github.com/go-drift/drift/plugins/media/runtime"`. The [plugin's section](/docs/guides/plugins#media) lists its config (DASH on Android).
 
-Up to Drift v0.26 these types were core: `platform.VideoPlayerController`, `platform.NewVideoPlayerController`, `platform.AudioPlayerController`, `platform.NewAudioPlayerController`, `platform.PlaybackState` (and its `PlaybackState*` values), the `platform.ErrCode*` error codes and the `widgets.VideoPlayer` widget. They keep their names, methods, fields and callbacks in the `media` package, so moving to the plugin means adding it to `drift.yaml` and replacing the `platform.` and `widgets.` prefixes with `media.`.
+Up to Drift v0.26 these types were core: `platform.VideoPlayerController`, `platform.AudioPlayerController`, `platform.PlaybackState` and the `widgets.VideoPlayer` widget. In the `media` package the controllers publish playback as state instead of callbacks: `OnPlaybackStateChanged` and `OnPositionChanged` became `State()` and `Progress()`, `OnError` became the `Errors()` stream with the `media.ErrSource`, `ErrDecoder` and `ErrPlaybackFailed` sentinels in place of the `ErrCode*` strings, and `NewVideoPlayerController` returns an error.
 
 The plugin has two APIs: the `VideoPlayerController` for embedded video with platform controls, and the `AudioPlayerController` for headless audio playback with a custom UI. Audio and video controllers share the same method set but are separate types. The video controller creates its native surface eagerly on construction, while the audio controller defers native player creation until the first method call.
 
-Both APIs deliver callbacks on the UI thread, so you can update widget state directly without wrapping calls in `drift.Dispatch`.
+Each controller publishes:
+
+- `State()`, a `*core.Derived[media.PlaybackState]`, and `Progress()`, a `*core.Derived[media.Progress]` (position, duration and buffered length, about every 250ms while media is loaded). Both change on the UI thread, so `core.UseListenable` rebuilds a widget on them.
+- `Errors()`, a `*platform.Stream[error]` of playback failures. Like every stream, its handlers run off the UI thread: update widget state inside `drift.Dispatch`.
 
 ## Video Player
 
 The `VideoPlayer` widget embeds a native video player (ExoPlayer on Android, AVPlayer on iOS) with built-in transport controls including play/pause, seek bar, and time display.
 
-Create a `VideoPlayerController` with `UseDisposable`, set callbacks, and pass it to the widget:
+Create a `VideoPlayerController`, subscribe to what the widget shows, and pass it to the widget:
 
 ```go
 import (
+    "log"
     "time"
 
     "github.com/go-drift/drift/pkg/core"
+    "github.com/go-drift/drift/pkg/drift"
+    "github.com/go-drift/drift/pkg/platform"
     "github.com/go-drift/drift/pkg/theme"
     "github.com/go-drift/drift/pkg/widgets"
     media "github.com/go-drift/drift/plugins/media/runtime"
@@ -40,43 +46,51 @@ import (
 type playerState struct {
     core.StateBase
     controller *media.VideoPlayerController
-    status     *core.Signal[string]
+    failure    *core.Signal[string]
 }
 
 func (s *playerState) InitState() {
-    s.status = core.NewSignal("Idle")
-    core.UseListenable(&s.StateBase, s.status)
-    s.controller = media.NewVideoPlayerController()
-    core.UseDisposable(&s.StateBase, s.controller)
+    controller, err := media.NewVideoPlayerController()
+    if err != nil {
+        log.Printf("video: %v", err) // the media plugin is missing, say
+        return
+    }
+    s.controller = controller
+    core.UseDisposable(&s.StateBase, controller)
+    core.UseListenable(&s.StateBase, controller.State())
+    core.UseListenable(&s.StateBase, controller.Progress())
 
-    s.controller.OnPlaybackStateChanged = func(state media.PlaybackState) {
-        s.status.Set(state.String())
-    }
-    s.controller.OnPositionChanged = func(position, duration, buffered time.Duration) {
-        s.status.Set(position.String() + " / " + duration.String())
-    }
-    s.controller.OnError = func(code, message string) {
-        s.status.Set("Error (" + code + "): " + message)
-    }
+    s.failure = core.NewSignal("")
+    core.UseListenable(&s.StateBase, s.failure)
+    s.OnDispose(controller.Errors().Listen(platform.StreamHandler[error]{
+        OnEvent: func(err error) {
+            drift.Dispatch(func() { s.failure.Set(err.Error()) })
+        },
+    }))
 
-    s.controller.Load("https://example.com/video.mp4")
+    controller.Load("https://example.com/video.mp4")
 }
 
 func (s *playerState) Build(ctx core.BuildContext) core.Widget {
+    if s.controller == nil {
+        return widgets.Text{Content: "Video unavailable"}
+    }
+    progress := s.controller.Progress().Value()
     return widgets.Column{
         Children: []core.Widget{
             media.VideoPlayer{
                 Controller: s.controller,
                 Height:     225,
             },
+            widgets.Text{Content: s.controller.State().Value().String() + " " +
+                progress.Position.String() + " / " + progress.Duration.String() + " " + s.failure.Value()},
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Pause", func() {
                         s.controller.Pause()
                     }),
                     theme.ButtonOf(ctx, "Seek +10s", func() {
-                        pos := s.controller.Position()
-                        s.controller.SeekTo(pos + 10*time.Second)
+                        s.controller.SeekTo(progress.Position + 10*time.Second)
                     }),
                 },
             },
@@ -84,6 +98,8 @@ func (s *playerState) Build(ctx core.BuildContext) core.Widget {
     }
 }
 ```
+
+`NewVideoPlayerController` fails when the native player cannot be created: the media plugin is missing from `drift.yaml`, or the platform could not make the player.
 
 Width and Height set explicit dimensions in logical pixels. To fill available width, wrap the widget in layout widgets such as `Expanded` inside a `Row`:
 
@@ -100,9 +116,9 @@ widgets.Row{
 }
 ```
 
-Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
+Subscribe to `Errors()` before calling `Load`: a failure is an event, delivered only to the subscribers present when it happens. `State()` and `Progress()` are state, so their current values are always at hand.
 
-`UseDisposable` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `media.NewVideoPlayerController()` directly and call `Dispose()` manually.
+`UseDisposable` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; nothing changes after that. For non-widget contexts (tests, standalone services), use `media.NewVideoPlayerController()` directly and call `Dispose()` manually.
 
 ### VideoPlayer Widget Fields
 
@@ -115,7 +131,7 @@ Set all callbacks before calling `Load`, `Play`, or any other playback method. C
 
 ### VideoPlayerController Methods
 
-All methods are safe for concurrent use. Set callback fields before calling `Load`.
+All methods are safe for concurrent use.
 
 | Method | Description |
 |--------|-------------|
@@ -128,20 +144,11 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | `SetLooping(looping bool) error` | Enable or disable looping |
 | `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal). Must be positive; behavior for zero or negative values is platform-dependent. |
 | `SetShowControls(show bool) error` | Show or hide native transport controls at runtime. |
-| `State() PlaybackState` | Current playback state |
-| `Position() time.Duration` | Current playback position |
-| `Duration() time.Duration` | Total media duration |
-| `Buffered() time.Duration` | Buffered position |
+| `State() *core.Derived[PlaybackState]` | Playback state, changing on the UI thread |
+| `Progress() *core.Derived[Progress]` | Position, duration and buffered length, changing on the UI thread about every 250ms while media is loaded |
+| `Errors() *platform.Stream[error]` | Playback failures, matching `ErrSource`, `ErrDecoder` or `ErrPlaybackFailed` |
 | `ViewID() int64` | Platform view ID, or 0 if the view was not created |
 | `Dispose()` | Release native resources. Later calls return `platform.ErrDisposed`; idempotent. |
-
-### VideoPlayerController Callbacks
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
-| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called approximately every 250ms while media is loaded (UI thread) |
-| `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
 ## Audio Player
 
@@ -151,9 +158,11 @@ Multiple controllers may exist concurrently, each managing its own native player
 
 ```go
 import (
+    "log"
     "time"
 
     "github.com/go-drift/drift/pkg/core"
+    "github.com/go-drift/drift/pkg/platform"
     "github.com/go-drift/drift/pkg/theme"
     "github.com/go-drift/drift/pkg/widgets"
     media "github.com/go-drift/drift/plugins/media/runtime"
@@ -162,37 +171,28 @@ import (
 type audioState struct {
     core.StateBase
     controller *media.AudioPlayerController
-    status     *core.Signal[string]
 }
 
 func (s *audioState) InitState() {
-    s.status = core.NewSignal("Idle")
-    core.UseListenable(&s.StateBase, s.status)
     s.controller = media.NewAudioPlayerController()
     core.UseDisposable(&s.StateBase, s.controller)
-
-    // Callbacks are delivered on the UI thread.
-    s.controller.OnPlaybackStateChanged = func(state media.PlaybackState) {
-        s.status.Set(state.String())
-    }
-    s.controller.OnPositionChanged = func(position, duration, buffered time.Duration) {
-        s.status.Set(position.String() + " / " + duration.String())
-    }
-    s.controller.OnError = func(code, message string) {
-        s.status.Set("Error (" + code + "): " + message)
-    }
+    core.UseListenable(&s.StateBase, s.controller.State())
+    core.UseListenable(&s.StateBase, s.controller.Progress())
+    s.OnDispose(s.controller.Errors().Listen(platform.StreamHandler[error]{
+        OnEvent: func(err error) { log.Printf("audio: %v", err) },
+    }))
 
     s.controller.Load("https://example.com/song.mp3")
 }
 ```
 
-Set all callbacks before calling `Load`, `Play`, or any other playback method. Callbacks are checked when events arrive from the native player, so any assigned after playback starts may miss early events.
+Subscribe to `Errors()` before calling `Load`, as for video.
 
-`UseDisposable` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; no further callbacks are delivered. For non-widget contexts (tests, standalone services), use `media.NewAudioPlayerController()` directly and call `Dispose()` manually.
+`UseDisposable` registers a dispose callback automatically, so the controller is released when the widget is removed from the tree. Disposing a controller that is still buffering silently cancels playback; nothing changes after that. For non-widget contexts (tests, standalone services), use `media.NewAudioPlayerController()` directly and call `Dispose()` manually.
 
 ### AudioPlayerController Methods
 
-All methods are safe for concurrent use. Set callback fields before calling `Load`.
+All methods are safe for concurrent use.
 
 | Method | Description |
 |--------|-------------|
@@ -204,19 +204,10 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 | `SetVolume(volume float64) error` | Set volume (0.0 to 1.0). Values outside this range are clamped by the native player. |
 | `SetLooping(looping bool) error` | Enable or disable looping |
 | `SetPlaybackSpeed(rate float64) error` | Set playback speed (1.0 = normal). Must be positive; behavior for zero or negative values is platform-dependent. |
-| `State() PlaybackState` | Current playback state |
-| `Position() time.Duration` | Current playback position |
-| `Duration() time.Duration` | Total media duration |
-| `Buffered() time.Duration` | Buffered position |
+| `State() *core.Derived[PlaybackState]` | Playback state, changing on the UI thread |
+| `Progress() *core.Derived[Progress]` | Position, duration and buffered length, changing on the UI thread about every 250ms while media is loaded |
+| `Errors() *platform.Stream[error]` | Playback failures, matching `ErrSource`, `ErrDecoder` or `ErrPlaybackFailed` |
 | `Dispose()` | Release native resources. Later calls return `platform.ErrDisposed`; idempotent. |
-
-### AudioPlayerController Callbacks
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `OnPlaybackStateChanged` | `func(PlaybackState)` | Called when playback state changes (UI thread) |
-| `OnPositionChanged` | `func(position, duration, buffered time.Duration)` | Called approximately every 250ms while media is loaded (UI thread) |
-| `OnError` | `func(code, message string)` | Called when a playback error occurs (UI thread) |
 
 ### Example: Transport Controls with Seek
 
@@ -224,7 +215,7 @@ All methods are safe for concurrent use. Set callback fields before calling `Loa
 func (s *audioState) Build(ctx core.BuildContext) core.Widget {
     return widgets.Column{
         Children: []core.Widget{
-            widgets.Text{Content: s.status.Value()},
+            widgets.Text{Content: s.controller.State().Value().String()},
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Play", func() {
@@ -241,7 +232,7 @@ func (s *audioState) Build(ctx core.BuildContext) core.Widget {
             widgets.Row{
                 Children: []core.Widget{
                     theme.ButtonOf(ctx, "Seek +10s", func() {
-                        pos := s.controller.Position()
+                        pos := s.controller.Progress().Value().Position
                         s.controller.SeekTo(pos + 10*time.Second)
                     }),
                     theme.ButtonOf(ctx, "Loop", func() {
@@ -269,34 +260,28 @@ Both video and audio players share the same `PlaybackState` enum (defined in `me
 | `PlaybackStateCompleted` | 3 | Playback reached the end of the media |
 | `PlaybackStatePaused` | 4 | Paused, can be resumed |
 
-Errors are delivered through the `OnError` callback rather than as a playback state.
+Failures arrive on `Errors()`, not as a playback state; the player goes idle after one.
 
-## Error Codes
+## Errors
 
-Control methods like `Load` and `Play` return an `error` that indicates a communication failure with the native player (for example, calling a method after disposal). The `OnError` callback fires for playback-time errors reported by the native player, such as network failures or unsupported codecs.
+Control methods like `Load` and `Play` return an `error` that indicates a communication failure with the native player (for example, calling a method after disposal). `Errors()` streams playback-time failures the native player reports, such as network failures or unsupported codecs, the same on Android and iOS:
 
-Both controllers use canonical error codes that are consistent across Android and iOS.
-
-| Code | Constant | Description |
-|------|----------|-------------|
-| `"source_error"` | `media.ErrCodeSourceError` | Media source could not be loaded (network failure, invalid URL, unsupported format) |
-| `"decoder_error"` | `media.ErrCodeDecoderError` | Media could not be decoded or rendered (codec failure, DRM error) |
-| `"playback_failed"` | `media.ErrCodePlaybackFailed` | General playback failure that does not fit a more specific category |
-
-Native implementations map platform-specific errors to these codes, so error handling behaves the same on Android and iOS.
+| Sentinel | Wire code | Meaning |
+|----------|-----------|---------|
+| `media.ErrSource` | `source_error` | Media source could not be loaded (network failure, invalid URL, unsupported format) |
+| `media.ErrDecoder` | `decoder_error` | Media could not be decoded or rendered (codec failure, DRM error) |
+| `media.ErrPlaybackFailed` | `playback_failed` | General playback failure that does not fit a more specific category |
 
 ```go
-controller.OnError = func(code, message string) {
-    switch code {
-    case media.ErrCodeSourceError:
+controller.Errors().Listen(platform.StreamHandler[error]{OnEvent: func(err error) {
+    switch {
+    case errors.Is(err, media.ErrSource):
         // Network or URL issue, prompt user to check connection
-    case media.ErrCodeDecoderError:
+    case errors.Is(err, media.ErrDecoder):
         // Format not supported on this device
-    default:
-        // General failure
     }
-    log.Printf("playback error [%s]: %s", code, message)
-}
+    log.Printf("playback error: %v", err) // includes the platform's message
+}})
 ```
 
 ## Custom Controls

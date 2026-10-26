@@ -158,11 +158,11 @@ func (p *permission) ShouldShowRationale() (bool, error) {
 // Listen subscribes to permission status changes for this permission.
 // The handler is invoked only when the change event matches this permission's name.
 func (p *permission) Listen(handler func(PermissionResult)) (unsubscribe func()) {
-	return permissionChanges.Listen(func(change permissionChange) {
+	return permissionChanges.Listen(StreamHandler[permissionChange]{OnEvent: func(change permissionChange) {
 		if change.Permission == p.name {
 			handler(change.Result)
 		}
-	})
+	}})
 }
 
 // notificationPermission extends permission with iOS-specific request options.

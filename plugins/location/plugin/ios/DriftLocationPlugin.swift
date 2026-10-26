@@ -7,7 +7,9 @@
 /// `location_always` when the build added its usage string.
 ///
 /// Errors Go maps to its sentinels (runtime package): `permission_denied`,
-/// `location_disabled`, `background_not_configured` and `always_denied`.
+/// `location_disabled`, `location_unavailable`, `background_not_configured`
+/// and `always_denied`. A revoked permission fails the update stream with
+/// `permission_denied`.
 
 import CoreLocation
 import DriftPluginAPI
@@ -153,13 +155,27 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
     }
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        let failure: Error = (error as? CLError)?.code == .denied
-            ? DriftCallError("permission_denied", "location permission not granted")
-            : error
+        let code = (error as? CLError)?.code
         if manager === oneShot {
-            finishCurrent { $0.error(failure) }
-        } else {
-            host?.sendEventError(Self.updatesChannel, code: (failure as? DriftCallError)?.code ?? "native_error", message: failure.localizedDescription)
+            switch code {
+            case .denied?:
+                finishCurrent { $0.error(DriftCallError("permission_denied", "location permission not granted")) }
+            case .locationUnknown?:
+                finishCurrent { $0.error(DriftCallError("location_unavailable", "no location fix available")) }
+            default:
+                finishCurrent { $0.error(error) }
+            }
+            return
+        }
+        switch code {
+        case .locationUnknown?:
+            // Transient: Core Location keeps trying, and the stream goes on.
+            return
+        case .denied?:
+            // Access was revoked; Core Location stops the updates.
+            host?.sendEventError(Self.updatesChannel, DriftCallError("permission_denied", "location permission revoked"))
+        default:
+            host?.sendEventError(Self.updatesChannel, error)
         }
     }
 

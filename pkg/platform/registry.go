@@ -193,8 +193,9 @@ func HandleEvent(channel string, eventData []byte) error {
 	return nil
 }
 
-// HandleEventError is called from the bridge when an event stream errors.
-func HandleEventError(channel string, code, message string) error {
+// HandleEventError is called from the bridge when an event stream errors,
+// with the error native sent.
+func HandleEventError(channel string, err *ChannelError) error {
 	ch := registry.getEventChannel(channel)
 	if ch == nil {
 		err := fmt.Errorf("%w: %s", ErrChannelNotRegistered, channel)
@@ -207,7 +208,7 @@ func HandleEventError(channel string, code, message string) error {
 		return err
 	}
 
-	ch.dispatchError(NewChannelError(code, message))
+	ch.dispatchError(err)
 	return nil
 }
 

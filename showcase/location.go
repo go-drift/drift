@@ -74,12 +74,12 @@ func (s *locationState) InitState() {
 	})
 
 	// Listen for location updates using Stream
-	updatesUnsub := location.Updates().Listen(func(update location.Update) {
+	updatesUnsub := location.Updates().Listen(platform.StreamHandler[location.Update]{OnEvent: func(update location.Update) {
 		drift.Dispatch(func() {
 			s.location.Set(&update)
 			s.statusText.Set("Location updated")
 		})
-	})
+	}})
 
 	s.unsubFuncs = []func(){whenInUseUnsub, alwaysUnsub, updatesUnsub}
 

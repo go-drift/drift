@@ -60,7 +60,15 @@ interface DriftPluginHost {
      * logged and reaches Go as a `not_encodable` stream error instead.
      */
     fun sendEvent(channel: String, data: Any?)
-    fun sendEventError(channel: String, code: String, message: String)
+    /**
+     * Fails Go's stream on [channel] with [error]: its subscribers' OnError
+     * receive it, a [DriftCallError] with its code, message and details, any
+     * other exception as for a failed call. The stream continues; send later
+     * events as usual.
+     */
+    fun sendEventError(channel: String, error: Exception)
+
+    /** Ends Go's stream on [channel]: its subscriptions end. */
     fun sendEventDone(channel: String)
 
     /**

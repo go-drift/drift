@@ -50,10 +50,10 @@ func TestOpensQueueUntilListened(t *testing.T) {
 	})
 
 	var got []Message
-	unsub := Opens().Listen(func(m Message) { got = append(got, m) })
+	unsub := Opens().Listen(platform.StreamHandler[Message]{OnEvent: func(m Message) { got = append(got, m) }})
 	unsub()
 	var again []Message
-	defer Opens().Listen(func(m Message) { again = append(again, m) })()
+	defer Opens().Listen(platform.StreamHandler[Message]{OnEvent: func(m Message) { again = append(again, m) }})()
 
 	want := []Message{{ID: "m1", Data: map[string]string{"route": "/inbox"}}}
 	if !reflect.DeepEqual(got, want) {
@@ -66,7 +66,7 @@ func TestOpensQueueUntilListened(t *testing.T) {
 
 func TestMessagesParse(t *testing.T) {
 	var got []Message
-	defer Messages().Listen(func(m Message) { got = append(got, m) })()
+	defer Messages().Listen(platform.StreamHandler[Message]{OnEvent: func(m Message) { got = append(got, m) }})()
 
 	send(t, messageChannel, map[string]any{
 		"id": "m2", "title": "Hi", "body": "There", "foreground": true,

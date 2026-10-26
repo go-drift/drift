@@ -146,7 +146,7 @@ object NativeBridge {
      * @param code    Error code.
      * @param message Error message.
      */
-    external fun platformHandleEventError(channel: String, code: String, message: String)
+    external fun platformHandleEventError(channel: String, errorJson: String)
 
     /**
      * Notifies Go that an event stream has ended for the given channel.

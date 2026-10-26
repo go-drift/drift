@@ -65,9 +65,9 @@ func (c *DeepLinkController) start() {
 			c.handleLink(*link)
 		}
 
-		unsub := platform.DeepLinks.Links().Listen(func(link platform.DeepLink) {
+		unsub := platform.DeepLinks.Links().Listen(platform.StreamHandler[platform.DeepLink]{OnEvent: func(link platform.DeepLink) {
 			c.handleLink(link)
-		})
+		}})
 		defer unsub()
 		<-c.stopCh
 	}()

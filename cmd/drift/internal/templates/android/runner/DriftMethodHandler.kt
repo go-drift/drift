@@ -154,7 +154,8 @@ class DriftResult internal constructor(
 /**
  * A call failure Go receives as a `*platform.ChannelError` with [code], the
  * message and [details]. Throw it from a method, or pass it to
- * [DriftResult.error]. Mirrors iOS's DriftCallError.
+ * [DriftResult.error] or [DriftPluginHost.sendEventError]. Mirrors iOS's
+ * DriftCallError.
  *
  * Go matches [code] against the sentinels the channel declares
  * (platform.ErrorCodes) under errors.Is. An

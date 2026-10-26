@@ -35,8 +35,7 @@ func DriftPlatformHandleEvent(
 @_silgen_name("DriftPlatformHandleEventError")
 func DriftPlatformHandleEventError(
     _ channel: UnsafePointer<CChar>,
-    _ code: UnsafePointer<CChar>,
-    _ message: UnsafePointer<CChar>
+    _ errorJSON: UnsafePointer<CChar>
 )
 
 /// FFI declaration for notifying Go that an event stream has ended.
@@ -264,9 +263,14 @@ final class PlatformChannelManager: DriftPluginHost {
         sendEvent(channel: channel, data: data)
     }
 
-    /// `DriftPluginHost`-shaped error sender. Mirrors `sendEvent(_:data:)`.
-    func sendEventError(_ channel: String, code: String, message: String) {
-        sendEventError(channel: channel, code: code, message: message)
+    /// `DriftPluginHost`: fail Go's stream on channel with error, encoded
+    /// as a failed call's error is (encodeErrorPayload).
+    func sendEventError(_ channel: String, _ error: Error) {
+        channel.withCString { channelPtr in
+            encodeErrorPayload(error).withCString { errorPtr in
+                DriftPlatformHandleEventError(channelPtr, errorPtr)
+            }
+        }
     }
 
     /// `DriftPluginHost`-shaped done sender. Mirrors `sendEvent(_:data:)`.
@@ -369,7 +373,7 @@ final class PlatformChannelManager: DriftPluginHost {
             }
         case .failure(let error):
             let message = notEncodableMessage("an event on \(channel)", error)
-            sendEventError(channel: channel, code: Self.notEncodable, message: message)
+            sendEventError(channel, DriftCallError(Self.notEncodable, message))
         }
     }
 
@@ -412,17 +416,6 @@ final class PlatformChannelManager: DriftPluginHost {
                 let handler = eventObservers[channel]?[id]
                 eventObserversLock.unlock()
                 handler?(data)
-            }
-        }
-    }
-
-    /// Sends an error to Go event listeners.
-    func sendEventError(channel: String, code: String, message: String) {
-        channel.withCString { channelPtr in
-            code.withCString { codePtr in
-                message.withCString { messagePtr in
-                    DriftPlatformHandleEventError(channelPtr, codePtr, messagePtr)
-                }
             }
         }
     }

@@ -134,3 +134,5 @@ Ejected projects (`platform/ios`, `platform/android`) run the same pipeline agai
 ## Runtime side
 
 Runtime packages use `pkg/platform` channels: `NewMethodChannel`, `NewEventChannel`, `NewStickyEventChannel` (last event replayed to each new subscriber; `engine.FrameEvents` uses it for `first_frame`), `NewQueuedEventChannel` (events kept until a subscriber takes them, once each), and `NewStream` for typed parsing. The guide covers when to use which.
+
+A `Stream` delivers events and errors to each `StreamHandler`. Native stream errors (`sendEventError`) cross the C bridge as the same JSON payload a failed call replies with (`DriftPlatformHandleEventError(channel, errorJSON)`), so they carry code, message and details and match the event channel's `ErrorCodes`. `Emitter` feeds a `Stream` from Go through an unregistered `EventChannel`, which native never addresses.

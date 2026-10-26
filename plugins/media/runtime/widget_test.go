@@ -24,8 +24,7 @@ func TestVideoPlayerWithoutController(t *testing.T) {
 
 func TestVideoPlayerEmbedsTheControllersView(t *testing.T) {
 	native := useNative(t)
-	c := NewVideoPlayerController()
-	defer c.Dispose()
+	c := newVideo(t)
 	r := VideoPlayer{Controller: c, Height: 225}.CreateRenderObject(nil).(*renderVideoPlayer)
 	if r.PlatformViewID() != c.ViewID() {
 		t.Errorf("PlatformViewID = %d, want %d", r.PlatformViewID(), c.ViewID())
@@ -39,9 +38,7 @@ func TestVideoPlayerEmbedsTheControllersView(t *testing.T) {
 // the controller is swapped.
 func TestVideoPlayerHideControls(t *testing.T) {
 	native := useNative(t)
-	a, b := NewVideoPlayerController(), NewVideoPlayerController()
-	defer a.Dispose()
-	defer b.Dispose()
+	a, b := newVideo(t), newVideo(t)
 
 	w := VideoPlayer{Controller: a, HideControls: true}
 	r := w.CreateRenderObject(nil)

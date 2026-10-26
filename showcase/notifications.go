@@ -49,20 +49,20 @@ func (s *notificationsState) InitState() {
 	}()
 
 	// Listen for notification deliveries
-	deliveriesUnsub := notifications.Deliveries().Listen(func(event notifications.Notification) {
+	deliveriesUnsub := notifications.Deliveries().Listen(platform.StreamHandler[notifications.Notification]{OnEvent: func(event notifications.Notification) {
 		message := "Received: " + event.Title
 		drift.Dispatch(func() {
 			s.receivedText.Set(message)
 		})
-	})
+	}})
 
 	// Listen for notification opens
-	opensUnsub := notifications.Opens().Listen(func(event notifications.Open) {
+	opensUnsub := notifications.Opens().Listen(platform.StreamHandler[notifications.Open]{OnEvent: func(event notifications.Open) {
 		message := "Opened: " + event.ID
 		drift.Dispatch(func() {
 			s.openedText.Set(message)
 		})
-	})
+	}})
 
 	// Listen for permission changes
 	permUnsub := platform.Notifications.Permission.Listen(func(status platform.PermissionResult) {

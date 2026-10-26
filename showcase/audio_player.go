@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/drift"
 	"github.com/go-drift/drift/pkg/graphics"
 	"github.com/go-drift/drift/pkg/layout"
+	"github.com/go-drift/drift/pkg/platform"
 	"github.com/go-drift/drift/pkg/theme"
 	"github.com/go-drift/drift/pkg/widgets"
 	media "github.com/go-drift/drift/plugins/media/runtime"
@@ -23,42 +25,16 @@ func buildAudioPlayerPage(_ core.BuildContext) core.Widget { return audioPlayerP
 
 type audioPlayerState struct {
 	core.StateBase
-	audioStatus     *core.Signal[string]
-	audioStateLabel string
 	audioController *media.AudioPlayerController
+	audioFailure    *core.Signal[string]
 	audioLooping    bool
 	audioMuted      bool
 }
 
 func (s *audioPlayerState) InitState() {
-	s.audioStatus = core.NewSignal("Idle")
-	s.audioStateLabel = "Idle"
-
 	s.audioController = media.NewAudioPlayerController()
+	s.audioFailure = watchPlayback(&s.StateBase, s.audioController.State(), s.audioController.Progress(), s.audioController.Errors())
 	core.UseDisposable(s, s.audioController)
-	core.UseListenable(s, s.audioStatus)
-
-	// After an error the player goes idle; keep the error on screen.
-	failed := false
-	s.audioController.OnPlaybackStateChanged = func(state media.PlaybackState) {
-		s.audioStateLabel = state.String()
-		if !failed {
-			s.audioStatus.Set(s.audioStateLabel)
-		}
-	}
-	s.audioController.OnPositionChanged = func(position, duration, buffered time.Duration) {
-		if failed {
-			return
-		}
-		pos := formatDuration(position)
-		dur := formatDuration(duration)
-		s.audioStatus.Set(s.audioStateLabel + " \u00b7 " + pos + " / " + dur)
-	}
-	s.audioController.OnError = func(code, message string) {
-		failed = true
-		s.audioStatus.Set("Error (" + code + "): " + message)
-	}
-
 	s.audioController.Load(audioURL)
 }
 
@@ -73,7 +49,7 @@ func (s *audioPlayerState) Build(ctx core.BuildContext) core.Widget {
 		widgets.VSpace(12),
 		s.audioControls(ctx, colors),
 		widgets.VSpace(12),
-		statusCard(s.audioStatus.Value(), colors),
+		statusCard(playbackStatus(s.audioController.State().Value(), s.audioController.Progress().Value(), s.audioFailure.Value()), colors),
 		widgets.VSpace(40),
 	)
 }
@@ -120,12 +96,12 @@ func (s *audioPlayerState) audioControls(ctx core.BuildContext, colors theme.Col
 				MainAxisAlignment: widgets.MainAxisAlignmentStart,
 				Children: []core.Widget{
 					smallButton(ctx, "Seek +10s", func() {
-						pos := s.audioController.Position()
+						pos := s.audioController.Progress().Value().Position
 						s.audioController.SeekTo(pos + 10*time.Second)
 					}, colors),
 					widgets.HSpace(6),
 					smallButton(ctx, "Seek -10s", func() {
-						pos := s.audioController.Position()
+						pos := s.audioController.Progress().Value().Position
 						if pos > 10*time.Second {
 							s.audioController.SeekTo(pos - 10*time.Second)
 						} else {
@@ -199,4 +175,29 @@ func formatDuration(d time.Duration) string {
 		secStr = "0" + secStr
 	}
 	return strconv.Itoa(minutes) + ":" + secStr
+}
+
+// watchPlayback rebuilds s on a player's state and progress, and returns
+// the signal holding its last failure ("" while none), kept on screen
+// since the player goes idle after one.
+func watchPlayback(s *core.StateBase, state *core.Derived[media.PlaybackState], progress *core.Derived[media.Progress], errors *platform.Stream[error]) *core.Signal[string] {
+	failure := core.NewSignal("")
+	core.UseListenable(s, state)
+	core.UseListenable(s, progress)
+	core.UseListenable(s, failure)
+	s.OnDispose(errors.Listen(platform.StreamHandler[error]{OnEvent: func(err error) {
+		drift.Dispatch(func() { failure.Set(err.Error()) })
+	}}))
+	return failure
+}
+
+// playbackStatus describes a player's state for the status card.
+func playbackStatus(state media.PlaybackState, progress media.Progress, failure string) string {
+	if failure != "" {
+		return "Error: " + failure
+	}
+	if progress.Duration <= 0 {
+		return state.String()
+	}
+	return state.String() + " \u00b7 " + formatDuration(progress.Position) + " / " + formatDuration(progress.Duration)
 }

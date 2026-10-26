@@ -496,13 +496,13 @@ Up to Drift v0.26 this was `platform.SecureStorage`. Apps moving to the plugin u
 Platform services are safe to call from any goroutine, but calls that wait for the user must not run on the UI thread (see [Context conventions](#context-conventions)). When updating UI state from platform callbacks, use `drift.Dispatch`:
 
 ```go
-unsubscribe := platform.DeepLinks.Links().Listen(func(link platform.DeepLink) {
+unsubscribe := platform.DeepLinks.Links().Listen(platform.StreamHandler[platform.DeepLink]{OnEvent: func(link platform.DeepLink) {
     // Called from background goroutine
     drift.Dispatch(func() {
         // Now safe to update UI
         s.lastLink = link
     })
-})
+}})
 defer unsubscribe()
 ```
 

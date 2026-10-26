@@ -71,7 +71,7 @@ func TestStreamErrorsMatchTheChannelsErrorCodes(t *testing.T) {
 	events := NewEventChannel("test/error_codes_events").WithErrors(ErrorCodes{"denied": errTestDenied})
 	var got error
 	events.Listen(EventHandler{OnError: func(err error) { got = err }})
-	if err := HandleEventError("test/error_codes_events", "denied", "revoked"); err != nil {
+	if err := HandleEventError("test/error_codes_events", NewChannelError("denied", "revoked")); err != nil {
 		t.Fatal(err)
 	}
 	if !errors.Is(got, errTestDenied) || !strings.Contains(got.Error(), "revoked") {

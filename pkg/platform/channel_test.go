@@ -281,7 +281,7 @@ func TestHandleEventError_NotEncodableMatchesSentinel(t *testing.T) {
 	})
 
 	const message = "drift: an event on drift/test/not_encodable is not JSON-like: value.speed is NaN, not a finite number"
-	if err := HandleEventError("drift/test/not_encodable", "not_encodable", message); err != nil {
+	if err := HandleEventError("drift/test/not_encodable", NewChannelError("not_encodable", message)); err != nil {
 		t.Fatalf("HandleEventError: %v", err)
 	}
 	if !errors.Is(got, ErrNotEncodable) {

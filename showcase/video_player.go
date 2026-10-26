@@ -21,48 +21,29 @@ func buildVideoPlayerPage(_ core.BuildContext) core.Widget { return videoPlayerP
 
 type videoPlayerState struct {
 	core.StateBase
-	videoStatus         *core.Signal[string]
-	videoStateLabel     string
 	videoController     *media.VideoPlayerController
+	videoCreateErr      error
+	videoFailure        *core.Signal[string]
 	videoLooping        bool
 	videoMuted          bool
 	videoControlsHidden bool
 }
 
 func (s *videoPlayerState) InitState() {
-	s.videoStatus = core.NewSignal("Idle")
-	s.videoStateLabel = "Idle"
-
-	s.videoController = media.NewVideoPlayerController()
+	s.videoController, s.videoCreateErr = media.NewVideoPlayerController()
+	if s.videoCreateErr != nil {
+		return
+	}
+	s.videoFailure = watchPlayback(&s.StateBase, s.videoController.State(), s.videoController.Progress(), s.videoController.Errors())
 	core.UseDisposable(s, s.videoController)
-	core.UseListenable(s, s.videoStatus)
-
-	// After an error the player goes idle; keep the error on screen.
-	failed := false
-	s.videoController.OnPlaybackStateChanged = func(state media.PlaybackState) {
-		s.videoStateLabel = state.String()
-		if !failed {
-			s.videoStatus.Set(s.videoStateLabel)
-		}
-	}
-	s.videoController.OnPositionChanged = func(position, duration, buffered time.Duration) {
-		if failed {
-			return
-		}
-		pos := formatDuration(position)
-		dur := formatDuration(duration)
-		s.videoStatus.Set(s.videoStateLabel + " \u00b7 " + pos + " / " + dur)
-	}
-	s.videoController.OnError = func(code, message string) {
-		failed = true
-		s.videoStatus.Set("Error (" + code + "): " + message)
-	}
-
 	s.videoController.Load(videoURL)
 }
 
 func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 	colors := theme.ColorsOf(ctx)
+	if s.videoCreateErr != nil {
+		return demoPage(ctx, "Video Player", statusCard("Error: "+s.videoCreateErr.Error(), colors))
+	}
 
 	return demoPage(ctx, "Video Player",
 		widgets.Text{
@@ -87,12 +68,12 @@ func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 			MainAxisAlignment: widgets.MainAxisAlignmentStart,
 			Children: []core.Widget{
 				smallButton(ctx, "Seek +10s", func() {
-					pos := s.videoController.Position()
+					pos := s.videoController.Progress().Value().Position
 					s.videoController.SeekTo(pos + 10*time.Second)
 				}, colors),
 				widgets.HSpace(6),
 				smallButton(ctx, "Seek -10s", func() {
-					pos := s.videoController.Position()
+					pos := s.videoController.Progress().Value().Position
 					if pos > 10*time.Second {
 						s.videoController.SeekTo(pos - 10*time.Second)
 					} else {
@@ -149,7 +130,7 @@ func (s *videoPlayerState) Build(ctx core.BuildContext) core.Widget {
 			},
 		},
 		widgets.VSpace(8),
-		statusCard(s.videoStatus.Value(), colors),
+		statusCard(playbackStatus(s.videoController.State().Value(), s.videoController.Progress().Value(), s.videoFailure.Value()), colors),
 		widgets.VSpace(40),
 	)
 }

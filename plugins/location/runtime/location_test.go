@@ -121,7 +121,7 @@ func TestAlwaysNamesMissingConfig(t *testing.T) {
 func TestUpdatesStream(t *testing.T) {
 	useNative(t, &fakeNative{})
 	got := make(chan Update, 1)
-	unsubscribe := Updates().Listen(func(u Update) { got <- u })
+	unsubscribe := Updates().Listen(platform.StreamHandler[Update]{OnEvent: func(u Update) { got <- u }})
 	defer unsubscribe()
 	data, err := platform.DefaultCodec.Encode(fix)
 	if err != nil {

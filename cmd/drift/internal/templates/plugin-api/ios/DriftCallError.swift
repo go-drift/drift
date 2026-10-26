@@ -7,7 +7,7 @@ import Foundation
 
 /// A failure Go receives as a `*platform.ChannelError` with `code`,
 /// `message` and `details`. Throw it from a method, or pass it to
-/// `DriftResult.error(_:)`.
+/// `DriftResult.error(_:)` or `DriftPluginHost.sendEventError(_:_:)`.
 ///
 /// Go matches `code` against the sentinels the channel declares
 /// (`platform.ErrorCodes`) under `errors.Is`. Any other `Error` reaches Go

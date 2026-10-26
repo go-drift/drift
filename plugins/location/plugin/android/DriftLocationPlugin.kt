@@ -118,7 +118,7 @@ class DriftLocationPlugin : DriftPlugin {
                         updates = null
                         stopService(context)
                     }
-                    host.sendEventError(UPDATES_CHANNEL, "native_error", e.message ?: "location updates failed")
+                    host.sendEventError(UPDATES_CHANNEL, e)
                 }
                 null
             }
