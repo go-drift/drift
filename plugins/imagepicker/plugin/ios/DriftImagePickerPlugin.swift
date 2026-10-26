@@ -50,12 +50,12 @@ public final class DriftImagePickerPlugin: NSObject, DriftPlugin {
     /// Opens a picker for result, or fails it.
     private func begin(_ result: DriftResult, _ open: () throws -> UIViewController) {
         guard pending == nil else {
-            result.error(Self.error("busy", "an image picker is already open"))
+            result.error(DriftCallError("busy", "an image picker is already open"))
             return
         }
         do {
             guard let host = viewController else {
-                throw Self.error("no_activity", "no Drift view to present the picker over")
+                throw DriftCallError("no_activity", "no Drift view to present the picker over")
             }
             let picker = try open()
             pending = result
@@ -69,14 +69,14 @@ public final class DriftImagePickerPlugin: NSObject, DriftPlugin {
 
     private func capture(front: Bool) throws -> UIViewController {
         guard Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") != nil else {
-            throw Self.error("camera_not_configured", "add camera: to the imagepicker plugin config to take photos")
+            throw DriftCallError("camera_not_configured", "add camera: to the imagepicker plugin config to take photos")
         }
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            throw Self.error("camera_unavailable", "this device has no camera")
+            throw DriftCallError("camera_unavailable", "this device has no camera")
         }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .denied, .restricted:
-            throw Self.error("permission_denied", "camera access denied; the user can allow it in Settings")
+            throw DriftCallError("permission_denied", "camera access denied; the user can allow it in Settings")
         default:
             // Not asked yet: the picker asks.
             break
@@ -113,7 +113,7 @@ public final class DriftImagePickerPlugin: NSObject, DriftPlugin {
     /// size accounts for orientation), as on Android.
     private static func save(_ image: UIImage) throws -> [String: Any] {
         guard let data = image.jpegData(compressionQuality: 0.9) else {
-            throw error("native_error", "could not encode the image as JPEG")
+            throw DriftCallError("native_error", "could not encode the image as JPEG")
         }
         let caches = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let url = caches.appendingPathComponent("drift_image_\(UUID().uuidString).jpg")
@@ -125,10 +125,6 @@ public final class DriftImagePickerPlugin: NSObject, DriftPlugin {
             "height": Int(image.size.height * image.scale),
             "size": data.count,
         ]
-    }
-
-    private static func error(_ code: String, _ message: String) -> NSError {
-        NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
 
@@ -178,7 +174,7 @@ extension DriftImagePickerPlugin: PHPickerViewControllerDelegate {
                     defer { group.leave() }
                     do {
                         guard let image = object as? UIImage else {
-                            throw error ?? Self.error("native_error", "could not load the picked image")
+                            throw error ?? DriftCallError("native_error", "could not load the picked image")
                         }
                         images[i] = try Self.save(image)
                     } catch {

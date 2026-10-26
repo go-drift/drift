@@ -264,7 +264,7 @@ final class AudioPlayers {
         channel.method("load") { [self] args in
             let args = args as? [String: Any] ?? [:]
             guard let url = (args["url"] as? String).flatMap(URL.init(string:)) else {
-                throw mediaError("invalid_arguments", "load needs a url")
+                throw DriftCallError.invalidArguments("load needs a url")
             }
             player(args, create: true)?.load(url: url)
             return nil

@@ -138,7 +138,7 @@ object PlatformViewHandler {
                     }
                 }
             }
-            else -> Pair(null, DriftCallError("method_not_found", "Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/platform_views", method))
         }
     }
 

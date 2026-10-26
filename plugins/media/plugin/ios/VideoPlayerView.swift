@@ -276,7 +276,7 @@ extension VideoPlayerView {
             if let url = args["url"] as? String {
                 load(url)
             }
-        default: throw mediaError("method_not_found", "unknown video method \(method)")
+        default: throw DriftCallError("method_not_found", "unknown video method \(method)")
         }
     }
 }

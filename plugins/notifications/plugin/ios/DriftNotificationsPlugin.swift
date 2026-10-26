@@ -49,7 +49,7 @@ public final class DriftNotificationsPlugin: DriftPlugin {
             }
             channel.method("cancel") { [self] args in
                 guard let id = (args as? [String: Any])?["id"] as? String else {
-                    throw Self.invalid("cancel needs an id")
+                    throw DriftCallError.invalidArguments("cancel needs an id")
                 }
                 center.removePendingNotificationRequests(withIdentifiers: [id])
                 center.removeDeliveredNotifications(withIdentifiers: [id])
@@ -61,7 +61,7 @@ public final class DriftNotificationsPlugin: DriftPlugin {
             }
             channel.method("setBadge") { args in
                 guard let count = (args as? [String: Any])?["count"] as? Int else {
-                    throw Self.invalid("setBadge needs a count")
+                    throw DriftCallError.invalidArguments("setBadge needs a count")
                 }
                 if #available(iOS 17.0, *) {
                     UNUserNotificationCenter.current().setBadgeCount(count)
@@ -109,7 +109,7 @@ public final class DriftNotificationsPlugin: DriftPlugin {
     /// The request scheduling args describes.
     private static func request(_ args: [String: Any]) throws -> UNNotificationRequest {
         guard let id = args["id"] as? String, !id.isEmpty else {
-            throw invalid("schedule needs an id")
+            throw DriftCallError.invalidArguments("schedule needs an id")
         }
         let content = UNMutableNotificationContent()
         content.title = args["title"] as? String ?? ""
@@ -168,9 +168,5 @@ public final class DriftNotificationsPlugin: DriftPlugin {
             data[key] = value
         }
         return data
-    }
-
-    private static func invalid(_ message: String) -> NSError {
-        NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }

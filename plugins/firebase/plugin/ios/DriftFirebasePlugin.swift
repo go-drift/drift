@@ -130,9 +130,7 @@ public final class DriftFirebasePlugin: NSObject, DriftPlugin, MessagingDelegate
     /// The call's topic (Go validated it), or nil after failing the call.
     private static func topic(_ args: Any?, _ result: DriftResult) -> String? {
         guard let topic = (args as? [String: Any])?["topic"] as? String else {
-            result.error(NSError(domain: "invalid_arguments", code: 0, userInfo: [
-                NSLocalizedDescriptionKey: "missing topic",
-            ]))
+            result.error(DriftCallError.invalidArguments("missing topic"))
             return nil
         }
         return topic

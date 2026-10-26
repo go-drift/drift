@@ -292,7 +292,7 @@ final class PlatformChannelManager: DriftPluginHost {
         let answer: (Result<Any?, Error>) -> Void = { outcome in
             reply(outcome.flatMap { value in
                 codec.encode(value).mapError { error -> Error in
-                    self.callError(Self.notEncodable, self.notEncodableMessage("the reply from \(channel).\(method)", error))
+                    DriftCallError(Self.notEncodable, self.notEncodableMessage("the reply from \(channel).\(method)", error))
                 }
             })
         }
@@ -300,7 +300,7 @@ final class PlatformChannelManager: DriftPluginHost {
         let registered = channels[channel]
         channelsLock.unlock()
         guard let registered = registered else {
-            answer(.failure(callError("channel_not_found", "channel not found: \(channel)")))
+            answer(.failure(DriftCallError("channel_not_found", "channel not found: \(channel)")))
             return
         }
 
@@ -320,7 +320,7 @@ final class PlatformChannelManager: DriftPluginHost {
         case .plugin(let declared):
             switch declared.lookup(method) {
             case nil:
-                answer(.failure(callError("method_not_found", "\(channel) has no method \(method)")))
+                answer(.failure(unknownMethod(channel, method)))
             case .sync(let handler)?:
                 let run = { answer(Result(catching: { try handler(args) })) }
                 if Thread.isMainThread {
@@ -330,7 +330,7 @@ final class PlatformChannelManager: DriftPluginHost {
                 }
             case .async(let handler)?:
                 guard !Thread.isMainThread else {
-                    answer(.failure(callError(
+                    answer(.failure(DriftCallError(
                         "blocks_ui_thread",
                         "drift: \(channel).\(method) replies asynchronously; Go must call it from a goroutine, not the UI thread"
                     )))
@@ -341,11 +341,6 @@ final class PlatformChannelManager: DriftPluginHost {
                 }
             }
         }
-    }
-
-    /// An error Go receives with `code` (see encodeErrorPayload).
-    private func callError(_ code: String, _ message: String) -> NSError {
-        NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
     /// The code Go receives when a reply or an event is not JSON-like.
@@ -519,7 +514,7 @@ enum ClipboardHandler {
         case "setText":
             guard let dict = args as? [String: Any],
                   let text = dict["text"] as? String else {
-                return (nil, NSError(domain: "Clipboard", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing text argument"]))
+                return (nil, DriftCallError.invalidArguments("Missing text argument"))
             }
             UIPasteboard.general.string = text
             return (nil, nil)
@@ -532,7 +527,7 @@ enum ClipboardHandler {
             return (nil, nil)
 
         default:
-            return (nil, NSError(domain: "Clipboard", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/clipboard", method))
         }
     }
 }
@@ -551,7 +546,7 @@ enum HapticsHandler {
         case "impact":
             guard let dict = args as? [String: Any],
                   let style = dict["style"] as? String else {
-                return (nil, NSError(domain: "Haptics", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing style argument"]))
+                return (nil, DriftCallError.invalidArguments("Missing style argument"))
             }
 
             switch style {
@@ -581,7 +576,7 @@ enum HapticsHandler {
             return (nil, nil)
 
         default:
-            return (nil, NSError(domain: "Haptics", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/haptics", method))
         }
     }
 }
@@ -591,11 +586,11 @@ enum HapticsHandler {
 enum ShareHandler {
     static func handle(method: String, args: Any?) -> (Any?, Error?) {
         guard method == "share" else {
-            return (nil, NSError(domain: "Share", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/share", method))
         }
 
         guard let dict = args as? [String: Any] else {
-            return (nil, NSError(domain: "Share", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
+            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
         }
 
         var items: [Any] = []
@@ -672,11 +667,11 @@ enum SystemUIHandler {
 
     static func handle(method: String, args: Any?) -> (Any?, Error?) {
         guard method == "setStyle" else {
-            return (nil, NSError(domain: "SystemUI", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/system_ui", method))
         }
 
         guard let dict = args as? [String: Any] else {
-            return (nil, NSError(domain: "SystemUI", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
+            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
         }
 
         let statusBarHidden = dict["statusBarHidden"] as? Bool ?? false
@@ -811,7 +806,7 @@ enum DeepLinkHandler {
             initialLink = nil
             return (link, nil)
         default:
-            return (nil, NSError(domain: "DeepLink", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/deeplinks", method))
         }
     }
 
@@ -855,7 +850,7 @@ enum LifecycleHandler {
             return (["state": state], nil)
 
         default:
-            return (nil, NSError(domain: "Lifecycle", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/lifecycle", method))
         }
     }
 
@@ -898,7 +893,7 @@ enum URLLauncherHandler {
             guard let dict = args as? [String: Any],
                   let urlString = dict["url"] as? String,
                   let url = URL(string: urlString) else {
-                return (nil, NSError(domain: "URLLauncher", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing or invalid url argument"]))
+                return (nil, DriftCallError.invalidArguments("Missing or invalid url argument"))
             }
             DispatchQueue.main.async {
                 UIApplication.shared.open(url)
@@ -909,39 +904,52 @@ enum URLLauncherHandler {
             guard let dict = args as? [String: Any],
                   let urlString = dict["url"] as? String,
                   let url = URL(string: urlString) else {
-                return (nil, NSError(domain: "URLLauncher", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing or invalid url argument"]))
+                return (nil, DriftCallError.invalidArguments("Missing or invalid url argument"))
             }
             return (["canOpen": UIApplication.shared.canOpenURL(url)], nil)
 
         default:
-            return (nil, NSError(domain: "URLLauncher", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/url_launcher", method))
         }
     }
 }
 
 // MARK: - C Bridge Functions
 
+/// The JSON error payload Go decodes into a ChannelError: a DriftCallError's
+/// code, message and details; any other error as native_error, its NSError
+/// domain and code in details. Details that are not JSON-like answer
+/// not_encodable instead.
 private func encodeErrorPayload(_ error: Error) -> String {
-    let nsError = error as NSError
-    var payload: [String: Any] = [
-        "code": nsError.domain.isEmpty ? "native_error" : nsError.domain,
-        "message": nsError.localizedDescription
-    ]
-    var details: [String: Any] = [:]
-    if !nsError.domain.isEmpty {
-        details["domain"] = nsError.domain
+    var payload: [String: Any]
+    if let callError = error as? DriftCallError {
+        payload = ["code": callError.code, "message": callError.message]
+        if let details = callError.details {
+            payload["details"] = details
+        }
+    } else {
+        let nsError = error as NSError
+        payload = [
+            "code": "native_error",
+            "message": nsError.localizedDescription,
+            "details": ["domain": nsError.domain, "code": nsError.code],
+        ]
     }
-    if nsError.code != 0 {
-        details["code"] = nsError.code
-    }
-    if !details.isEmpty {
-        payload["details"] = details
-    }
-    switch JsonCodec().encode(payload) {
+    let codec = JsonCodec()
+    switch codec.encode(payload) {
     case .success(let data):
         return String(decoding: data, as: UTF8.self)
     case .failure(let encodeError):
-        // The payload holds only strings and an Int.
-        preconditionFailure("drift: error payload is not JSON-like: \(encodeError)")
+        let message = "drift: the details of error \(payload["code"] ?? "") are not JSON-like: \(encodeError)"
+        DriftLog.platform.error("\(message)")
+        guard case .success(let data) = codec.encode(["code": "not_encodable", "message": message]) else {
+            preconditionFailure("drift: error payload of strings is not JSON-like")
+        }
+        return String(decoding: data, as: UTF8.self)
     }
+}
+
+/// The error a built-in channel answers for a method it does not have.
+func unknownMethod(_ channel: String, _ method: String) -> DriftCallError {
+    DriftCallError("method_not_found", "\(channel) has no method \(method)")
 }

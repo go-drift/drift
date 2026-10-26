@@ -152,12 +152,21 @@ class DriftResult internal constructor(
 }
 
 /**
- * A call failure Go sees with [code]: a `*platform.ChannelError` whose
- * Code is [code], matching Drift's sentinel errors under errors.Is for
- * Drift's own codes. Throw it from a method, or pass it to
- * [DriftResult.error]. (iOS: an NSError whose domain is the code.)
+ * A call failure Go receives as a `*platform.ChannelError` with [code], the
+ * message and [details]. Throw it from a method, or pass it to
+ * [DriftResult.error]. Mirrors iOS's DriftCallError.
+ *
+ * Go matches [code] against its sentinel errors under errors.Is. An
+ * IllegalArgumentException (as `require` throws) reaches Go as
+ * `invalid_arguments`; any other exception as `native_error`, with its
+ * class in the details.
  */
-class DriftCallError(val code: String, message: String) : Exception(message)
+class DriftCallError(
+    val code: String,
+    message: String,
+    /** JSON-like extra data for Go (ChannelError.Details), or null. A value that is not JSON-like fails the call with `not_encodable`. */
+    val details: Any? = null,
+) : Exception(message)
 
 /**
  * Fails fast on a programming error: reports to the default uncaught

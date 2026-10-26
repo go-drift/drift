@@ -1,6 +1,7 @@
 /// PreferencesHandler.swift
 /// Handles simple key-value storage using UserDefaults.
 
+import DriftPluginAPI
 import Foundation
 
 enum PreferencesHandler {
@@ -26,7 +27,7 @@ enum PreferencesHandler {
         case "deleteAll":
             return deleteAll()
         default:
-            return (nil, NSError(domain: "Preferences", code: 404, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/preferences", method))
         }
     }
 
@@ -36,7 +37,7 @@ enum PreferencesHandler {
         guard let dict = args as? [String: Any],
               let key = dict["key"] as? String,
               let value = dict["value"] as? String else {
-            return (nil, NSError(domain: "Preferences", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing key or value"]))
+            return (nil, DriftCallError.invalidArguments("Missing key or value"))
         }
 
         UserDefaults.standard.set(value, forKey: keyPrefix + key)
@@ -46,7 +47,7 @@ enum PreferencesHandler {
     private static func get(args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any],
               let key = dict["key"] as? String else {
-            return (nil, NSError(domain: "Preferences", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing key"]))
+            return (nil, DriftCallError.invalidArguments("Missing key"))
         }
 
         let value = UserDefaults.standard.string(forKey: keyPrefix + key)
@@ -56,7 +57,7 @@ enum PreferencesHandler {
     private static func delete(args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any],
               let key = dict["key"] as? String else {
-            return (nil, NSError(domain: "Preferences", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing key"]))
+            return (nil, DriftCallError.invalidArguments("Missing key"))
         }
 
         UserDefaults.standard.removeObject(forKey: keyPrefix + key)
@@ -66,7 +67,7 @@ enum PreferencesHandler {
     private static func contains(args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any],
               let key = dict["key"] as? String else {
-            return (nil, NSError(domain: "Preferences", code: 400, userInfo: [NSLocalizedDescriptionKey: "Missing key"]))
+            return (nil, DriftCallError.invalidArguments("Missing key"))
         }
 
         let exists = UserDefaults.standard.object(forKey: keyPrefix + key) != nil

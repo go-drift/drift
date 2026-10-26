@@ -54,9 +54,10 @@ public final class DriftSplashPlugin: DriftPlugin {
         host.registerChannel("drift/splash") { channel in
             channel.method("preserve") { [self] _ in
                 guard !dismissed else {
-                    throw NSError(domain: "drift.splash", code: 2, userInfo: [
-                        NSLocalizedDescriptionKey: "splash already dismissed; call Preserve before the first frame (App.OnInit or the root's InitState)",
-                    ])
+                    throw DriftCallError(
+                        "already_dismissed",
+                        "splash already dismissed; call Preserve before the first frame (App.OnInit or the root's InitState)"
+                    )
                 }
                 preserveCount += 1
                 return nil

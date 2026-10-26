@@ -65,17 +65,13 @@ enum PermissionHandler {
 
     private static func lookup(_ args: Any?) throws -> (kind: String, permission: DriftPermission) {
         guard let kind = (args as? [String: Any])?["permission"] as? String else {
-            throw NSError(domain: "invalid_arguments", code: 0, userInfo: [
-                NSLocalizedDescriptionKey: "drift/permissions: missing permission kind",
-            ])
+            throw DriftCallError.invalidArguments("drift/permissions: missing permission kind")
         }
         kindsLock.lock()
         let permission = kinds[kind]
         kindsLock.unlock()
         guard let permission else {
-            throw NSError(domain: "permission_not_registered", code: 0, userInfo: [
-                NSLocalizedDescriptionKey: "no plugin registered the permission kind \"\(kind)\"; add the plugin that provides it to drift.yaml",
-            ])
+            throw DriftCallError("permission_not_registered", "no plugin registered the permission kind \"\(kind)\"; add the plugin that provides it to drift.yaml")
         }
         return (kind, permission)
     }

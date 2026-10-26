@@ -20,7 +20,7 @@ object PreferencesHandler {
             "contains" -> contains(context, args)
             "getAllKeys" -> getAllKeys(context)
             "deleteAll" -> deleteAll(context)
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/preferences", method))
         }
     }
 

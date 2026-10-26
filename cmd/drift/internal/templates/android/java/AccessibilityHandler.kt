@@ -78,7 +78,7 @@ object AccessibilityHandler {
             "setAccessibilityFocus" -> setAccessibilityFocus(args)
             "clearAccessibilityFocus" -> clearAccessibilityFocus()
             "isAccessibilityEnabled" -> isAccessibilityEnabled()
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/accessibility", method))
         }
     }
 

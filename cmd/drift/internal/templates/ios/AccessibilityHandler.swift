@@ -1,6 +1,7 @@
 /// AccessibilityHandler.swift
 /// Handles accessibility platform channel messages for Drift.
 
+import DriftPluginAPI
 import UIKit
 
 final class AccessibilityHandler {
@@ -51,11 +52,7 @@ final class AccessibilityHandler {
         case "isAccessibilityEnabled":
             return shared.isAccessibilityEnabled()
         default:
-            return (nil, NSError(
-                domain: "AccessibilityHandler",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]
-            ))
+            return (nil, unknownMethod("drift/accessibility", method))
         }
     }
 
@@ -63,11 +60,7 @@ final class AccessibilityHandler {
 
     private func updateSemantics(args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any] else {
-            return (nil, NSError(
-                domain: "AccessibilityHandler",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]
-            ))
+            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
         }
 
         let updates = dict["updates"] as? [[String: Any]] ?? []
@@ -85,11 +78,7 @@ final class AccessibilityHandler {
     private func announce(args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any],
               let message = dict["message"] as? String else {
-            return (nil, NSError(
-                domain: "AccessibilityHandler",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Missing message"]
-            ))
+            return (nil, DriftCallError.invalidArguments("Missing message"))
         }
 
         let politeness = dict["politeness"] as? String ?? "polite"
@@ -100,11 +89,7 @@ final class AccessibilityHandler {
     private func setAccessibilityFocus(args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any],
               let nodeId = (dict["nodeId"] as? NSNumber)?.int64Value else {
-            return (nil, NSError(
-                domain: "AccessibilityHandler",
-                code: 400,
-                userInfo: [NSLocalizedDescriptionKey: "Missing nodeId"]
-            ))
+            return (nil, DriftCallError.invalidArguments("Missing nodeId"))
         }
 
         bridge?.setAccessibilityFocus(nodeId: nodeId)

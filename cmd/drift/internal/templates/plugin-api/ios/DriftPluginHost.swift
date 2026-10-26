@@ -88,9 +88,7 @@ public final class DriftResult {
 
     deinit {
         if !replied {
-            deliver(.failure(NSError(domain: "reply_dropped", code: 0, userInfo: [
-                NSLocalizedDescriptionKey: "drift: \(call) released its DriftResult without replying",
-            ])))
+            deliver(.failure(DriftCallError("reply_dropped", "drift: \(call) released its DriftResult without replying")))
         }
     }
 

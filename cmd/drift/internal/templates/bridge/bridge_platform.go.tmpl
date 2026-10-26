@@ -237,7 +237,7 @@ func decodeNativeError(message string) error {
 			return &payload
 		}
 	}
-	return platform.NewChannelError("NATIVE_ERROR", message)
+	return platform.NewChannelError("native_error", message)
 }
 
 func encodeErrorPayload(err error) string {

@@ -29,6 +29,7 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.window.SplashScreenView
 import com.drift.runner.DriftActivityBinding
+import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlugin
 import com.drift.runner.DriftPluginHost
 
@@ -58,9 +59,12 @@ class DriftSplashPlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
         host.registerChannel("drift/splash") {
             method("preserve") { _ ->
-                check(!dismissed) {
-                    "splash already dismissed; call Preserve before the first frame " +
-                        "(App.OnInit or the root's InitState)"
+                if (dismissed) {
+                    throw DriftCallError(
+                        "already_dismissed",
+                        "splash already dismissed; call Preserve before the first frame " +
+                            "(App.OnInit or the root's InitState)",
+                    )
                 }
                 preserveCount++
                 null

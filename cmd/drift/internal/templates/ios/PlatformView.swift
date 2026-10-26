@@ -376,7 +376,7 @@ enum PlatformViewHandler {
 
     static func handle(method: String, args: Any?) -> (Any?, Error?) {
         guard let dict = args as? [String: Any] else {
-            return (nil, NSError(domain: "PlatformView", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid arguments"]))
+            return (nil, DriftCallError.invalidArguments("Invalid arguments"))
         }
 
         switch method {
@@ -404,7 +404,7 @@ enum PlatformViewHandler {
             }
         case "invokeViewMethod":
             guard let viewMethod = dict["method"] as? String else {
-                return (nil, NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing method"]))
+                return (nil, DriftCallError.invalidArguments("Missing method"))
             }
             return onView(dict) { viewId, container in
                 do {
@@ -418,7 +418,7 @@ enum PlatformViewHandler {
                 }
             }
         default:
-            return (nil, NSError(domain: "method_not_found", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unknown method: \(method)"]))
+            return (nil, unknownMethod("drift/platform_views", method))
         }
     }
 
@@ -427,7 +427,7 @@ enum PlatformViewHandler {
     /// it after disposing).
     private static func onView(_ args: [String: Any], _ body: @escaping (Int, DriftPlatformView) -> Void) -> (Any?, Error?) {
         guard let viewId = args["viewId"] as? Int else {
-            return (nil, NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing viewId"]))
+            return (nil, DriftCallError.invalidArguments("Missing viewId"))
         }
         DispatchQueue.main.async {
             guard let container = views[viewId] else { return }
@@ -439,7 +439,7 @@ enum PlatformViewHandler {
     private static func create(args: [String: Any]) -> (Any?, Error?) {
         guard let viewId = args["viewId"] as? Int,
               let viewType = args["viewType"] as? String else {
-            return (nil, NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "Missing viewId or viewType"]))
+            return (nil, DriftCallError.invalidArguments("Missing viewId or viewType"))
         }
         let params = args["params"] as? [String: Any] ?? [:]
 
@@ -447,9 +447,7 @@ enum PlatformViewHandler {
         let factory = factories[viewType]
         factoriesLock.unlock()
         guard let factory else {
-            return (nil, NSError(domain: "view_type_not_found", code: 0, userInfo: [
-                NSLocalizedDescriptionKey: "no native platform view type \"\(viewType)\"; add the plugin that provides it to drift.yaml",
-            ]))
+            return (nil, DriftCallError("view_type_not_found", "no native platform view type \"\(viewType)\"; add the plugin that provides it to drift.yaml"))
         }
 
         // Created on the main thread, after earlier calls. Go is notified
@@ -552,8 +550,8 @@ enum PlatformViewHandler {
 }
 
 /// The error a view's handle(_:_:) throws for a method it does not know.
-func unknownViewMethod(_ method: String) -> NSError {
-    NSError(domain: "method_not_found", code: 0, userInfo: [NSLocalizedDescriptionKey: "unknown view method \(method)"])
+func unknownViewMethod(_ method: String) -> DriftCallError {
+    DriftCallError("method_not_found", "unknown view method \(method)")
 }
 
 // MARK: - Native Web View Container

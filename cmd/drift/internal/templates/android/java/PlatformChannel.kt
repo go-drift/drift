@@ -227,7 +227,7 @@ object PlatformChannelManager : DriftPluginHost {
             is Channel.Plugin -> {
                 val onMainThread = Looper.myLooper() == Looper.getMainLooper()
                 when (val m = registered.channel.lookup(method)) {
-                    null -> reply(null, DriftCallError("method_not_found", "$channel has no method $method"))
+                    null -> reply(null, unknownMethod(channel, method))
                     is DriftChannel.Method.Sync -> {
                         fun run() {
                             val value = try {
@@ -352,26 +352,31 @@ object PlatformChannelManager : DriftPluginHost {
     private fun notEncodableMessage(what: String, encoded: JsonCodec.Encoded.Unencodable) =
         "drift: $what is not JSON-like: ${encoded.reason}"
 
-    /** Encodes a failed call's exception as the JSON error payload Go decodes. */
+    /**
+     * Encodes a failed call's exception as the JSON error payload Go
+     * decodes. Details that are not JSON-like answer not_encodable instead.
+     */
     private fun errorPayload(e: Exception): String {
         val code = when (e) {
             is DriftCallError -> e.code
             is IllegalArgumentException -> "invalid_arguments"
             else -> "native_error"
         }
-        val details = if (e is DriftCallError) null else mapOf("exception" to e.javaClass.name)
-        return errorPayload(code, e.message ?: "Unknown error", details)
-    }
-
-    private fun errorPayload(code: String, message: String, details: Map<String, Any?>? = null): String {
-        val payload = mutableMapOf<String, Any?>("code" to code, "message" to message)
-        if (details != null && details.isNotEmpty()) {
+        val details = if (e is DriftCallError) e.details else mapOf("exception" to e.javaClass.name)
+        val payload = mutableMapOf<String, Any?>("code" to code, "message" to (e.message ?: "Unknown error"))
+        if (details != null) {
             payload["details"] = details
         }
         return when (val encoded = codec.encode(payload)) {
             is JsonCodec.Encoded.Bytes -> String(encoded.data, Charsets.UTF_8)
-            // The payload holds only strings.
-            is JsonCodec.Encoded.Unencodable -> error("drift: error payload is not JSON-like: ${encoded.reason}")
+            is JsonCodec.Encoded.Unencodable -> {
+                val message = "drift: the details of error $code are not JSON-like: ${encoded.reason}"
+                Log.e("PlatformChannel", message)
+                when (val fallback = codec.encode(mapOf("code" to NOT_ENCODABLE, "message" to message))) {
+                    is JsonCodec.Encoded.Bytes -> String(fallback.data, Charsets.UTF_8)
+                    is JsonCodec.Encoded.Unencodable -> error("drift: error payload of strings is not JSON-like")
+                }
+            }
         }
     }
 
@@ -497,7 +502,7 @@ object ClipboardHandler {
                 Pair(null, null)
             }
 
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/clipboard", method))
         }
     }
 }
@@ -524,7 +529,7 @@ object HapticsHandler {
                 Pair(null, null)
             }
 
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/haptics", method))
         }
     }
 
@@ -569,7 +574,7 @@ object HapticsHandler {
 object ShareHandler {
     fun handle(context: Context, method: String, args: Any?): Pair<Any?, Exception?> {
         if (method != "share") {
-            return Pair(null, IllegalArgumentException("Unknown method: $method"))
+            return Pair(null, unknownMethod("drift/share", method))
         }
 
         val argsMap = args as? Map<*, *>
@@ -664,7 +669,7 @@ object DeepLinkHandler {
                 initialLink = null
                 Pair(link, null)
             }
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/deeplinks", method))
         }
     }
 
@@ -699,7 +704,7 @@ object LifecycleHandler {
     fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
         return when (method) {
             "getState" -> Pair(mapOf("state" to currentState), null)
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/lifecycle", method))
         }
     }
 
@@ -726,7 +731,7 @@ object SystemUIHandler {
 
     fun handle(method: String, args: Any?): Pair<Any?, Exception?> {
         if (method != "setStyle") {
-            return Pair(null, IllegalArgumentException("Unknown method: $method"))
+            return Pair(null, unknownMethod("drift/system_ui", method))
         }
         val argsMap = args as? Map<*, *>
             ?: return Pair(null, IllegalArgumentException("Invalid arguments"))
@@ -808,7 +813,7 @@ object URLLauncherHandler {
                 Pair(mapOf("canOpen" to canOpen), null)
             }
 
-            else -> Pair(null, IllegalArgumentException("Unknown method: $method"))
+            else -> Pair(null, unknownMethod("drift/url_launcher", method))
         }
     }
 }
@@ -906,3 +911,7 @@ object JsonCodec {
         }
     }
 }
+
+/** The error a built-in channel answers for a method it does not have. */
+internal fun unknownMethod(channel: String, method: String) =
+    DriftCallError("method_not_found", "$channel has no method $method")

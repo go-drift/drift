@@ -54,22 +54,22 @@ public final class DriftSecureStoragePlugin: DriftPlugin {
     private static func set(_ args: [String: Any]) throws -> Any? {
         let key = try string(args, "key")
         guard let data = try string(args, "value").data(using: .utf8) else {
-            throw error("invalid_arguments", "value is not UTF-8")
+            throw DriftCallError.invalidArguments("value is not UTF-8")
         }
         let accessibility = parseAccessibility(args["accessibility"] as? String)
         var item = query(args, key: key)
         item[kSecValueData as String] = data
         if args["requireBiometric"] as? Bool ?? false {
             guard Bundle.main.object(forInfoDictionaryKey: "NSFaceIDUsageDescription") != nil else {
-                throw error("biometrics_not_configured", "add biometrics: to the securestorage plugin config")
+                throw DriftCallError("biometrics_not_configured", "add biometrics: to the securestorage plugin config")
             }
             var laError: NSError?
             guard LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &laError) else {
-                throw error("biometrics_unavailable", laError?.localizedDescription ?? "no biometrics enrolled")
+                throw DriftCallError("biometrics_unavailable", laError?.localizedDescription ?? "no biometrics enrolled")
             }
             var cfError: Unmanaged<CFError>?
             guard let access = SecAccessControlCreateWithFlags(nil, accessibility, .biometryCurrentSet, &cfError) else {
-                throw cfError?.takeRetainedValue() ?? error("native_error", "could not create access control")
+                throw cfError?.takeRetainedValue() ?? DriftCallError("native_error", "could not create access control")
             }
             item[kSecAttrAccessControl as String] = access
         } else {
@@ -94,7 +94,7 @@ public final class DriftSecureStoragePlugin: DriftPlugin {
         }
         try check(status)
         guard let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
-            throw error("native_error", "stored value is not UTF-8")
+            throw DriftCallError("native_error", "stored value is not UTF-8")
         }
         return ["value": value]
     }
@@ -173,7 +173,7 @@ public final class DriftSecureStoragePlugin: DriftPlugin {
 
     private static func string(_ args: [String: Any], _ name: String) throws -> String {
         guard let value = args[name] as? String else {
-            throw error("invalid_arguments", "missing \(name)")
+            throw DriftCallError.invalidArguments("missing \(name)")
         }
         return value
     }
@@ -196,16 +196,12 @@ public final class DriftSecureStoragePlugin: DriftPlugin {
     private static func check(_ status: OSStatus) throws {
         switch status {
         case errSecSuccess: return
-        case errSecUserCanceled: throw error("auth_canceled", "authentication canceled")
-        case errSecAuthFailed: throw error("auth_failed", "authentication failed")
-        case errSecInteractionNotAllowed: throw error("locked", "the device is locked")
+        case errSecUserCanceled: throw DriftCallError("auth_canceled", "authentication canceled")
+        case errSecAuthFailed: throw DriftCallError("auth_failed", "authentication failed")
+        case errSecInteractionNotAllowed: throw DriftCallError("locked", "the device is locked")
         default:
             let message = SecCopyErrorMessageString(status, nil) as String? ?? "Keychain error \(status)"
-            throw error("native_error", message)
+            throw DriftCallError("native_error", message)
         }
-    }
-
-    private static func error(_ code: String, _ message: String) -> NSError {
-        NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }

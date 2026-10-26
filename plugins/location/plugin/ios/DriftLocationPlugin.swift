@@ -111,7 +111,7 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             let enabled = CLLocationManager.locationServicesEnabled()
             DispatchQueue.main.async {
                 guard enabled else {
-                    result.error(Self.error("location_disabled", "location services are turned off"))
+                    result.error(DriftCallError("location_disabled", "location services are turned off"))
                     return
                 }
                 do {
@@ -128,16 +128,16 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
         case .authorizedWhenInUse, .authorizedAlways:
             return
         default:
-            throw Self.error("permission_denied", "location permission not granted; request it first")
+            throw DriftCallError("permission_denied", "location permission not granted; request it first")
         }
     }
 
     private func requireBackground() throws {
         guard Self.backgroundConfigured else {
-            throw Self.error("background_not_configured", "background location updates need the location plugin's always: config")
+            throw DriftCallError("background_not_configured", "background location updates need the location plugin's always: config")
         }
         guard oneShot.authorizationStatus == .authorizedAlways else {
-            throw Self.error("always_denied", "background location updates need the Always location permission; request it first")
+            throw DriftCallError("always_denied", "background location updates need the Always location permission; request it first")
         }
     }
 
@@ -154,12 +154,12 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         let failure: Error = (error as? CLError)?.code == .denied
-            ? Self.error("permission_denied", "location permission not granted")
+            ? DriftCallError("permission_denied", "location permission not granted")
             : error
         if manager === oneShot {
             finishCurrent { $0.error(failure) }
         } else {
-            host?.sendEventError(Self.updatesChannel, code: (failure as NSError).domain, message: failure.localizedDescription)
+            host?.sendEventError(Self.updatesChannel, code: (failure as? DriftCallError)?.code ?? "native_error", message: failure.localizedDescription)
         }
     }
 
@@ -183,10 +183,6 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             "timestamp": Int64(location.timestamp.timeIntervalSince1970 * 1000),
             "isMocked": location.sourceInformation?.isSimulatedBySoftware ?? false,
         ]
-    }
-
-    private static func error(_ code: String, _ message: String) -> NSError {
-        NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }
 

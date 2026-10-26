@@ -823,9 +823,12 @@ host.registerChannel("acme/push") { channel in
 }
 ```
 
-Calling a method that is not declared fails with `platform.ErrMethodNotFound`.
+Calling a method that is not declared fails with `platform.ErrMethodNotFound`, on Drift's own channels too.
 
-To fail a call with an error Go can match, give it a code: on iOS an `NSError` whose domain is the code, on Android a `DriftCallError(code, message)` (thrown, or passed to `result.error`). Go receives a `*platform.ChannelError` with that `Code`; the runtime half maps codes to its own sentinel errors.
+To fail a call with an error Go can match, throw a `DriftCallError(code, message)` (Swift and Kotlin alike), or pass it to `result.error`; an optional `details` argument carries JSON-like data. Go receives a `*platform.ChannelError` with that `Code`, `Message` and `Details`; the runtime half maps codes to its own sentinel errors.
+
+- Missing or malformed arguments: `DriftCallError.invalidArguments(message)` on iOS, an `IllegalArgumentException` (as `require` throws) on Android. Both match `platform.ErrInvalidArguments`.
+- Any other error reaches Go as `native_error`, with the `NSError` domain and code (iOS) or the exception class (Android) in `Details`.
 
 Values crossing the channel are JSON-like: nil, booleans, finite numbers, strings, lists and string-keyed maps. Send bytes as base64 strings (a Go `[]byte` argument already arrives as one). A reply or event outside that set, such as a NaN, an Infinity or a `Date`, never reaches Go as data: the call fails with `platform.ErrNotEncodable`, and an event arrives as that error on the stream's error handler, its message naming the call or channel and the offending part (`value.items[2] is NaN, not a finite number`). Native logs it too.
 

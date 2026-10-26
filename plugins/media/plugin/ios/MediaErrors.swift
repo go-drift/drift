@@ -28,8 +28,3 @@ func mediaErrorCode(for error: Error?) -> String {
 
     return "playback_failed"
 }
-
-/// An error Go receives with `code`.
-func mediaError(_ code: String, _ message: String) -> NSError {
-    NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
-}

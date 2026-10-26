@@ -124,9 +124,7 @@ final class StorageHandler: NSObject {
     /// picker is open.
     private func begin(_ result: DriftResult) -> Bool {
         guard pending == nil else {
-            result.error(NSError(domain: "storage_busy", code: 0, userInfo: [
-                NSLocalizedDescriptionKey: "a storage picker is already open",
-            ]))
+            result.error(DriftCallError("storage_busy", "a storage picker is already open"))
             return false
         }
         pending = result
@@ -213,14 +211,12 @@ final class StorageHandler: NSObject {
         return data
     }
 
-    private static func invalid(_ message: String) -> NSError {
-        NSError(domain: "invalid_arguments", code: 0, userInfo: [NSLocalizedDescriptionKey: "drift/storage: \(message)"])
+    private static func invalid(_ message: String) -> DriftCallError {
+        DriftCallError.invalidArguments("drift/storage: \(message)")
     }
 
-    private static func noScreen() -> NSError {
-        NSError(domain: "platform_unavailable", code: 0, userInfo: [
-            NSLocalizedDescriptionKey: "no screen to show the picker over",
-        ])
+    private static func noScreen() -> DriftCallError {
+        DriftCallError("platform_unavailable", "no screen to show the picker over")
     }
 }
 

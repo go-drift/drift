@@ -25,9 +25,7 @@ enum TimePickerHandler {
                     })
                 }
                 if !shown {
-                    result.error(NSError(domain: "platform_unavailable", code: 0, userInfo: [
-                        NSLocalizedDescriptionKey: "no screen to show the time picker over",
-                    ]))
+                    result.error(DriftCallError("platform_unavailable", "no screen to show the time picker over"))
                 }
             }
         }
