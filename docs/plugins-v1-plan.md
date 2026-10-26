@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (6.1 to 6.3 done, see [6.1 status](#61-status), [6.2 status](#62-status), [6.3 status](#63-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (Phase 6 done, see [6.1 status](#61-status), [6.2 status](#62-status), [6.3 status](#63-status), [6.4 status](#64-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -427,6 +427,19 @@ Done (`3b630a9`, `36c6d5b`), verified on the emulator and the Simulator. Decisio
 - **No example app consumes `hello`**, so an author cannot run it without writing an app first.
 - **No iOS open-URL or user-activity hook.** Android plugins claim intents (`onNewIntent`), start Activities for results (`launchForResult`) and provide permissions (`registerPermission`), all documented since Phase 5. iOS lost its URL and user-activity hooks in `bc57176`, so a deep-link or OAuth plugin can only be written for Android. Add them to `DriftPlugin` (first claim wins, unclaimed URLs reach `DeepLinkHandler`), routed from `SceneDelegate` and the xtool `DriftApp`.
 - **Done when:** following the guide from an empty directory produces a plugin, an app that uses it, and a run on the emulator and xtool, without reading Drift's source.
+
+##### 6.4 status
+
+Done (`cbcc119`..`2c08426`). Decisions (2026-10-26): the iOS hooks are `openURL(_:)` and `continueUserActivity(_:)` (UIKit's verbs), app-level like the notification hooks, first claim wins, unclaimed URLs reach `DeepLinkHandler`; on xtool SwiftUI delivers only universal links; ejected projects must route through `DriftPlugins` (two new wiring checks); the example app is `examples/plugins/hello-app`.
+
+| Commit | Content |
+|--------|---------|
+| `cbcc119` | iOS `DriftPlugin.openURL` / `continueUserActivity`, offered from `SceneDelegate` (launch options, `openURLContexts`, `continue`) and xtool's `DriftApp`; ejected wiring checks |
+| `40b48f8` | `examples/plugins/hello-app`: the smallest app using a plugin, with the `replace` the guide teaches |
+| `a559999` | Guide: "Your first plugin" walkthrough (plugin module, app beside it, sync, run, publish) and "Publishing a plugin"; `TestGuideQuotesThisPlugin` checks the walkthrough's app code against hello-app's |
+| `2c08426` | Fix found by following the walkthrough: `drift plugin sync --tidy` resolved plugins before tidying, so an app that had just required a local plugin (newer `go` line from `go mod init`) failed with "updates to go.mod needed"; `drift init`'s `drift.yaml` comment describes adding a plugin |
+
+**Verified:** `go vet`/`go test` (`TestSyncTidyResolvesANewlyRequiredPlugin` fails without the fix). The walkthrough followed verbatim outside the repo (code blocks extracted from the guide, the CLI and modules at `v0.27.0` from the `install-check.sh` rehearsal proxy): plugin module, `drift init` app, `replace`, `drift plugin sync --tidy`, `drift build xtool`, and `drift run android` showing "Hello from drift.yaml" on the API 36 emulator. hello-app in the repo: emulator and `drift build xtool`. Simulator (Xcode 27.1): with the app running, a URL the test plugin claims never reaches `DeepLinkHandler`, an unclaimed one does (`Received deep link ... source=open_url`). Not run: a launch URL, since `simctl openurl` raises an "Open in ...?" prompt and Xcode 27 removed the SimulatorKit `idb` needs to tap it; the launch path shares the same routing helper.
 
 ## Verification matrix (merge gate)
 
