@@ -119,7 +119,12 @@ Drift owns the request mechanism; permission kinds come from plugins. `Permissio
 Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files.
 
 - `ejected.go` checks the template calls that feed `DriftPlugins` and, on iOS, the `Drift/Plugins` package reference; the error names each missing call.
-- `lock.go`: after applying, `SyncEjectedLock` compares the ops with `.drift/plugins.lock.json` from the previous build (committed by the user). Files a removed plugin owned are deleted unless the user changed them; edits it made inside shared files (plist keys, manifest entries, Gradle lines) are listed once in a build error for the user to undo, since Drift cannot tell them from user edits.
+- `lock.go`: `ReadLock` reads `.drift/plugins.lock.json` from the previous build (committed by the user) before applying; paths in it must stay inside the project. After applying, `SyncEjectedLock` compares it with the current ops by what the project holds, not by op identity, so ops renamed or retargeted by a CLI upgrade are neither removals nor additions:
+  - a file the lock owned that no current op owns is deleted, unless the user changed it;
+  - an edit inside a shared file (plist keys, manifest entries, Gradle lines) whose key no current op has and which no current op makes is listed once in a build error for the user to undo, since Drift cannot tell it from user edits.
+- Keys exclude content, so a plugin upgrade is an update. A Gradle dependency is keyed by `Artifact()` (no version). The lock records the exact line each versioned Gradle op wrote (`line`); when the same plugin's op writes another line and the project still holds the old one verbatim, the mutator replaces it (`Lock.gradleReplacements`). Lines the user changed are left alone.
+- `Apply` never overwrites a file Drift did not write (`checkOwnedWrites`, `ForeignFileError`): an owned file that exists with other content is written only if the previous lock records that content. Managed builds pass no lock and start from a fresh scaffold, so a plugin colliding with a template file fails there too. Kotlin sources may not use `com.drift.runner`.
+- Every project write is atomic (`mutate.WriteFileAtomic`: a temporary file renamed into place), so an interrupted build never leaves a torn user file or lock.
 - Plugin values XML (`values/plugin_*.xml`) and the `Drift/Plugins` package are regenerated every build.
 
 ## Runtime side

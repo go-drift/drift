@@ -101,6 +101,12 @@ Plugins also edit shared files: `Info.plist`, `Runner.entitlements`, `AndroidMan
 
 When you remove a plugin, Drift deletes the files it owned (unless you changed them) and fails the next build once with a list of the edits it made inside shared files, such as an `Info.plist` key or a manifest permission. Drift cannot tell those apart from your own edits, so you remove them, or keep them if you still want them.
 
+When a plugin upgrade changes a Gradle dependency's version or a Gradle plugin's version, Drift updates the line it wrote in place. If you changed that line yourself, Drift leaves it and adds its own.
+
+Drift never overwrites a file it did not write. If a plugin would replace one of your files, or a plugin file you edited, the build fails and names each file: move yours aside (or undo your change) to let the plugin write it, or remove the plugin.
+
+If `.drift/plugins.lock.json` stops parsing (a merge conflict, say), resolve it, or delete it: Drift then treats plugin files as new, and refuses only those whose content differs from what the plugin writes.
+
 If an ejected project lacks the wiring plugins need (calls into `DriftPlugins`, the `Drift/Plugins` package reference), the build fails and names the file and call to restore. Compare with a freshly ejected project.
 
 ### Splash

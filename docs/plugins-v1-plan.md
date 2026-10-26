@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (6.1 done, see [6.1 status](#61-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (6.1 and 6.2 done, see [6.1 status](#61-status) and [6.2 status](#62-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -382,6 +382,19 @@ Done (`fddeba4`..`7118e69`). Decisions (2026-10-26):
 - **Re-checked at `bd08dd7`** (all four hold). Also: content in the lock key hits `add_intent_filter` too (its XML hash is the member); `apply_plugin` keys carry no version, but in an ejected project a version bump fails `ApplyGradleProjectPlugins` on every build (Drift's own earlier line reads as a user conflict); a key whose path changed leaks the old path; every mutator writes non-atomically, not only the lock; `TestSyncEjectedLockContentChangeIsNotRemoval` covers only an owner op.
 - **Done when:** a test ejects a project, upgrades a plugin version (lock unchanged, no "removed" error), renames an op type between two runs (nothing deleted), plants a user file at a plugin's path (build refuses with the path named), and interrupts a lock write (next build recovers).
 
+##### 6.2 status
+
+Done (`01a7136`..`596bd02`). Decisions (2026-10-26): removal follows what the project holds (paths, edits), not op identity; versioned Gradle lines Drift wrote are updated in place on a plugin upgrade (other shared-file edits are still never undone); the overwrite guard covers managed builds too (template collisions); a removed plugin's leftover edits still fail the build once.
+
+| Commit | Content |
+|--------|---------|
+| `01a7136` | `mutate.WriteFileAtomic`: every project write (seven `os.WriteFile` sites, the lock, the bridge source) is a temp file renamed into place |
+| `efb41ae` | `ReadLock` before `Apply` (paths confined to the project, recovery hint on a parse error); `SyncEjectedLock` deletes files no current op owns and lists edits whose key and text no current op has; intent filter edits name the filter |
+| `c51823f` | `Apply` refuses (`ForeignFileError`) to replace a file the previous lock does not record as Drift's, unchanged: a user file, an edited plugin file, a template file; Kotlin sources may not use `com.drift.runner` |
+| `596bd02` | Gradle dependency lock key is `Artifact()` (no version); the lock records each versioned Gradle line, and the same plugin's next version replaces it in place; plugins pinning different versions keep a line each |
+
+**Verified:** `go vet`/`go test` (tests for each Done-when: `TestEjectedPluginUpgradeUpdatesGradleVersionsInPlace`, `TestSyncEjectedLockRenamedOpIsNotRemoval`, `TestApplyRefusesToOverwriteAUserFile`, `TestSyncEjectedLockRecoversFromAFailedWrite`, plus `TestWriteFileAtomicKeepsOldContentWhenInterrupted`). Linux, ejected firebase-demo (scratch copy) on Android: the firebase plugin's `firebase-messaging` and `google-services` versions changed, the rebuild updated both lines in place with no error and Gradle built; editing the ejected `app/google-services.json` while the plugin's config changed refused the build naming it, and undoing the edit built. Managed splash-demo builds on Android and xtool. Not run: killing a real build mid-apply (the unit tests interrupt the rename).
+
 #### 6.3 iOS lifecycle
 
 **Splash**
@@ -433,6 +446,8 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 - **iOS `SaveFile` returns the temporary copy's path**, not where the user saved it (the share sheet does not report the destination). Use `UIDocumentPickerViewController(forExporting:)` to get the destination, or document that the path is not the saved file.
 - **Secure storage biometric prompt on a device.** Untested: the Simulator does not enforce keychain biometric access control.
 - **Optional hardware features.** Google Play infers required features from permissions (location permissions imply `android.hardware.location`; `RECORD_AUDIO` implies `android.hardware.microphone`), which hides the app from devices without them. A plugin cannot mark them optional: add an `android.manifest.add_uses_feature` op when one needs it.
+
+- **A permission's `max_sdk` change does not reach an existing declaration** in an ejected project: `ensurePermission` keeps the declaration it finds, so a plugin upgrade changing `max_sdk` leaves the old value.
 
 **Correctness, low severity**
 - **`theme` vs `android:theme` do not conflict.** `SetActivityAttr.Targets()` uses the raw attribute name, while `setNSAttr` adds the `android:` prefix; normalise in `Targets()`.
