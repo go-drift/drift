@@ -17,10 +17,11 @@ type permissionsBridge struct {
 	mu       sync.Mutex
 	calls    []recordedCall
 	handlers map[string]func(args map[string]any) (any, error)
-	// held lists methods that never reply, like a prompt the user has not
-	// answered.
-	held map[string]bool
 }
+
+// errNoReply, returned by a handler, makes the call wait forever for its
+// reply, like a prompt the user has not answered.
+var errNoReply = errors.New("test: native does not reply")
 
 type recordedCall struct {
 	Channel string
@@ -31,15 +32,12 @@ type recordedCall struct {
 func newPermissionsBridge() *permissionsBridge {
 	return &permissionsBridge{
 		handlers: map[string]func(args map[string]any) (any, error){},
-		held:     map[string]bool{},
 	}
 }
 
 // hold makes calls to method wait forever for their reply.
 func (b *permissionsBridge) hold(method string) {
-	b.mu.Lock()
-	b.held[method] = true
-	b.mu.Unlock()
+	b.on(method, func(map[string]any) (any, error) { return nil, errNoReply })
 }
 
 func (b *permissionsBridge) on(method string, fn func(args map[string]any) (any, error)) {
@@ -50,10 +48,7 @@ func (b *permissionsBridge) on(method string, fn func(args map[string]any) (any,
 
 func (b *permissionsBridge) InvokeMethod(channel, method string, args []byte, reply func([]byte, error)) {
 	data, err := b.answer(channel, method, args)
-	b.mu.Lock()
-	held := b.held[method]
-	b.mu.Unlock()
-	if !held {
+	if !errors.Is(err, errNoReply) {
 		reply(data, err)
 	}
 }
@@ -221,6 +216,82 @@ func TestRequest_CtxCanceled(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Request did not unblock after ctx cancel")
+	}
+}
+
+// startHeldRequest starts a camera Request whose prompt stays up, and
+// returns once it has reached native.
+func startHeldRequest(t *testing.T, bridge *permissionsBridge) {
+	t.Helper()
+	go func() { _, _ = NewPermission("camera").Request(context.Background()) }()
+	bridge.waitForCall(t, "request")
+}
+
+// requestWithin runs Request and fails the test unless it returns within a
+// second.
+func requestWithin(t *testing.T, ctx context.Context, p Permission) error {
+	t.Helper()
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := p.Request(ctx)
+		errCh <- err
+	}()
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(time.Second):
+		t.Fatal("Request blocked behind the open prompt")
+		return nil
+	}
+}
+
+// A Request made while the kind's prompt is up goes straight to native,
+// which joins it to that prompt, so its ctx still bounds the wait.
+func TestRequest_WhilePromptUp_HonoursCtx(t *testing.T) {
+	bridge := newPermissionsBridge()
+	bridge.hold("request")
+	setupPermissions(t, bridge)
+	startHeldRequest(t, bridge)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := requestWithin(t, ctx, NewPermission("camera")); !errors.Is(err, ErrTimeout) {
+		t.Errorf("err = %v, want ErrTimeout", err)
+	}
+
+	requests := 0
+	for _, c := range bridge.snapshot() {
+		if c.Method == "request" {
+			requests++
+		}
+	}
+	if requests != 2 {
+		t.Errorf("native saw %d requests, want 2 (Go must not hold the second back)", requests)
+	}
+}
+
+// A UI-thread Request made while the kind's prompt is up gets native's
+// in-place refusal instead of waiting for the prompt, which would deadlock
+// (the prompt's answer arrives on the UI thread).
+func TestRequest_WhilePromptUp_UIThreadRefused(t *testing.T) {
+	bridge := newPermissionsBridge()
+	var mu sync.Mutex
+	first := true
+	bridge.on("request", func(map[string]any) (any, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if first {
+			first = false
+			return nil, errNoReply
+		}
+		// Native refuses an async method called on the UI thread.
+		return nil, NewChannelError("blocks_ui_thread", "called on the UI thread")
+	})
+	setupPermissions(t, bridge)
+	startHeldRequest(t, bridge)
+
+	if err := requestWithin(t, context.Background(), NewPermission("camera")); !errors.Is(err, ErrBlocksUIThread) {
+		t.Errorf("err = %v, want ErrBlocksUIThread", err)
 	}
 }
 

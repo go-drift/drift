@@ -6,7 +6,10 @@
  * registerPermission) and by Drift itself (notifications, below); Go's
  * platform.Permission reaches a kind by name. "request" is an async method
  * that replies with the status once the user has answered, and reports it
- * on drift/permissions/changes.
+ * on drift/permissions/changes. One prompt per kind shows at a time: a
+ * request made while one is up waits for that prompt's answer. Drift runs
+ * the channel on the main thread, which serializes the bookkeeping, so Go
+ * holds no lock and a UI-thread call still fails at once (blocks_ui_thread).
  */
 package {{.PackageName}}
 
@@ -23,12 +26,16 @@ import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPermission
 import com.drift.runner.DriftPermissionStatus
 import com.drift.runner.DriftPluginHost
+import com.drift.runner.DriftResult
 import com.drift.runner.DriftRuntimePermission
 import com.drift.runner.driftCrash
 import java.util.concurrent.ConcurrentHashMap
 
 object PermissionHandler {
     private val kinds = ConcurrentHashMap<String, DriftPermission>()
+
+    /** The requests waiting on each kind's open prompt. Main thread only. */
+    private val prompts = HashMap<String, MutableList<DriftResult>>()
 
     /** Registers the permission [kind]; a second registration crashes. */
     fun register(kind: String, permission: DriftPermission) {
@@ -54,13 +61,27 @@ object PermissionHandler {
                     result.success(mapOf("status" to current.wire))
                     return@asyncMethod
                 }
+                prompts[kind]?.let { waiting ->
+                    waiting.add(result)
+                    return@asyncMethod
+                }
                 val activity = foreground() as? FragmentActivity
                     ?: throw DriftCallError("platform_unavailable", "no foreground Activity to show the $kind permission prompt")
                 @Suppress("UNCHECKED_CAST")
                 val options = (args as Map<String, Any?>) - "permission"
-                permission.request(activity, options) { status ->
-                    host.sendEvent("drift/permissions/changes", mapOf("permission" to kind, "status" to status.wire))
-                    result.success(mapOf("status" to status.wire))
+                val waiting = mutableListOf(result)
+                prompts[kind] = waiting
+                try {
+                    permission.request(activity, options) { status ->
+                        prompts.remove(kind, waiting)
+                        host.sendEvent("drift/permissions/changes", mapOf("permission" to kind, "status" to status.wire))
+                        waiting.forEach { it.success(mapOf("status" to status.wire)) }
+                    }
+                } catch (e: Exception) {
+                    // No request joined: this call holds the main thread.
+                    // The channel replies to result with e.
+                    prompts.remove(kind, waiting)
+                    throw e
                 }
             }
             method("shouldShowRationale") { args ->

@@ -25,6 +25,8 @@ type Permission interface {
 	//
 	// Request waits for the user, so call it from a goroutine: from the UI
 	// thread it fails with [ErrBlocksUIThread] before any prompt shows.
+	// One prompt per kind shows at a time: a Request made while one is up
+	// returns that prompt's answer.
 	//
 	// Cancellation: returns ErrCanceled or ErrTimeout on ctx cancellation;
 	// the native dialog stays up until the user answers it.

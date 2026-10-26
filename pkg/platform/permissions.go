@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"sync"
 
 	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
@@ -77,9 +76,6 @@ func NewPermission(kind string) Permission {
 // the high-level permission API does not expose ctx for them.
 type permission struct {
 	name string
-	// requestMu serializes requests for this kind, so one prompt shows at
-	// a time.
-	requestMu sync.Mutex
 }
 
 func newPermission(name string) *permission {
@@ -107,10 +103,13 @@ func (p *permission) Request(ctx context.Context) (PermissionResult, error) {
 // request asks native to request the permission, with kind-specific
 // options, and returns the status native replies with. Native replies once
 // the user has answered (or at once when no prompt is needed).
+//
+// Native shows one prompt per kind at a time: a request made while one is
+// up waits there for that prompt's answer. Native serializes on the main
+// thread rather than Go behind a lock, since a lock held across Invoke
+// would block a UI-thread caller (which the prompt's reply needs) and
+// ignore a waiting caller's ctx.
 func (p *permission) request(ctx context.Context, options map[string]any) (PermissionResult, error) {
-	p.requestMu.Lock()
-	defer p.requestMu.Unlock()
-
 	args := map[string]any{"permission": p.name}
 	maps.Copy(args, options)
 	result, err := permissionsChannel.Invoke(ctx, "request", args)

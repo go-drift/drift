@@ -5,7 +5,10 @@
 /// registerPermission) and by Drift itself (notifications, below); Go's
 /// platform.Permission reaches a kind by name. "request" is an async method
 /// that replies with the status once the user has answered, and reports it
-/// on drift/permissions/changes.
+/// on drift/permissions/changes. One prompt per kind shows at a time: a
+/// request made while one is up waits for that prompt's answer. Drift runs
+/// the channel on the main thread, which serializes the bookkeeping, so Go
+/// holds no lock and a UI-thread call still fails at once (blocks_ui_thread).
 
 import DriftPluginAPI
 import UIKit
@@ -14,6 +17,9 @@ import UserNotifications
 enum PermissionHandler {
     private static var kinds: [String: DriftPermission] = [:]
     private static let kindsLock = NSLock()
+
+    /// The requests waiting on each kind's open prompt. Main thread only.
+    private static var prompts: [String: [DriftResult]] = [:]
 
     /// Registers the permission `kind`; a second registration traps.
     static func register(_ kind: String, _ permission: DriftPermission) {
@@ -84,16 +90,26 @@ enum PermissionHandler {
         default:
             break
         }
+        if prompts[kind] != nil {
+            prompts[kind]?.append(result)
+            return
+        }
+        prompts[kind] = [result]
         var options = options
         options.removeValue(forKey: "permission")
         permission.request(options: options) { status in
             DispatchQueue.main.async {
+                guard let waiting = prompts.removeValue(forKey: kind) else {
+                    fatalError("drift: the \(kind) permission completed twice")
+                }
                 PlatformChannelManager.shared.sendEvent(channel: "drift/permissions/changes", data: [
                     "permission": kind,
                     "status": status.rawValue,
                 ])
+                for result in waiting {
+                    result.success(["status": status.rawValue])
+                }
             }
-            result.success(["status": status.rawValue])
         }
     }
 }
