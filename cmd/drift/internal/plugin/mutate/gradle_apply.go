@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
-	"strings"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
@@ -74,7 +73,7 @@ func ApplyGradleProjectPlugins(cs *Changeset, projectGradlePath string, ops []*p
 		if blk, err = findTopLevelBlock(src, "plugins"); err != nil {
 			return nil, err
 		}
-		declared := projectPluginVersions(blk.body(src))
+		declared := projectPluginVersions(blk.body(maskGroovy(src, false)))
 		var toInsert []string
 		for _, op := range ops {
 			if op.Version == "" {
@@ -109,39 +108,25 @@ var applyPluginIDRE = regexp.MustCompile(`apply\s+plugin\s*:\s*["']([^"']+)["']`
 var projectPluginRE = regexp.MustCompile(`id\s+["']([^"']+)["'](?:\s+version\s+["']([^"']+)["'])?`)
 
 // applyPluginIDsPresent returns the set of plugin ids with a live
-// `apply plugin:` line in src. Line comments are stripped first so a
-// commented-out occurrence (full-line or trailing) never suppresses
-// insertion.
+// `apply plugin:` line in src. Comments are masked first so a
+// commented-out occurrence never suppresses insertion.
 func applyPluginIDsPresent(src []byte) map[string]bool {
 	present := make(map[string]bool)
-	for line := range strings.SplitSeq(string(src), "\n") {
-		for _, m := range applyPluginIDRE.FindAllStringSubmatch(stripLineComment(line), -1) {
-			present[m[1]] = true
-		}
+	for _, m := range applyPluginIDRE.FindAllSubmatch(maskGroovy(src, false), -1) {
+		present[string(m[1])] = true
 	}
 	return present
 }
 
 // projectPluginVersions maps each plugin id declared in a plugins { } block
-// body to its declared version ("" when the declaration has no version).
+// body, comments masked, to its declared version ("" when the declaration
+// has no version).
 func projectPluginVersions(body string) map[string]string {
 	declared := make(map[string]string)
-	for line := range strings.SplitSeq(body, "\n") {
-		for _, m := range projectPluginRE.FindAllStringSubmatch(stripLineComment(line), -1) {
-			declared[m[1]] = m[2]
-		}
+	for _, m := range projectPluginRE.FindAllStringSubmatch(body, -1) {
+		declared[m[1]] = m[2]
 	}
 	return declared
-}
-
-// stripLineComment drops a trailing `//` comment. Pragmatic: it does not
-// understand `//` inside string literals, which the lines scanned here
-// (plugin declarations) never contain.
-func stripLineComment(line string) string {
-	if i := strings.Index(line, "//"); i >= 0 {
-		return line[:i]
-	}
-	return line
 }
 
 // insertAfterAndroidBlock returns src with lines inserted after the closing
@@ -151,17 +136,17 @@ func insertAfterAndroidBlock(src []byte, lines []string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	insertPoint := blk.closeIdx + 1
-	var b bytes.Buffer
-	b.Write(src[:insertPoint])
-	if insertPoint >= len(src) || src[insertPoint] != '\n' {
-		b.WriteByte('\n')
+	rest := blk.closeIdx + 1
+	if rest < len(src) && src[rest] == '\n' {
+		rest++
 	}
-	b.WriteByte('\n')
+	var b bytes.Buffer
+	b.Write(src[:blk.closeIdx+1])
+	b.WriteString("\n\n")
 	for _, line := range lines {
 		b.WriteString(line)
 		b.WriteByte('\n')
 	}
-	b.Write(src[insertPoint:])
+	b.Write(src[rest:])
 	return b.Bytes(), nil
 }

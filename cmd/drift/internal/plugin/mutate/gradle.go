@@ -108,14 +108,14 @@ func replaceBlockLines(src []byte, blk gradleBlock, stale map[string]string) []b
 
 // insertIntoDependenciesBlock inserts new lines at the end of the top-level
 // dependencies { ... } block, skipping any that are already byte-identical
-// (trimmed) inside the block. Returns the updated source.
+// (trimmed, comments ignored) inside the block. Returns the updated source.
 func insertIntoDependenciesBlock(src []byte, lines []string) ([]byte, error) {
 	blk, err := findTopLevelBlock(src, "dependencies")
 	if err != nil {
 		return nil, err
 	}
 	existing := make(map[string]bool)
-	for l := range strings.SplitSeq(blk.body(src), "\n") {
+	for l := range strings.SplitSeq(blk.body(maskGroovy(src, false)), "\n") {
 		existing[strings.TrimSpace(l)] = true
 	}
 	var toInsert []string
@@ -130,10 +130,10 @@ func insertIntoDependenciesBlock(src []byte, lines []string) ([]byte, error) {
 
 // ---- Groovy DSL helpers ---------------------------------------------------
 //
-// Shared by every build.gradle mutator. The scanning is deliberately
-// pragmatic: blocks are located by a column-0 opener and matched by brace
-// counting that does not understand strings or comments. That holds for the
-// scaffold templates, which are the only files these mutators edit.
+// Shared by every build.gradle mutator. Ejected projects run them on
+// user-owned files, so scanning skips comments and string literals
+// (maskGroovy): blocks are located by a column-0 opener and matched by
+// counting the braces that are code.
 
 // requireGroovyDSL errors with errKotlinDSL when a `.kts` sibling of a
 // `.gradle` path exists, so the error names the actual situation (Groovy
@@ -176,17 +176,18 @@ type gradleBlock struct {
 func (b gradleBlock) body(src []byte) string { return string(src[b.bodyStart:b.closeIdx]) }
 
 // findTopLevelBlock finds the first `name {` opener at column 0 and its
-// matching closing brace. Anchoring on column 0 skips nested blocks of the
-// same name.
+// matching closing brace, ignoring both inside comments and strings.
+// Anchoring on column 0 skips nested blocks of the same name.
 func findTopLevelBlock(src []byte, name string) (gradleBlock, error) {
+	code := maskGroovy(src, true)
 	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `\s*\{`)
-	loc := re.FindIndex(src)
+	loc := re.FindIndex(code)
 	if loc == nil {
 		return gradleBlock{}, fmt.Errorf("could not locate `%s {` block", name)
 	}
 	depth := 1
-	for i := loc[1]; i < len(src); i++ {
-		switch src[i] {
+	for i := loc[1]; i < len(code); i++ {
+		switch code[i] {
 		case '{':
 			depth++
 		case '}':
@@ -197,6 +198,72 @@ func findTopLevelBlock(src []byte, name string) (gradleBlock, error) {
 		}
 	}
 	return gradleBlock{}, fmt.Errorf("could not locate closing `}` of %s block", name)
+}
+
+// maskGroovy returns a copy of src with every byte of a comment, and with
+// maskStrings of a string literal (quotes included), replaced by a space.
+// Newlines are kept, so offsets and lines in the copy are those of src.
+//
+// Strings are '...', "..." and their triple-quoted forms, with backslash
+// escapes; a GString's ${...} is part of its string. Slashy strings
+// (/.../, $/.../$) are not recognised: they cannot be told from division
+// without parsing, and build files do not use them.
+func maskGroovy(src []byte, maskStrings bool) []byte {
+	out := bytes.Clone(src)
+	blank := func(from, to int) {
+		for k := from; k < to; k++ {
+			if out[k] != '\n' {
+				out[k] = ' '
+			}
+		}
+	}
+	for i := 0; i < len(src); {
+		end := i + 1
+		switch {
+		case bytes.HasPrefix(src[i:], []byte("//")):
+			end = indexFrom(src, i+2, "\n", 0)
+			blank(i, end)
+		case bytes.HasPrefix(src[i:], []byte("/*")):
+			end = indexFrom(src, i+2, "*/", len("*/"))
+			blank(i, end)
+		case src[i] == '\'' || src[i] == '"':
+			end = groovyStringEnd(src, i)
+			if maskStrings {
+				blank(i, end)
+			}
+		}
+		i = end
+	}
+	return out
+}
+
+// indexFrom returns the index of sep in src at or after from, plus skip,
+// or len(src) when sep does not occur.
+func indexFrom(src []byte, from int, sep string, skip int) int {
+	if j := bytes.Index(src[from:], []byte(sep)); j >= 0 {
+		return from + j + skip
+	}
+	return len(src)
+}
+
+// groovyStringEnd returns the index just past the string literal opening
+// at start. An unterminated single-line string ends at its line's end.
+func groovyStringEnd(src []byte, start int) int {
+	delim := src[start : start+1]
+	if triple := bytes.Repeat(delim, 3); bytes.HasPrefix(src[start:], triple) {
+		delim = triple
+	}
+	for j := start + len(delim); j < len(src); j++ {
+		switch {
+		case src[j] == '\\':
+			j++
+		case bytes.HasPrefix(src[j:], delim):
+			return j + len(delim)
+		case src[j] == '\n' && len(delim) == 1:
+			return j
+		}
+	}
+	return len(src)
 }
 
 // insertBeforeClose inserts lines immediately before the brace at closeIdx,

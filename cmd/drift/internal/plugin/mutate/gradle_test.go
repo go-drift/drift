@@ -170,3 +170,87 @@ android {
 		t.Errorf("error should name the missing dependencies block; got %v", err)
 	}
 }
+
+// An ejected app's build.gradle is the user's: braces, block names and
+// dependency lines inside comments and strings are not code, so edits land
+// where they would in the same file without them.
+const hostileGradle = `plugins {
+    id "com.android.application"
+}
+
+/*
+dependencies {
+    implementation "old:commented:1.0"
+}
+*/
+android {
+    namespace "com.example.app" // not "}" either
+    // a closing } in a comment
+    buildConfigField "String", "BRACES", '"}}{"'
+    defaultConfig {
+        manifestPlaceholders = [label: """multi
+line } string"""]
+    }
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    // implementation "androidx.core:core-ktx:1.12.0" }
+    /* implementation "com.example:unused:1.0" */
+}
+`
+
+func TestGradleMutatorsIgnoreCommentsAndStrings(t *testing.T) {
+	path := writeGradle(t, hostileGradle)
+	_, _, err := applyGradleAddDependencies(t, path, []*protocol.OpAndroidGradleAddDependency{
+		{Base: protocol.Base{Pkg: "p"}, Configuration: "implementation", Coord: "androidx.core:core-ktx:1.12.0"},
+		{Base: protocol.Base{Pkg: "p"}, Configuration: "implementation", Coord: "old:commented:1.0"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("add dependencies: %v", err)
+	}
+	if _, _, err := applyGradleApplyPlugins(t, path, []*protocol.OpAndroidGradleApplyPlugin{op("com.google.gms.google-services", "")}); err != nil {
+		t.Fatalf("apply plugins: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	want := strings.Replace(hostileGradle, `        manifestPlaceholders = [label: """multi
+line } string"""]
+    }
+}
+`, `        manifestPlaceholders = [label: """multi
+line } string"""]
+    }
+}
+
+apply plugin: "com.google.gms.google-services"
+`, 1)
+	want = strings.Replace(want, `    /* implementation "com.example:unused:1.0" */
+}`, `    /* implementation "com.example:unused:1.0" */
+    implementation "androidx.core:core-ktx:1.12.0"
+    implementation "old:commented:1.0"
+}`, 1)
+	if string(body) != want {
+		t.Errorf("got:\n%s\nwant:\n%s", body, want)
+	}
+}
+
+func TestMaskGroovy(t *testing.T) {
+	for _, tc := range []struct{ src, comments, all string }{
+		{`a // b }`, `a       `, `a       `},
+		{"a /* {\n} */ b", "a     \n     b", "a     \n     b"},
+		{`x "a}" 'b{' y`, `x "a}" 'b{' y`, `x           y`},
+		{`x "a\"}" y`, `x "a\"}" y`, `x        y`},
+		{`x """a"}""" y`, `x """a"}""" y`, `x           y`},
+		{`x "//" }`, `x "//" }`, `x      }`},
+		{`x '/*' }`, `x '/*' }`, `x      }`},
+		{"x 'open\n}", "x 'open\n}", "x      \n}"},
+		{"x /* open", "x        ", "x        "},
+	} {
+		if got := string(maskGroovy([]byte(tc.src), false)); got != tc.comments {
+			t.Errorf("maskGroovy(%q, false) = %q, want %q", tc.src, got, tc.comments)
+		}
+		if got := string(maskGroovy([]byte(tc.src), true)); got != tc.all {
+			t.Errorf("maskGroovy(%q, true) = %q, want %q", tc.src, got, tc.all)
+		}
+	}
+}
