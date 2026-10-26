@@ -18,6 +18,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.drift.runner.DriftActivityBinding
@@ -46,7 +47,11 @@ class DriftNotificationsPlugin : DriftPlugin {
                 null
             }
             method("cancelAll") { _ ->
-                Scheduled.all(context).forEach { cancel(context, it) }
+                // Shown notifications that will not fire again have left
+                // Scheduled; the shade still holds them.
+                val shown = context.getSystemService(NotificationManager::class.java)
+                    .activeNotifications.mapNotNull { shownID(it) }
+                (Scheduled.all(context) + shown).forEach { cancel(context, it) }
                 null
             }
             // Android has no app badge count; launchers show their own.
@@ -110,7 +115,7 @@ class DriftNotificationsPlugin : DriftPlugin {
             context.getSystemService(AlarmManager::class.java).cancel(it)
             it.cancel()
         }
-        NotificationManagerCompat.from(context).cancel(id, NOTIFICATION_TAG_ID)
+        NotificationManagerCompat.from(context).cancel(TAG_PREFIX + id, NOTIFICATION_TAG_ID)
         Scheduled.remove(context, id)
     }
 
@@ -152,9 +157,15 @@ class DriftNotificationsPlugin : DriftPlugin {
         // Posting needs POST_NOTIFICATIONS, which the app may not have; the
         // system then drops it, as it does for any app.
         try {
-            NotificationManagerCompat.from(context).notify(n.id, NOTIFICATION_TAG_ID, notification)
+            NotificationManagerCompat.from(context).notify(TAG_PREFIX + n.id, NOTIFICATION_TAG_ID, notification)
         } catch (_: SecurityException) {
         }
+    }
+
+    /** The ID of a shown notification if this plugin posted it, else null. */
+    private fun shownID(shown: StatusBarNotification): String? {
+        if (shown.id != NOTIFICATION_TAG_ID) return null
+        return shown.tag?.takeIf { it.startsWith(TAG_PREFIX) }?.removePrefix(TAG_PREFIX)
     }
 
     private fun isForeground(): Boolean {
@@ -169,8 +180,11 @@ class DriftNotificationsPlugin : DriftPlugin {
         private const val OPENED_CHANNEL = "drift/notifications/opened"
         private const val DEFAULT_CHANNEL = "drift_notifications"
         private const val DEFAULT_CHANNEL_NAME = "Notifications"
-        // Notifications are posted under their ID as the tag, with this id.
+        // Notifications are posted with this id and TAG_PREFIX plus their
+        // ID as the tag. The prefix tells them from the app's other posts:
+        // Firebase posts push notifications with id 0 and its own tags.
         private const val NOTIFICATION_TAG_ID = 0
+        private const val TAG_PREFIX = "com.drift.plugin.notifications/"
         private const val ACTION_DELIVER = "com.drift.plugin.notifications.DELIVER/"
         private const val ACTION_OPEN = "com.drift.plugin.notifications.OPEN/"
 
