@@ -2,7 +2,7 @@ module github.com/go-drift/drift/examples/plugins/hello
 
 go 1.24.0
 
-require github.com/go-drift/drift v0.26.1
+require github.com/go-drift/drift v0.27.0
 
 require (
 	golang.org/x/image v0.34.0 // indirect

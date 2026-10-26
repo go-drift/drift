@@ -2,15 +2,9 @@ module github.com/go-drift/drift/examples/splash-demo
 
 go 1.24.0
 
-require (
-	github.com/go-drift/drift v0.26.1
-	github.com/go-drift/drift/plugins/splash v0.26.1
-)
+require github.com/go-drift/drift v0.27.0
 
-replace (
-	github.com/go-drift/drift => ../..
-	github.com/go-drift/drift/plugins/splash => ../../plugins/splash
-)
+replace github.com/go-drift/drift => ../..
 
 require (
 	golang.org/x/image v0.34.0 // indirect

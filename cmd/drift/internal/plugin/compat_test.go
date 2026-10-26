@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/mod/semver"
+
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
@@ -106,6 +108,14 @@ func TestCheckPluginCompatSkips(t *testing.T) {
 	if err := checkPluginCompat("v0.28.0", []ConfiguredPlugin{p}, []*PackageInfo{{Module: &main}}); err != nil {
 		t.Errorf("plugin in the main module: %v", err)
 	}
+
+	// A first-party plugin is in drift itself, whose go.mod does not
+	// require drift: the bridge check covers it.
+	firstParty := ConfiguredPlugin{Package: protocol.DriftModulePath + "/plugins/splash/plugin"}
+	drift := &ModuleInfo{Path: protocol.DriftModulePath, Version: "v0.99.0", GoMod: filepath.Join(t.TempDir(), "missing.mod")}
+	if err := checkPluginCompat("v0.28.0", []ConfiguredPlugin{firstParty}, []*PackageInfo{{Module: drift}}); err != nil {
+		t.Errorf("first-party plugin: %v", err)
+	}
 }
 
 func TestCheckPluginCompatChecksLocalPlugins(t *testing.T) {
@@ -115,6 +125,20 @@ func TestCheckPluginCompatChecksLocalPlugins(t *testing.T) {
 	err := checkPluginCompat("v0.28.0", []ConfiguredPlugin{p}, []*PackageInfo{info})
 	if !strings.Contains(err.Error(), "example.com/p => ../p") {
 		t.Errorf("want skew naming the replaced module, got %v", err)
+	}
+}
+
+// TestHelloRequiresAServedPluginAPI keeps examples/plugins/hello, the
+// in-repo third-party plugin, usable with a release CLI: raising
+// templates.PluginAPIFloor must raise the drift its go.mod requires too.
+func TestHelloRequiresAServedPluginAPI(t *testing.T) {
+	mod := &ModuleInfo{Path: "github.com/go-drift/drift/examples/plugins/hello", GoMod: "../../../../examples/plugins/hello/go.mod"}
+	req, err := requiredDrift(mod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if semver.Compare(req, templates.PluginAPIFloor) < 0 {
+		t.Errorf("%s requires drift %s, older than templates.PluginAPIFloor %s", mod.GoMod, req, templates.PluginAPIFloor)
 	}
 }
 

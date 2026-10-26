@@ -76,8 +76,8 @@ func (e *VersionSkewError) Error() string {
 // checkPluginCompat returns a *VersionSkewError naming every plugin whose
 // required drift version the CLI cannot serve. cli is the CLI's release
 // version; empty (a development build) skips the check. Plugins in the main
-// module or in drift itself are skipped: the app's own drift requirement is
-// checked through the bridge (checkBridgeDrift).
+// module or in drift itself (first-party plugins) are skipped: the app's own
+// drift requirement is checked through the bridge (checkBridgeDrift).
 func checkPluginCompat(cli string, plugins []ConfiguredPlugin, infos []*PackageInfo) error {
 	if cli == "" {
 		return nil
