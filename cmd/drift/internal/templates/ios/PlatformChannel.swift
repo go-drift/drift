@@ -107,21 +107,30 @@ private let driftNativeMethodHandlerImpl: DriftNativeMethodHandler = { callID, c
 
 // MARK: - JSON Helpers
 
-/// Simple JSON codec for basic types.
+/// Why a value cannot cross a platform channel: some part of it is not
+/// JSON-like. `description` locates that part, as in `value.items[2]`.
+struct JsonEncodeError: Error, CustomStringConvertible {
+    let description: String
+}
+
+/// JSON codec for the values crossing a platform channel: nil, booleans,
+/// finite numbers, strings, lists and string-keyed maps. Mirrors the
+/// Android JsonCodec.
 final class JsonCodec {
-    func encode(_ value: Any?) -> Data {
-        let normalized = normalize(value)
-        // JSONSerialization requires top-level array/dict, so wrap primitives
-        if JSONSerialization.isValidJSONObject(normalized) {
-            return (try? JSONSerialization.data(withJSONObject: normalized, options: [])) ?? Data()
+    /// Encodes a JSON-like value, or fails naming the first part that is not.
+    func encode(_ value: Any?) -> Result<Data, JsonEncodeError> {
+        let normalized: Any
+        do {
+            normalized = try normalize(value, at: "value")
+        } catch {
+            return .failure(error)
         }
-        // For primitives, wrap in array then strip brackets
-        let wrapper = [normalized]
-        guard let data = try? JSONSerialization.data(withJSONObject: wrapper, options: []),
-              data.count >= 2 else {
-            return Data()
+        // normalize admits only what JSONSerialization writes, so this
+        // cannot raise its uncatchable invalid-object exception.
+        guard let data = try? JSONSerialization.data(withJSONObject: normalized, options: [.fragmentsAllowed]) else {
+            return .failure(JsonEncodeError(description: "value could not be serialized"))
         }
-        return data.subdata(in: 1..<data.count - 1)
+        return .success(data)
     }
 
     func decode(_ data: Data) -> Any? {
@@ -129,30 +138,56 @@ final class JsonCodec {
         return try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
     }
 
-    private func normalize(_ value: Any?) -> Any {
+    /// The JSONSerialization form of `value`, found at `path`.
+    private func normalize(_ value: Any?, at path: String) throws(JsonEncodeError) -> Any {
+        guard let value = value else { return NSNull() }
         switch value {
-        case nil:
+        case let optional as BoxedOptional:
+            return try normalize(optional.unboxed, at: path)
+        case is NSNull, is Void:
             return NSNull()
-        case let bool as Bool:
-            return bool
         case let number as NSNumber:
+            // A Bool bridges to a CFBoolean. Any other NSNumber is a number,
+            // even a 0 or 1 that `as Bool` would also match.
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return number
+            }
+            guard number.doubleValue.isFinite else {
+                throw JsonEncodeError(description: "\(path) is \(number), not a finite number")
+            }
             return number
         case let string as String:
             return string
         case let array as [Any]:
-            return array.map { normalize($0) }
-        case let dict as [String: Any]:
-            return dict.mapValues { normalize($0) }
+            var result: [Any] = []
+            result.reserveCapacity(array.count)
+            for (index, item) in array.enumerated() {
+                result.append(try normalize(item, at: "\(path)[\(index)]"))
+            }
+            return result
         case let dict as [AnyHashable: Any]:
             var result: [String: Any] = [:]
-            for (key, val) in dict {
-                result[String(describing: key)] = normalize(val)
+            for (key, item) in dict {
+                let name = String(describing: key)
+                result[name] = try normalize(item, at: "\(path).\(name)")
             }
             return result
         default:
-            return NSNull()
+            throw JsonEncodeError(
+                description: "\(path) is a \(type(of: value)); values must be null, booleans, finite numbers, strings, lists or string-keyed maps"
+            )
         }
     }
+}
+
+/// An Optional boxed in `Any`, such as a `String?` value in a dictionary
+/// literal, which `normalize` unwraps.
+private protocol BoxedOptional {
+    var unboxed: Any? { get }
+}
+
+extension Optional: BoxedOptional {
+    fileprivate var unboxed: Any? { map { $0 } }
 }
 
 // MARK: - Platform Channel Manager
@@ -259,7 +294,11 @@ final class PlatformChannelManager: DriftPluginHost {
     ) {
         let codec = self.codec
         let answer: (Result<Any?, Error>) -> Void = { outcome in
-            reply(outcome.map { codec.encode($0) })
+            reply(outcome.flatMap { value in
+                codec.encode(value).mapError { error -> Error in
+                    self.callError(Self.notEncodable, self.notEncodableMessage("the reply from \(channel).\(method)", error))
+                }
+            })
         }
         channelsLock.lock()
         let registered = channels[channel]
@@ -313,6 +352,16 @@ final class PlatformChannelManager: DriftPluginHost {
         NSError(domain: code, code: 0, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
+    /// The code Go receives when a reply or an event is not JSON-like.
+    private static let notEncodable = "not_encodable"
+
+    /// Why `what` (a reply or an event) cannot reach Go, logged.
+    private func notEncodableMessage(_ what: String, _ error: JsonEncodeError) -> String {
+        let message = "drift: \(what) is not JSON-like: \(error)"
+        DriftLog.platform.error("\(message)")
+        return message
+    }
+
     /// Sends an event to Go listeners. Also fans out to any native-side
     /// observers registered via `observeEvent(_:handler:)`, so plugins can
     /// react to events originating from other native modules (e.g. the
@@ -320,11 +369,16 @@ final class PlatformChannelManager: DriftPluginHost {
     /// `DriftRenderer`).
     func sendEvent(channel: String, data: Any?) {
         notifyEventObservers(channel: channel, data: data)
-        let encoded = codec.encode(data)
-        encoded.withUnsafeBytes { ptr in
-            channel.withCString { channelPtr in
-                DriftPlatformHandleEvent(channelPtr, ptr.baseAddress, Int32(encoded.count))
+        switch codec.encode(data) {
+        case .success(let encoded):
+            encoded.withUnsafeBytes { ptr in
+                channel.withCString { channelPtr in
+                    DriftPlatformHandleEvent(channelPtr, ptr.baseAddress, Int32(encoded.count))
+                }
             }
+        case .failure(let error):
+            let message = notEncodableMessage("an event on \(channel)", error)
+            sendEventError(channel: channel, code: Self.notEncodable, message: message)
         }
     }
 
@@ -887,7 +941,11 @@ private func encodeErrorPayload(_ error: Error) -> String {
     if !details.isEmpty {
         payload["details"] = details
     }
-    let codec = JsonCodec()
-    let data = codec.encode(payload)
-    return String(data: data, encoding: .utf8) ?? nsError.localizedDescription
+    switch JsonCodec().encode(payload) {
+    case .success(let data):
+        return String(decoding: data, as: UTF8.self)
+    case .failure(let encodeError):
+        // The payload holds only strings and an Int.
+        preconditionFailure("drift: error payload is not JSON-like: \(encodeError)")
+    }
 }

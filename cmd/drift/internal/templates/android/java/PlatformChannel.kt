@@ -163,12 +163,7 @@ object PlatformChannelManager : DriftPluginHost {
         val replied = AtomicBoolean(false)
         val reply = { value: Any?, error: Exception? ->
             if (replied.compareAndSet(false, true)) {
-                if (error != null) {
-                    Log.e("PlatformChannel", "Error handling $channel.$method: $error")
-                    NativeBridge.platformReply(callId, null, errorPayload(error))
-                } else {
-                    NativeBridge.platformReply(callId, codec.encode(value), null)
-                }
+                replyNative(callId, channel, method, value, error)
             }
         }
         try {
@@ -177,6 +172,17 @@ object PlatformChannelManager : DriftPluginHost {
             // A built-in handler or argument decoding threw before replying.
             reply(null, e)
         }
+    }
+
+    /** Sends a call's one reply to Go: [error], or [value] encoded. Never throws. */
+    private fun replyNative(callId: Long, channel: String, method: String, value: Any?, error: Exception?) {
+        val failure = error ?: when (val encoded = codec.encode(value)) {
+            is JsonCodec.Encoded.Bytes -> return NativeBridge.platformReply(callId, encoded.data, null)
+            is JsonCodec.Encoded.Unencodable ->
+                DriftCallError(NOT_ENCODABLE, notEncodableMessage("the reply from $channel.$method", encoded))
+        }
+        Log.e("PlatformChannel", "Error handling $channel.$method: $failure")
+        NativeBridge.platformReply(callId, null, errorPayload(failure))
     }
 
     /**
@@ -267,8 +273,14 @@ object PlatformChannelManager : DriftPluginHost {
      */
     override fun sendEvent(channel: String, data: Any?) {
         notifyEventObservers(channel, data)
-        val encoded = codec.encode(data)
-        NativeBridge.platformHandleEvent(channel, encoded, encoded.size)
+        when (val encoded = codec.encode(data)) {
+            is JsonCodec.Encoded.Bytes -> NativeBridge.platformHandleEvent(channel, encoded.data, encoded.data.size)
+            is JsonCodec.Encoded.Unencodable -> {
+                val message = notEncodableMessage("an event on $channel", encoded)
+                Log.e("PlatformChannel", message)
+                sendEventError(channel, NOT_ENCODABLE, message)
+            }
+        }
         onFrameNeeded?.invoke()
     }
 
@@ -333,6 +345,13 @@ object PlatformChannelManager : DriftPluginHost {
         NativeBridge.platformHandleEventDone(channel)
     }
 
+    /** The code Go receives when a reply or an event is not JSON-like. */
+    private const val NOT_ENCODABLE = "not_encodable"
+
+    /** Why [what] (a reply or an event) cannot reach Go. */
+    private fun notEncodableMessage(what: String, encoded: JsonCodec.Encoded.Unencodable) =
+        "drift: $what is not JSON-like: ${encoded.reason}"
+
     /** Encodes a failed call's exception as the JSON error payload Go decodes. */
     private fun errorPayload(e: Exception): String {
         val code = when (e) {
@@ -349,7 +368,11 @@ object PlatformChannelManager : DriftPluginHost {
         if (details != null && details.isNotEmpty()) {
             payload["details"] = details
         }
-        return String(codec.encode(payload), Charsets.UTF_8)
+        return when (val encoded = codec.encode(payload)) {
+            is JsonCodec.Encoded.Bytes -> String(encoded.data, Charsets.UTF_8)
+            // The payload holds only strings.
+            is JsonCodec.Encoded.Unencodable -> error("drift: error payload is not JSON-like: ${encoded.reason}")
+        }
     }
 
     private fun registerBuiltInChannels() {
@@ -793,19 +816,38 @@ object URLLauncherHandler {
 // MARK: - JSON Implementation
 
 /**
- * Simple JSON codec for basic types.
+ * JSON codec for the values crossing a platform channel: null, booleans,
+ * finite numbers, strings, lists and string-keyed maps. Mirrors the iOS
+ * JsonCodec.
  */
 object JsonCodec {
-    fun encode(value: Any?): ByteArray {
-        val jsonValue = toJson(value)
+    /** The outcome of [encode]. */
+    sealed interface Encoded {
+        class Bytes(val data: ByteArray) : Encoded
+
+        /** Some part of the value is not JSON-like; [reason] locates it, as in `value.items[2]`. */
+        class Unencodable(val reason: String) : Encoded
+    }
+
+    /** Thrown inside [toJson] only, carrying [Encoded.Unencodable.reason]. */
+    private class NotJsonLike(val reason: String) : Exception(reason)
+
+    /** Encodes a JSON-like value, or fails naming the first part that is not. */
+    fun encode(value: Any?): Encoded {
+        val jsonValue = try {
+            toJson(value, "value")
+        } catch (e: NotJsonLike) {
+            return Encoded.Unencodable(e.reason)
+        }
+        // toJson admits only finite numbers, so org.json cannot refuse these.
         val jsonString = when (jsonValue) {
             JSONObject.NULL -> "null"
             is JSONObject, is JSONArray -> jsonValue.toString()
             is String -> JSONObject.quote(jsonValue)
             is Number, is Boolean -> jsonValue.toString()
-            else -> "null"
+            else -> error("drift: JsonCodec.toJson returned a ${jsonValue.javaClass.name}")
         }
-        return jsonString.toByteArray(Charsets.UTF_8)
+        return Encoded.Bytes(jsonString.toByteArray(Charsets.UTF_8))
     }
 
     fun decode(data: ByteArray): Any? {
@@ -815,23 +857,37 @@ object JsonCodec {
         return fromJson(parsed)
     }
 
-    private fun toJson(value: Any?): Any? {
+    /** The org.json form of [value], found at [path]. */
+    private fun toJson(value: Any?, path: String): Any {
         return when (value) {
-            null -> JSONObject.NULL
-            is JSONObject, is JSONArray -> value
+            null, Unit, JSONObject.NULL -> JSONObject.NULL
+            // Rebuilt to check its numbers: a JSONArray accepts NaN.
+            is JSONObject, is JSONArray -> toJson(fromJson(value), path)
+            is Double, is Float -> {
+                if (!(value as Number).toDouble().isFinite()) {
+                    throw NotJsonLike("$path is $value, not a finite number")
+                }
+                value
+            }
             is Boolean, is Number, is String -> value
             is Map<*, *> -> {
                 val obj = JSONObject()
                 for ((key, item) in value) {
                     if (key != null) {
-                        obj.put(key.toString(), toJson(item))
+                        obj.put(key.toString(), toJson(item, "$path.$key"))
                     }
                 }
                 obj
             }
-            is Iterable<*> -> JSONArray().also { arr -> value.forEach { arr.put(toJson(it)) } }
-            is Array<*> -> JSONArray().also { arr -> value.forEach { arr.put(toJson(it)) } }
-            else -> JSONObject.NULL
+            is Iterable<*> -> JSONArray().also { arr ->
+                value.forEachIndexed { i, item -> arr.put(toJson(item, "$path[$i]")) }
+            }
+            is Array<*> -> JSONArray().also { arr ->
+                value.forEachIndexed { i, item -> arr.put(toJson(item, "$path[$i]")) }
+            }
+            else -> throw NotJsonLike(
+                "$path is a ${value.javaClass.name}; values must be null, booleans, finite numbers, strings, lists or string-keyed maps"
+            )
         }
     }
 

@@ -226,7 +226,7 @@ func (doubleReplyBridge) StopEventStream(string) error  { return nil }
 // Native refuses an async method called from the UI thread with a wire
 // code; Go callers match it by sentinel.
 func TestChannelErrorMatchesStandardSentinels(t *testing.T) {
-	for _, sentinel := range []error{ErrBlocksUIThread, ErrReplyDropped, ErrMethodNotFound} {
+	for _, sentinel := range []error{ErrBlocksUIThread, ErrReplyDropped, ErrMethodNotFound, ErrNotEncodable} {
 		err := fmt.Errorf("invoke: %w", AsChannelError(sentinel))
 		if !errors.Is(err, sentinel) {
 			t.Errorf("native error %v does not match %v", err, sentinel)
@@ -276,5 +276,28 @@ func TestInvoke_BackgroundCtx(t *testing.T) {
 	}
 	if got := bridge.callCount(); got != 1 {
 		t.Errorf("bridge call count = %d, want 1", got)
+	}
+}
+
+// Native reports an event it cannot encode (a NaN, say) as a stream error
+// with the not_encodable code instead of crashing or dropping it silently.
+func TestHandleEventError_NotEncodableMatchesSentinel(t *testing.T) {
+	t.Cleanup(ResetForTest)
+	ch := NewEventChannel("drift/test/not_encodable")
+	var got error
+	ch.Listen(EventHandler{
+		OnEvent: func(data any) { t.Errorf("OnEvent(%v), want an error", data) },
+		OnError: func(err error) { got = err },
+	})
+
+	const message = "drift: an event on drift/test/not_encodable is not JSON-like: value.speed is NaN, not a finite number"
+	if err := HandleEventError("drift/test/not_encodable", "not_encodable", message); err != nil {
+		t.Fatalf("HandleEventError: %v", err)
+	}
+	if !errors.Is(got, ErrNotEncodable) {
+		t.Fatalf("OnError got %v, want ErrNotEncodable", got)
+	}
+	if !strings.Contains(got.Error(), "value.speed is NaN") {
+		t.Errorf("error %q lost native's reason", got)
 	}
 }

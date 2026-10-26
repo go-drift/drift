@@ -94,7 +94,8 @@ public final class DriftResult {
         }
     }
 
-    /// Replies with a JSON-encodable value (or nil).
+    /// Replies with a JSON-like value (or nil). Any other value fails the
+    /// call with `not_encodable`.
     public func success(_ value: Any?) {
         submit(.success(value))
     }

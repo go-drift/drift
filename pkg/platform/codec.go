@@ -79,6 +79,14 @@ var (
 	// without answering it, a bug in the native handler.
 	ErrReplyDropped = errors.New("native handler dropped the call without replying")
 
+	// ErrNotEncodable indicates native produced a reply or an event that
+	// is not JSON-like (a NaN, an Infinity, or a type outside null,
+	// booleans, numbers, strings, lists and string-keyed maps), a bug in
+	// the native handler. A method call fails with it; an event stream
+	// delivers it to OnError in place of the event. The message names the
+	// call or channel and the offending part of the value.
+	ErrNotEncodable = errors.New("native value is not JSON-like")
+
 	// ErrPermissionNotRegistered indicates no native code registered the
 	// permission kind: the plugin providing it is missing from drift.yaml,
 	// or not configured for that kind.
@@ -103,6 +111,7 @@ var channelErrorCodes = map[error]string{
 	ErrViewTypeNotFound:    "view_type_not_found",
 	ErrBlocksUIThread:      "blocks_ui_thread",
 	ErrReplyDropped:        "reply_dropped",
+	ErrNotEncodable:        "not_encodable",
 
 	ErrPermissionNotRegistered: "permission_not_registered",
 	ErrPermissionNotDeclared:   "permission_not_declared",

@@ -100,6 +100,7 @@ Method calls cross as callbacks keyed by call ID. Go starts the call on the call
 - Plugin channels declare each method's reply kind (`DriftChannel`). `method` returns its reply: in place on the main thread, otherwise posted there. `asyncMethod` replies through `DriftResult`; called on the main thread it fails with `blocks_ui_thread` before running, since Go is blocking the main thread. So Go never waits on the main thread.
 - A `DriftResult` released without a reply answers `reply_dropped` (iOS `deinit`, Android `PhantomReference` reaper). A second reply crashes on both platforms.
 - Native error codes match Go sentinels under `errors.Is` (`ChannelError.Is`, `pkg/platform/codec.go`).
+- Native encoding is total: each `JsonCodec.encode` returns the bytes or why the value is not JSON-like (NaN, Infinity, an unsupported type). Every reply passes through one encode point (iOS `handleMethodCall`'s `answer`, Android `replyNative`), so an unencodable reply answers `not_encodable` instead of hanging Go or raising an uncatchable exception; an unencodable event goes to `DriftPlatformHandleEventError` with the same code. iOS tells booleans from numbers by `CFBoolean`, since an `NSNumber` 0 or 1 also matches `as Bool`.
 
 ## Permissions
 

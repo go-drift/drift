@@ -89,7 +89,7 @@ class DriftResult internal constructor(
         DroppedResults.watch(this, reply)
     }
 
-    /** Replies with a JSON-encodable value (or null). */
+    /** Replies with a JSON-like value (or null). Any other value fails the call with `not_encodable`. */
     fun success(value: Any?) = reply.submit(value, null)
 
     /** Replies with an error; Go receives it as the call's error. */
