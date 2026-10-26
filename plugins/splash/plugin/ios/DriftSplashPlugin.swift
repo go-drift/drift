@@ -3,14 +3,16 @@
 /// The splash plugin's native half, driven by DriftPlugins on the main
 /// thread:
 ///   1. register: the `drift/splash` channel (the Go runtime's Preserve and
-///      Remove), the `drift/rendering/frame_events` observer (`first_frame`:
-///      the app has drawn content) and the max_duration_ms timer, after
-///      which Preserve no longer holds the splash.
-///      Once per process.
+///      Remove) and the `drift/rendering/frame_events` observer
+///      (`first_frame`: the app has drawn content). Once per process.
 ///   2. attach: install the overlay on the binding's overlay view, unless
 ///      the splash may already go. DriftViewController attaches before its
 ///      window is visible, so the overlay takes over from the launch screen
-///      without a flash.
+///      without a flash. The first attach starts the timers: after
+///      max_duration_ms Preserve no longer holds the splash, and at the
+///      ceiling it goes whatever its state. They count from here, not from
+///      launch, because a process launched in the background (a silent
+///      push) may show its window much later.
 ///   3. detach: drop the overlay with the view.
 ///
 /// Dismissal is state, not an event: every input calls reconcile(), so an
@@ -31,13 +33,20 @@ public final class DriftSplashPlugin: DriftPlugin {
     private var contentShown = false
     /// max_duration_ms has passed: Preserve no longer holds the splash.
     private var timedOut = false
+    /// The ceiling has passed: the splash goes even without content.
+    private var ceilingReached = false
+    /// The first attach has started the timers.
+    private var timersStarted = false
     /// The splash has gone for this process and never comes back.
     private var dismissed = false
     private var overlay: DriftSplashOverlayView?
 
-    /// The splash always waits for content (a slow App.OnInit keeps it up,
-    /// as Drift promises); the timeout only overrides a missed Remove.
-    private var dismissible: Bool { contentShown && (preserveCount == 0 || timedOut) }
+    /// The splash waits for content (a slow App.OnInit keeps it up) and the
+    /// timeout overrides only a missed Remove; the ceiling overrides both,
+    /// so a lost first_frame cannot hide the app for good.
+    private var dismissible: Bool {
+        ceilingReached || contentShown && (preserveCount == 0 || timedOut)
+    }
 
     public init() {}
 
@@ -64,17 +73,10 @@ public final class DriftSplashPlugin: DriftPlugin {
             contentShown = true
             reconcile()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.maxDurationMs)) { [self] in
-            timedOut = true
-            guard !dismissed, preserveCount > 0 else { return }
-            os_log("splash held past max_duration_ms=%d by %d Preserve without Remove; ignoring them",
-                   log: splashLog, type: .error,
-                   DriftSplashConfig.maxDurationMs, preserveCount)
-            reconcile()
-        }
     }
 
     public func attach(_ binding: DriftViewBinding) {
+        startTimers()
         guard !dismissed else { return }
         if dismissible {
             dismissed = true
@@ -88,6 +90,27 @@ public final class DriftSplashPlugin: DriftPlugin {
     public func detach() {
         overlay?.removeFromSuperview()
         overlay = nil
+    }
+
+    private func startTimers() {
+        guard !timersStarted else { return }
+        timersStarted = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.maxDurationMs)) { [self] in
+            timedOut = true
+            guard !dismissed, preserveCount > 0 else { return }
+            os_log("splash held past max_duration_ms=%d by %d Preserve without Remove; ignoring them",
+                   log: splashLog, type: .error,
+                   DriftSplashConfig.maxDurationMs, preserveCount)
+            reconcile()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(DriftSplashConfig.ceilingMs)) { [self] in
+            ceilingReached = true
+            guard !dismissed else { return }
+            os_log("splash still up %d ms after the window appeared (first frame drawn: %{public}@); dismissing it",
+                   log: splashLog, type: .error,
+                   DriftSplashConfig.ceilingMs, contentShown ? "yes" : "no")
+            reconcile()
+        }
     }
 
     /// Dismisses the splash once it may go. Fades the overlay if attached;

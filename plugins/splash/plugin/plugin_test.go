@@ -367,3 +367,20 @@ func TestBuild_MaxDuration(t *testing.T) {
 		t.Error("max_duration_ms 0 accepted")
 	}
 }
+
+// The ceiling is the same on both platforms: at least 30 s, and never
+// shorter than max_duration_ms, so it cannot cut Preserve short.
+func TestBuild_Ceiling(t *testing.T) {
+	for config, want := range map[string]string{
+		"image: assets/splash.png\n":                         "30000",
+		"image: assets/splash.png\nmax_duration_ms: 45000\n": "45000",
+	} {
+		ops := runBuild(t, config, "assets/splash.png")
+		if swift := iosSource(ops, "SplashConfig.swift"); !strings.Contains(swift, "ceilingMs = "+want) {
+			t.Errorf("%q: SplashConfig.swift lacks ceilingMs = %s:\n%s", config, want, swift)
+		}
+		if kt := kotlinSource(ops, "SplashConfig.kt"); !strings.Contains(kt, "CEILING_MS: Int = "+want) {
+			t.Errorf("%q: SplashConfig.kt lacks CEILING_MS = %s:\n%s", config, want, kt)
+		}
+	}
+}

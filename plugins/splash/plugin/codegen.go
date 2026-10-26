@@ -73,12 +73,14 @@ func generateSplashConfigSwift(cfg resolvedConfig) string {
 		Width, Height           string
 		FadeDurationMs          int
 		MaxDurationMs           int
+		CeilingMs               int
 	}{
 		Red: component(c.R), Green: component(c.G), Blue: component(c.B), Alpha: component(c.A),
 		Width:          formatLength(cfg.ImageSize.Width),
 		Height:         formatLength(cfg.ImageSize.Height),
 		FadeDurationMs: cfg.FadeDurationMs,
 		MaxDurationMs:  cfg.MaxDurationMs,
+		CeilingMs:      cfg.CeilingMs,
 	})
 }
 
@@ -86,10 +88,11 @@ func generateSplashConfigSwift(cfg resolvedConfig) string {
 // SplashConfig.swift.
 func generateSplashConfigKotlin(cfg resolvedConfig) string {
 	return renderTemplate(tmplKotlinCfg, struct {
-		FadeDurationMs, MaxDurationMs int
+		FadeDurationMs, MaxDurationMs, CeilingMs int
 	}{
 		FadeDurationMs: cfg.FadeDurationMs,
 		MaxDurationMs:  cfg.MaxDurationMs,
+		CeilingMs:      cfg.CeilingMs,
 	})
 }
 

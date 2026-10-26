@@ -19,8 +19,9 @@ type Config struct {
 	BackgroundColor string `yaml:"background_color" drift:"default=#FFFFFF,hex"`
 	FadeDurationMs  int    `yaml:"fade_duration_ms" drift:"default=200"`
 	// MaxDurationMs is a safety net for a Preserve never matched by Remove:
-	// after this long from launch, Preserve no longer holds the splash. It
-	// still waits for the app's first frame, however long App.OnInit runs.
+	// this long after the app's window appears, Preserve no longer holds
+	// the splash. It still waits for the app's first frame, up to the
+	// ceiling (ceilingMs).
 	MaxDurationMs int      `yaml:"max_duration_ms" drift:"default=10000"`
 	Android       *Android `yaml:"android,omitempty"`
 }
@@ -44,12 +45,28 @@ type resolvedConfig struct {
 	BackgroundColor driftplugin.Color
 	FadeDurationMs  int
 	MaxDurationMs   int
-	AndroidIcon     []byte
+	// CeilingMs is how long after the app's window appears the splash goes
+	// whatever its state (ceilingMs).
+	CeilingMs   int
+	AndroidIcon []byte
 	// AndroidIconBackground is nil when no icon background is configured.
 	AndroidIconBackground *driftplugin.Color
 }
 
 type size struct{ Width, Height float64 }
+
+// minCeilingMs is the least time the splash can stay up.
+const minCeilingMs = 30_000
+
+// ceilingMs is when, after the app's window appears, the splash goes even
+// without the app's first frame: a safety net for a first_frame the
+// renderer never sent (a frame dropped with nothing scheduled after it),
+// which would otherwise hide the app for good. At least maxDurationMs, so
+// it never cuts Preserve short; an App.OnInit slower than it shows Drift's
+// background instead of the splash.
+func ceilingMs(maxDurationMs int) int {
+	return max(minCeilingMs, maxDurationMs)
+}
 
 // resolve reads and parses cfg (already schema-checked and defaulted by the
 // bridge: required fields present, hex colours and asset paths valid).
@@ -85,6 +102,7 @@ func resolve(ctx *driftplugin.BuildCtx, cfg Config) (resolvedConfig, error) {
 		BackgroundColor: bg,
 		FadeDurationMs:  cfg.FadeDurationMs,
 		MaxDurationMs:   cfg.MaxDurationMs,
+		CeilingMs:       ceilingMs(cfg.MaxDurationMs),
 	}
 	out.AndroidIcon = img
 	if a := cfg.Android; a != nil {
