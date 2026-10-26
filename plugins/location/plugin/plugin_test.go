@@ -95,25 +95,109 @@ func TestBuildAndroid(t *testing.T) {
 	}
 }
 
-// Always adds the background permission and its usage string; nothing
-// else does (Google Play policy).
-func TestBuildAlways(t *testing.T) {
-	ios := plistStrings(mustBuild(t, "ios", withAlways))
-	if ios["NSLocationAlwaysAndWhenInUseUsageDescription"] != "Tracks runs in the background." {
-		t.Errorf("Always usage string = %q", ios["NSLocationAlwaysAndWhenInUseUsageDescription"])
+func backgroundModes(ops []protocol.Op) []string {
+	var modes []string
+	for _, op := range ops {
+		if o, ok := op.(*protocol.OpPlistAppendArrayItem); ok && o.File == protocol.PlistInfo && o.Key == "UIBackgroundModes" {
+			modes = append(modes, o.Value)
+		}
 	}
-	if got := permissions(mustBuild(t, "android", withAlways)); !slices.Contains(got, "android.permission.ACCESS_BACKGROUND_LOCATION") {
-		t.Errorf("permissions = %v, want ACCESS_BACKGROUND_LOCATION", got)
+	return modes
+}
+
+func services(ops []protocol.Op) []string {
+	var xml []string
+	for _, op := range ops {
+		if o, ok := op.(*protocol.OpAndroidManifestAddService); ok {
+			xml = append(xml, o.XML)
+		}
+	}
+	return xml
+}
+
+func androidStrings(ops []protocol.Op) map[string]string {
+	values := map[string]string{}
+	for _, op := range ops {
+		if o, ok := op.(*protocol.OpAndroidStringSet); ok {
+			values[o.Name] = o.Value
+		}
+	}
+	return values
+}
+
+// Without always:, nothing for the background is declared (App Review,
+// Google Play policy).
+func TestBuildWithoutAlwaysDeclaresNoBackground(t *testing.T) {
+	if got := backgroundModes(mustBuild(t, "ios", whenInUse)); len(got) != 0 {
+		t.Errorf("UIBackgroundModes = %v, want none", got)
+	}
+	android := mustBuild(t, "android", whenInUse)
+	if got := services(android); len(got) != 0 {
+		t.Errorf("services = %v, want none", got)
+	}
+	if got := androidStrings(android); len(got) != 0 {
+		t.Errorf("strings = %v, want none", got)
+	}
+}
+
+// Always adds the Always usage string and the location background mode on
+// iOS: background updates need both, and the native half checks for them.
+func TestBuildAlwaysIOS(t *testing.T) {
+	ops := mustBuild(t, "ios", withAlways)
+	if got := plistStrings(ops)["NSLocationAlwaysAndWhenInUseUsageDescription"]; got != "Tracks runs in the background." {
+		t.Errorf("Always usage string = %q", got)
+	}
+	// Appended, so other plugins' modes (remote-notification) merge.
+	if got := backgroundModes(ops); !slices.Equal(got, []string{"location"}) {
+		t.Errorf("UIBackgroundModes = %v, want [location]", got)
+	}
+}
+
+// Always adds, on Android, the background permission and the foreground
+// service that keeps background updates running, with the permissions
+// Android 14+ needs to start it and its notification's strings.
+func TestBuildAlwaysAndroid(t *testing.T) {
+	ops := mustBuild(t, "android", withAlways)
+	if got := permissions(ops); !slices.Equal(got, []string{
+		"android.permission.ACCESS_FINE_LOCATION",
+		"android.permission.ACCESS_COARSE_LOCATION",
+		"android.permission.ACCESS_BACKGROUND_LOCATION",
+		"android.permission.FOREGROUND_SERVICE",
+		"android.permission.FOREGROUND_SERVICE_LOCATION",
+		"android.permission.POST_NOTIFICATIONS",
+	}) {
+		t.Errorf("permissions = %v", got)
+	}
+	svc := services(ops)
+	if len(svc) != 1 ||
+		!strings.Contains(svc[0], `android:name="com.drift.plugin.location.DriftLocationService"`) ||
+		!strings.Contains(svc[0], `android:foregroundServiceType="location"`) ||
+		!strings.Contains(svc[0], `android:exported="false"`) {
+		t.Errorf("services = %v, want DriftLocationService of type location, not exported", svc)
+	}
+	if got := androidStrings(ops); got[notificationTitleString] != "Using your location" ||
+		got[notificationTextString] != "Location updates continue while the app is in the background." {
+		t.Errorf("default notification strings = %v", got)
+	}
+}
+
+func TestBuildAlwaysNotificationText(t *testing.T) {
+	config := withAlways + "  notification_title: Recording your run\n  notification_text: You're on mile 3.\n"
+	got := androidStrings(mustBuild(t, "android", config))
+	if got[notificationTitleString] != "Recording your run" || got[notificationTextString] != "You're on mile 3." {
+		t.Errorf("notification strings = %v", got)
 	}
 }
 
 func TestBuildRejectsEmptyDescriptions(t *testing.T) {
-	for _, config := range []string{
-		"when_in_use_description: \"  \"\n",
-		whenInUse + "always:\n  description: \"\"\n",
+	for config, key := range map[string]string{
+		"when_in_use_description: \"  \"\n":          "when_in_use_description",
+		whenInUse + "always:\n  description: \"\"\n": "always.description",
+		withAlways + "  notification_title: \" \"\n": "always.notification_title",
+		withAlways + "  notification_text: \"\"\n":   "always.notification_text",
 	} {
-		if _, err := build(t, "ios", config); err == nil || !strings.Contains(err.Error(), "description") {
-			t.Errorf("config %q: err = %v, want one naming the description", config, err)
+		if _, err := build(t, "ios", config); err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("config %q: err = %v, want one naming %s", config, err, key)
 		}
 	}
 	if _, err := build(t, "ios", ""); err == nil || !strings.Contains(err.Error(), "when_in_use_description") {

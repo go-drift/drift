@@ -11,15 +11,25 @@ import (
 )
 
 // fakeNative stands in for the native halves: it answers each method with
-// a canned reply or error.
+// a canned reply or error, and records the args of each method's last call.
 type fakeNative struct {
 	replies map[string]any
 	errs    map[string]error
 	calls   []string
+	args    map[string]any
 }
 
-func (f *fakeNative) InvokeMethod(channel, method string, _ []byte, reply func([]byte, error)) {
+func (f *fakeNative) InvokeMethod(channel, method string, args []byte, reply func([]byte, error)) {
 	f.calls = append(f.calls, channel+"."+method)
+	decoded, err := platform.DefaultCodec.Decode(args)
+	if err != nil {
+		reply(nil, err)
+		return
+	}
+	if f.args == nil {
+		f.args = map[string]any{}
+	}
+	f.args[method] = decoded
 	if err := f.errs[method]; err != nil {
 		reply(nil, err)
 		return
@@ -127,5 +137,41 @@ func TestUpdatesStream(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("no update delivered")
+	}
+}
+
+// The stream's options reach the native side, Background always stated:
+// restarting a background stream without it ends its background use.
+func TestStartUpdatesSendsOptions(t *testing.T) {
+	for _, background := range []bool{false, true} {
+		native := &fakeNative{}
+		useNative(t, native)
+		opts := UpdateOptions{Options: Options{HighAccuracy: true, DistanceFilter: 10}, Background: background}
+		if err := StartUpdates(opts); err != nil {
+			t.Fatal(err)
+		}
+		args, _ := native.args["startUpdates"].(map[string]any)
+		if args["background"] != background || args["highAccuracy"] != true || args["distanceFilter"] != 10.0 {
+			t.Errorf("background=%v: startUpdates args = %v", background, args)
+		}
+	}
+}
+
+// A background stream fails, rather than silently running only in the
+// foreground, without the always: config, without Always, or (Android)
+// when started from the background.
+func TestStartUpdatesBackgroundErrors(t *testing.T) {
+	for code, want := range map[string]error{
+		"background_not_configured": ErrBackgroundNotConfigured,
+		"always_denied":             ErrAlwaysDenied,
+		"background_start":          ErrBackgroundStart,
+	} {
+		useNative(t, &fakeNative{errs: map[string]error{"startUpdates": platform.NewChannelError(code, "native says no")}})
+		if err := StartUpdates(UpdateOptions{Background: true}); !errors.Is(err, want) {
+			t.Errorf("%s: err = %v, want %v", code, err, want)
+		}
+	}
+	if want := "always: config"; !strings.Contains(ErrBackgroundNotConfigured.Error(), want) {
+		t.Errorf("ErrBackgroundNotConfigured = %q, want it to mention %q", ErrBackgroundNotConfigured, want)
 	}
 }

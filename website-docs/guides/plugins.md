@@ -243,15 +243,24 @@ plugins:
     config:
       when_in_use_description: Shows stores near you.
       always:                       # optional
-        description: Tracks your runs while the app is closed.
+        description: Records your runs while the app is in the background.
+        notification_title: Recording your run
+        notification_text: Your route is being recorded.
 ```
 
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `when_in_use_description` | required | Why the app needs location; iOS shows it in the permission prompt |
-| `always.description` | none | Enables the Always permission; iOS shows it when asking to upgrade |
+| `always.description` | none | Enables the Always permission and background updates; iOS shows it when asking to upgrade |
+| `always.notification_title` | `Using your location` | Title of the ongoing notification Android shows during background updates |
+| `always.notification_text` | `Location updates continue while the app is in the background.` | Its text |
 
-Leave `always` out unless the app needs location while closed: it adds Android's `ACCESS_BACKGROUND_LOCATION`, which Google Play accepts only with a background location declaration. Without it, `Permission.Always` fails with `platform.ErrPermissionNotRegistered`.
+Leave `always` out unless the app needs location while in the background. It declares:
+
+- iOS: `NSLocationAlwaysAndWhenInUseUsageDescription` and the `location` background mode (`UIBackgroundModes`), which App Review expects the app to justify.
+- Android: `ACCESS_BACKGROUND_LOCATION`, which Google Play accepts only with a background location declaration; a foreground service of type `location` (with `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION`); and `POST_NOTIFICATIONS`, so the app can request `platform.Notifications.Permission`, without which Android 13+ keeps the service's notification out of the notification drawer.
+
+Without it, `Permission.Always` fails with `platform.ErrPermissionNotRegistered`, and background updates with `location.ErrBackgroundNotConfigured`.
 
 ```go
 import location "github.com/go-drift/drift/plugins/location/runtime"
@@ -273,7 +282,9 @@ go func() {
 unsubscribe := location.Updates().Listen(func(u location.Update) {
     drift.Dispatch(func() { moveMarker(u) })
 })
-err := location.StartUpdates(location.Options{HighAccuracy: true, DistanceFilter: 10})
+err := location.StartUpdates(location.UpdateOptions{
+    Options: location.Options{HighAccuracy: true, DistanceFilter: 10},
+})
 ```
 
 | Function | Waits | Notes |
@@ -282,11 +293,31 @@ err := location.StartUpdates(location.Options{HighAccuracy: true, DistanceFilter
 | `Current(ctx, opts)` | yes | A fresh fix |
 | `LastKnown(ctx)` | yes | The cached fix, or nil |
 | `IsEnabled(ctx)` | yes | Whether location services are on |
-| `StartUpdates(opts)`, `StopUpdates()` | no | Start or stop `Updates()` |
+| `StartUpdates(opts)`, `StopUpdates()` | no | Start or stop `Updates()`; a failed start leaves the running stream as it was |
 
 Functions that wait must be called from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`. Failures match `location.ErrPermissionDenied`, `location.ErrDisabled` (location services off) and `location.ErrUnavailable` (no fix, Android) under `errors.Is`.
 
 On iOS, Always can be requested only after WhenInUse is granted, and iOS asks at most once. On Android, Always is granted in Settings, where the request takes the user. Supported on iOS, xtool and Android (Google Play services).
+
+#### Background updates
+
+A stream started with `Background: true` keeps delivering updates to the app's Go code while the app is in the background:
+
+```go
+err := location.StartUpdates(location.UpdateOptions{
+    Options:    location.Options{HighAccuracy: true, DistanceFilter: 10},
+    Background: true,
+})
+```
+
+It fails instead of quietly running only in the foreground: with `location.ErrBackgroundNotConfigured` without the `always` config, with `location.ErrAlwaysDenied` until the user grants `Permission.Always`, and on Android with `location.ErrBackgroundStart` when the app is not in the foreground, since Android 12+ starts the foreground service only from there. Start it while the app is on screen, for example from the button that starts a run. Restarting the stream from the background with new options is fine; `StopUpdates` ends it.
+
+Updates reach Go, so they last only as long as the app's process:
+
+| | While the stream is on | Ends when |
+|---|---|---|
+| iOS | The app keeps running in the background, with the blue location indicator in the status bar; updates do not pause automatically | The user force-quits the app (swipes it away in the app switcher) or the system terminates it; iOS does not relaunch the app for these updates |
+| Android | A foreground service keeps the process alive, showing the ongoing notification from the `always` config; a tap opens the app | The process is killed (Force stop, Stop in the Task Manager, low memory); the service is not restarted. Swiping the app away from Recents usually leaves it running, though some manufacturers' builds kill it |
 
 ### Permissions
 

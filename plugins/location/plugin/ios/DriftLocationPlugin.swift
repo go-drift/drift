@@ -2,11 +2,12 @@
 ///
 /// The location plugin's native half on iOS, on the main thread: one
 /// CLLocationManager answers one-shot requests and another streams updates
-/// to Go on `drift/location/updates`. Registers the `location` permission,
-/// and `location_always` when the build added its usage string.
+/// to Go on `drift/location/updates`, in the background too when the
+/// stream asks for it. Registers the `location` permission, and
+/// `location_always` when the build added its usage string.
 ///
-/// Errors Go maps to its sentinels (runtime package): `permission_denied`
-/// and `location_disabled`.
+/// Errors Go maps to its sentinels (runtime package): `permission_denied`,
+/// `location_disabled`, `background_not_configured` and `always_denied`.
 
 import CoreLocation
 import DriftPluginAPI
@@ -17,6 +18,16 @@ import UIKit
 public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManagerDelegate {
     private static let channel = "drift/location"
     private static let updatesChannel = "drift/location/updates"
+
+    /// Whether the build's always: config added the Always usage string and
+    /// the location background mode. Background updates need both, and
+    /// allowsBackgroundLocationUpdates must not be set without the mode
+    /// (Core Location raises an exception).
+    private static let backgroundConfigured: Bool = {
+        let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+        return modes.contains("location")
+            && Bundle.main.object(forInfoDictionaryKey: "NSLocationAlwaysAndWhenInUseUsageDescription") != nil
+    }()
 
     private var host: DriftPluginHost?
     private let oneShot = CLLocationManager()
@@ -65,10 +76,23 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             channel.method("startUpdates") { [self] args in
                 try requireAuthorized()
                 let args = args as? [String: Any] ?? [:]
+                let background = args["background"] as? Bool ?? false
+                if background {
+                    try requireBackground()
+                }
                 let highAccuracy = args["highAccuracy"] as? Bool ?? true
                 updates.desiredAccuracy = highAccuracy ? kCLLocationAccuracyBest : kCLLocationAccuracyHundredMeters
                 updates.distanceFilter = (args["distanceFilter"] as? Double).flatMap { $0 > 0 ? $0 : nil }
                     ?? kCLDistanceFilterNone
+                if Self.backgroundConfigured {
+                    updates.allowsBackgroundLocationUpdates = background
+                }
+                // The status bar shows background use, as Android's
+                // notification does. A paused stream does not resume by
+                // itself, and an app in the background gets no chance to
+                // restart it, so a background stream never pauses.
+                updates.showsBackgroundLocationIndicator = background
+                updates.pausesLocationUpdatesAutomatically = !background
                 updates.startUpdatingLocation()
                 return nil
             }
@@ -105,6 +129,15 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             return
         default:
             throw Self.error("permission_denied", "location permission not granted; request it first")
+        }
+    }
+
+    private func requireBackground() throws {
+        guard Self.backgroundConfigured else {
+            throw Self.error("background_not_configured", "background location updates need the location plugin's always: config")
+        }
+        guard oneShot.authorizationStatus == .authorizedAlways else {
+            throw Self.error("always_denied", "background location updates need the Always location permission; request it first")
         }
     }
 

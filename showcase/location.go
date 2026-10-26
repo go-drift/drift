@@ -266,10 +266,10 @@ func (s *locationState) toggleUpdates() {
 		s.isStreaming.Set(false)
 		s.statusText.Set("Location updates stopped")
 	} else {
-		err := location.StartUpdates(location.Options{
+		err := location.StartUpdates(location.UpdateOptions{Options: location.Options{
 			HighAccuracy:   true,
 			DistanceFilter: 10, // 10 meters
-		})
+		}})
 		if err != nil {
 			s.statusText.Set("Error starting: " + err.Error())
 			return

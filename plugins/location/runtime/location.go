@@ -15,6 +15,27 @@
 // Permission requests and the methods taking a ctx wait for the platform,
 // so call them from a goroutine: from the UI thread they fail with
 // platform.ErrBlocksUIThread. Updates is a stream; Listen from anywhere.
+//
+// # Background updates
+//
+// A stream started with UpdateOptions.Background keeps delivering updates
+// to Go while the app is in the background, for as long as the app's
+// process lives. It needs the plugin's always: config and the Always
+// permission, and must be started while the app is in the foreground
+// (Android does not allow it from the background).
+//
+//   - iOS keeps the app running in the background while the stream is on,
+//     showing the blue location indicator in the status bar. Updates stop
+//     when the user force-quits the app (swipes it away in the app
+//     switcher) or the system terminates it, and the app is not relaunched
+//     for them.
+//   - Android runs a foreground service with an ongoing notification (its
+//     text comes from the always: config), which keeps the process alive
+//     after the app leaves the screen and, on most devices, after the user
+//     swipes it away from Recents. Updates stop when the process is killed
+//     (force stop, the Task Manager's Stop, low memory) and do not restart.
+//
+// StopUpdates ends the stream, the service and the indicator.
 package runtime
 
 import (
@@ -49,13 +70,28 @@ var (
 
 	// ErrUnavailable indicates no fix could be obtained (Android).
 	ErrUnavailable = errors.New("no location fix available")
+
+	// ErrBackgroundNotConfigured indicates background updates were
+	// requested without the location plugin's always: config.
+	ErrBackgroundNotConfigured = errors.New("background location updates need the location plugin's always: config")
+
+	// ErrAlwaysDenied indicates background updates were requested without
+	// the Always permission: request Permission.Always first.
+	ErrAlwaysDenied = errors.New("background location updates need the Always location permission")
+
+	// ErrBackgroundStart indicates background updates were started while
+	// the app was in the background, which Android does not allow.
+	ErrBackgroundStart = errors.New("background location updates must start while the app is in the foreground")
 )
 
 // nativeErrors maps the native halves' error codes to the sentinels.
 var nativeErrors = map[string]error{
-	"permission_denied":    ErrPermissionDenied,
-	"location_disabled":    ErrDisabled,
-	"location_unavailable": ErrUnavailable,
+	"permission_denied":         ErrPermissionDenied,
+	"location_disabled":         ErrDisabled,
+	"location_unavailable":      ErrUnavailable,
+	"background_not_configured": ErrBackgroundNotConfigured,
+	"always_denied":             ErrAlwaysDenied,
+	"background_start":          ErrBackgroundStart,
 }
 
 // Permissions are the location permission levels.
@@ -63,7 +99,8 @@ type Permissions struct {
 	// WhenInUse is location access while the app is in use.
 	WhenInUse platform.Permission
 	// Always is location access at any time, including while the app is
-	// closed. It needs the plugin's always: config; without it, its calls
+	// in the background, as background updates (UpdateOptions.Background)
+	// need. It needs the plugin's always: config; without it, its calls
 	// fail with platform.ErrPermissionNotRegistered. On iOS, WhenInUse
 	// must be granted first; on Android, the user grants it in Settings.
 	Always platform.Permission
@@ -118,6 +155,24 @@ func (o Options) args() map[string]any {
 	}
 }
 
+// UpdateOptions configures a stream of updates (StartUpdates).
+type UpdateOptions struct {
+	Options
+	// Background keeps updates coming while the app is in the background
+	// (see the package documentation). It needs the plugin's always:
+	// config (else ErrBackgroundNotConfigured) and the Always permission
+	// (else ErrAlwaysDenied), and must be started while the app is in the
+	// foreground (else ErrBackgroundStart, Android). On iOS it also keeps
+	// updates from pausing automatically while the device is stationary.
+	Background bool
+}
+
+func (o UpdateOptions) args() map[string]any {
+	args := o.Options.args()
+	args["background"] = o.Background
+	return args
+}
+
 // Current returns a fresh location fix. It waits for the platform, so call
 // it from a goroutine.
 func Current(ctx context.Context, opts Options) (Update, error) {
@@ -162,15 +217,18 @@ func IsEnabled(ctx context.Context) (bool, error) {
 }
 
 // StartUpdates starts streaming location updates to Updates, replacing any
-// running stream's options. Any goroutine may call it.
-func StartUpdates(opts Options) error {
+// running stream's options, including whether it runs in the background.
+// A failed start leaves the running stream as it was. Any goroutine may
+// call it.
+func StartUpdates(opts UpdateOptions) error {
 	if _, err := channel.Invoke(context.Background(), "startUpdates", opts.args()); err != nil {
 		return wrap("start updates", err)
 	}
 	return nil
 }
 
-// StopUpdates stops the stream. Any goroutine may call it.
+// StopUpdates stops the stream, background or not. Any goroutine may call
+// it.
 func StopUpdates() error {
 	if _, err := channel.Invoke(context.Background(), "stopUpdates", nil); err != nil {
 		return wrap("stop updates", err)

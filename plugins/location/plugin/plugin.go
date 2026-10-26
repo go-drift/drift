@@ -9,15 +9,30 @@
 //	    config:
 //	      when_in_use_description: Shows stores near you.
 //	      always:                          # optional
-//	        description: Tracks your runs while the app is closed.
+//	        description: Records your runs while the app is in the background.
+//	        notification_title: Recording your run          # optional
+//	        notification_text: Your route is being recorded. # optional
 //
 // when_in_use_description is the text iOS shows when asking for location
 // access (NSLocationWhenInUseUsageDescription); App Review rejects vague
-// ones. The optional always section enables the Always permission:
-// Android's ACCESS_BACKGROUND_LOCATION, which Google Play accepts only with
-// a background location declaration, and iOS's
-// NSLocationAlwaysAndWhenInUseUsageDescription. Leave it out unless the app
-// needs location while closed.
+// ones.
+//
+// The optional always section enables the Always permission and background
+// updates (runtime.UpdateOptions.Background). It declares:
+//
+//   - iOS: NSLocationAlwaysAndWhenInUseUsageDescription (description, shown
+//     when asking to upgrade to Always) and the location background mode
+//     (UIBackgroundModes), which App Review expects the app to justify.
+//   - Android: ACCESS_BACKGROUND_LOCATION, which Google Play accepts only
+//     with a background location declaration, and a foreground service of
+//     type location that keeps the app running while background updates
+//     are on. Android requires that service to show an ongoing
+//     notification: notification_title and notification_text. The plugin
+//     also declares POST_NOTIFICATIONS: on Android 13+, the notification
+//     appears in the notification drawer only once the app is granted
+//     platform.Notifications.Permission.
+//
+// Leave always out unless the app needs location while in the background.
 //
 // The Go API is github.com/go-drift/drift/plugins/location/runtime.
 //
@@ -47,20 +62,31 @@ const playServicesLocation = "com.google.android.gms:play-services-location:21.1
 // androidPackage is the Kotlin package of the plugin's Android sources.
 const androidPackage = "com.drift.plugin.location"
 
+// The string resources the background service's notification reads. Must
+// match the names in plugin/android/DriftLocationService.kt.
+const (
+	notificationTitleString = "drift_location_notification_title"
+	notificationTextString  = "drift_location_notification_text"
+)
+
 // Config is the location plugin's drift.yaml config block.
 type Config struct {
 	// WhenInUseDescription is why the app needs location while in use,
 	// shown by iOS in the permission prompt.
 	WhenInUseDescription string `yaml:"when_in_use_description" drift:"required"`
-	// Always enables the Always (background) permission.
+	// Always enables the Always permission and background updates.
 	Always *Always `yaml:"always,omitempty"`
 }
 
-// Always configures the Always (background) location permission.
+// Always configures the Always permission and background updates.
 type Always struct {
-	// Description is why the app needs location while closed, shown by
-	// iOS when asking to upgrade to Always.
+	// Description is why the app needs location while in the background,
+	// shown by iOS when asking to upgrade to Always.
 	Description string `yaml:"description" drift:"required"`
+	// NotificationTitle and NotificationText are the ongoing notification
+	// Android shows while background updates run.
+	NotificationTitle string `yaml:"notification_title" drift:"default=Using your location"`
+	NotificationText  string `yaml:"notification_text" drift:"default=Location updates continue while the app is in the background."`
 }
 
 type location struct{}
@@ -71,15 +97,24 @@ func (location) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 	if strings.TrimSpace(cfg.WhenInUseDescription) == "" {
 		return fmt.Errorf("location: when_in_use_description must not be empty")
 	}
-	if cfg.Always != nil && strings.TrimSpace(cfg.Always.Description) == "" {
-		return fmt.Errorf("location: always.description must not be empty")
+	if a := cfg.Always; a != nil {
+		for _, field := range []struct{ key, value string }{
+			{"description", a.Description},
+			{"notification_title", a.NotificationTitle},
+			{"notification_text", a.NotificationText},
+		} {
+			if strings.TrimSpace(field.value) == "" {
+				return fmt.Errorf("location: always.%s must not be empty", field.key)
+			}
+		}
 	}
 
 	ctx.IOS.Info.SetString("NSLocationWhenInUseUsageDescription", cfg.WhenInUseDescription)
 	if cfg.Always != nil {
-		// The native plugin registers the Always permission only when this
-		// key is present.
+		// The native plugin registers the Always permission, and allows
+		// background updates, only when these are present.
 		ctx.IOS.Info.SetString("NSLocationAlwaysAndWhenInUseUsageDescription", cfg.Always.Description)
+		ctx.IOS.Info.AppendArrayItem("UIBackgroundModes", "location")
 	}
 	ctx.IOS.Sources.AddFS("Location", iosSources, "ios")
 	ctx.IOS.Plugin("DriftLocationPlugin")
@@ -88,9 +123,16 @@ func (location) Build(ctx *driftplugin.BuildCtx, cfg Config) error {
 	ctx.Android.Manifest.AddPermission("android.permission.ACCESS_FINE_LOCATION")
 	ctx.Android.Manifest.AddPermission("android.permission.ACCESS_COARSE_LOCATION")
 	if cfg.Always != nil {
-		// The native plugin registers the Always permission only when this
-		// permission is declared.
+		// The native plugin registers the Always permission, and allows
+		// background updates, only when ACCESS_BACKGROUND_LOCATION is
+		// declared.
 		ctx.Android.Manifest.AddPermission("android.permission.ACCESS_BACKGROUND_LOCATION")
+		ctx.Android.Manifest.AddPermission("android.permission.FOREGROUND_SERVICE")
+		ctx.Android.Manifest.AddPermission("android.permission.FOREGROUND_SERVICE_LOCATION")
+		ctx.Android.Manifest.AddPermission("android.permission.POST_NOTIFICATIONS")
+		ctx.Android.Manifest.AddService(`<service android:name="` + androidPackage + `.DriftLocationService" android:exported="false" android:foregroundServiceType="location" />`)
+		ctx.Android.Resources.Strings.Set(notificationTitleString, cfg.Always.NotificationTitle)
+		ctx.Android.Resources.Strings.Set(notificationTextString, cfg.Always.NotificationText)
 	}
 	ctx.Android.Sources.AddFS(androidPackage, androidSources, "android")
 	ctx.Android.Plugin(androidPackage + ".DriftLocationPlugin")
