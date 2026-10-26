@@ -213,11 +213,11 @@ func (doubleReplyBridge) InvokeMethod(_, _ string, _ []byte, reply func([]byte, 
 	reply(nil, nil)
 }
 
-// Native refuses an async method called from the UI thread with a wire
-// code; Go callers match it by sentinel.
+// Native answers transport failures (an async method called from the UI
+// thread, say) with a wire code; Go callers match it by sentinel.
 func TestChannelErrorMatchesStandardSentinels(t *testing.T) {
-	for _, sentinel := range []error{ErrBlocksUIThread, ErrReplyDropped, ErrMethodNotFound, ErrNotEncodable} {
-		err := fmt.Errorf("invoke: %w", AsChannelError(sentinel))
+	for sentinel, code := range transportErrorCodes {
+		err := fmt.Errorf("invoke: %w", NewChannelError(code, "x"))
 		if !errors.Is(err, sentinel) {
 			t.Errorf("native error %v does not match %v", err, sentinel)
 		}

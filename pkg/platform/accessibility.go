@@ -59,34 +59,8 @@ func init() {
 }
 
 func initAccessibilityListeners() {
-	// Set up handler for incoming method calls from the platform
-	// Note: performAction comes via event channel, not method channel
-	Accessibility.method.SetHandler(func(method string, args any) (any, error) {
-		switch method {
-		case "setAccessibilityEnabled":
-			return Accessibility.handleSetEnabled(args)
-		default:
-			return nil, ErrMethodNotFound
-		}
-	})
-
 	// Listen for accessibility state changes from platform
-	Accessibility.stateEvents.Listen(EventHandler{
-		OnEvent: func(data any) {
-			const op = "stateEvent"
-			args, err := requireMap(op, data)
-			if err != nil {
-				Accessibility.reportArg(accessibilityStateChannel, op, err)
-				return
-			}
-			enabled, err := requireBool(op, args, "enabled")
-			if err != nil {
-				Accessibility.reportArg(accessibilityStateChannel, op, err)
-				return
-			}
-			semantics.GetSemanticsBinding().SetEnabled(enabled)
-		},
-	})
+	Accessibility.stateEvents.Listen(EventHandler{OnEvent: Accessibility.handleStateEvent})
 
 	// Listen for accessibility action events from platform
 	Accessibility.actionEvents.Listen(EventHandler{
@@ -175,28 +149,22 @@ func (c *accessibilityChannel) IsAccessibilityEnabled() (bool, error) {
 	return false, nil
 }
 
-// handleSetEnabled processes an accessibility enabled state change from the platform.
-func (c *accessibilityChannel) handleSetEnabled(raw any) (any, error) {
-	const op = "handleSetEnabled"
-	args, err := requireMap(op, raw)
+// handleStateEvent applies the platform's accessibility state (a screen
+// reader turned on or off) to the semantics binding, which sends the whole
+// tree when it becomes enabled.
+func (c *accessibilityChannel) handleStateEvent(data any) {
+	const op = "stateEvent"
+	args, err := requireMap(op, data)
 	if err != nil {
-		return nil, c.reportArg(accessibilityMethodChannel, op, err)
+		c.reportArg(accessibilityStateChannel, op, err)
+		return
 	}
 	enabled, err := requireBool(op, args, "enabled")
 	if err != nil {
-		return nil, c.reportArg(accessibilityMethodChannel, op, err)
+		c.reportArg(accessibilityStateChannel, op, err)
+		return
 	}
-
-	// Update the semantics binding
-	binding := semantics.GetSemanticsBinding()
-	binding.SetEnabled(enabled)
-
-	// If enabling, request a full update
-	if enabled {
-		binding.RequestFullUpdate()
-	}
-
-	return nil, nil
+	semantics.GetSemanticsBinding().SetEnabled(enabled)
 }
 
 // politenessToString converts politeness to a string for serialization.

@@ -121,21 +121,6 @@ func initLifecycleListeners() {
 			})
 		},
 	})
-
-	// Handle method calls from native (e.g., permission to close)
-	Lifecycle.channel.SetHandler(func(method string, args any) (any, error) {
-		switch method {
-		case "didChangeState":
-			if m, ok := args.(map[string]any); ok {
-				if state, ok := m["state"].(string); ok {
-					Lifecycle.updateState(LifecycleState(state))
-				}
-			}
-			return nil, nil
-		default:
-			return nil, ErrMethodNotFound
-		}
-	})
 }
 
 // State returns the current lifecycle state.

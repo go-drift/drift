@@ -15,46 +15,29 @@ import (
 // Cross-test interference is avoided by serial execution (no t.Parallel) and
 // by snapshot/restore of the errors.SetHandler in captureErrorReports.
 
-func TestAccessibility_HandleSetEnabled(t *testing.T) {
+func TestAccessibility_HandleStateEvent(t *testing.T) {
 	t.Run("happy", func(t *testing.T) {
-		// Reset the semantics binding's enabled state via the handler.
-		_, err := Accessibility.handleSetEnabled(map[string]any{"enabled": true})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		Accessibility.handleStateEvent(map[string]any{"enabled": true})
 		if !semantics.GetSemanticsBinding().IsEnabled() {
-			t.Fatal("binding not enabled after handleSetEnabled(true)")
+			t.Fatal("binding not enabled after a state event with enabled=true")
 		}
-		// Restore.
-		Accessibility.handleSetEnabled(map[string]any{"enabled": false})
+		Accessibility.handleStateEvent(map[string]any{"enabled": false})
+		if semantics.GetSemanticsBinding().IsEnabled() {
+			t.Fatal("binding still enabled after a state event with enabled=false")
+		}
 	})
 
-	t.Run("args not map", func(t *testing.T) {
-		h := captureErrorReports(t)
-		_, err := Accessibility.handleSetEnabled("garbage")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		assertAccessibilityArgReport(t, h, "accessibility.handleSetEnabled", accessibilityMethodChannel)
-	})
-
-	t.Run("missing enabled", func(t *testing.T) {
-		h := captureErrorReports(t)
-		_, err := Accessibility.handleSetEnabled(map[string]any{})
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		assertAccessibilityArgReport(t, h, "accessibility.handleSetEnabled", accessibilityMethodChannel)
-	})
-
-	t.Run("wrong-type enabled", func(t *testing.T) {
-		h := captureErrorReports(t)
-		_, err := Accessibility.handleSetEnabled(map[string]any{"enabled": "true"})
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		assertAccessibilityArgReport(t, h, "accessibility.handleSetEnabled", accessibilityMethodChannel)
-	})
+	for name, data := range map[string]any{
+		"args not map":       "garbage",
+		"missing enabled":    map[string]any{},
+		"wrong-type enabled": map[string]any{"enabled": "true"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := captureErrorReports(t)
+			Accessibility.handleStateEvent(data)
+			assertAccessibilityArgReport(t, h, "accessibility.stateEvent", accessibilityStateChannel)
+		})
+	}
 }
 
 // assertAccessibilityArgReport mirrors platform_view's assertArgErrorReport

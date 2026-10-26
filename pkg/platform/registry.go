@@ -10,33 +10,18 @@ import (
 
 // channelRegistry manages all registered platform channels.
 type channelRegistry struct {
-	methodChannels map[string]*MethodChannel
-	eventChannels  map[string]*EventChannel
-	mu             sync.RWMutex
+	eventChannels map[string]*EventChannel
+	mu            sync.RWMutex
 }
 
 var registry = &channelRegistry{
-	methodChannels: make(map[string]*MethodChannel),
-	eventChannels:  make(map[string]*EventChannel),
-}
-
-func (r *channelRegistry) registerMethod(name string, ch *MethodChannel) {
-	r.mu.Lock()
-	r.methodChannels[name] = ch
-	r.mu.Unlock()
+	eventChannels: make(map[string]*EventChannel),
 }
 
 func (r *channelRegistry) registerEvent(name string, ch *EventChannel) {
 	r.mu.Lock()
 	r.eventChannels[name] = ch
 	r.mu.Unlock()
-}
-
-func (r *channelRegistry) getMethodChannel(name string) *MethodChannel {
-	r.mu.RLock()
-	ch := r.methodChannels[name]
-	r.mu.RUnlock()
-	return ch
 }
 
 func (r *channelRegistry) getEventChannel(name string) *EventChannel {
@@ -141,29 +126,6 @@ func (r nativeReply) decode() (any, error) {
 		return nil, r.err
 	}
 	return DefaultCodec.Decode(r.data)
-}
-
-// HandleMethodCall is called from the bridge when native invokes a Go method.
-func HandleMethodCall(channel, method string, argsData []byte) ([]byte, error) {
-	ch := registry.getMethodChannel(channel)
-	if ch == nil {
-		return nil, ErrChannelNotFound
-	}
-
-	// Decode arguments
-	args, err := DefaultCodec.Decode(argsData)
-	if err != nil {
-		return nil, err
-	}
-
-	// Handle the call
-	result, err := ch.handleCall(method, args)
-	if err != nil {
-		return nil, err
-	}
-
-	// Encode result
-	return DefaultCodec.Encode(result)
 }
 
 // HandleNativeConnected is called from the bridge once native has

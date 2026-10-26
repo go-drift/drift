@@ -95,10 +95,7 @@ func newPlatformViewRegistry() *PlatformViewRegistry {
 		viewsSeenThisFrame: make(map[int64]struct{}),
 	}
 
-	// Handle incoming calls from native
-	r.channel.SetHandler(r.handleMethodCall)
-
-	// Also listen for events from native (text changes, focus, etc.)
+	// Native views reach Go as events (creation, text changes, focus, ...)
 	eventChannel := NewEventChannel("drift/platform_views")
 	listenForViewEvents := func() {
 		eventChannel.Listen(EventHandler{
@@ -378,19 +375,6 @@ func (r *PlatformViewRegistry) InvokeViewMethod(viewID int64, method string, arg
 	invokeArgs["viewId"] = viewID
 	invokeArgs["method"] = method
 	return r.channel.Invoke(context.Background(), "invokeViewMethod", invokeArgs)
-}
-
-// handleMethodCall processes incoming method calls from native code.
-func (r *PlatformViewRegistry) handleMethodCall(method string, args any) (any, error) {
-	switch method {
-	case "onViewDisposed":
-		// Native has finished disposing the view. No args expected.
-		return nil, nil
-	case "onViewCreated":
-		return r.handleViewCreated(args)
-	default:
-		return nil, r.routeViewEvent(method, args)
-	}
 }
 
 // routeViewEvent delivers method, an event or call from a native view, to

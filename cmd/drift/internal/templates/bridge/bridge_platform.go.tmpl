@@ -151,34 +151,6 @@ func DriftPlatformReply(callID C.int64_t, data unsafe.Pointer, dataLen C.int, er
 	reply(result, nil)
 }
 
-// DriftPlatformHandleMethodCall is called by native to invoke a Go method handler.
-// Returns JSON-encoded result or sets error.
-//
-//export DriftPlatformHandleMethodCall
-func DriftPlatformHandleMethodCall(channelPtr *C.char, methodPtr *C.char, argsPtr unsafe.Pointer, argsLen C.int, resultPtr *unsafe.Pointer, resultLen *C.int, errorPtr **C.char) C.int {
-	channel := C.GoString(channelPtr)
-	method := C.GoString(methodPtr)
-
-	var argsData []byte
-	if argsLen > 0 && argsPtr != nil {
-		argsData = C.GoBytes(argsPtr, argsLen)
-	}
-
-	result, err := platform.HandleMethodCall(channel, method, argsData)
-	if err != nil {
-		errStr := encodeErrorPayload(err)
-		*errorPtr = C.CString(errStr)
-		return 1
-	}
-
-	if result != nil {
-		*resultPtr = C.CBytes(result)
-		*resultLen = C.int(len(result))
-	}
-
-	return 0
-}
-
 // DriftPlatformHandleEvent is called by native to dispatch an event to Go listeners.
 //
 //export DriftPlatformHandleEvent
@@ -223,13 +195,6 @@ func DriftSetScheduleFrameHandler(handler C.DriftScheduleFrameHandler) {
 	})
 }
 
-// DriftPlatformFree frees memory allocated by Go for native code.
-//
-//export DriftPlatformFree
-func DriftPlatformFree(ptr unsafe.Pointer) {
-	C.free(ptr)
-}
-
 // decodeNativeError decodes native's JSON error payload, or keeps payload
 // as the message of a native_error if it is not one.
 func decodeNativeError(payload string) *platform.ChannelError {
@@ -240,13 +205,4 @@ func decodeNativeError(payload string) *platform.ChannelError {
 		}
 	}
 	return platform.NewChannelError("native_error", payload)
-}
-
-func encodeErrorPayload(err error) string {
-	payload := platform.AsChannelError(err)
-	data, marshalErr := json.Marshal(payload)
-	if marshalErr != nil {
-		return err.Error()
-	}
-	return string(data)
 }

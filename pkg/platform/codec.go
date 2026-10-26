@@ -101,10 +101,8 @@ var (
 )
 
 // transportErrorCodes are the wire codes of the errors any channel can
-// answer, which the transport and Drift's native hosts produce. Shared by
-// both directions: a Go error crossing to native carries its code (see
-// [AsChannelError]), and a native error with one of these codes matches its
-// sentinel under [errors.Is]. A feature's own codes belong to its channel
+// answer, which the transport and Drift's native hosts produce. A native
+// error with one of these codes matches its sentinel under [errors.Is]. A feature's own codes belong to its channel
 // ([ErrorCodes]).
 var transportErrorCodes = map[error]string{
 	ErrChannelNotFound:  "channel_not_found",
@@ -163,25 +161,6 @@ func (c ErrorCodes) attach(err error) error {
 	withCodes := *channelErr
 	withCodes.codes = c
 	return &withCodes
-}
-
-// AsChannelError converts a Go error to the ChannelError sent to native:
-// a ChannelError as is, a transport error with its code, anything else as
-// "go_error".
-func AsChannelError(err error) *ChannelError {
-	if err == nil {
-		return NewChannelError("go_error", "unknown error")
-	}
-	var channelErr *ChannelError
-	if errors.As(err, &channelErr) {
-		return channelErr
-	}
-	for sentinel, code := range transportErrorCodes {
-		if errors.Is(err, sentinel) {
-			return NewChannelError(code, err.Error())
-		}
-	}
-	return NewChannelError("go_error", err.Error())
 }
 
 // ChannelError represents an error returned from native code.

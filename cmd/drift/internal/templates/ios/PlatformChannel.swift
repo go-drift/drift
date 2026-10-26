@@ -11,18 +11,6 @@ import UserNotifications
 
 // MARK: - FFI Declarations
 
-/// FFI declaration for handling method call results from Go.
-@_silgen_name("DriftPlatformHandleMethodCall")
-func DriftPlatformHandleMethodCall(
-    _ channel: UnsafePointer<CChar>,
-    _ method: UnsafePointer<CChar>,
-    _ args: UnsafeRawPointer?,
-    _ argsLen: Int32,
-    _ result: UnsafeMutablePointer<UnsafeMutableRawPointer?>,
-    _ resultLen: UnsafeMutablePointer<Int32>,
-    _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
-) -> Int32
-
 /// FFI declaration for sending events to Go.
 @_silgen_name("DriftPlatformHandleEvent")
 func DriftPlatformHandleEvent(
@@ -41,10 +29,6 @@ func DriftPlatformHandleEventError(
 /// FFI declaration for notifying Go that an event stream has ended.
 @_silgen_name("DriftPlatformHandleEventDone")
 func DriftPlatformHandleEventDone(_ channel: UnsafePointer<CChar>)
-
-/// FFI declaration for freeing Go-allocated memory.
-@_silgen_name("DriftPlatformFree")
-func DriftPlatformFree(_ ptr: UnsafeMutableRawPointer?)
 
 /// FFI declaration for replying to a Go method call (see
 /// `DriftNativeMethodHandler`). Go copies the bytes.

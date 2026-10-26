@@ -10,25 +10,20 @@ import (
 	drifterrors "github.com/go-drift/drift/pkg/errors"
 )
 
-// MethodHandler handles incoming method calls on a channel.
-type MethodHandler func(method string, args any) (any, error)
-
-// MethodChannel provides bidirectional method-call communication with native code.
+// MethodChannel calls methods native code registers under its name. Native
+// reaches Go through event channels.
 type MethodChannel struct {
-	name    string
-	codec   MessageCodec
-	handler MethodHandler
-	codes   ErrorCodes
+	name  string
+	codec MessageCodec
+	codes ErrorCodes
 }
 
 // NewMethodChannel creates a new method channel with the given name.
 func NewMethodChannel(name string) *MethodChannel {
-	ch := &MethodChannel{
+	return &MethodChannel{
 		name:  name,
 		codec: DefaultCodec,
 	}
-	registry.registerMethod(name, ch)
-	return ch
 }
 
 // Name returns the channel name.
@@ -49,11 +44,6 @@ func (c *MethodChannel) WithErrors(codes ErrorCodes) *MethodChannel {
 	return c
 }
 
-// SetHandler sets the handler for incoming method calls from native code.
-func (c *MethodChannel) SetHandler(handler MethodHandler) {
-	c.handler = handler
-}
-
 // Invoke calls a method on the native side and returns the result.
 // Blocks until the native side responds, an error occurs, or ctx is canceled.
 // See [invokeNative] for the ctx cancellation contract. A native error is a
@@ -61,14 +51,6 @@ func (c *MethodChannel) SetHandler(handler MethodHandler) {
 func (c *MethodChannel) Invoke(ctx context.Context, method string, args any) (any, error) {
 	result, err := invokeNative(ctx, c.name, method, args)
 	return result, c.codes.attach(err)
-}
-
-// handleCall processes an incoming method call from native code.
-func (c *MethodChannel) handleCall(method string, args any) (any, error) {
-	if c.handler == nil {
-		return nil, ErrMethodNotFound
-	}
-	return c.handler(method, args)
 }
 
 // EventHandler receives events from an EventChannel.

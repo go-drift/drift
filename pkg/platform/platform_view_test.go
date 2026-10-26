@@ -196,7 +196,7 @@ func TestHandleTextChanged(t *testing.T) {
 		view := NewTextInputView(viewID, TextInputViewConfig{}, client)
 		registerView(reg, view)
 
-		_, err := reg.handleMethodCall("onTextChanged", validTextChangedArgs(viewID))
+		err := reg.routeViewEvent("onTextChanged", validTextChangedArgs(viewID))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -208,7 +208,7 @@ func TestHandleTextChanged(t *testing.T) {
 	t.Run("args not map", func(t *testing.T) {
 		reg := newTestRegistry()
 		h := captureErrorReports(t)
-		_, err := reg.handleMethodCall("onTextChanged", "garbage")
+		err := reg.routeViewEvent("onTextChanged", "garbage")
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -224,7 +224,7 @@ func TestHandleTextChanged(t *testing.T) {
 		h := captureErrorReports(t)
 		args := validTextChangedArgs(viewID)
 		delete(args, "viewId")
-		_, err := reg.handleMethodCall("onTextChanged", args)
+		err := reg.routeViewEvent("onTextChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -236,7 +236,7 @@ func TestHandleTextChanged(t *testing.T) {
 		h := captureErrorReports(t)
 		args := validTextChangedArgs(viewID)
 		args["viewId"] = 1.5
-		_, err := reg.handleMethodCall("onTextChanged", args)
+		err := reg.routeViewEvent("onTextChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -249,7 +249,7 @@ func TestHandleTextChanged(t *testing.T) {
 		h := captureErrorReports(t)
 		args := validTextChangedArgs(viewID)
 		args["text"] = 42
-		_, err := reg.handleMethodCall("onTextChanged", args)
+		err := reg.routeViewEvent("onTextChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -260,7 +260,7 @@ func TestHandleTextChanged(t *testing.T) {
 		reg := newTestRegistry()
 		h := captureErrorReports(t)
 		// No view registered. Should be a silent no-op (dispose race).
-		_, err := reg.handleMethodCall("onTextChanged", validTextChangedArgs(viewID))
+		err := reg.routeViewEvent("onTextChanged", validTextChangedArgs(viewID))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -272,7 +272,7 @@ func TestHandleTextChanged(t *testing.T) {
 	t.Run("view does not handle the event", func(t *testing.T) {
 		reg := newTestRegistry(viewID) // registers stubView, not TextInputView
 		h := captureErrorReports(t)
-		_, err := reg.handleMethodCall("onTextChanged", validTextChangedArgs(viewID))
+		err := reg.routeViewEvent("onTextChanged", validTextChangedArgs(viewID))
 		if !errors.Is(err, ErrMethodNotFound) {
 			t.Fatalf("expected ErrMethodNotFound, got %v", err)
 		}
@@ -303,7 +303,7 @@ func TestHandleSwitchChanged(t *testing.T) {
 			"viewId": float64(viewID),
 			"value":  true,
 		}
-		_, err := reg.handleMethodCall("onSwitchChanged", args)
+		err := reg.routeViewEvent("onSwitchChanged", args)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -317,7 +317,7 @@ func TestHandleSwitchChanged(t *testing.T) {
 		registerView(reg, NewSwitchView(viewID, SwitchViewConfig{}, &fakeSwitchClient{}))
 		h := captureErrorReports(t)
 		args := map[string]any{"viewId": float64(viewID)}
-		_, err := reg.handleMethodCall("onSwitchChanged", args)
+		err := reg.routeViewEvent("onSwitchChanged", args)
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -329,7 +329,7 @@ func TestHandleSwitchChanged(t *testing.T) {
 		registerView(reg, NewSwitchView(viewID, SwitchViewConfig{}, &fakeSwitchClient{}))
 		h := captureErrorReports(t)
 		args := map[string]any{"viewId": float64(viewID), "value": "true"}
-		_, err := reg.handleMethodCall("onSwitchChanged", args)
+		err := reg.routeViewEvent("onSwitchChanged", args)
 		if err == nil {
 			t.Fatal("expected error for non-bool value")
 		}
@@ -357,26 +357,6 @@ func TestHandleEvent_NonMapReported(t *testing.T) {
 	h := captureErrorReports(t)
 	reg.handleEvent("not a map")
 	assertArgErrorReport(t, h, "platform_view.handleEvent", platformViewsChannel)
-}
-
-func TestHandleMethodCall_OnViewDisposedNoArgs(t *testing.T) {
-	reg := newTestRegistry()
-	h := captureErrorReports(t)
-	res, err := reg.handleMethodCall("onViewDisposed", nil)
-	if err != nil || res != nil {
-		t.Fatalf("expected (nil, nil); got (%v, %v)", res, err)
-	}
-	if len(h.snapshot()) != 0 {
-		t.Fatalf("expected no reports for onViewDisposed; got %+v", h.snapshot())
-	}
-}
-
-func TestHandleMethodCall_UnknownMethodReturnsNotFound(t *testing.T) {
-	reg := newTestRegistry(3)
-	_, err := reg.handleMethodCall("noSuchMethod", map[string]any{"viewId": float64(3)})
-	if !errors.Is(err, ErrMethodNotFound) {
-		t.Fatalf("expected ErrMethodNotFound, got %v", err)
-	}
 }
 
 // capturedForView finds the captured geometry for a given viewID, or nil.
