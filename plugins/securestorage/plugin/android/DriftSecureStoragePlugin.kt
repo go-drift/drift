@@ -9,6 +9,9 @@
  * gate the plugin enforces (BiometricPrompt without a CryptoObject); the
  * values are encrypted either way.
  *
+ * A file Auto Backup or device transfer restored does not decrypt (the
+ * master key stays behind) and opens empty: see prefs.
+ *
  * Errors Go maps to its sentinels (runtime package): `auth_failed`,
  * `auth_canceled`, `biometrics_unavailable`, `biometrics_not_configured`,
  * `no_activity`.
@@ -19,6 +22,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -27,7 +31,14 @@ import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlugin
 import com.drift.runner.DriftPluginHost
 import com.drift.runner.DriftResult
+import java.io.IOException
+import java.security.GeneralSecurityException
+import java.security.KeyStore
+import java.security.KeyStoreException
 import java.util.concurrent.Executors
+import javax.crypto.Cipher
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 class DriftSecureStoragePlugin : DriftPlugin {
     private lateinit var context: Context
@@ -140,13 +151,74 @@ class DriftSecureStoragePlugin : DriftPlugin {
         }
     }
 
+    /**
+     * The preference file name, opened. The file holds its values and the
+     * Tink keysets that encrypt them, the keysets wrapped by the master key
+     * in the Android Keystore. Auto Backup and device transfer restore the
+     * file but not the key, which never leaves its device, so a restored
+     * file cannot open again and its values are lost for good: it is reset
+     * to empty. Keystore errors, which can be transient, fail the call and
+     * leave the file alone.
+     */
     private fun prefs(name: String): SharedPreferences = opened.getOrPut(name) {
-        val key = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
-        EncryptedSharedPreferences.create(
-            context, name, key,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+        val key = MasterKey.Builder(context, MASTER_KEY_ALIAS)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        try {
+            open(name, key)
+        } catch (e: GeneralSecurityException) {
+            reset(name, key, e)
+        } catch (e: IOException) {
+            reset(name, key, e)
+        }
+    }
+
+    private fun open(name: String, key: MasterKey): SharedPreferences = EncryptedSharedPreferences.create(
+        context, name, key,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    )
+
+    /**
+     * Opening name failed with cause. Tink fails the same way for keysets
+     * the master key does not decrypt and for keystore errors, so name is
+     * emptied and opened afresh only when the master key works and name
+     * still fails to open; otherwise this throws cause.
+     */
+    private fun reset(name: String, key: MasterKey, cause: Exception): SharedPreferences {
+        try {
+            checkMasterKey()
+        } catch (e: Exception) {
+            cause.addSuppressed(e)
+            throw cause
+        }
+        try {
+            return open(name, key) // cause was transient
+        } catch (e: GeneralSecurityException) {
+            cause.addSuppressed(e)
+        } catch (e: IOException) {
+            cause.addSuppressed(e)
+        }
+        Log.w(TAG, "\"$name\" does not decrypt with this install's key (restored from a backup or another device?); its values are lost, starting it empty: $cause")
+        // The keysets are entries of the file itself: clearing it drops them.
+        context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
+        return open(name, key)
+    }
+
+    /** Throws unless the master key encrypts and decrypts a probe. */
+    private fun checkMasterKey() {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val key = keyStore.getKey(MASTER_KEY_ALIAS, null) as? SecretKey
+            ?: throw KeyStoreException("no master key $MASTER_KEY_ALIAS")
+        val probe = CHANNEL.toByteArray()
+        val seal = Cipher.getInstance(MASTER_KEY_CIPHER).apply { init(Cipher.ENCRYPT_MODE, key) }
+        val sealed = seal.doFinal(probe)
+        val unseal = Cipher.getInstance(MASTER_KEY_CIPHER).apply {
+            init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, seal.iv))
+        }
+        if (!unseal.doFinal(sealed).contentEquals(probe)) {
+            throw KeyStoreException("master key $MASTER_KEY_ALIAS does not round-trip")
+        }
     }
 
     /** A call's arguments. */
@@ -165,5 +237,8 @@ class DriftSecureStoragePlugin : DriftPlugin {
     private companion object {
         const val CHANNEL = "drift/securestorage"
         const val DEFAULT_FILE = "drift_secure_storage"
+        const val TAG = "DriftSecureStorage"
+        const val MASTER_KEY_ALIAS = MasterKey.DEFAULT_MASTER_KEY_ALIAS
+        const val MASTER_KEY_CIPHER = "AES/GCM/NoPadding"
     }
 }

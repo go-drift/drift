@@ -422,6 +422,8 @@ go func() {
 
 Biometric protection guards reading a value. On iOS the Keychain enforces it; on Android the plugin does, before it decrypts the value (BiometricPrompt without a CryptoObject), so it stops another person using the unlocked device, not code running as the app. Supported on iOS, xtool and Android.
 
+On Android, values last as long as the install that wrote them. Auto Backup and device transfer copy the encrypted files but not the Android Keystore key that decrypts them (it never leaves the device), and uninstalling deletes the key, so a restored store opens empty: the plugin resets it and logs a warning. Keep what secure storage holds recoverable, such as a token the user gets back by signing in again. On iOS, Keychain items move with an encrypted backup or device transfer unless their `Accessibility` is a `ThisDeviceOnly` one.
+
 ### Media
 
 Video in the widget tree, with the platform's own controls, and audio players without a view. Android plays through media3 ExoPlayer and iOS through AVPlayer.
