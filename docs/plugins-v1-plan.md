@@ -1,6 +1,6 @@
 # Plugins v1: plan
 
-Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (Phase 6 done, see [6.1 status](#61-status), [6.2 status](#62-status), [6.3 status](#63-status), [6.4 status](#64-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
+Handoff document for finishing the `feat/plugins` branch. Read the website guide [plugins.md](../website-docs/guides/plugins.md) for using and authoring plugins, and [plugins.md](plugins.md) for internals. **Phases 1 to 4 are done, and the fixes from the second review (2026-10-02) have landed; the new method-call transport has run on the iOS Simulator (2026-10-21, see Second review), so the branch is ready to merge.** Device runs not yet done are accepted on the strength of the emulator and Simulator runs (decision 2026-10-02, see Phase 4 decisions). Phase 5 is done on `feat/core-plugins` and verified on the iOS Simulator (see Phase 5 status). Next is [Phase 6](#phase-6-release-readiness) (release readiness), done before merging on `feat/plugins-release` (Phase 6 done, see [6.1 status](#61-status), [6.2 status](#62-status), [6.3 status](#63-status), [6.4 status](#64-status), [6.5 status](#65-status)); then the [Release sequence](#release-sequence) rebases, merges and tags. Non-blocking work is in [Known follow-ups](#known-follow-ups). Line numbers in the review findings are from commit `261864d` and may drift; many of those findings are now fixed (see Status).
 
 ## Context
 
@@ -448,6 +448,58 @@ Done (`cbcc119`..`2c08426`). Decisions (2026-10-26): the iOS hooks are `openURL(
 | `2c08426` | Fix found by following the walkthrough: `drift plugin sync --tidy` resolved plugins before tidying, so an app that had just required a local plugin (newer `go` line from `go mod init`) failed with "updates to go.mod needed"; `drift init`'s `drift.yaml` comment describes adding a plugin |
 
 **Verified:** `go vet`/`go test` (`TestSyncTidyResolvesANewlyRequiredPlugin` fails without the fix). The walkthrough followed verbatim outside the repo (code blocks extracted from the guide, the CLI and modules at `v0.27.0` from the `install-check.sh` rehearsal proxy): plugin module, `drift init` app, `replace`, `drift plugin sync --tidy`, `drift build xtool`, and `drift run android` showing "Hello from drift.yaml" on the API 36 emulator. hello-app in the repo: emulator and `drift build xtool`. Simulator (Xcode 27.1): with the app running, a URL the test plugin claims never reaches `DeepLinkHandler`, an unclaimed one does (`Received deep link ... source=open_url`). Not run: a launch URL, since `simctl openurl` raises an "Open in ...?" prompt and Xcode 27 removed the SimulatorKit `idb` needs to tap it; the launch path shares the same routing helper.
+
+#### 6.5 Author API hardening
+
+Third-party plugins compile against the native API (`plugin-api/ios`, `android/runner`), the Go build API (`pkg/plugin`) and channel semantics (`pkg/platform`); once they exist, each change there raises `PluginAPIFloor` and breaks them. These changes land before the first release, so the floor stays `v0.27.0`.
+
+- **iOS errors.** iOS plugins hand-rolled `NSError(domain: code)`, and any other Swift error reached Go with its type name as the code; built-in channels answered unknown methods with a per-handler domain (iOS) or `invalid_arguments` (Android).
+- **Closed error codes.** `channelErrorCodes` was closed, so three plugins copied a code-to-sentinel map and a `wrap()`.
+- **Stream errors.** `Stream` sent native stream errors only to `errors.Report`; media used mutable callback fields under a mutex; iOS location sent a `CLError` domain as the code.
+- **Stream lifecycle.** Native code was not told of Go's subscriptions, so location hand-rolled `StartUpdates` / `StopUpdates`.
+- **Build config.** Native code got it three ways: generated sources (permissions, splash), an Info.plist key read back (hello), a string resource looked up with `getIdentifier` (hello, location).
+- **Platform views.** Go heard `created: true` before the factory ran, factories could not fail, and views stayed in the dead hierarchy (leaking the Activity) when the host changed.
+- **Launch intent.** Android gave it to `DeepLinkHandler` before plugins.
+- **Config and versions.** `drift:"required"` accepted blank strings; the skew check compared patch versions.
+
+##### 6.5 status
+
+Done. Decisions (2026-10-26):
+- `Stream.Listen(StreamHandler[T]{OnEvent, OnError})`, nil `OnError` reported, mirroring `EventHandler`; parse errors stay reported (malformed wire data), never delivered.
+- Media playback state is state: `State()` / `Progress()` are `*core.Derived` set on the UI thread (`core.UseListenable` calls `SetState`, which is UI-thread only); failures are the `Errors()` stream. Firebase's `Token()` is set on the UI thread too, and `DeleteToken` waits for it.
+- Native stream lifecycle over the reserved `drift/streams` channel (one native entry point, the transport's threading and encoding; fakes can assert on it), numbered requests so out-of-order arrival cannot invert them. Location's updates run while `Updates()` has listeners; `SetUpdateOptions` is one app-wide setting.
+- `ctx.NativeConfig(v)`: one call, one JSON object for both platforms; Android ships it as an asset (`drift/plugins/<name>.json`), not `res/raw`, which would need `getIdentifier` again. Info.plist checks in securestorage (`NSFaceIDUsageDescription`), imagepicker (`NSCameraUsageDescription`) and location (`UIBackgroundModes`, the Always string) stay: they test what iOS enforces, which another plugin may provide, and catch an ejected project that dropped the key.
+- Each plugin registers with its own host (its `config`); `registerChannel` rejects `drift/` names from plugins outside the drift module.
+- The transport table keeps only transport codes; Drift's feature codes (`storage_busy`, `permission_*`, `view_type_not_found`, `platform_unavailable`) are declared on their channels with `ErrorCodes`, as plugins declare theirs. `channel_not_found` stays a transport code (the host answers it for any channel); `native_error` has no sentinel to map.
+- No `configChanges` added: listing them hides the recreation bug for those changes only. Views are re-hosted instead, on both platforms.
+- `isNewLaunch` is gone: the launch intent reaches plugins through `addIntentListener`, once per real launch.
+- `NewVideoPlayerController` returns its creation error; audio creates its native player lazily, so its constructor cannot fail.
+
+| Commit | Content |
+|--------|---------|
+| `95cbcfa` | Skew check compares major.minor (a v0.27.0 CLI serves a plugin requiring v0.27.1) |
+| `16e10cc` | `drift:"required"` rejects empty and whitespace-only strings; five `TrimSpace` checks deleted |
+| `17cff62` | iOS `DriftCallError(code, message, details)` and `invalidArguments`; other errors are `native_error` with domain and code in details; Android's gains `details`; every channel answers unknown methods with `method_not_found`; splash's late Preserve is `already_dismissed` |
+| `3acf6e3` | `platform.ErrorCodes` and `WithErrors` on method and event channels; transport table trimmed; feature codes on their channels; the plugins' copies deleted; `splash.ErrAlreadyDismissed` |
+| `e492b7c` | `StreamHandler`, `Emitter`; native `sendEventError(channel, error)` crosses the C bridge as the reply error payload; iOS location codes; media `State` / `Progress` / `Errors`; Firebase token on the UI thread |
+| `7352778` | `DriftChannel.stream(onListen:onCancel:)` on both platforms; `drift/streams`; `HandleNativeConnected` replays early subscriptions; location's `SetUpdateOptions` and subscription-driven updates |
+| `0094243` | `ctx.NativeConfig`, `ios.plugin_config` / `android.plugin_config`, `host.config`, per-plugin host with the `drift/` reservation; Android `JsonCodec` moves to the runner; permissions, splash, hello and location migrated |
+| `cefbcdb` | Platform view `create` replies with the factory's outcome (throwing factories); views re-hosted across Activities and scenes (`MutableContextWrapper` on Android); `DriftPlugin.kt`'s lifecycle text |
+| `4e19935` | Android launch intent offered to plugins first (`addIntentListener`); `isNewLaunch` removed |
+| `fe1ea3b` | Fix found on the emulator: a re-hosted view still held the first Activity. A view's context has its own `LayoutInflater` (from the Application's), and `DriftPlatformView.onHostChanged` (Android) lets a view rebuild what it built from the old Activity; media rebuilds its `PlayerView` around the same player. Android's own autofill caches in `EditText` and `WebView` keep at most the Activity a view was created in, until it is disposed |
+
+**Verified:** `go vet`/`go test` in the root and every nested module; `make cli`; `drift build android` of showcase, splash-demo, hello-app and firebase-demo; `drift build xtool` of showcase, splash-demo, hello-app and a scratch probe app; `drift build ios` (Simulator, Xcode 27.1) of showcase, splash-demo, hello-app and the probe app. A scratch probe plugin and app (outside the repo) checked on the API 36 emulator and the iOS Simulator alike:
+- `host.config` reaches native code; an event channel subscribed during package init starts its native stream once native connects; a second listener shares it, the last cancel stops it, a new listener restarts it; a throwing `onListen` reaches `OnError` with its code and no `onCancel` follows.
+- A built-in and a plugin channel answer an unknown method with `ErrMethodNotFound`; `invalidArguments` / `require` match `ErrInvalidArguments`; another native error is `native_error` with details; `DriftCallError` details reach Go.
+- A throwing factory fails `Create` from a goroutine and from the UI thread, and leaves no view.
+- A plugin registering a `drift/` channel crashes at launch, naming it.
+- Location: an update reaches `Updates()` (`geo fix`, `simctl location set`); on the Simulator, revoking the permission mid-stream (`simctl privacy revoke`) reaches `OnError` as `location.ErrPermissionDenied`.
+- Android: a launch intent the plugin claims never reaches `DeepLinkHandler`; dark-mode recreation offers no intent again; a later unclaimed intent reaches `DeepLinkHandler`, a claimed one the plugin.
+
+Emulator, showcase: video plays on through two dark-mode recreations, in place, its rebuilt controls working and state and progress reaching Go; a WebView keeps its page; text inputs keep their text, take input and validate after recreation; live Activities (`dumpsys meminfo` after `am dumpheap`, GC-root paths from the heap dump) stay at one beyond the current across eight recreations, and drop to one when the page is left. hello-app shows its greeting and splash-demo holds and dismisses its splash, on the emulator and the Simulator; showcase launches on the Simulator. **Not run:** iOS scene reconnect with live platform views (the Simulator cannot open a second scene, and closing an iPad's last scene ends the process; see 6.3); firebase-demo on a device (no FCM run); the notifications plugin's launch tap (the same `addIntentListener` path the probe covered).
+
+
+**Wire contract generation** (not built): after these changes each channel has, on both sides, one name carrying its methods, an optional stream with a lifecycle, and one declared table of error codes (`ErrorCodes` in Go, `DriftCallError` codes natively). A declaration of methods, codes and stream could generate stubs over these primitives without changing them; the native code strings would become generated constants.
 
 ## Verification matrix (merge gate)
 
