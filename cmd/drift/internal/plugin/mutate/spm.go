@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -48,7 +47,7 @@ type PluginPackage struct {
 	Sources []*protocol.OpAddIOSSource
 }
 
-// WritePluginPackage regenerates the Drift/Plugins package at root: the
+// WritePluginPackage plans the Drift/Plugins package at root: the
 // DriftPluginAPI target, one DriftPlugin_<name> target per plugin with
 // sources or SwiftPM dependencies (depending on DriftPluginAPI and its own
 // products), and a DriftPlugins library product listing them all, which
@@ -60,7 +59,7 @@ type PluginPackage struct {
 // did not write is removed, so a dropped plugin's module goes with it.
 // Byte-identical output produces no writes. Returns written and removed
 // paths.
-func WritePluginPackage(root string, pkg PluginPackage) ([]string, error) {
+func WritePluginPackage(cs *Changeset, root string, pkg PluginPackage) ([]string, error) {
 	files := map[string][]byte{}
 	for name, content := range pkg.API {
 		files[filepath.Join("Sources", pluginAPIModule, name)] = content
@@ -84,15 +83,15 @@ func WritePluginPackage(root string, pkg PluginPackage) ([]string, error) {
 	var changed []string
 	for _, rel := range slices.Sorted(maps.Keys(files)) {
 		p := filepath.Join(root, rel)
-		ch, err := WriteIfDifferent(p, files[rel])
+		ch, err := cs.WriteFile(p, files[rel])
 		if err != nil {
-			return changed, fmt.Errorf("write %s: %w", p, err)
+			return changed, err
 		}
 		if ch {
 			changed = append(changed, p)
 		}
 	}
-	removed, err := pruneTree(filepath.Join(root, "Sources"), func(path string) bool {
+	removed, err := pruneTree(cs, filepath.Join(root, "Sources"), func(path string) bool {
 		rel, err := filepath.Rel(root, path)
 		return err == nil && files[rel] != nil
 	})
@@ -101,15 +100,20 @@ func WritePluginPackage(root string, pkg PluginPackage) ([]string, error) {
 		return changed, err
 	}
 	// The single wrapper source of the earlier one-target layout.
-	if err := os.Remove(filepath.Join(root, "Empty.swift")); err == nil {
-		changed = append(changed, filepath.Join(root, "Empty.swift"))
+	legacy := filepath.Join(root, "Empty.swift")
+	if gone, err := cs.Remove(legacy); err != nil {
+		return changed, err
+	} else if gone {
+		changed = append(changed, legacy)
 	}
 	return changed, nil
 }
 
-// pruneTree removes every file under dir that keep rejects, then the
-// directories left empty. Returns the removed files.
-func pruneTree(dir string, keep func(path string) bool) ([]string, error) {
+// pruneTree plans the removal of every file under dir that keep rejects,
+// then of the directories left empty. It walks dir on disk: dir is
+// Drift-owned, and keep accepts every file planned there. Returns the
+// removed files.
+func pruneTree(cs *Changeset, dir string, keep func(path string) bool) ([]string, error) {
 	var removed, dirs []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -125,7 +129,7 @@ func pruneTree(dir string, keep func(path string) bool) ([]string, error) {
 		if keep(path) {
 			return nil
 		}
-		if err := os.Remove(path); err != nil {
+		if _, err := cs.Remove(path); err != nil {
 			return err
 		}
 		removed = append(removed, path)
@@ -133,7 +137,7 @@ func pruneTree(dir string, keep func(path string) bool) ([]string, error) {
 	})
 	// Deepest first, so a parent empties after its children.
 	for i := len(dirs) - 1; i >= 0; i-- {
-		_ = os.Remove(dirs[i]) // fails, harmlessly, while not empty
+		cs.RemoveIfEmpty(dirs[i])
 	}
 	return removed, err
 }

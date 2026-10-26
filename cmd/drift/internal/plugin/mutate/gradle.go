@@ -37,7 +37,7 @@ func GradleDependencyLine(op *protocol.OpAndroidGradleAddDependency) string {
 // Idempotent: re-runs of `drift build` against an unchanged project produce
 // no Gradle file modifications. This is what makes the plugin pipeline cheap
 // to re-run in watch mode without invalidating Gradle's incremental cache.
-func ApplyGradleAddDependencies(gradlePath string, ops []*protocol.OpAndroidGradleAddDependency, replace map[string]string) (string, bool, error) {
+func ApplyGradleAddDependencies(cs *Changeset, gradlePath string, ops []*protocol.OpAndroidGradleAddDependency, replace map[string]string) (string, bool, error) {
 	if len(ops) == 0 {
 		return gradlePath, false, nil
 	}
@@ -53,7 +53,7 @@ func ApplyGradleAddDependencies(gradlePath string, ops []*protocol.OpAndroidGrad
 		desired = append(desired, line)
 	}
 
-	changed, err := rewriteGradle(gradlePath, func(src []byte) ([]byte, error) {
+	changed, err := rewriteGradle(cs, gradlePath, func(src []byte) ([]byte, error) {
 		blk, err := findTopLevelBlock(src, "dependencies")
 		if err != nil {
 			return nil, err
@@ -148,13 +148,13 @@ func requireGroovyDSL(path string) error {
 	return nil
 }
 
-// rewriteGradle reads path, applies edit, and writes the result back only
-// when it differs. Reports whether the file changed.
-func rewriteGradle(path string, edit func([]byte) ([]byte, error)) (bool, error) {
+// rewriteGradle reads path, applies edit, and plans the result. Reports
+// whether the file changes.
+func rewriteGradle(cs *Changeset, path string, edit func([]byte) ([]byte, error)) (bool, error) {
 	if err := requireGroovyDSL(path); err != nil {
 		return false, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := cs.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -162,13 +162,7 @@ func rewriteGradle(path string, edit func([]byte) ([]byte, error)) (bool, error)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
-	if bytes.Equal(updated, data) {
-		return false, nil
-	}
-	if err := WriteFileAtomic(path, updated); err != nil {
-		return false, fmt.Errorf("write %s: %w", path, err)
-	}
-	return true, nil
+	return cs.WriteFile(path, updated)
 }
 
 // gradleBlock locates a top-level `name { ... }` block within a source

@@ -103,7 +103,7 @@ When you remove a plugin, Drift deletes the files it owned (unless you changed t
 
 When a plugin upgrade changes a Gradle dependency's version or a Gradle plugin's version, Drift updates the line it wrote in place. If you changed that line yourself, Drift leaves it and adds its own.
 
-Drift never overwrites a file it did not write. If a plugin would replace one of your files, or a plugin file you edited, the build fails and names each file: move yours aside (or undo your change) to let the plugin write it, or remove the plugin.
+Drift never overwrites a file it did not write. If a plugin would replace one of your files, or a plugin file you edited, the build fails and names each file: move yours aside (or undo your change) to let the plugin write it, or remove the plugin. Like any plugin op that fails, this stops the build before Drift changes a file in the project.
 
 If `.drift/plugins.lock.json` stops parsing (a merge conflict, say), resolve it, or delete it: Drift then treats plugin files as new, and refuses only those whose content differs from what the plugin writes.
 

@@ -16,17 +16,19 @@ import (
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// Apply mutates the rendered project at buildDir according to the validated
-// op list. Returns the list of files whose bytes actually changed.
+// Apply plans into cs the mutations the validated op list makes to the
+// rendered project at buildDir, writing nothing: the caller commits cs
+// once every step of the build has planned, so a failing op leaves the
+// project untouched. Returns the files whose bytes the commit changes.
 //
 // prev is the ejected project's lock from its previous build (ReadLock),
 // nil for a managed build. Apply never overwrites a file Drift did not
-// write: before changing anything, it fails with a *ForeignFileError if an
-// op would replace a file that prev does not record as Drift's, unchanged.
+// write: it fails with a *ForeignFileError if an op would replace a file
+// that prev does not record as Drift's, unchanged.
 //
 // Apply skips ops that do not match the target platform; plugins may
 // unconditionally emit ops for every platform.
-func Apply(ops []protocol.Op, buildDir, platform string, prev *Lock) ([]string, error) {
+func Apply(cs *mutate.Changeset, ops []protocol.Op, buildDir, platform string, prev *Lock) ([]string, error) {
 	if err := checkOwnedWrites(ops, buildDir, platform, prev); err != nil {
 		return nil, err
 	}
@@ -43,14 +45,14 @@ func Apply(ops []protocol.Op, buildDir, platform string, prev *Lock) ([]string, 
 	}
 
 	if platform == "ios" || platform == "xtool" {
-		ios, err := applyIOSOps(bag, buildDir, platform)
+		ios, err := applyIOSOps(cs, bag, buildDir, platform)
 		if err != nil {
 			return changedSorted(changed), err
 		}
 		record(ios...)
 	}
 	if platform == "android" {
-		droid, err := applyAndroidOps(bag, buildDir, prev.gradleReplacements(ops))
+		droid, err := applyAndroidOps(cs, bag, buildDir, prev.gradleReplacements(ops))
 		if err != nil {
 			return changedSorted(changed), err
 		}
@@ -194,7 +196,7 @@ func reportUnknownOp(op protocol.Op) {
 	})
 }
 
-func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
+func applyIOSOps(cs *mutate.Changeset, bag *opBag, buildDir, platform string) ([]string, error) {
 	var changed []string
 
 	for _, file := range []protocol.PlistFile{protocol.PlistInfo, protocol.PlistEntitlements} {
@@ -203,7 +205,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 			continue
 		}
 		path := filepath.Join(buildDir, filepath.FromSlash(iosPlistRelPath(platform, file)))
-		ch, err := mutate.ApplyPlist(path, ops)
+		ch, err := mutate.ApplyPlist(cs, path, ops)
 		if err != nil {
 			return changed, err
 		}
@@ -229,7 +231,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 		}
 		bundleFiles = append(bundleFiles, images...)
 	} else if len(bag.iosAssets) > 0 {
-		paths, err := mutate.WriteIOSAssets(iosAssetCatalog(buildDir), bag.iosAssets)
+		paths, err := mutate.WriteIOSAssets(cs, iosAssetCatalog(buildDir), bag.iosAssets)
 		if err != nil {
 			return changed, err
 		}
@@ -237,7 +239,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 	}
 
 	if len(bag.iosLaunch) > 0 {
-		path, ch, err := mutate.ReplaceLaunchScreen(iosLaunchScreenPath(buildDir, platform), bag.iosLaunch[0])
+		path, ch, err := mutate.ReplaceLaunchScreen(cs, iosLaunchScreenPath(buildDir, platform), bag.iosLaunch[0])
 		if err != nil {
 			return changed, err
 		}
@@ -248,7 +250,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 
 	// Always synced, even with zero files, so resources from a removed
 	// plugin are pruned.
-	paths, err := mutate.WriteIOSBundleResources(iosBundleResourcesDir(buildDir, platform), bundleFiles)
+	paths, err := mutate.WriteIOSBundleResources(cs, iosBundleResourcesDir(buildDir, platform), bundleFiles)
 	if err != nil {
 		return changed, err
 	}
@@ -260,7 +262,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 			resources = append(resources, xtoolPluginResourcesDir+"/"+f.Name)
 		}
 		ymlPath := filepath.Join(buildDir, "xtool.yml")
-		ch, err := mutate.SetXtoolResources(ymlPath, resources)
+		ch, err := mutate.SetXtoolResources(cs, ymlPath, resources)
 		if err != nil {
 			return changed, err
 		}
@@ -276,7 +278,7 @@ func applyIOSOps(bag *opBag, buildDir, platform string) ([]string, error) {
 	if err != nil {
 		return changed, err
 	}
-	spmPaths, err := mutate.WritePluginPackage(iosSPMPackageRoot(buildDir), pkg)
+	spmPaths, err := mutate.WritePluginPackage(cs, iosSPMPackageRoot(buildDir), pkg)
 	if err != nil {
 		return changed, err
 	}
@@ -321,11 +323,11 @@ const pluginAPITemplates = "plugin-api/ios"
 
 // replace maps Gradle lines to the lines Drift wrote for them at an earlier
 // version (Lock.gradleReplacements).
-func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]string, error) {
+func applyAndroidOps(cs *mutate.Changeset, bag *opBag, buildDir string, replace map[string]string) ([]string, error) {
 	var changed []string
 	manifestPath := filepath.Join(buildDir, "app", "src", "main", "AndroidManifest.xml")
 	if !bag.manifest.Empty() {
-		ch, err := mutate.ApplyAndroidManifest(manifestPath, bag.manifest)
+		ch, err := mutate.ApplyAndroidManifest(cs, manifestPath, bag.manifest)
 		if err != nil {
 			return changed, err
 		}
@@ -339,13 +341,13 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 	resDir := androidResDir(buildDir)
 	for _, w := range []func() (string, bool, error){
 		func() (string, bool, error) {
-			return mutate.WriteAndroidColors(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginColorsFile)), bag.colors)
+			return mutate.WriteAndroidColors(cs, filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginColorsFile)), bag.colors)
 		},
 		func() (string, bool, error) {
-			return mutate.WriteAndroidStrings(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStringsFile)), bag.strings)
+			return mutate.WriteAndroidStrings(cs, filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStringsFile)), bag.strings)
 		},
 		func() (string, bool, error) {
-			return mutate.WriteAndroidStyles(filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStylesFile)), bag.styles)
+			return mutate.WriteAndroidStyles(cs, filepath.Join(resDir, filepath.FromSlash(protocol.AndroidPluginStylesFile)), bag.styles)
 		},
 	} {
 		path, ch, err := w()
@@ -358,7 +360,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 	}
 
 	if len(bag.drawables) > 0 {
-		paths, err := mutate.WriteAndroidDrawables(androidDrawableDir(buildDir), bag.drawables)
+		paths, err := mutate.WriteAndroidDrawables(cs, androidDrawableDir(buildDir), bag.drawables)
 		if err != nil {
 			return changed, err
 		}
@@ -366,7 +368,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 	}
 
 	if len(bag.resXML) > 0 {
-		paths, err := mutate.WriteAndroidResourceXML(androidResDir(buildDir), bag.resXML)
+		paths, err := mutate.WriteAndroidResourceXML(cs, androidResDir(buildDir), bag.resXML)
 		if err != nil {
 			return changed, err
 		}
@@ -374,7 +376,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 	}
 
 	if len(bag.kotlinSources) > 0 {
-		paths, err := mutate.WriteKotlinSources(androidJavaRoot(buildDir), bag.kotlinSources)
+		paths, err := mutate.WriteKotlinSources(cs, androidJavaRoot(buildDir), bag.kotlinSources)
 		if err != nil {
 			return changed, err
 		}
@@ -383,7 +385,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 
 	if len(bag.gradleDeps) > 0 {
 		gradlePath := filepath.Join(buildDir, "app", "build.gradle")
-		path, ch, err := mutate.ApplyGradleAddDependencies(gradlePath, bag.gradleDeps, replace)
+		path, ch, err := mutate.ApplyGradleAddDependencies(cs, gradlePath, bag.gradleDeps, replace)
 		if err != nil {
 			return changed, err
 		}
@@ -393,7 +395,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 	}
 
 	if len(bag.appModule) > 0 {
-		paths, err := mutate.WriteAndroidAppModuleFiles(androidAppDir(buildDir), bag.appModule)
+		paths, err := mutate.WriteAndroidAppModuleFiles(cs, androidAppDir(buildDir), bag.appModule)
 		if err != nil {
 			return changed, err
 		}
@@ -402,7 +404,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 
 	if len(bag.gradlePlugins) > 0 {
 		appGradle := filepath.Join(buildDir, "app", "build.gradle")
-		path, ch, err := mutate.ApplyGradleApplyPlugins(appGradle, bag.gradlePlugins)
+		path, ch, err := mutate.ApplyGradleApplyPlugins(cs, appGradle, bag.gradlePlugins)
 		if err != nil {
 			return changed, err
 		}
@@ -410,7 +412,7 @@ func applyAndroidOps(bag *opBag, buildDir string, replace map[string]string) ([]
 			changed = append(changed, path)
 		}
 		projectGradle := filepath.Join(buildDir, "build.gradle")
-		path, ch, err = mutate.ApplyGradleProjectPlugins(projectGradle, bag.gradlePlugins, replace)
+		path, ch, err = mutate.ApplyGradleProjectPlugins(cs, projectGradle, bag.gradlePlugins, replace)
 		if err != nil {
 			return changed, err
 		}

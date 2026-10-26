@@ -69,13 +69,13 @@ func TestPipelineEndToEndAndroid(t *testing.T) {
 		t.Errorf("duplicate permission should collapse to 1, got %d", got)
 	}
 
-	if _, err := Apply(normalized, dir, "android", nil); err != nil {
+	if _, err := apply(t, normalized, dir, "android", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	if _, err := EnsureRunnerSupport(dir, "android"); err != nil {
+	if _, err := ensureRunnerSupport(t, dir, "android"); err != nil {
 		t.Fatalf("EnsureRunnerSupport: %v", err)
 	}
-	if _, err := WriteRegistrant(dir, "android", normalized); err != nil {
+	if _, err := writeRegistrant(t, dir, "android", normalized); err != nil {
 		t.Fatalf("WriteRegistrant: %v", err)
 	}
 

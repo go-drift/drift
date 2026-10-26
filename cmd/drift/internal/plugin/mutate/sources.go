@@ -3,19 +3,20 @@ package mutate
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// WriteIOSAssets writes one Contents.json + image bundle per OpIOSAssetsAddImageSet
+// WriteIOSAssets plans one Contents.json + image bundle per OpIOSAssetsAddImageSet
 // under the supplied Assets.xcassets directory. Each set lives at
 // <Assets.xcassets>/<Name>.imageset/.
-func WriteIOSAssets(assetsRoot string, ops []*protocol.OpIOSAssetsAddImageSet) ([]string, error) {
+func WriteIOSAssets(cs *Changeset, assetsRoot string, ops []*protocol.OpIOSAssetsAddImageSet) ([]string, error) {
 	var changed []string
-	if err := ensureAssetsRoot(assetsRoot); err != nil {
+	if err := ensureAssetsRoot(cs, assetsRoot); err != nil {
 		return changed, err
 	}
 	for _, op := range ops {
@@ -23,7 +24,7 @@ func WriteIOSAssets(assetsRoot string, ops []*protocol.OpIOSAssetsAddImageSet) (
 		if err != nil {
 			return changed, err
 		}
-		paths, err := writeOwned(files...)
+		paths, err := writeOwned(cs, files...)
 		changed = append(changed, paths...)
 		if err != nil {
 			return changed, err
@@ -32,13 +33,14 @@ func WriteIOSAssets(assetsRoot string, ops []*protocol.OpIOSAssetsAddImageSet) (
 	return changed, nil
 }
 
-func ensureAssetsRoot(dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("mkdir Assets.xcassets: %w", err)
-	}
+// ensureAssetsRoot plans the catalog's root Contents.json unless one
+// exists.
+func ensureAssetsRoot(cs *Changeset, dir string) error {
 	rootContents := filepath.Join(dir, "Contents.json")
-	if _, err := os.Stat(rootContents); err == nil {
+	if _, err := cs.ReadFile(rootContents); err == nil {
 		return nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("read %s: %w", rootContents, err)
 	}
 	root := []byte(`{
   "info" : {
@@ -47,7 +49,8 @@ func ensureAssetsRoot(dir string) error {
   }
 }
 `)
-	return WriteFileAtomic(rootContents, root)
+	_, err := cs.WriteFile(rootContents, root)
+	return err
 }
 
 func imagesetContentsJSON(filename string) ([]byte, error) {
@@ -68,20 +71,20 @@ func imagesetContentsJSON(filename string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ReplaceLaunchScreen writes a new LaunchScreen.storyboard at path. Returns
+// ReplaceLaunchScreen plans a new LaunchScreen.storyboard at path. Returns
 // the path and a changed flag.
-func ReplaceLaunchScreen(path string, op *protocol.OpIOSReplaceLaunchScreen) (string, bool, error) {
-	ch, err := WriteIfDifferent(path, []byte(op.Content))
+func ReplaceLaunchScreen(cs *Changeset, path string, op *protocol.OpIOSReplaceLaunchScreen) (string, bool, error) {
+	ch, err := cs.WriteFile(path, []byte(op.Content))
 	if err != nil {
-		return path, false, fmt.Errorf("write LaunchScreen: %w", err)
+		return path, false, fmt.Errorf("LaunchScreen: %w", err)
 	}
 	return path, ch, nil
 }
 
-// WriteKotlinSources writes Kotlin sources under
+// WriteKotlinSources plans Kotlin sources under
 // <javaRoot>/<packagePath>/<rel> where packagePath = pkg with dots to slashes.
-func WriteKotlinSources(javaRoot string, ops []*protocol.OpAddKotlinSource) ([]string, error) {
-	return writeEach(ops, func(op *protocol.OpAddKotlinSource) (OwnedFile, error) {
+func WriteKotlinSources(cs *Changeset, javaRoot string, ops []*protocol.OpAddKotlinSource) ([]string, error) {
+	return writeEach(cs, ops, func(op *protocol.OpAddKotlinSource) (OwnedFile, error) {
 		return KotlinSourceFile(javaRoot, op)
 	})
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/go-drift/drift/cmd/drift/internal/cache"
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	driftpluginCLI "github.com/go-drift/drift/cmd/drift/internal/plugin"
+	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	"github.com/go-drift/drift/cmd/drift/internal/scaffold"
 	"github.com/go-drift/drift/cmd/drift/internal/templates"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
@@ -362,8 +363,10 @@ func newPluginOps(ops []protocol.Op) (pluginOps, error) {
 // still writes those, with an empty registrant, and resets
 // plugin-generated output (bundle resources, the SwiftPM sidecar) so the
 // project compiles. Ejected projects are checked for plugin wiring first;
-// afterwards, output from plugins removed since the last build is cleaned
-// up (see SyncEjectedLock) and the modified files are summarised.
+// output from plugins removed since the last build is cleaned up and the
+// lock rewritten (see SyncEjectedLock), and the modified files are
+// summarised. Every step plans into one changeset, committed only once all
+// have succeeded, so a failing op leaves the project as it was.
 func applyPluginOps(ws *Workspace, ops pluginOps) error {
 	platformDir := platformProjectDir(ws, ws.Platform)
 	platform := ws.Platform
@@ -385,32 +388,41 @@ func applyPluginOps(ws *Workspace, ops pluginOps) error {
 		}
 	}
 
+	cs := mutate.NewChangeset()
 	var changed []string
-	applied, err := driftpluginCLI.Apply(ops.ops, platformDir, platform, prevLock)
+	applied, err := driftpluginCLI.Apply(cs, ops.ops, platformDir, platform, prevLock)
 	if err != nil {
 		return err
 	}
 	changed = append(changed, applied...)
-	support, err := driftpluginCLI.EnsureRunnerSupport(platformDir, platform)
+	support, err := driftpluginCLI.EnsureRunnerSupport(cs, platformDir, platform)
 	if err != nil {
 		return err
 	}
 	changed = append(changed, support...)
-	registrant, err := driftpluginCLI.WriteRegistrant(platformDir, platform, ops.ops)
+	registrant, err := driftpluginCLI.WriteRegistrant(cs, platformDir, platform, ops.ops)
 	if err != nil {
 		return err
 	}
 	changed = append(changed, registrant...)
 
-	var lockErr error
+	var dropped error
 	if ws.Ejected {
 		var deleted []string
-		deleted, lockErr = driftpluginCLI.SyncEjectedLock(platformDir, platform, ops.ops, prevLock)
+		deleted, dropped, err = driftpluginCLI.SyncEjectedLock(cs, platformDir, platform, ops.ops, prevLock)
+		if err != nil {
+			return err
+		}
 		changed = append(changed, deleted...)
+	}
+	if err := cs.Commit(); err != nil {
+		return err
+	}
+	if ws.Ejected {
 		reportChangedFiles(changed, ws.Root)
 	}
 	ws.pluginOps = ops
-	return lockErr
+	return dropped
 }
 
 func reportChangedFiles(changed []string, root string) {

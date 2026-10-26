@@ -51,25 +51,28 @@ type lockedFile struct {
 	SHA256 string `json:"sha256"`
 }
 
-// SyncEjectedLock reconciles an ejected project with the ops just applied
-// to it, using prev, the lock from the previous build (ReadLock), then
-// records ops as the new lock. What the project holds decides, not which
-// op made it, so an op renamed or retargeted by a CLI upgrade is neither a
-// removal nor an addition:
+// SyncEjectedLock plans into cs the reconciliation of an ejected project
+// with the ops just planned for it, using prev, the lock from the previous
+// build (ReadLock), then plans ops' record as the new lock. It is the
+// build's last planning step, so the commit writes the lock after the
+// output it records. What the project holds
+// decides, not which op made it, so an op renamed or retargeted by a CLI
+// upgrade is neither a removal nor an addition:
 //   - a file prev owned that no current op owns is deleted, unless it
 //     changed since Drift wrote it, in which case it stays and a warning
 //     names it;
 //   - an edit prev made inside a shared file (Info.plist, the manifest,
 //     build.gradle) that no current op makes, under the same key or as the
 //     same edit, cannot be undone safely, so it is listed in the returned
-//     error. The new lock is written first, so the list is shown once and
-//     the next build proceeds.
+//     dropped error, to report once cs is committed. The commit writes the
+//     new lock, so the list is shown once and the next build proceeds.
 //
-// Returns the deleted paths.
-func SyncEjectedLock(projectDir, platform string, ops []protocol.Op, prev *Lock) ([]string, error) {
+// Returns the paths the commit deletes. err is a failure to plan, after
+// which cs must not be committed.
+func SyncEjectedLock(cs *mutate.Changeset, projectDir, platform string, ops []protocol.Op, prev *Lock) (deleted []string, dropped error, err error) {
 	cur, err := lockFor(ops, projectDir, platform)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	curKeys := make(map[string]bool, len(cur.Ops))
@@ -82,20 +85,20 @@ func SyncEjectedLock(projectDir, platform string, ops []protocol.Op, prev *Lock)
 			curFiles[f.Path] = true
 		}
 	}
-	var deleted, edits []string
+	var edits []string
 	for _, o := range prev.ops() {
 		for _, f := range o.Files {
 			if curFiles[f.Path] {
 				continue
 			}
 			path := filepath.Join(projectDir, filepath.FromSlash(f.Path))
-			gone, err := deleteIfUnchanged(path, f.SHA256)
+			gone, err := deleteIfUnchanged(cs, path, f.SHA256)
 			if err != nil {
-				return deleted, err
+				return nil, nil, err
 			}
 			if gone {
 				deleted = append(deleted, path)
-				removeEmptyParents(filepath.Dir(path), projectDir)
+				removeEmptyParents(cs, filepath.Dir(path), projectDir)
 			} else if _, statErr := os.Stat(path); statErr == nil {
 				fmt.Fprintf(os.Stderr, "drift: kept %s from plugin %s: it changed since Drift wrote it\n", f.Path, o.Plugin)
 			}
@@ -107,19 +110,19 @@ func SyncEjectedLock(projectDir, platform string, ops []protocol.Op, prev *Lock)
 
 	data, err := json.MarshalIndent(cur, "", "  ")
 	if err != nil {
-		return deleted, err
+		return nil, nil, err
 	}
-	if _, err := writeIfDifferentSingle(lockPath(projectDir), append(data, '\n')); err != nil {
-		return deleted, err
+	if _, err := cs.WriteFile(lockPath(projectDir), append(data, '\n')); err != nil {
+		return nil, nil, err
 	}
 
 	if len(edits) > 0 {
 		sort.Strings(edits)
 		return deleted, fmt.Errorf("plugins no longer make these edits Drift made in the ejected project at %s; "+
 			"remove the ones you no longer need, then build again (this list is shown once):\n  - %s",
-			projectDir, strings.Join(edits, "\n  - "))
+			projectDir, strings.Join(edits, "\n  - ")), nil
 	}
-	return deleted, nil
+	return deleted, nil, nil
 }
 
 func lockPath(projectDir string) string {
@@ -295,10 +298,10 @@ func describeEdit(op protocol.Op, platform string) string {
 	return ""
 }
 
-// deleteIfUnchanged removes path if its content still hashes to sum.
-// Reports whether it removed the file.
-func deleteIfUnchanged(path, sum string) (bool, error) {
-	data, err := os.ReadFile(path)
+// deleteIfUnchanged plans the removal of path if its content still hashes
+// to sum. Reports whether it planned one.
+func deleteIfUnchanged(cs *mutate.Changeset, path, sum string) (bool, error) {
+	data, err := cs.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
@@ -308,19 +311,14 @@ func deleteIfUnchanged(path, sum string) (bool, error) {
 	if sha256Hex(data) != sum {
 		return false, nil
 	}
-	if err := os.Remove(path); err != nil {
-		return false, err
-	}
-	return true, nil
+	return cs.Remove(path)
 }
 
-// removeEmptyParents removes dir and its ancestors while they are empty,
-// stopping at root.
-func removeEmptyParents(dir, root string) {
+// removeEmptyParents plans the removal of dir and its ancestors while they
+// are empty, stopping at root.
+func removeEmptyParents(cs *mutate.Changeset, dir, root string) {
 	for dir != root && strings.HasPrefix(dir, root+string(filepath.Separator)) {
-		if os.Remove(dir) != nil {
-			return
-		}
+		cs.RemoveIfEmpty(dir)
 		dir = filepath.Dir(dir)
 	}
 }

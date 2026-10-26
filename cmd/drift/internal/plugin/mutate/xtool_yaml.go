@@ -3,14 +3,13 @@ package mutate
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"sort"
 
 	"gopkg.in/yaml.v3"
 )
 
-// SetXtoolResources makes the top-level `resources:` list of xtool.yml
-// exactly the given paths (relative to the xtool project root). xtool copies
+// SetXtoolResources plans the top-level `resources:` list of xtool.yml to
+// be exactly the given paths (relative to the xtool project root). xtool copies
 // each listed file into the root of the app bundle, where Bundle.main and
 // UIImage(named:) find it. SwiftPM target resources would instead land in a
 // separate Runner_Runner.bundle that neither can see, which is why plugin
@@ -24,8 +23,8 @@ import (
 // FUTURE(xtool#219): once xtool compiles asset catalogs, this mutator also
 // sets `assetCatalogs:` (one catalog per product) to the Drift-owned
 // Assets.xcassets. https://github.com/xtool-org/xtool/pull/219
-func SetXtoolResources(xtoolYmlPath string, resources []string) (bool, error) {
-	data, err := os.ReadFile(xtoolYmlPath)
+func SetXtoolResources(cs *Changeset, xtoolYmlPath string, resources []string) (bool, error) {
+	data, err := cs.ReadFile(xtoolYmlPath)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", xtoolYmlPath, err)
 	}
@@ -68,7 +67,7 @@ func SetXtoolResources(xtoolYmlPath string, resources []string) (bool, error) {
 	if err := enc.Close(); err != nil {
 		return false, fmt.Errorf("encode %s: %w", xtoolYmlPath, err)
 	}
-	return WriteIfDifferent(xtoolYmlPath, buf.Bytes())
+	return cs.WriteFile(xtoolYmlPath, buf.Bytes())
 }
 
 // mappingKeyIndex returns the index of key's key node in mapping m's

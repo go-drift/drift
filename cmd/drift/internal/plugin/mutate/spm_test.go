@@ -43,7 +43,7 @@ func readFile(t *testing.T, path string) string {
 // app target imports unconditionally.
 func TestWritePluginPackageEmpty(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "Drift", "Plugins")
-	if _, err := WritePluginPackage(root, PluginPackage{API: testAPI}); err != nil {
+	if _, err := writePluginPackage(t, root, PluginPackage{API: testAPI}); err != nil {
 		t.Fatal(err)
 	}
 	want := `// swift-tools-version:5.9
@@ -88,7 +88,7 @@ func TestWritePluginPackageFirebaseSnapshot(t *testing.T) {
 			swiftSource("analytics", "Main", "AnalyticsPlugin.swift", "import FirebaseAnalytics\n"),
 		},
 	}
-	if _, err := WritePluginPackage(root, pkg); err != nil {
+	if _, err := writePluginPackage(t, root, pkg); err != nil {
 		t.Fatal(err)
 	}
 	want := `// swift-tools-version:5.9
@@ -153,10 +153,10 @@ func TestWritePluginPackageIdempotentAndPrunes(t *testing.T) {
 		swiftSource("splash", "Splash", "Splash.swift", "// splash\n"),
 		swiftSource("camera", "Camera", "Camera.swift", "// camera\n"),
 	}}
-	if _, err := WritePluginPackage(root, full); err != nil {
+	if _, err := writePluginPackage(t, root, full); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := WritePluginPackage(root, full); err != nil || len(changed) != 0 {
+	if changed, err := writePluginPackage(t, root, full); err != nil || len(changed) != 0 {
 		t.Fatalf("rerun should write nothing: %v %v", changed, err)
 	}
 	// An earlier layout's wrapper source is removed.
@@ -166,7 +166,7 @@ func TestWritePluginPackageIdempotentAndPrunes(t *testing.T) {
 
 	// Dropping the camera plugin removes its module.
 	full.Sources = full.Sources[:1]
-	if _, err := WritePluginPackage(root, full); err != nil {
+	if _, err := writePluginPackage(t, root, full); err != nil {
 		t.Fatal(err)
 	}
 	for _, gone := range []string{"Sources/DriftPlugin_camera", "Empty.swift"} {

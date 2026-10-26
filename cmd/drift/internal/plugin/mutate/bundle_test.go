@@ -27,7 +27,7 @@ func writeBundleOps(t *testing.T, dir string, ops ...*protocol.OpIOSAddBundleRes
 	if err != nil {
 		return nil, err
 	}
-	return WriteIOSBundleResources(dir, files)
+	return writeIOSBundleResources(t, dir, files)
 }
 
 func TestWriteIOSBundleResourceVerbatim(t *testing.T) {
@@ -115,14 +115,14 @@ func TestWriteIOSBundleResourceEmptyRemovesDir(t *testing.T) {
 	if _, err := writeBundleOps(t, dir, iosBundleOp("a", "x.json", []byte("x"))); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if _, err := WriteIOSBundleResources(dir, nil); err != nil {
+	if _, err := writeIOSBundleResources(t, dir, nil); err != nil {
 		t.Fatalf("empty: %v", err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("expected dir removed, stat err = %v", err)
 	}
 	// Missing dir with no files is a no-op.
-	if changed, err := WriteIOSBundleResources(dir, nil); err != nil || len(changed) != 0 {
+	if changed, err := writeIOSBundleResources(t, dir, nil); err != nil || len(changed) != 0 {
 		t.Errorf("expected no-op, got %v, %v", changed, err)
 	}
 }
@@ -139,7 +139,7 @@ func TestWriteIOSBundleResourceDuplicateNameFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = WriteIOSBundleResources(dir, append(images, files...))
+	_, err = writeIOSBundleResources(t, dir, append(images, files...))
 	if err == nil || !strings.Contains(err.Error(), "splash") || !strings.Contains(err.Error(), "other") {
 		t.Fatalf("expected duplicate-name error naming both plugins, got %v", err)
 	}
@@ -164,11 +164,11 @@ func TestWriteAndroidAppModuleFiles(t *testing.T) {
 		Name:    "google-services.json",
 		Content: base64.StdEncoding.EncodeToString([]byte(`{"project_info":{}}`)),
 	}
-	changed, err := WriteAndroidAppModuleFiles(dir, []*protocol.OpAndroidAddAppModuleFile{op})
+	changed, err := writeAndroidAppModuleFiles(t, dir, []*protocol.OpAndroidAddAppModuleFile{op})
 	if err != nil || len(changed) != 1 {
 		t.Fatalf("write: %v, %v", changed, err)
 	}
-	changed, err = WriteAndroidAppModuleFiles(dir, []*protocol.OpAndroidAddAppModuleFile{op})
+	changed, err = writeAndroidAppModuleFiles(t, dir, []*protocol.OpAndroidAddAppModuleFile{op})
 	if err != nil || len(changed) != 0 {
 		t.Errorf("expected idempotent rerun, got %v, %v", changed, err)
 	}

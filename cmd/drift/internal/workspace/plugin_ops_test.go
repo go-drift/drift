@@ -1,8 +1,16 @@
 package workspace
 
 import (
+	"encoding/base64"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
+	driftpluginCLI "github.com/go-drift/drift/cmd/drift/internal/plugin"
+	"github.com/go-drift/drift/cmd/drift/internal/scaffold"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
@@ -36,4 +44,108 @@ func TestPluginOpsHash(t *testing.T) {
 	if one == mk(perm("android.permission.INTERNET")) {
 		t.Error("changing an op did not change the hash")
 	}
+}
+
+// An ejected build whose last op fails writes nothing: the edits and files
+// earlier ops planned, the registrant, the support files and the lock stay
+// as they were, so no output escapes the lock. Without the failing op the
+// same build lands.
+func TestApplyPluginOpsWritesNothingWhenAnOpFails(t *testing.T) {
+	root := t.TempDir()
+	if err := scaffold.WriteAndroid(root, scaffold.Settings{AppName: "App", AppID: "com.example.app", Bundle: "com.example.app", Orientation: "portrait"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "android")
+	ws := &Workspace{Root: root, AndroidDir: dir, Platform: "android", Ejected: true}
+	base := protocol.Base{Pkg: "github.com/acme/push"}
+	enc := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	build := func(ops ...protocol.Op) error {
+		t.Helper()
+		p, err := newPluginOps(ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return applyPluginOps(ws, p)
+	}
+
+	if err := build(&protocol.OpAndroidWriteDrawable{Base: base, Name: "push_icon", Content: enc("png v1")}); err != nil {
+		t.Fatalf("first build: %v", err)
+	}
+	before := snapshotTree(t, dir)
+
+	good := []protocol.Op{
+		&protocol.OpAndroidManifestAddPermission{Base: base, Name: "android.permission.POST_NOTIFICATIONS"},
+		&protocol.OpAndroidColorSet{Base: base, Name: "push_accent", Value: "#ff0000ff"},
+		&protocol.OpAndroidWriteDrawable{Base: base, Name: "push_icon", Content: enc("png v2")},
+		&protocol.OpAddKotlinSource{Base: base, Package: "com.acme.push", RelPath: "PushPlugin.kt", Content: enc("class PushPlugin\n")},
+		&protocol.OpAndroidGradleAddDependency{Base: base, Configuration: "implementation", Coord: "com.acme:push:1.0"},
+		&protocol.OpAndroidPlugin{Base: base, Class: "com.acme.push.PushPlugin"},
+	}
+	// The scaffold declares com.android.application at another version,
+	// which the last Gradle mutator rejects.
+	bad := &protocol.OpAndroidGradleApplyPlugin{Base: base, ID: "com.android.application", Version: "0.0.1"}
+	err := build(append(good, bad)...)
+	if err == nil || !strings.Contains(err.Error(), "the project declares version") {
+		t.Fatalf("err = %v, want the Gradle plugin version mismatch", err)
+	}
+	if after := snapshotTree(t, dir); !reflect.DeepEqual(after, before) {
+		for path := range after {
+			if _, ok := before[path]; !ok {
+				t.Errorf("failed build created %s", path)
+			} else if after[path] != before[path] {
+				t.Errorf("failed build changed %s", path)
+			}
+		}
+		for path := range before {
+			if _, ok := after[path]; !ok {
+				t.Errorf("failed build removed %s", path)
+			}
+		}
+	}
+
+	if err := build(good...); err != nil {
+		t.Fatalf("build without the failing op: %v", err)
+	}
+	lock, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(driftpluginCLI.LockFile)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{"app/src/main/java/com/acme/push/PushPlugin.kt", "app/src/main/res/drawable-nodpi/push_icon.png"} {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("%s not written: %v", rel, err)
+		}
+		if !strings.Contains(string(lock), rel) {
+			t.Errorf("lock does not record %s:\n%s", rel, lock)
+		}
+	}
+	if gradle, _ := os.ReadFile(filepath.Join(dir, "app", "build.gradle")); !strings.Contains(string(gradle), "com.acme:push:1.0") {
+		t.Errorf("app/build.gradle lacks the dependency:\n%s", gradle)
+	}
+}
+
+// snapshotTree maps every file and directory under dir, relative, to its
+// content ("" for a directory).
+func snapshotTree(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	tree := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			tree[rel+"/"] = ""
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		tree[rel] = string(data)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tree
 }

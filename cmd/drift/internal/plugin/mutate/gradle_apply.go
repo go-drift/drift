@@ -18,11 +18,11 @@ import (
 // `apply plugin:` line anywhere in the file is skipped, so reruns on an
 // ejected project converge and a line the user wrote (even inside a
 // conditional) is respected.
-func ApplyGradleApplyPlugins(appGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin) (string, bool, error) {
+func ApplyGradleApplyPlugins(cs *Changeset, appGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin) (string, bool, error) {
 	if len(ops) == 0 {
 		return appGradlePath, false, nil
 	}
-	changed, err := rewriteGradle(appGradlePath, func(src []byte) ([]byte, error) {
+	changed, err := rewriteGradle(cs, appGradlePath, func(src []byte) ([]byte, error) {
 		present := applyPluginIDsPresent(src)
 		var toInsert []string
 		for _, op := range ops {
@@ -55,11 +55,11 @@ func ApplyGradleApplyPlugins(appGradlePath string, ops []*protocol.OpAndroidGrad
 // earlier version (an ejected project's lock): if the project still holds
 // that line as written, it is updated in place rather than reported as a
 // mismatch.
-func ApplyGradleProjectPlugins(projectGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin, replace map[string]string) (string, bool, error) {
+func ApplyGradleProjectPlugins(cs *Changeset, projectGradlePath string, ops []*protocol.OpAndroidGradleApplyPlugin, replace map[string]string) (string, bool, error) {
 	if len(ops) == 0 {
 		return projectGradlePath, false, nil
 	}
-	changed, err := rewriteGradle(projectGradlePath, func(src []byte) ([]byte, error) {
+	changed, err := rewriteGradle(cs, projectGradlePath, func(src []byte) ([]byte, error) {
 		blk, err := findTopLevelBlock(src, "plugins")
 		if err != nil {
 			return nil, err

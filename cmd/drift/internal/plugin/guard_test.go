@@ -46,7 +46,7 @@ func TestApplyRefusesToOverwriteAUserFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = Apply(ops, dir, "android", prev)
+	_, err = apply(t, ops, dir, "android", prev)
 	wantForeign(t, err, "app/services.json")
 	if got := readFile(t, filepath.Join(dir, "app/services.json")); got != "mine" {
 		t.Errorf("user file overwritten: %q", got)
@@ -62,7 +62,7 @@ func TestApplyUpdatesOnlyUnchangedPluginFiles(t *testing.T) {
 	dir := t.TempDir()
 	seedAndroidScaffold(t, dir)
 	v1 := []protocol.Op{appModuleFile("a.json", "a1"), appModuleFile("b.json", "b1")}
-	if _, err := Apply(v1, dir, "android", nil); err != nil {
+	if _, err := apply(t, v1, dir, "android", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := syncLock(t, dir, v1); err != nil {
@@ -72,18 +72,18 @@ func TestApplyUpdatesOnlyUnchangedPluginFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Apply(v1, dir, "android", prev); err != nil {
+	if _, err := apply(t, v1, dir, "android", prev); err != nil {
 		t.Errorf("reapplying identical content: %v", err)
 	}
 
 	writeTree(t, dir, map[string]string{"app/b.json": "b1, edited"})
 	v2 := []protocol.Op{appModuleFile("a.json", "a2"), appModuleFile("b.json", "b2")}
-	_, err = Apply(v2, dir, "android", prev)
+	_, err = apply(t, v2, dir, "android", prev)
 	wantForeign(t, err, "app/b.json")
 
 	// Undoing the edit lets the upgrade through.
 	writeTree(t, dir, map[string]string{"app/b.json": "b1"})
-	if _, err := Apply(v2, dir, "android", prev); err != nil {
+	if _, err := apply(t, v2, dir, "android", prev); err != nil {
 		t.Fatal(err)
 	}
 	if a, b := readFile(t, filepath.Join(dir, "app/a.json")), readFile(t, filepath.Join(dir, "app/b.json")); a != "a2" || b != "b2" {
@@ -100,6 +100,6 @@ func TestApplyRefusesToReplaceTemplateFiles(t *testing.T) {
 	}
 	dir := filepath.Join(root, "android")
 	op := &protocol.OpAndroidWriteResourceXML{Base: protocol.Base{Pkg: "github.com/acme/push"}, RelPath: "drawable/launch_background.xml", Content: "<layer-list/>"}
-	_, err := Apply([]protocol.Op{op}, dir, "android", nil)
+	_, err := apply(t, []protocol.Op{op}, dir, "android", nil)
 	wantForeign(t, err, "app/src/main/res/drawable/launch_background.xml")
 }

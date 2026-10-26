@@ -32,7 +32,7 @@ func TestWriteRegistrantAndroidListsPluginsInSourceOrder(t *testing.T) {
 		&protocol.OpAndroidManifestAddPermission{Base: protocol.Base{Pkg: "z"}, Name: "android.permission.CAMERA"},
 		&protocol.OpAndroidPlugin{Base: protocol.Base{Pkg: "a"}, Class: "com.alpha.AlphaPlugin"},
 	}
-	if _, err := WriteRegistrant(dir, "android", ops); err != nil {
+	if _, err := writeRegistrant(t, dir, "android", ops); err != nil {
 		t.Fatalf("WriteRegistrant: %v", err)
 	}
 	s := readRegistrant(t, dir, "android")
@@ -54,7 +54,7 @@ func TestWriteRegistrantIOSListsPluginsInSourceOrder(t *testing.T) {
 	}
 	for _, platform := range []string{"ios", "xtool"} {
 		dir := t.TempDir()
-		if _, err := WriteRegistrant(dir, platform, ops); err != nil {
+		if _, err := writeRegistrant(t, dir, platform, ops); err != nil {
 			t.Fatalf("%s: WriteRegistrant: %v", platform, err)
 		}
 		s := readRegistrant(t, dir, platform)
@@ -78,10 +78,10 @@ func TestWriteRegistrantIOSListsPluginsInSourceOrder(t *testing.T) {
 
 func TestWriteRegistrantIdempotent(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := WriteRegistrant(dir, "android", nil); err != nil {
+	if _, err := writeRegistrant(t, dir, "android", nil); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	changed, err := WriteRegistrant(dir, "android", nil)
+	changed, err := writeRegistrant(t, dir, "android", nil)
 	if err != nil {
 		t.Fatalf("second: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestRegistrantPlaceholdersMatchEmptyCodegen(t *testing.T) {
 			t.Fatalf("read %s: %v", c.template, err)
 		}
 		dir := t.TempDir()
-		if _, err := WriteRegistrant(dir, c.platform, nil); err != nil {
+		if _, err := writeRegistrant(t, dir, c.platform, nil); err != nil {
 			t.Fatalf("WriteRegistrant: %v", err)
 		}
 		if got := readRegistrant(t, dir, c.platform); got != string(tmpl) {
@@ -127,7 +127,7 @@ func TestEnsureRunnerSupportMatchesTemplates(t *testing.T) {
 	}
 	for platform, files := range cases {
 		dir := t.TempDir()
-		changed, err := EnsureRunnerSupport(dir, platform)
+		changed, err := ensureRunnerSupport(t, dir, platform)
 		if err != nil {
 			t.Fatalf("%s: %v", platform, err)
 		}
@@ -147,7 +147,7 @@ func TestEnsureRunnerSupportMatchesTemplates(t *testing.T) {
 				t.Errorf("%s: %s differs from %s", platform, f.written, f.template)
 			}
 		}
-		if changed, err := EnsureRunnerSupport(dir, platform); err != nil || len(changed) != 0 {
+		if changed, err := ensureRunnerSupport(t, dir, platform); err != nil || len(changed) != 0 {
 			t.Errorf("%s: rerun should be a no-op, got %v, %v", platform, changed, err)
 		}
 	}

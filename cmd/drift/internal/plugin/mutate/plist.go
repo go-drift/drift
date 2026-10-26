@@ -1,13 +1,14 @@
 // Package mutate contains the file mutators driven by plugin ops. Each
-// mutator reads the current file, computes the would-be-new file, and only
-// writes if the bytes actually changed; this preserves comments,
-// non-plugin-managed content, and avoids spurious touches on ejected builds.
+// mutator reads the current file through a Changeset, computes the
+// would-be-new file, and plans it there; nothing reaches disk until the
+// build commits the changeset, and then only files whose bytes changed.
+// This preserves comments and non-plugin-managed content, avoids spurious
+// touches on ejected builds, and lets a failing op abort a build before
+// it writes anything.
 package mutate
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 
@@ -16,14 +17,14 @@ import (
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
-// ApplyPlist applies plist ops to the plist at path in-place. The file must
+// ApplyPlist plans plist ops' edits to the plist at path into cs. The file must
 // exist already (scaffold writes Info.plist and Runner.entitlements before
 // plugin ops run); every op must target that one file. Setters run before
 // appends, so an array a plugin sets is the base others append to; appends
-// de-duplicate. Returns changed=true iff the file was rewritten.
-func ApplyPlist(path string, ops []protocol.PlistOp) (bool, error) {
+// de-duplicate. Returns changed=true iff the file's bytes change.
+func ApplyPlist(cs *Changeset, path string, ops []protocol.PlistOp) (bool, error) {
 	name := filepath.Base(path)
-	data, err := os.ReadFile(path)
+	data, err := cs.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", name, err)
 	}
@@ -72,17 +73,5 @@ func ApplyPlist(path string, ops []protocol.PlistOp) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("marshal %s: %w", name, err)
 	}
-	if bytes.Equal(out, data) {
-		return false, nil
-	}
-	if err := WriteFileAtomic(path, out); err != nil {
-		return false, fmt.Errorf("write %s: %w", name, err)
-	}
-	return true, nil
-}
-
-// EnsureDir is a small helper used by other mutators when writing into
-// directories that may not exist (asset catalogs, etc.).
-func EnsureDir(p string) error {
-	return os.MkdirAll(filepath.Dir(p), 0o755)
+	return cs.WriteFile(path, out)
 }

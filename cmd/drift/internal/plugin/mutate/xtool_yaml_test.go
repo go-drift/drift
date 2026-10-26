@@ -44,7 +44,7 @@ func readXtoolYml(t *testing.T, p string) map[string]any {
 
 func TestSetXtoolResourcesSetsSortedListAndPreservesKeys(t *testing.T) {
 	p := writeXtoolYml(t, scaffoldXtoolYml)
-	changed, err := SetXtoolResources(p, []string{"PluginResources/b.json", "PluginResources/a.png"})
+	changed, err := setXtoolResources(t, p, []string{"PluginResources/b.json", "PluginResources/a.png"})
 	if err != nil || !changed {
 		t.Fatalf("set: changed=%v err=%v", changed, err)
 	}
@@ -60,13 +60,13 @@ func TestSetXtoolResourcesSetsSortedListAndPreservesKeys(t *testing.T) {
 
 func TestSetXtoolResourcesIdempotentAndReplaces(t *testing.T) {
 	p := writeXtoolYml(t, scaffoldXtoolYml)
-	if _, err := SetXtoolResources(p, []string{"PluginResources/a.png"}); err != nil {
+	if _, err := setXtoolResources(t, p, []string{"PluginResources/a.png"}); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := SetXtoolResources(p, []string{"PluginResources/a.png"}); err != nil || changed {
+	if changed, err := setXtoolResources(t, p, []string{"PluginResources/a.png"}); err != nil || changed {
 		t.Errorf("rerun: changed=%v err=%v", changed, err)
 	}
-	if _, err := SetXtoolResources(p, []string{"PluginResources/c.png"}); err != nil {
+	if _, err := setXtoolResources(t, p, []string{"PluginResources/c.png"}); err != nil {
 		t.Fatal(err)
 	}
 	res, _ := readXtoolYml(t, p)["resources"].([]any)
@@ -78,17 +78,17 @@ func TestSetXtoolResourcesIdempotentAndReplaces(t *testing.T) {
 func TestSetXtoolResourcesEmpty(t *testing.T) {
 	p := writeXtoolYml(t, scaffoldXtoolYml)
 	// No resources and no key: file untouched byte-for-byte.
-	if changed, err := SetXtoolResources(p, nil); err != nil || changed {
+	if changed, err := setXtoolResources(t, p, nil); err != nil || changed {
 		t.Fatalf("empty on clean file: changed=%v err=%v", changed, err)
 	}
 	if data, _ := os.ReadFile(p); string(data) != scaffoldXtoolYml {
 		t.Errorf("clean file was rewritten:\n%s", data)
 	}
 	// Emptying a populated list removes the key.
-	if _, err := SetXtoolResources(p, []string{"PluginResources/a.png"}); err != nil {
+	if _, err := setXtoolResources(t, p, []string{"PluginResources/a.png"}); err != nil {
 		t.Fatal(err)
 	}
-	if changed, err := SetXtoolResources(p, nil); err != nil || !changed {
+	if changed, err := setXtoolResources(t, p, nil); err != nil || !changed {
 		t.Fatalf("clear: changed=%v err=%v", changed, err)
 	}
 	if _, ok := readXtoolYml(t, p)["resources"]; ok {
@@ -98,7 +98,7 @@ func TestSetXtoolResourcesEmpty(t *testing.T) {
 
 func TestSetXtoolResourcesRejectsNonMapping(t *testing.T) {
 	p := writeXtoolYml(t, "- not\n- a mapping\n")
-	if _, err := SetXtoolResources(p, []string{"x"}); err == nil {
+	if _, err := setXtoolResources(t, p, []string{"x"}); err == nil {
 		t.Errorf("expected error for non-mapping document")
 	}
 }

@@ -8,18 +8,28 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // syncLock reconciles dir the way an ejected build does: the lock from the
-// previous build, then SyncEjectedLock.
+// previous build, then SyncEjectedLock, committed. Returns the deleted
+// paths and the dropped-edits or commit error.
 func syncLock(t *testing.T, dir string, ops []protocol.Op) ([]string, error) {
 	t.Helper()
 	prev, err := ReadLock(dir)
 	if err != nil {
 		return nil, err
 	}
-	return SyncEjectedLock(dir, "android", ops, prev)
+	cs := mutate.NewChangeset()
+	deleted, dropped, err := SyncEjectedLock(cs, dir, "android", ops, prev)
+	if err != nil {
+		return nil, err
+	}
+	if err := cs.Commit(); err != nil {
+		return nil, err
+	}
+	return deleted, dropped
 }
 
 func TestSyncEjectedLockCleansUpRemovedPlugins(t *testing.T) {
@@ -122,7 +132,7 @@ func TestOwnedFilesMatchApply(t *testing.T) {
 		&protocol.OpAndroidWriteResourceXML{Base: base, RelPath: "xml/p_config.xml", Content: "<config/>"},
 		&protocol.OpAndroidAddAppModuleFile{Base: base, Name: "p-services.json", Content: enc("{}")},
 	}
-	if _, err := Apply(ops, dir, "android", nil); err != nil {
+	if _, err := apply(t, ops, dir, "android", nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	for _, op := range ops {

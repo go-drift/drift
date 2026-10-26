@@ -1,9 +1,7 @@
 package mutate
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,11 +26,11 @@ func (m ManifestOps) Empty() bool {
 	return len(m.Permissions)+len(m.IntentFilters)+len(m.ActivityAttrs)+len(m.MetaData)+len(m.Services)+len(m.Receivers) == 0
 }
 
-// ApplyAndroidManifest applies manifest ops to the file at path. Existing
-// nodes are preserved (etree round-trips comments and unrelated siblings).
-// Returns changed=true iff the file's bytes actually changed.
-func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
-	doc, original, err := loadXML(path)
+// ApplyAndroidManifest plans manifest ops' edits to the file at path into
+// cs. Existing nodes are preserved (etree round-trips comments and
+// unrelated siblings). Returns changed=true iff the file's bytes change.
+func ApplyAndroidManifest(cs *Changeset, path string, ops ManifestOps) (bool, error) {
+	doc, err := loadXML(cs, path)
 	if err != nil {
 		return false, fmt.Errorf("read AndroidManifest: %w", err)
 	}
@@ -95,13 +93,7 @@ func ApplyAndroidManifest(path string, ops ManifestOps) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("serialize AndroidManifest: %w", err)
 	}
-	if bytes.Equal(out, original) {
-		return false, nil
-	}
-	if err := WriteFileAtomic(path, out); err != nil {
-		return false, fmt.Errorf("write AndroidManifest: %w", err)
-	}
-	return true, nil
+	return cs.WriteFile(path, out)
 }
 
 // ensurePermission declares name, up to API level maxSDK when it is set.
@@ -226,12 +218,12 @@ func ensureMetaData(parent *etree.Element, name, value string) {
 	parent.AddChild(meta)
 }
 
-// WriteAndroidColors writes Drift's plugin colours file at path from ops,
+// WriteAndroidColors plans Drift's plugin colours file at path from ops,
 // replacing any previous content (the file is Drift-owned), or removes it
 // when there are no ops so a dropped plugin's colours do not linger.
 // Values are Drift hex colours (alpha last), written in Android's format
 // (alpha first).
-func WriteAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {
+func WriteAndroidColors(cs *Changeset, path string, ops []*protocol.OpAndroidColorSet) (string, bool, error) {
 	values := make([]string, len(ops))
 	for i, op := range ops {
 		c, err := protocol.ParseColor(op.Value)
@@ -240,7 +232,7 @@ func WriteAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string,
 		}
 		values[i] = c.AndroidHex()
 	}
-	return writeValuesXML(path, "color", len(ops), func(root *etree.Element) {
+	return writeValuesXML(cs, path, "color", len(ops), func(root *etree.Element) {
 		for i, op := range ops {
 			setValueEntry(root, "color", op.Name, values[i])
 		}
@@ -253,8 +245,8 @@ func WriteAndroidColors(path string, ops []*protocol.OpAndroidColorSet) (string,
 // value containing % is marked formatted="false": it is not a format
 // string, and aapt2 rejects some literal text, such as "%s and %d", as an
 // unnumbered format otherwise.
-func WriteAndroidStrings(path string, ops []*protocol.OpAndroidStringSet) (string, bool, error) {
-	return writeValuesXML(path, "string", len(ops), func(root *etree.Element) {
+func WriteAndroidStrings(cs *Changeset, path string, ops []*protocol.OpAndroidStringSet) (string, bool, error) {
+	return writeValuesXML(cs, path, "string", len(ops), func(root *etree.Element) {
 		for _, op := range ops {
 			el := setValueEntry(root, "string", op.Name, androidStringText(op.Value))
 			if strings.Contains(op.Value, "%") {
@@ -299,24 +291,21 @@ func androidStringText(value string) string {
 }
 
 // WriteAndroidStyles is WriteAndroidColors for Drift's plugin styles file.
-func WriteAndroidStyles(path string, ops []*protocol.OpAndroidStyleSet) (string, bool, error) {
-	return writeValuesXML(path, "style", len(ops), func(root *etree.Element) {
+func WriteAndroidStyles(cs *Changeset, path string, ops []*protocol.OpAndroidStyleSet) (string, bool, error) {
+	return writeValuesXML(cs, path, "style", len(ops), func(root *etree.Element) {
 		for _, op := range ops {
 			setStyleEntry(root, op)
 		}
 	})
 }
 
-func writeValuesXML(path, kind string, entries int, fill func(root *etree.Element)) (string, bool, error) {
+func writeValuesXML(cs *Changeset, path, kind string, entries int, fill func(root *etree.Element)) (string, bool, error) {
 	if entries == 0 {
-		err := os.Remove(path)
-		if os.IsNotExist(err) {
-			return path, false, nil
-		}
+		existed, err := cs.Remove(path)
 		if err != nil {
 			return path, false, fmt.Errorf("remove %s: %w", kind, err)
 		}
-		return path, true, nil
+		return path, existed, nil
 	}
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
@@ -326,9 +315,9 @@ func writeValuesXML(path, kind string, entries int, fill func(root *etree.Elemen
 	if err != nil {
 		return path, false, fmt.Errorf("serialize %s: %w", kind, err)
 	}
-	ch, err := WriteIfDifferent(path, out)
+	ch, err := cs.WriteFile(path, out)
 	if err != nil {
-		return path, false, fmt.Errorf("write %s: %w", kind, err)
+		return path, false, fmt.Errorf("%s: %w", kind, err)
 	}
 	return path, ch, nil
 }
@@ -379,29 +368,29 @@ func setStyleEntry(root *etree.Element, op *protocol.OpAndroidStyleSet) {
 	}
 }
 
-// WriteAndroidDrawables writes raw bitmap files under drawableDir. Returns
-// the paths that actually changed.
-func WriteAndroidDrawables(drawableDir string, ops []*protocol.OpAndroidWriteDrawable) ([]string, error) {
-	return writeEach(ops, func(op *protocol.OpAndroidWriteDrawable) (OwnedFile, error) {
+// WriteAndroidDrawables plans raw bitmap files under drawableDir. Returns
+// the paths that change.
+func WriteAndroidDrawables(cs *Changeset, drawableDir string, ops []*protocol.OpAndroidWriteDrawable) ([]string, error) {
+	return writeEach(cs, ops, func(op *protocol.OpAndroidWriteDrawable) (OwnedFile, error) {
 		return DrawableFile(drawableDir, op)
 	})
 }
 
-// WriteAndroidResourceXML writes arbitrary res/<relPath> XML files.
-func WriteAndroidResourceXML(resRoot string, ops []*protocol.OpAndroidWriteResourceXML) ([]string, error) {
-	return writeEach(ops, func(op *protocol.OpAndroidWriteResourceXML) (OwnedFile, error) {
+// WriteAndroidResourceXML plans arbitrary res/<relPath> XML files.
+func WriteAndroidResourceXML(cs *Changeset, resRoot string, ops []*protocol.OpAndroidWriteResourceXML) ([]string, error) {
+	return writeEach(cs, ops, func(op *protocol.OpAndroidWriteResourceXML) (OwnedFile, error) {
 		return ResourceXMLFile(resRoot, op), nil
 	})
 }
 
-func loadXML(path string) (*etree.Document, []byte, error) {
-	data, err := os.ReadFile(path)
+func loadXML(cs *Changeset, path string) (*etree.Document, error) {
+	data, err := cs.ReadFile(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(data); err != nil {
-		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	return doc, data, nil
+	return doc, nil
 }

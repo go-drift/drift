@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-drift/drift/cmd/drift/internal/plugin/mutate"
 	"github.com/go-drift/drift/cmd/drift/internal/scaffold"
 	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
@@ -23,18 +24,26 @@ func ejectedAndroid(t *testing.T) string {
 	return filepath.Join(root, "android")
 }
 
-// ejectedBuild applies ops to dir the way an ejected build does.
+// ejectedBuild applies ops to dir the way an ejected build does: Apply and
+// SyncEjectedLock plan, then one commit.
 func ejectedBuild(t *testing.T, dir string, ops ...protocol.Op) error {
 	t.Helper()
 	prev, err := ReadLock(dir)
 	if err != nil {
 		return err
 	}
-	if _, err := Apply(ops, dir, "android", prev); err != nil {
+	cs := mutate.NewChangeset()
+	if _, err := Apply(cs, ops, dir, "android", prev); err != nil {
 		return err
 	}
-	_, err = SyncEjectedLock(dir, "android", ops, prev)
-	return err
+	_, dropped, err := SyncEjectedLock(cs, dir, "android", ops, prev)
+	if err != nil {
+		return err
+	}
+	if err := cs.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	return dropped
 }
 
 func lockKeys(t *testing.T, dir string) []string {

@@ -72,7 +72,7 @@ func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
 	return BundleFile{Name: name, Content: decoded, Plugin: plugin}, nil
 }
 
-// WriteIOSBundleResources makes dir contain exactly files: each file is
+// WriteIOSBundleResources plans dir to contain exactly files: each file is
 // written (only when its bytes differ) and anything else in dir is removed,
 // so a plugin dropped from the project, including mid-watch-session, takes
 // its resources with it. dir is owned by Drift; nothing else may write
@@ -81,7 +81,7 @@ func decodeBundleFile(name, content, plugin string) (BundleFile, error) {
 // Two files with the same name are an error: both build paths flatten
 // resources into the bundle root, so the second would shadow the first.
 // Returns written and removed paths.
-func WriteIOSBundleResources(dir string, files []BundleFile) ([]string, error) {
+func WriteIOSBundleResources(cs *Changeset, dir string, files []BundleFile) ([]string, error) {
 	want := make(map[string]BundleFile, len(files))
 	for _, f := range files {
 		if prev, dup := want[f.Name]; dup {
@@ -91,7 +91,7 @@ func WriteIOSBundleResources(dir string, files []BundleFile) ([]string, error) {
 	}
 
 	var changed []string
-	removed, err := pruneDir(dir, want)
+	removed, err := pruneDir(cs, dir, want)
 	if err != nil {
 		return nil, err
 	}
@@ -106,9 +106,9 @@ func WriteIOSBundleResources(dir string, files []BundleFile) ([]string, error) {
 		f := want[name]
 		maybeWarnLargeResource(f.Plugin, f.Name, len(f.Content))
 		dest := filepath.Join(dir, name)
-		ch, err := WriteIfDifferent(dest, f.Content)
+		ch, err := cs.WriteFile(dest, f.Content)
 		if err != nil {
-			return changed, fmt.Errorf("write iOS bundle resource %s: %w", name, err)
+			return changed, fmt.Errorf("iOS bundle resource %s: %w", name, err)
 		}
 		if ch {
 			changed = append(changed, dest)
@@ -117,9 +117,11 @@ func WriteIOSBundleResources(dir string, files []BundleFile) ([]string, error) {
 	return changed, nil
 }
 
-// pruneDir removes every entry in dir whose name is not in keep, and dir
-// itself when keep is empty. A missing dir is not an error.
-func pruneDir(dir string, keep map[string]BundleFile) ([]string, error) {
+// pruneDir plans the removal of every entry in dir whose name is not in
+// keep, and of dir itself when keep is empty. A missing dir is not an
+// error. It lists dir on disk: dir is Drift-owned, and nothing else plans
+// writes into it.
+func pruneDir(cs *Changeset, dir string, keep map[string]BundleFile) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -133,24 +135,22 @@ func pruneDir(dir string, keep map[string]BundleFile) ([]string, error) {
 			continue
 		}
 		p := filepath.Join(dir, e.Name())
-		if err := os.RemoveAll(p); err != nil {
+		if _, err := cs.Remove(p); err != nil {
 			return removed, fmt.Errorf("remove stale %s: %w", p, err)
 		}
 		removed = append(removed, p)
 	}
 	if len(keep) == 0 {
-		if err := os.Remove(dir); err != nil && !os.IsNotExist(err) {
-			return removed, fmt.Errorf("remove %s: %w", dir, err)
-		}
+		cs.RemoveIfEmpty(dir)
 	}
 	return removed, nil
 }
 
-// WriteAndroidAppModuleFiles writes each OpAndroidAddAppModuleFile into the
+// WriteAndroidAppModuleFiles plans each OpAndroidAddAppModuleFile into the
 // app module directory (appDir, i.e. <project>/app), where Gradle plugins
 // such as google-services read their config.
-func WriteAndroidAppModuleFiles(appDir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
-	return writeEach(ops, func(op *protocol.OpAndroidAddAppModuleFile) (OwnedFile, error) {
+func WriteAndroidAppModuleFiles(cs *Changeset, appDir string, ops []*protocol.OpAndroidAddAppModuleFile) ([]string, error) {
+	return writeEach(cs, ops, func(op *protocol.OpAndroidAddAppModuleFile) (OwnedFile, error) {
 		return AppModuleFile(appDir, op)
 	})
 }

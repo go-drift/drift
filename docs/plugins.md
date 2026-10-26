@@ -26,11 +26,12 @@ Package layout:
    3. `EnsureBridge` writes `tools/drift-plugins/main.go` (build tag `drift_tool`, committed by the app so `go mod tidy` keeps plugin deps; keyword-safe import aliases) and builds it.
    4. `RunBridge` sends the envelope on stdin (`APIVersion`, `cmd`, platform, project root, build dir, `app_id`, config YAML per plugin) and reads ops from a response file.
    5. `protocol.DecodeOps` decodes and validates each op again; `Validate` (`conflict.go`) checks ops against each other by target and drops exact duplicates.
-2. **`applyPluginOps`** writes them:
+2. **`applyPluginOps`** writes them. Steps 2 to 4 plan into one `mutate.Changeset` and write nothing; step 5 commits it, so an op that fails anywhere leaves the project as it was:
    1. Ejected projects only: `CheckEjectedIOS` / `CheckEjectedAndroid` fail early if the project lacks the template calls plugins need.
-   2. `Apply` files ops by platform (`opAppliesTo`: iOS ops apply to `ios` and `xtool`) and runs the mutators.
-   3. `EnsureRunnerSupport` writes the Drift-owned host files (`DriftPlugins`, plugin API), `WriteRegistrant` the generated `DriftPluginRegistrant` (plugin classes in drift.yaml order).
-   4. Ejected projects only: `SyncEjectedLock` (see [Ejected projects](#ejected-projects)).
+   2. `Apply` files ops by platform (`opAppliesTo`: iOS ops apply to `ios` and `xtool`) and runs the mutators. A mutator reads through the changeset, so it sees what an earlier one planned for the same file.
+   3. `EnsureRunnerSupport` plans the Drift-owned host files (`DriftPlugins`, plugin API), `WriteRegistrant` the generated `DriftPluginRegistrant` (plugin classes in drift.yaml order).
+   4. Ejected projects only: `SyncEjectedLock` (see [Ejected projects](#ejected-projects)) plans its deletions and, last, the new lock.
+   5. `Changeset.Commit` removes, then writes each file whose bytes changed in the order planned, so the lock lands after the output it records.
 
 With zero plugins the bridge is skipped and `tools/drift-plugins/main.go` deleted, but the registrant, sidecar package and resource directories are still reset so generated projects always compile.
 
@@ -121,7 +122,7 @@ Drift owns the request mechanism; permission kinds come from plugins. `Permissio
 Ejected projects (`platform/ios`, `platform/android`) run the same pipeline against user-owned files.
 
 - `ejected.go` checks the template calls that feed `DriftPlugins` and, on iOS, the `Drift/Plugins` package reference; the error names each missing call.
-- `lock.go`: `ReadLock` reads `.drift/plugins.lock.json` from the previous build (committed by the user) before applying; paths in it must stay inside the project. After applying, `SyncEjectedLock` compares it with the current ops by what the project holds, not by op identity, so ops renamed or retargeted by a CLI upgrade are neither removals nor additions:
+- `lock.go`: `ReadLock` reads `.drift/plugins.lock.json` from the previous build (committed by the user) before applying; paths in it must stay inside the project. After `Apply` plans, `SyncEjectedLock` compares it with the current ops by what the project holds, not by op identity, so ops renamed or retargeted by a CLI upgrade are neither removals nor additions:
   - a file the lock owned that no current op owns is deleted, unless the user changed it;
   - an edit inside a shared file (plist keys, manifest entries, Gradle lines) whose key no current op has and which no current op makes is listed once in a build error for the user to undo, since Drift cannot tell it from user edits.
 - Keys exclude content, so a plugin upgrade is an update. A Gradle dependency is keyed by `Artifact()` (no version). The lock records the exact line each versioned Gradle op wrote (`line`); when the same plugin's op writes another line and the project still holds the old one verbatim, the mutator replaces it (`Lock.gradleReplacements`). Lines the user changed are left alone.

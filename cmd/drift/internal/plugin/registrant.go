@@ -33,19 +33,19 @@ var AndroidRunnerSupportFiles = []struct {
 }
 
 // WriteRegistrant generates DriftPluginRegistrant for the target platform and
-// writes it into buildDir at the fixed runtime-runner path. It only lists
+// plans it into cs at buildDir's fixed runtime-runner path. It only lists
 // the configured plugin classes, in drift.yaml order; the hand-written
 // DriftPlugins support file drives their lifecycle and the app templates
 // keep Drift's own event handling. With no plugins the list is empty, so
 // the call site always resolves.
-func WriteRegistrant(buildDir, platform string, ops []protocol.Op) ([]string, error) {
+func WriteRegistrant(cs *mutate.Changeset, buildDir, platform string, ops []protocol.Op) ([]string, error) {
 	switch platform {
 	case "android":
 		dest := filepath.Join(buildDir, "app", "src", "main", "java", "com", "drift", "runner", "DriftPluginRegistrant.kt")
-		return writeIfDifferentSingle(dest, []byte(androidRegistrant(ops)))
+		return planFile(cs, dest, []byte(androidRegistrant(ops)))
 	case "ios", "xtool":
 		dest := filepath.Join(iosRunnerSourcesDir(buildDir, platform), "DriftPluginRegistrant.swift")
-		return writeIfDifferentSingle(dest, []byte(iosRegistrant(ops)))
+		return planFile(cs, dest, []byte(iosRegistrant(ops)))
 	default:
 		return nil, fmt.Errorf("WriteRegistrant: unknown platform %q", platform)
 	}
@@ -102,17 +102,17 @@ func iosRegistrant(ops []protocol.Op) string {
 	return b.String()
 }
 
-// EnsureRunnerSupport writes the Drift-owned plugin support files (the
-// plugin API and the plugin lifecycle owner) so ejected projects, whose
-// sources were copied once at eject time, stay in step with the generated
-// registrant. Managed builds already have identical copies from the
+// EnsureRunnerSupport plans the Drift-owned plugin support files (the
+// plugin API and the plugin lifecycle owner) into cs, so ejected projects,
+// whose sources were copied once at eject time, stay in step with the
+// generated registrant. Managed builds already have identical copies from the
 // scaffold.
-func EnsureRunnerSupport(buildDir, platform string) ([]string, error) {
+func EnsureRunnerSupport(cs *mutate.Changeset, buildDir, platform string) ([]string, error) {
 	switch platform {
 	case "android":
-		return ensureAndroidRunnerSupport(buildDir)
+		return ensureAndroidRunnerSupport(cs, buildDir)
 	case "ios", "xtool":
-		return ensureIOSRunnerSupport(buildDir, platform)
+		return ensureIOSRunnerSupport(cs, buildDir, platform)
 	default:
 		return nil, fmt.Errorf("EnsureRunnerSupport: unknown platform %q", platform)
 	}
@@ -126,7 +126,7 @@ var IOSRunnerSupportFiles = []string{
 	"DriftPlugins.swift",
 }
 
-func ensureIOSRunnerSupport(buildDir, platform string) ([]string, error) {
+func ensureIOSRunnerSupport(cs *mutate.Changeset, buildDir, platform string) ([]string, error) {
 	dir := iosRunnerSourcesDir(buildDir, platform)
 	var changed []string
 	for _, name := range IOSRunnerSupportFiles {
@@ -134,7 +134,7 @@ func ensureIOSRunnerSupport(buildDir, platform string) ([]string, error) {
 		if err != nil {
 			return changed, fmt.Errorf("read ios/%s: %w", name, err)
 		}
-		paths, err := writeIfDifferentSingle(filepath.Join(dir, name), content)
+		paths, err := planFile(cs, filepath.Join(dir, name), content)
 		if err != nil {
 			return changed, err
 		}
@@ -153,7 +153,7 @@ func iosRunnerSourcesDir(buildDir, platform string) string {
 	return filepath.Join(buildDir, "Runner")
 }
 
-func ensureAndroidRunnerSupport(buildDir string) ([]string, error) {
+func ensureAndroidRunnerSupport(cs *mutate.Changeset, buildDir string) ([]string, error) {
 	root := filepath.Join(buildDir, "app", "src", "main", "java", "com", "drift", "runner")
 	var changed []string
 	for _, f := range AndroidRunnerSupportFiles {
@@ -162,7 +162,7 @@ func ensureAndroidRunnerSupport(buildDir string) ([]string, error) {
 			return changed, fmt.Errorf("read %s: %w", f.TemplatePath, err)
 		}
 		dest := filepath.Join(root, f.Name)
-		paths, err := writeIfDifferentSingle(dest, content)
+		paths, err := planFile(cs, dest, content)
 		if err != nil {
 			return changed, err
 		}
@@ -171,10 +171,11 @@ func ensureAndroidRunnerSupport(buildDir string) ([]string, error) {
 	return changed, nil
 }
 
-func writeIfDifferentSingle(path string, content []byte) ([]string, error) {
-	changed, err := mutate.WriteIfDifferent(path, content)
+// planFile plans content at path, returning path if that changes it.
+func planFile(cs *mutate.Changeset, path string, content []byte) ([]string, error) {
+	changed, err := cs.WriteFile(path, content)
 	if err != nil {
-		return nil, fmt.Errorf("write %s: %w", path, err)
+		return nil, err
 	}
 	if !changed {
 		return nil, nil

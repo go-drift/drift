@@ -43,7 +43,7 @@ func TestApplyAndroidManifestAddPermission(t *testing.T) {
 		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.INTERNET"}, // dedupe
 		{Base: protocol.Base{Pkg: "a"}, Name: "android.permission.READ_EXTERNAL_STORAGE", MaxSDK: 32},
 	}
-	changed, err := ApplyAndroidManifest(path, ManifestOps{Permissions: ops})
+	changed, err := applyAndroidManifest(t, path, ManifestOps{Permissions: ops})
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 	ops := []*protocol.OpAndroidManifestSetActivityAttr{
 		{Base: protocol.Base{Pkg: "p"}, Activity: ".MainActivity", Attr: "android:theme", Value: "@style/Splash"},
 	}
-	if _, err := ApplyAndroidManifest(path, ManifestOps{ActivityAttrs: ops}); err != nil {
+	if _, err := applyAndroidManifest(t, path, ManifestOps{ActivityAttrs: ops}); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
@@ -91,7 +91,7 @@ func TestApplyAndroidManifestAddService(t *testing.T) {
 	}
 	apply := func(op *protocol.OpAndroidManifestAddService) string {
 		t.Helper()
-		if _, err := ApplyAndroidManifest(path, ManifestOps{Services: []*protocol.OpAndroidManifestAddService{op}}); err != nil {
+		if _, err := applyAndroidManifest(t, path, ManifestOps{Services: []*protocol.OpAndroidManifestAddService{op}}); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 		body, _ := os.ReadFile(path)
@@ -124,7 +124,7 @@ func TestApplyAndroidManifestAddReceiver(t *testing.T) {
 		XML:  `<receiver android:name="com.drift.plugin.notifications.AlarmReceiver" android:exported="false" />`,
 	}
 	for range 2 { // a rerun converges
-		if _, err := ApplyAndroidManifest(path, ManifestOps{Receivers: []*protocol.OpAndroidManifestAddReceiver{op}}); err != nil {
+		if _, err := applyAndroidManifest(t, path, ManifestOps{Receivers: []*protocol.OpAndroidManifestAddReceiver{op}}); err != nil {
 			t.Fatalf("apply: %v", err)
 		}
 	}
@@ -144,7 +144,7 @@ func TestWriteAndroidColorsCreates(t *testing.T) {
 		{Base: protocol.Base{Pkg: "p"}, Name: "splash_bg", Value: "#FFFFFF"},
 		{Base: protocol.Base{Pkg: "p"}, Name: "scrim", Value: "#11223380"},
 	}
-	wrote, changed, err := WriteAndroidColors(path, ops)
+	wrote, changed, err := writeAndroidColors(t, path, ops)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestWriteAndroidStyles(t *testing.T) {
 			Items:  []protocol.StyleItem{{Name: "android:windowBackground", Value: "@drawable/splash"}},
 		},
 	}
-	_, _, err := WriteAndroidStyles(path, ops)
+	_, _, err := writeAndroidStyles(t, path, ops)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -192,23 +192,23 @@ func TestWriteAndroidColorsRegeneratesAndRemoves(t *testing.T) {
 	set := func(name string) []*protocol.OpAndroidColorSet {
 		return []*protocol.OpAndroidColorSet{{Base: protocol.Base{Pkg: "p"}, Name: name, Value: "#000000"}}
 	}
-	if _, _, err := WriteAndroidColors(path, set("old")); err != nil {
+	if _, _, err := writeAndroidColors(t, path, set("old")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := WriteAndroidColors(path, set("new")); err != nil {
+	if _, _, err := writeAndroidColors(t, path, set("new")); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(path)
 	if strings.Contains(string(body), "old") || !strings.Contains(string(body), "new") {
 		t.Errorf("file should hold only the latest entries:\n%s", body)
 	}
-	if _, changed, err := WriteAndroidColors(path, nil); err != nil || !changed {
+	if _, changed, err := writeAndroidColors(t, path, nil); err != nil || !changed {
 		t.Fatalf("remove: changed=%v err=%v", changed, err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("file should be removed with no ops: %v", err)
 	}
-	if _, changed, err := WriteAndroidColors(path, nil); err != nil || changed {
+	if _, changed, err := writeAndroidColors(t, path, nil); err != nil || changed {
 		t.Errorf("removing a missing file: changed=%v err=%v", changed, err)
 	}
 }
@@ -248,7 +248,7 @@ func TestWriteAndroidStringsEscapes(t *testing.T) {
 		{Base: protocol.Base{Pkg: "p"}, Name: "greeting", Value: "it's <b>"},
 		{Base: protocol.Base{Pkg: "p"}, Name: "offer", Value: "%s and %d"},
 	}
-	if _, _, err := WriteAndroidStrings(path, ops); err != nil {
+	if _, _, err := writeAndroidStrings(t, path, ops); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(path)

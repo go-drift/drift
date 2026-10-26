@@ -78,14 +78,13 @@ func AppModuleFile(appDir string, op *protocol.OpAndroidAddAppModuleFile) (Owned
 	return OwnedFile{Path: filepath.Join(appDir, op.Name), Content: content}, nil
 }
 
-// writeOwned writes each file whose bytes differ and returns the paths it
-// changed.
-func writeOwned(files ...OwnedFile) ([]string, error) {
+// writeOwned plans each file and returns the paths whose bytes change.
+func writeOwned(cs *Changeset, files ...OwnedFile) ([]string, error) {
 	var changed []string
 	for _, f := range files {
-		ch, err := WriteIfDifferent(f.Path, f.Content)
+		ch, err := cs.WriteFile(f.Path, f.Content)
 		if err != nil {
-			return changed, fmt.Errorf("write %s: %w", f.Path, err)
+			return changed, err
 		}
 		if ch {
 			changed = append(changed, f.Path)
@@ -94,15 +93,15 @@ func writeOwned(files ...OwnedFile) ([]string, error) {
 	return changed, nil
 }
 
-// writeEach writes the OwnedFile each op produces.
-func writeEach[O any](ops []O, file func(O) (OwnedFile, error)) ([]string, error) {
+// writeEach plans the OwnedFile each op produces.
+func writeEach[O any](cs *Changeset, ops []O, file func(O) (OwnedFile, error)) ([]string, error) {
 	var changed []string
 	for _, op := range ops {
 		f, err := file(op)
 		if err != nil {
 			return changed, err
 		}
-		paths, err := writeOwned(f)
+		paths, err := writeOwned(cs, f)
 		changed = append(changed, paths...)
 		if err != nil {
 			return changed, err

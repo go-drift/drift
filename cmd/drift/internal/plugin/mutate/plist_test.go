@@ -53,7 +53,7 @@ func TestApplyPlistSetString(t *testing.T) {
 	ops := []*protocol.OpPlistSetString{
 		{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("NSCameraUsageDescription"), Value: "Take photos"},
 	}
-	changed, err := ApplyPlist(path, plistOps(ops))
+	changed, err := applyPlist(t, path, plistOps(ops))
 	if err != nil {
 		t.Fatalf("ApplyPlist: %v", err)
 	}
@@ -74,10 +74,10 @@ func TestApplyPlistIdempotent(t *testing.T) {
 	ops := []*protocol.OpPlistSetString{
 		{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("NSCameraUsageDescription"), Value: "Take photos"},
 	}
-	if _, err := ApplyPlist(path, plistOps(ops)); err != nil {
+	if _, err := applyPlist(t, path, plistOps(ops)); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	changed, err := ApplyPlist(path, plistOps(ops))
+	changed, err := applyPlist(t, path, plistOps(ops))
 	if err != nil {
 		t.Fatalf("second apply: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestApplyPlistAppendArrayItem(t *testing.T) {
 		{Base: protocol.Base{Pkg: "b"}, PlistEntry: info("Schemes"), Value: "other"},
 		{Base: protocol.Base{Pkg: "c"}, PlistEntry: info("Schemes"), Value: "myapp"}, // dedupe
 	}
-	if _, err := ApplyPlist(path, plistOps(ops)); err != nil {
+	if _, err := applyPlist(t, path, plistOps(ops)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
@@ -110,7 +110,7 @@ func TestApplyPlistSetBool(t *testing.T) {
 	ops := []*protocol.OpPlistSetBool{
 		{Base: protocol.Base{Pkg: "p"}, PlistEntry: info("MyFlag"), Value: true},
 	}
-	if _, err := ApplyPlist(path, plistOps(ops)); err != nil {
+	if _, err := applyPlist(t, path, plistOps(ops)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
@@ -126,7 +126,7 @@ func TestApplyPlistAppendsAfterSet(t *testing.T) {
 		&protocol.OpPlistAppendArrayItem{Base: protocol.Base{Pkg: "a"}, PlistEntry: info("Modes"), Value: "remote-notification"},
 		&protocol.OpPlistSetStringArray{Base: protocol.Base{Pkg: "b"}, PlistEntry: info("Modes"), Values: []string{"fetch"}},
 	}
-	if _, err := ApplyPlist(path, ops); err != nil {
+	if _, err := applyPlist(t, path, ops); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	body, _ := os.ReadFile(path)
@@ -142,7 +142,7 @@ func TestApplyPlistAppendToNonArrayFails(t *testing.T) {
 	ops := []protocol.PlistOp{
 		&protocol.OpPlistAppendArrayItem{Base: protocol.Base{Pkg: "a"}, PlistEntry: info("CFBundleName"), Value: "x"},
 	}
-	_, err := ApplyPlist(path, ops)
+	_, err := applyPlist(t, path, ops)
 	if err == nil || !strings.Contains(err.Error(), "CFBundleName") {
 		t.Fatalf("err = %v, want one naming CFBundleName", err)
 	}
@@ -169,7 +169,7 @@ func TestApplyPlistSetDictKeepsNumberKinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := writePlist(t)
-	if _, err := ApplyPlist(path, []protocol.PlistOp{op.(protocol.PlistOp)}); err != nil {
+	if _, err := applyPlist(t, path, []protocol.PlistOp{op.(protocol.PlistOp)}); err != nil {
 		t.Fatalf("ApplyPlist: %v", err)
 	}
 	body, _ := os.ReadFile(path)
