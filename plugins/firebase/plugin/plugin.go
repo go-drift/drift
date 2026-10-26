@@ -14,6 +14,8 @@
 // Download both files from the Firebase console (Project settings, Your
 // apps), registered with drift.yaml's app.id as the iOS bundle ID and the
 // Android package name. A platform's section is required to build for it.
+// The build checks the files as the Firebase SDKs do when the app starts,
+// so a file that would stop Firebase at launch fails the build instead.
 // The files name the app, so keep them out of version control if the
 // repository is public.
 //

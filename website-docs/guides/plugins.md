@@ -179,7 +179,7 @@ plugins:
         config_file: firebase/google-services.json
 ```
 
-Register both apps in the Firebase console with `drift.yaml`'s `app.id` as the iOS bundle ID and Android package name, and download their config files. The build checks that each file names your `app.id`. Each platform's section is required to build for that platform. iOS also needs an APNs key uploaded to the Firebase project and a signing team; the plugin adds the push entitlement. [`examples/firebase-demo`](https://github.com/go-drift/drift/tree/master/examples/firebase-demo) walks through the setup and includes a test sender.
+Register both apps in the Firebase console with `drift.yaml`'s `app.id` as the iOS bundle ID and Android package name, and download their config files. The build checks that each file names your `app.id` and has the values Firebase checks when the app starts (app ID, project ID, API key, sender ID), so a file that would stop Firebase at launch fails the build instead. Each platform's section is required to build for that platform. iOS also needs an APNs key uploaded to the Firebase project and a signing team; the plugin adds the push entitlement. [`examples/firebase-demo`](https://github.com/go-drift/drift/tree/master/examples/firebase-demo) walks through the setup and includes a test sender.
 
 ```go
 import "github.com/go-drift/drift/plugins/firebase/runtime/messaging"

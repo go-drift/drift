@@ -12,7 +12,7 @@
           "package_name": "com.example.app"
         }
       },
-      "api_key": [{"current_key": "AIzaTestKey"}]
+      "api_key": [{"current_key": "AIzaSyFakeKeyForDriftTests0000000000000"}]
     }
   ],
   "configuration_version": "1"

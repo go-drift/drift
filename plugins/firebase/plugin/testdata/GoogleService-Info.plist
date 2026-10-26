@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaTestKey</string>
+	<string>AIzaSyFakeKeyForDriftTests0000000000000</string>
 	<key>GCM_SENDER_ID</key>
 	<string>123456789012</string>
 	<key>PLIST_VERSION</key>

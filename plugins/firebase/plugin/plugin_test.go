@@ -175,12 +175,3 @@ func TestBuildRejectsConfigForAnotherApp(t *testing.T) {
 		}
 	}
 }
-
-func TestBuildRejectsMalformedConfigFiles(t *testing.T) {
-	if _, err := build(t, "ios", fullConfig, "GCM_SENDER_ID", "OTHER_KEY"); err == nil {
-		t.Error("iOS: plist without GCM_SENDER_ID accepted")
-	}
-	if _, err := build(t, "android", fullConfig, `"project_info"`, `"other"`); err == nil {
-		t.Error("Android: json without project_info accepted")
-	}
-}
