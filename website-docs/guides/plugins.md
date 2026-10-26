@@ -133,7 +133,7 @@ plugins:
 | `image_width` | `200` | iOS width in points; height follows the PNG's aspect ratio |
 | `background_color` | `#FFFFFF` | `#RRGGBB` or `#RRGGBBAA` (alpha last) |
 | `fade_duration_ms` | `200` | Fade-out length |
-| `max_duration_ms` | `10000` | After this, `Preserve` no longer holds the splash |
+| `max_duration_ms` | `10000` | This long after the app's window appears, `Preserve` no longer holds the splash |
 | `android.icon` | `image` | Android icon, e.g. a padded variant |
 | `android.icon_background_color` | none | Circle behind the Android icon |
 
@@ -161,7 +161,7 @@ drift.App{
 }.Run()
 ```
 
-Calls are counted: the splash fades when every `Preserve` has a matching `Remove` and the first frame is drawn. After `max_duration_ms`, unmatched `Preserve` calls stop holding it, so a missed `Remove` cannot keep it up forever; a slow `App.OnInit` still does, since there is nothing to show yet.
+Calls are counted: the splash fades when every `Preserve` has a matching `Remove` and the first frame is drawn. After `max_duration_ms`, unmatched `Preserve` calls stop holding it, so a missed `Remove` cannot keep it up forever; a slow `App.OnInit` still does, since there is nothing to show yet, for up to 30 seconds (or `max_duration_ms`, if longer). After that the splash goes whatever the state, so the app is never hidden for good. Both times count from when the app's window first appears, not from process start: an app launched in the background, for a push or an alarm, keeps its full splash time for when the user opens it.
 
 Supported on iOS, xtool and Android. On xtool, whether the replacement launch storyboard renders is unverified; the native overlay that follows it works.
 
@@ -613,7 +613,7 @@ The app creates one instance of each plugin class per process, in `drift.yaml` o
 | | iOS (`DriftPlugin` protocol) | Android (`DriftPlugin` interface) |
 |---|---|---|
 | Once per process | `register(host:)`, then `didFinishLaunching(_:options:)` | `onRegister(host)`, when the process starts (`Application.onCreate`), before any Activity, service or receiver; a process may start without an Activity, for a push message or an alarm |
-| View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity (recreation detaches and attaches again) |
+| View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller, which detaches when its scene disconnects | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity (recreation detaches and attaches again) |
 | Overlays | `binding.overlayView`: above Drift's content and platform views; touches pass through where it is empty | `binding.overlayView`: the window's decor view |
 | App events | `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse` | `binding.addOnNewIntentListener`; the launch intent is `binding.activity.intent`, to act on only when `binding.isNewLaunch` (false for a recreated Activity or one relaunched from Recents) |
 
