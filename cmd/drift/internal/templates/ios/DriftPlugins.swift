@@ -119,4 +119,20 @@ final class DriftPlugins {
         dispatchPrecondition(condition: .onQueue(.main))
         return plugins.contains { $0.didReceiveNotificationResponse(response) }
     }
+
+    /// Offers a URL the app was opened with to each plugin in drift.yaml
+    /// order. Returns true if one claimed it; otherwise the caller hands it
+    /// to DeepLinkHandler.
+    func openURL(_ url: URL) -> Bool {
+        dispatchPrecondition(condition: .onQueue(.main))
+        return plugins.contains { $0.openURL(url) }
+    }
+
+    /// Offers a continued user activity to each plugin in drift.yaml order.
+    /// Returns true if one claimed it; otherwise the caller hands its
+    /// webpageURL to DeepLinkHandler.
+    func continueUserActivity(_ activity: NSUserActivity) -> Bool {
+        dispatchPrecondition(condition: .onQueue(.main))
+        return plugins.contains { $0.continueUserActivity(activity) }
+    }
 }

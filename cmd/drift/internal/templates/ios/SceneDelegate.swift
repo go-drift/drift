@@ -61,14 +61,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This guard handles the case where scene is not a UIWindowScene.
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        // URLs and activities that launched the app.
+        // URLs and activities that launched the app: plugins first, then
+        // Drift's deep links.
         for context in connectionOptions.urlContexts {
-            DeepLinkHandler.handle(url: context.url, source: "launch")
+            openURL(context.url, source: "launch")
         }
         for activity in connectionOptions.userActivities {
-            if let url = activity.webpageURL {
-                DeepLinkHandler.handle(url: url, source: "launch")
-            }
+            continueUserActivity(activity, source: "launch")
         }
 
         // Create a new window attached to this window scene.
@@ -91,15 +90,28 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// arrive here, not at UIApplicationDelegate.application(_:open:options:).
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {
-            DeepLinkHandler.handle(url: context.url, source: "open_url")
+            openURL(context.url, source: "open_url")
         }
     }
 
     /// User activities (universal links, Handoff) continued while the app is
     /// running. Scene-based apps receive these here, not at the app delegate.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        if let url = userActivity.webpageURL {
-            DeepLinkHandler.handle(url: url, source: "user_activity")
+        continueUserActivity(userActivity, source: "user_activity")
+    }
+
+    /// Offers url to plugins; Drift's deep links get it if none claims it.
+    private func openURL(_ url: URL, source: String) {
+        if !DriftPlugins.shared.openURL(url) {
+            DeepLinkHandler.handle(url: url, source: source)
+        }
+    }
+
+    /// Offers activity to plugins; Drift's deep links get its web URL if
+    /// none claims it.
+    private func continueUserActivity(_ activity: NSUserActivity, source: String) {
+        if !DriftPlugins.shared.continueUserActivity(activity), let url = activity.webpageURL {
+            DeepLinkHandler.handle(url: url, source: source)
         }
     }
 

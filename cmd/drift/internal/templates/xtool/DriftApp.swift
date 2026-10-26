@@ -16,11 +16,15 @@ struct DriftApp: App {
         WindowGroup {
             DriftViewControllerRepresentable()
                 .ignoresSafeArea()
+                // Plugins first, then Drift's deep links. SwiftUI delivers
+                // only the activity types asked for: universal links.
                 .onOpenURL { url in
-                    DeepLinkHandler.handle(url: url, source: "open_url")
+                    if !DriftPlugins.shared.openURL(url) {
+                        DeepLinkHandler.handle(url: url, source: "open_url")
+                    }
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                    if let url = activity.webpageURL {
+                    if !DriftPlugins.shared.continueUserActivity(activity), let url = activity.webpageURL {
                         DeepLinkHandler.handle(url: url, source: "user_activity")
                     }
                 }

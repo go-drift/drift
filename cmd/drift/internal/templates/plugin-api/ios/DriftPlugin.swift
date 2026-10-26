@@ -51,9 +51,23 @@ public protocol DriftPlugin: AnyObject {
     /// Offers the user's response to a notification (a tap or an action),
     /// including the one that launched the app. Return true to claim it.
     func didReceiveNotificationResponse(_ response: UNNotificationResponse) -> Bool
+
+    /// Offers a URL the app was opened with (a custom scheme, such as an
+    /// OAuth redirect), including the one that launched it. Return true to
+    /// claim it; an unclaimed URL reaches Drift's deep links.
+    func openURL(_ url: URL) -> Bool
+
+    /// Offers a user activity the app continues (a universal link, Handoff,
+    /// a Spotlight result), including the one that launched it. Return true
+    /// to claim it; an unclaimed activity's webpageURL reaches Drift's deep
+    /// links. On xtool only universal links (NSUserActivityTypeBrowsingWeb)
+    /// arrive.
+    func continueUserActivity(_ activity: NSUserActivity) -> Bool
 }
 
 public extension DriftPlugin {
+    func openURL(_ url: URL) -> Bool { false }
+    func continueUserActivity(_ activity: NSUserActivity) -> Bool { false }
     func didFinishLaunching(_ application: UIApplication, options: [UIApplication.LaunchOptionsKey: Any]?) {}
     func attach(_ binding: DriftViewBinding) {}
     func detach() {}
