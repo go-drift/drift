@@ -14,6 +14,8 @@
  *      tapping one starts MainActivity with the message in its extras,
  *      sent to Go as `opened`: from the launch intent when it is a new
  *      launch, from new intents after.
+ *   4. `drift/firebase/messaging` methods: topic subscriptions, and
+ *      deleteToken, which sends "" as the token before replying.
  * Mirrors the iOS plugin.
  */
 package com.drift.plugin.firebase
@@ -23,8 +25,11 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import com.drift.runner.DriftActivityBinding
+import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlugin
 import com.drift.runner.DriftPluginHost
+import com.drift.runner.DriftResult
+import com.google.android.gms.tasks.Task
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.RemoteMessage
 
@@ -34,6 +39,27 @@ class DriftFirebasePlugin : DriftPlugin {
     override fun onRegister(host: DriftPluginHost) {
         this.host = host
         registered = this
+        host.registerChannel(METHOD_CHANNEL) {
+            asyncMethod("subscribeToTopic") { args, result ->
+                FirebaseMessaging.getInstance().subscribeToTopic(topic(args)).replyTo(result)
+            }
+            asyncMethod("unsubscribeFromTopic") { args, result ->
+                FirebaseMessaging.getInstance().unsubscribeFromTopic(topic(args)).replyTo(result)
+            }
+            asyncMethod("deleteToken") { _, result ->
+                // Completes on the main thread: Go's Token is "" before the
+                // reply, and tokens issued after (also sent from main)
+                // follow it.
+                FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        onNewToken("")
+                        result.success(null)
+                    } else {
+                        result.error(task.failure())
+                    }
+                }
+            }
+        }
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 onNewToken(task.result)
@@ -90,6 +116,7 @@ class DriftFirebasePlugin : DriftPlugin {
 
     companion object {
         private const val TAG = "DriftFirebase"
+        private const val METHOD_CHANNEL = "drift/firebase/messaging"
         private const val TOKEN_CHANNEL = "drift/firebase/messaging/token"
         private const val MESSAGE_CHANNEL = "drift/firebase/messaging/message"
         private const val OPENED_CHANNEL = "drift/firebase/messaging/opened"
@@ -101,6 +128,21 @@ class DriftFirebasePlugin : DriftPlugin {
          */
         internal var registered: DriftFirebasePlugin? = null
             private set
+
+        /** The call's topic; Go validated it. */
+        private fun topic(args: Any?): String =
+            (args as? Map<*, *>)?.get("topic") as? String
+                ?: throw IllegalArgumentException("missing topic")
+
+        /** Replies to result when the task completes. */
+        private fun Task<Void>.replyTo(result: DriftResult) {
+            addOnCompleteListener { task ->
+                if (task.isSuccessful) result.success(null) else result.error(task.failure())
+            }
+        }
+
+        private fun Task<*>.failure(): Exception =
+            exception ?: DriftCallError("native_error", "Firebase task failed without an exception")
 
         /** The wire form of a message (see runtime/messaging). */
         private fun payload(

@@ -2,7 +2,10 @@
 // Drift Firebase plugin (github.com/go-drift/drift/plugins/firebase/plugin
 // in drift.yaml).
 //
-// Nothing here blocks: the token is state, and messages are streams.
+// Reading never blocks: the token is state, and messages are streams.
+// Topic subscriptions and DeleteToken wait for Firebase's servers, so call
+// them from a goroutine: from the UI thread they fail with
+// platform.ErrBlocksUIThread.
 //
 //	import "github.com/go-drift/drift/plugins/firebase/runtime/messaging"
 //
@@ -22,6 +25,16 @@
 //	    drift.Dispatch(func() { navigate(m.Data["route"]) })
 //	})
 //
+//	// Messages sent to a topic.
+//	go func() {
+//	    if err := messaging.SubscribeToTopic(ctx, "news"); err != nil { ... }
+//	}()
+//
+//	// On logout: no more messages for this user.
+//	go func() {
+//	    if err := messaging.DeleteToken(ctx); err != nil { ... }
+//	}()
+//
 // Showing notifications needs the user's permission:
 // platform.Notifications.Permission.Request. On Android, notification
 // messages that arrive while the app is in the background are shown by the
@@ -29,16 +42,20 @@
 package messaging
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/go-drift/drift/pkg/core"
-	"github.com/go-drift/drift/pkg/errors"
+	drifterrors "github.com/go-drift/drift/pkg/errors"
 	"github.com/go-drift/drift/pkg/platform"
 )
 
 // Wire channels. Must match the literals in the plugin's native sources
 // (plugin/ios/DriftFirebasePlugin.swift, plugin/android/*.kt).
 const (
+	methodChannel  = "drift/firebase/messaging"
 	tokenChannel   = "drift/firebase/messaging/token"
 	messageChannel = "drift/firebase/messaging/message"
 	openedChannel  = "drift/firebase/messaging/opened"
@@ -63,8 +80,15 @@ type Message struct {
 	Foreground bool
 }
 
+// ErrInvalidTopic indicates a topic name FCM does not accept.
+var ErrInvalidTopic = errors.New("invalid FCM topic name")
+
+// topicName is FCM's topic name syntax, as its Android SDK checks it.
+var topicName = regexp.MustCompile(`^[a-zA-Z0-9\-_.~%]{1,900}$`)
+
 var (
-	token = core.NewSignal("")
+	methods = platform.NewMethodChannel(methodChannel)
+	token   = core.NewSignal("")
 	// readToken is token, read-only for apps.
 	readToken = core.NewDerived(token.Value, token)
 	messages  = platform.NewStream(messageChannel,
@@ -78,9 +102,9 @@ func init() {
 	tokens.Listen(token.Set)
 }
 
-// Token is this installation's FCM registration token, "" until Firebase
-// has one. It changes when Firebase rotates it; listen to send the new one
-// to your server.
+// Token is this installation's FCM registration token, "" while there is
+// none: until Firebase issues one, and after DeleteToken. It changes when
+// Firebase rotates it; listen to send the new one to your server.
 func Token() *core.Derived[string] {
 	return readToken
 }
@@ -99,11 +123,59 @@ func Opens() *platform.Stream[Message] {
 	return opens
 }
 
+// SubscribeToTopic subscribes this installation to topic, so it receives
+// the messages sent to it. A topic name is 1 to 900 characters from a-z,
+// A-Z, 0-9 and "-_.~%"; any other fails with ErrInvalidTopic.
+//
+// It waits for Firebase's servers, so call it from a goroutine. On ctx
+// cancellation it returns ctx's error; the subscription may still
+// complete.
+func SubscribeToTopic(ctx context.Context, topic string) error {
+	return topicCall(ctx, "subscribeToTopic", topic)
+}
+
+// UnsubscribeFromTopic undoes SubscribeToTopic. Topic names, waiting and
+// cancellation are as for SubscribeToTopic.
+func UnsubscribeFromTopic(ctx context.Context, topic string) error {
+	return topicCall(ctx, "unsubscribeFromTopic", topic)
+}
+
+// DeleteToken deletes this installation's FCM token, so neither messages
+// sent to it nor topic messages arrive: call it on logout. Token is ""
+// when it returns. Firebase issues a new token by the time the app next
+// starts, which Token reports like any new token; send it to your server,
+// and subscribe to the user's topics again, only once a user logs in.
+//
+// It waits for Firebase's servers, so call it from a goroutine. On ctx
+// cancellation it returns ctx's error; the deletion may still complete.
+func DeleteToken(ctx context.Context) error {
+	// The native half sends "" on tokenChannel before replying, so Token is
+	// "" on return and orders before any token Firebase issues after.
+	return invoke(ctx, "deleteToken", nil)
+}
+
+func topicCall(ctx context.Context, method, topic string) error {
+	if !topicName.MatchString(topic) {
+		return fmt.Errorf("messaging %s: %w %q: want 1 to 900 characters from a-z, A-Z, 0-9 and \"-_.~%%\"",
+			method, ErrInvalidTopic, topic)
+	}
+	return invoke(ctx, method, map[string]any{"topic": topic})
+}
+
+func invoke(ctx context.Context, method string, args map[string]any) error {
+	if _, err := methods.Invoke(ctx, method, args); err != nil {
+		return fmt.Errorf("messaging %s: %w", method, err)
+	}
+	return nil
+}
+
+// parseToken parses a token event: the token, or "" once DeleteToken
+// deleted it.
 func parseToken(data any) (string, error) {
 	m, ok := data.(map[string]any)
 	token, isString := m["token"].(string)
-	if !ok || !isString || token == "" {
-		return "", &errors.ParseError{Channel: tokenChannel, DataType: "token", Got: data}
+	if !ok || !isString {
+		return "", &drifterrors.ParseError{Channel: tokenChannel, DataType: "token", Got: data}
 	}
 	return token, nil
 }
@@ -112,11 +184,11 @@ func parseMessage(channel string) func(data any) (Message, error) {
 	return func(data any) (Message, error) {
 		m, ok := data.(map[string]any)
 		if !ok {
-			return Message{}, &errors.ParseError{Channel: channel, DataType: "Message", Got: data}
+			return Message{}, &drifterrors.ParseError{Channel: channel, DataType: "Message", Got: data}
 		}
 		id, _ := m["id"].(string)
 		if id == "" {
-			return Message{}, &errors.ParseError{Channel: channel, DataType: "Message", Got: data}
+			return Message{}, &drifterrors.ParseError{Channel: channel, DataType: "Message", Got: data}
 		}
 		msg := Message{ID: id, Data: map[string]string{}}
 		msg.Title, _ = m["title"].(string)
@@ -126,7 +198,7 @@ func parseMessage(channel string) func(data any) (Message, error) {
 			for k, v := range raw {
 				s, ok := v.(string)
 				if !ok {
-					return Message{}, &errors.ParseError{
+					return Message{}, &drifterrors.ParseError{
 						Channel: channel, DataType: "Message",
 						Got: fmt.Sprintf("data[%q] = %#v, want a string", k, v),
 					}

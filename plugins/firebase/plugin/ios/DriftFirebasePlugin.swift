@@ -11,6 +11,8 @@
 ///   3. Notifications carrying `gcm.message_id` are Firebase's: this plugin
 ///      claims them and sends them to Go, as `message` (received while
 ///      running) or `opened` (tapped). Others are left to Drift.
+///   4. `drift/firebase/messaging` methods: topic subscriptions, and
+///      deleteToken, which sends "" as the token before replying.
 ///
 /// Firebase's swizzling is off (FirebaseAppDelegateProxyEnabled = NO);
 /// every event arrives through the DriftPlugin hooks.
@@ -27,6 +29,7 @@ private let firebaseLog = OSLog(subsystem: "drift.firebase", category: "messagin
 /// Public, with a public initializer: the app's generated registrant
 /// creates it from outside this module (DriftPlugin_firebase).
 public final class DriftFirebasePlugin: NSObject, DriftPlugin, MessagingDelegate {
+    private static let methodChannel = "drift/firebase/messaging"
     private static let tokenChannel = "drift/firebase/messaging/token"
     private static let messageChannel = "drift/firebase/messaging/message"
     private static let openedChannel = "drift/firebase/messaging/opened"
@@ -42,6 +45,30 @@ public final class DriftFirebasePlugin: NSObject, DriftPlugin, MessagingDelegate
 
     public func register(host: DriftPluginHost) {
         self.host = host
+        host.registerChannel(Self.methodChannel) { channel in
+            channel.asyncMethod("subscribeToTopic") { args, result in
+                guard let topic = Self.topic(args, result) else { return }
+                Messaging.messaging().subscribe(toTopic: topic) { Self.reply(result, $0) }
+            }
+            channel.asyncMethod("unsubscribeFromTopic") { args, result in
+                guard let topic = Self.topic(args, result) else { return }
+                Messaging.messaging().unsubscribe(fromTopic: topic) { Self.reply(result, $0) }
+            }
+            channel.asyncMethod("deleteToken") { [self] _, result in
+                Messaging.messaging().deleteToken { error in
+                    if let error {
+                        result.error(error)
+                        return
+                    }
+                    // Go's Token is "" before the reply, and tokens issued
+                    // after (also sent from main) follow it.
+                    DispatchQueue.main.async { [self] in
+                        self.host?.sendEvent(Self.tokenChannel, data: ["token": ""])
+                        result.success(nil)
+                    }
+                }
+            }
+        }
     }
 
     public func didFinishLaunching(_ application: UIApplication, options: [UIApplication.LaunchOptionsKey: Any]?) {
@@ -95,6 +122,27 @@ public final class DriftFirebasePlugin: NSObject, DriftPlugin, MessagingDelegate
         guard let token = fcmToken else { return }
         DispatchQueue.main.async { [self] in
             host?.sendEvent(Self.tokenChannel, data: ["token": token])
+        }
+    }
+
+    // MARK: - Methods
+
+    /// The call's topic (Go validated it), or nil after failing the call.
+    private static func topic(_ args: Any?, _ result: DriftResult) -> String? {
+        guard let topic = (args as? [String: Any])?["topic"] as? String else {
+            result.error(NSError(domain: "invalid_arguments", code: 0, userInfo: [
+                NSLocalizedDescriptionKey: "missing topic",
+            ]))
+            return nil
+        }
+        return topic
+    }
+
+    private static func reply(_ result: DriftResult, _ error: Error?) {
+        if let error {
+            result.error(error)
+        } else {
+            result.success(nil)
         }
     }
 

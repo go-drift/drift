@@ -167,7 +167,7 @@ Supported on iOS, xtool and Android. On xtool, whether the replacement launch st
 
 ### Firebase
 
-Firebase Core and Cloud Messaging: an FCM token, messages, and notification taps.
+Firebase Core and Cloud Messaging: an FCM token, messages, notification taps, and topics.
 
 ```yaml
 plugins:
@@ -201,6 +201,26 @@ messaging.Opens().Listen(func(m messaging.Message) {
 ```
 
 Nothing here blocks. Messages and taps that arrive before the app listens are queued for its first listener. Showing notifications needs the user's permission (`platform.Notifications.Permission.Request`).
+
+Topic subscriptions and token deletion wait for Firebase's servers, so call them from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`.
+
+```go
+// Receive messages sent to a topic.
+go func() {
+    if err := messaging.SubscribeToTopic(ctx, "news"); err != nil {
+        log.Printf("subscribe: %v", err)
+    }
+}()
+
+// On logout: stop this user's messages, topics included.
+go func() {
+    if err := messaging.DeleteToken(ctx); err != nil {
+        log.Printf("delete token: %v", err)
+    }
+}()
+```
+
+A topic name is 1 to 900 characters from `a-z`, `A-Z`, `0-9` and `-_.~%`; others fail with `messaging.ErrInvalidTopic` before reaching Firebase. `DeleteToken` deletes the token, so neither messages sent to it nor topic messages reach the device; `Token()` is `""` when it returns. Firebase issues a new token by the time the app next starts, and `Token()` reports it like any other: send it to your server, and subscribe to the user's topics again, only once a user logs in.
 
 | Situation | What happens |
 |-----------|--------------|
