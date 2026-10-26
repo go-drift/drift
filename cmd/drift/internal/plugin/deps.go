@@ -8,6 +8,9 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/go-drift/drift/cmd/drift/internal/cache"
+	"github.com/go-drift/drift/pkg/plugin/protocol"
 )
 
 // PackageInfo summarises the bits of `go list -e -json <pkg>` we care about.
@@ -120,38 +123,55 @@ func parseGoList(data []byte) (*PackageInfo, error) {
 // module graph does not know about. Always carries the full list; callers
 // read Packages.
 type MissingPluginError struct {
+	// CLI is the CLI's release version; empty for a development build.
+	CLI      string
 	Packages []string
 }
 
 func (e *MissingPluginError) Error() string {
-	pkgs := e.Packages
-	if len(pkgs) == 1 {
-		return fmt.Sprintf(`Plugin package not found: %s
-
-Run:
-  go get %s@latest
-
-After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
-			pkgs[0], pkgs[0],
-		)
-	}
 	var sb strings.Builder
-	sb.WriteString("Plugin packages not found:\n")
-	for _, p := range pkgs {
-		fmt.Fprintf(&sb, "  - %s\n", p)
+	if len(e.Packages) == 1 {
+		fmt.Fprintf(&sb, "Plugin package not found: %s\n", e.Packages[0])
+	} else {
+		sb.WriteString("Plugin packages not found:\n")
+		for _, p := range e.Packages {
+			fmt.Fprintf(&sb, "  - %s\n", p)
+		}
 	}
 	sb.WriteString("\nRun:\n")
-	for _, p := range pkgs {
-		fmt.Fprintf(&sb, "  go get %s@latest\n", p)
+	thirdParty := false
+	for _, p := range e.Packages {
+		fmt.Fprintf(&sb, "  go get %s@%s\n", p, e.version(p))
+		thirdParty = thirdParty || (e.CLI != "" && !isDriftPackage(p))
+	}
+	if thirdParty {
+		fmt.Fprintf(&sb, "\nIf a plugin's latest version requires a drift newer than this CLI (%s), get an earlier version of it.\n", e.CLI)
 	}
 	sb.WriteString("\nAfter installing, commit drift.yaml and tools/drift-plugins/main.go together.")
 	return sb.String()
 }
 
+// version is the version of pkg to get. First-party plugins are tagged in
+// lockstep with drift, so a release CLI names its own version; a third-party
+// plugin, or any plugin under a development CLI, gets the latest.
+func (e *MissingPluginError) version(pkg string) string {
+	if e.CLI != "" && isDriftPackage(pkg) {
+		return e.CLI
+	}
+	return "latest"
+}
+
+// isDriftPackage reports whether pkg is in the drift repository: the drift
+// module or a first-party plugin module under it.
+func isDriftPackage(pkg string) bool {
+	return pkg == protocol.DriftModulePath || strings.HasPrefix(pkg, protocol.DriftModulePath+"/")
+}
+
 // CheckPluginDeps verifies each configured plugin is reachable through the
 // module graph. All missing entries are collected so one CLI invocation
-// surfaces every required `go get`.
-func CheckPluginDeps(plugins []ConfiguredPlugin, resolver PackageResolver) ([]*PackageInfo, error) {
+// surfaces every required `go get`. cliVersion is the CLI's version; a
+// release names the version to get in the hint for first-party plugins.
+func CheckPluginDeps(cliVersion string, plugins []ConfiguredPlugin, resolver PackageResolver) ([]*PackageInfo, error) {
 	out := make([]*PackageInfo, len(plugins))
 	var missing []string
 	for i, p := range plugins {
@@ -166,7 +186,7 @@ func CheckPluginDeps(plugins []ConfiguredPlugin, resolver PackageResolver) ([]*P
 		out[i] = info
 	}
 	if len(missing) > 0 {
-		return nil, &MissingPluginError{Packages: missing}
+		return nil, &MissingPluginError{CLI: cache.NormalizeVersion(cliVersion), Packages: missing}
 	}
 	return out, nil
 }

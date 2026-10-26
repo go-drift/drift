@@ -22,7 +22,7 @@ Package layout:
 
 1. **`resolvePluginOps`** runs every build half without touching the native project:
    1. `LoadFromDriftYAML` reads `plugins:` (YAML anchors resolved, an empty list allowed).
-   2. `CheckPluginDeps` runs `go list` per package; a missing one fails with a `go get` hint.
+   2. `CheckPluginDeps` runs `go list` per package; a missing one fails with a `go get` hint, at the CLI's version for a first-party plugin under a release CLI and `@latest` otherwise.
    3. `EnsureBridge` writes `tools/drift-plugins/main.go` (build tag `drift_tool`, committed by the app so `go mod tidy` keeps plugin deps; keyword-safe import aliases) and builds it.
    4. `RunBridge` sends the envelope on stdin (`APIVersion`, `cmd`, platform, project root, build dir, `app_id`, config YAML per plugin) and reads ops from a response file.
    5. `protocol.DecodeOps` decodes and validates each op again; `Validate` (`conflict.go`) checks ops against each other by target and drops exact duplicates.

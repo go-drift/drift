@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -69,23 +70,13 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		}
 	}
 
-	resolver := NewGoListResolver(opts.ProjectRoot)
-	// Walk all plugins individually so a single missing entry doesn't mask
-	// the others: users get one `go get` line per missing package.
-	infos := make([]*PackageInfo, len(plugins))
-	for i, p := range plugins {
-		info, err := resolver(p.Package)
-		if err != nil {
-			return res, err
+	infos, err := CheckPluginDeps(opts.CLIVersion, plugins, NewGoListResolver(opts.ProjectRoot))
+	if err != nil {
+		var missing *MissingPluginError
+		if errors.As(err, &missing) {
+			res.Missing = missing.Packages
 		}
-		if info == nil || info.Module == nil || info.Error != "" {
-			res.Missing = append(res.Missing, p.Package)
-			continue
-		}
-		infos[i] = info
-	}
-	if len(res.Missing) > 0 {
-		return res, &MissingPluginError{Packages: res.Missing}
+		return res, err
 	}
 
 	bridge, err := EnsureBridge(opts.ProjectRoot, opts.CLIVersion, plugins, infos)
@@ -157,7 +148,7 @@ func List(projectRoot, cliVersion string, resolve bool) (*ListResult, error) {
 	}
 
 	resolver := NewGoListResolver(projectRoot)
-	infos, depErr := CheckPluginDeps(plugins, resolver)
+	infos, depErr := CheckPluginDeps(cliVersion, plugins, resolver)
 	if depErr != nil {
 		// We still want to display rows for the resolved subset and mark
 		// missing entries; reset and re-resolve individually.

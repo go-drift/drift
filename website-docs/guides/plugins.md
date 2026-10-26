@@ -53,7 +53,7 @@ The next `drift build` or `drift run` picks it up. Plugins run in `drift.yaml` o
 
 Drift runs build halves through a small generated program, `tools/drift-plugins/main.go`, built and cached by the CLI. Commit it: it imports every configured plugin, which keeps their modules in `go.mod` when you run `go mod tidy`.
 
-Drift never edits `go.mod` or `go.sum` during a build. If an entry is missing, the build stops and tells you to run `go mod tidy` (or `go get` for a plugin that is not a dependency yet).
+Drift never edits `go.mod` or `go.sum` during a build. If an entry is missing, the build stops and tells you to run `go mod tidy` (or `go get` for a plugin that is not a dependency yet; for a first-party plugin, a release CLI names its own version, see [Versions](#versions)).
 
 ```bash
 drift plugin sync          # regenerate the bridge, validate drift.yaml

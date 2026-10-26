@@ -11,7 +11,7 @@ func TestCheckPluginDepsMissing(t *testing.T) {
 	resolver := PackageResolver(func(pkg string) (*PackageInfo, error) {
 		return &PackageInfo{ImportPath: pkg, Error: "package not found"}, nil
 	})
-	_, err := CheckPluginDeps(plugins, resolver)
+	_, err := CheckPluginDeps("dev", plugins, resolver)
 	var missing *MissingPluginError
 	if !errors.As(err, &missing) {
 		t.Fatalf("expected MissingPluginError, got %T %v", err, err)
@@ -24,6 +24,84 @@ func TestCheckPluginDepsMissing(t *testing.T) {
 	}
 }
 
+// TestMissingPluginErrorHint checks the `go get` hint: a release CLI names
+// its own version for first-party plugins, which are tagged in lockstep with
+// drift, since @latest may need a newer CLI; third-party plugins and any
+// plugin under a development CLI get @latest.
+func TestMissingPluginErrorHint(t *testing.T) {
+	const (
+		splash = "github.com/go-drift/drift/plugins/splash"
+		hello  = "example.com/hello"
+	)
+	tests := []struct {
+		name string
+		cli  string
+		pkgs []string
+		want string
+	}{
+		{
+			name: "release CLI, first-party",
+			cli:  "v0.28.0",
+			pkgs: []string{splash},
+			want: `Plugin package not found: github.com/go-drift/drift/plugins/splash
+
+Run:
+  go get github.com/go-drift/drift/plugins/splash@v0.28.0
+
+After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
+		},
+		{
+			name: "release CLI, first- and third-party",
+			cli:  "0.28.0",
+			pkgs: []string{splash, hello},
+			want: `Plugin packages not found:
+  - github.com/go-drift/drift/plugins/splash
+  - example.com/hello
+
+Run:
+  go get github.com/go-drift/drift/plugins/splash@v0.28.0
+  go get example.com/hello@latest
+
+If a plugin's latest version requires a drift newer than this CLI (v0.28.0), get an earlier version of it.
+
+After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
+		},
+		{
+			name: "development CLI",
+			cli:  "dev+abc123",
+			pkgs: []string{splash, hello},
+			want: `Plugin packages not found:
+  - github.com/go-drift/drift/plugins/splash
+  - example.com/hello
+
+Run:
+  go get github.com/go-drift/drift/plugins/splash@latest
+  go get example.com/hello@latest
+
+After installing, commit drift.yaml and tools/drift-plugins/main.go together.`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plugins := make([]ConfiguredPlugin, len(tt.pkgs))
+			for i, p := range tt.pkgs {
+				plugins[i] = ConfiguredPlugin{Package: p}
+			}
+			resolver := PackageResolver(func(pkg string) (*PackageInfo, error) {
+				return &PackageInfo{ImportPath: pkg, Error: "package not found"}, nil
+			})
+			_, err := CheckPluginDeps(tt.cli, plugins, resolver)
+			var missing *MissingPluginError
+			if !errors.As(err, &missing) {
+				t.Fatalf("expected MissingPluginError, got %T %v", err, err)
+			}
+			if got := missing.Error(); got != tt.want {
+				t.Errorf("message:\n%s\nwant:\n%s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCheckPluginDepsOK(t *testing.T) {
 	plugins := []ConfiguredPlugin{{Package: "github.com/foo/p/plugin"}}
 	resolver := PackageResolver(func(pkg string) (*PackageInfo, error) {
@@ -32,7 +110,7 @@ func TestCheckPluginDepsOK(t *testing.T) {
 			Module:     &ModuleInfo{Path: "github.com/foo/p", Version: "v1.2.3"},
 		}, nil
 	})
-	infos, err := CheckPluginDeps(plugins, resolver)
+	infos, err := CheckPluginDeps("dev", plugins, resolver)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -56,7 +134,7 @@ func TestCheckPluginDepsAggregatesMissing(t *testing.T) {
 		}
 		return &PackageInfo{ImportPath: pkg, Error: "package not found"}, nil
 	})
-	_, err := CheckPluginDeps(plugins, resolver)
+	_, err := CheckPluginDeps("dev", plugins, resolver)
 	var missing *MissingPluginError
 	if !errors.As(err, &missing) {
 		t.Fatalf("expected MissingPluginError, got %v", err)
