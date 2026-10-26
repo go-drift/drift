@@ -150,6 +150,8 @@ Plugins in `drift.yaml` keep working after ejecting: each build applies them to 
 
 When you remove a plugin, Drift deletes the files it owned (unless you changed them) and fails the next build once with a list of the edits it made inside your files, for you to undo or keep. If the project is missing the calls plugins need, the build names the file and call to restore. See [Plugins](/docs/guides/plugins#ejected-projects).
 
+iOS projects ejected before plugins could claim URLs fail to build with plugins until `SceneDelegate.swift` offers URLs and user activities to `DriftPlugins.shared.openURL` / `continueUserActivity` before `DeepLinkHandler`; the error names the calls, and a freshly ejected project shows them in place.
+
 iOS projects ejected before plugins detached on scene disconnect lack `sceneDidDisconnect` in `SceneDelegate.swift` and the weak display link target in `DriftViewController.swift`. They still build, but plugins stay attached to a closed scene and the view controller is never released. Copy both from a freshly ejected project.
 
 ## `.gitignore` Setup

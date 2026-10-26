@@ -450,13 +450,126 @@ media.VideoPlayer{Controller: s.video, Height: 225}
 
 ## Authoring plugins
 
-Start from [`examples/plugins/hello`](https://github.com/go-drift/drift/tree/master/examples/plugins/hello), the smallest complete plugin: it takes a greeting from `drift.yaml` and ships native code that returns it to Go. The code on this page is that plugin's. The splash and Firebase plugins are full references: splash for native UI and lifecycle, Firebase for an SDK with a SwiftPM package, a Gradle plugin, config files, entitlements and a manifest service.
+The code on this page is [`examples/plugins/hello`](https://github.com/go-drift/drift/tree/master/examples/plugins/hello), the smallest complete plugin: it takes a greeting from `drift.yaml` and ships native code that returns it to Go. [`examples/plugins/hello-app`](https://github.com/go-drift/drift/tree/master/examples/plugins/hello-app) is an app using it. The splash and Firebase plugins are full references: splash for native UI and lifecycle, Firebase for an SDK with a SwiftPM package, a Gradle plugin, config files, entitlements and a manifest service.
+
+### Your first plugin
+
+This builds the hello plugin and an app that uses it, side by side in one directory, with the plugin unpublished. You need the `drift` CLI and, for the app, what [Getting Started](/docs/guides/getting-started) sets up.
+
+**1. The plugin module.** Use your CLI's version (`drift version`) for Drift:
+
+```bash
+mkdir hello && cd hello
+go mod init example.com/hello
+go get github.com/go-drift/drift@<version>
+```
+
+Write the files in [Module layout](#module-layout), taking their contents from the sections below: [the build half](#the-build-half) (`plugin/plugin.go`), the [native code](#native-code) (`plugin/ios/HelloPlugin.swift`, `plugin/android/HelloPlugin.kt`) and [the runtime half](#the-runtime-half) (`runtime/hello.go`). The tests are optional. Then:
+
+```bash
+go mod tidy
+go test ./...
+```
+
+**2. The app.** Create it next to the plugin, and point it at the plugin's directory: an unpublished module needs a `replace`, and the `require` names it for Go (`v0.0.0` stands for "not released").
+
+```bash
+cd ..
+drift init hello-app example.com/hello-app
+cd hello-app
+go mod edit -require=example.com/hello@v0.0.0 -replace=example.com/hello=../hello
+```
+
+In `drift.yaml`, replace `plugins: []` with the plugin and its config:
+
+```yaml
+plugins:
+  - package: example.com/hello/plugin
+    config:
+      greeting: Hello from drift.yaml
+```
+
+Replace `main.go` with an app that shows the greeting:
+
+```go
+package main
+
+import (
+	"context"
+
+	"github.com/go-drift/drift/pkg/core"
+	"github.com/go-drift/drift/pkg/drift"
+	"github.com/go-drift/drift/pkg/graphics"
+	"github.com/go-drift/drift/pkg/theme"
+	"github.com/go-drift/drift/pkg/widgets"
+
+	hello "example.com/hello/runtime"
+)
+
+func main() {
+	drift.App{Root: app{}}.Run()
+}
+
+type app struct {
+	core.StatefulBase
+}
+
+func (app) CreateState() core.State {
+	return &appState{}
+}
+
+type appState struct {
+	core.StateBase
+	greeting string
+}
+
+func (s *appState) InitState() {
+	// Greeting's native method replies in place, so the UI thread may
+	// call it.
+	greeting, err := hello.Greeting(context.Background())
+	if err != nil {
+		greeting = err.Error()
+	}
+	s.greeting = greeting
+}
+
+func (s *appState) Build(ctx core.BuildContext) core.Widget {
+	_, colors, _ := theme.UseTheme(ctx)
+	return widgets.Container{
+		Color: colors.Background,
+		Child: widgets.Centered(widgets.Text{
+			Content: s.greeting,
+			Style:   graphics.TextStyle{Color: colors.OnBackground, FontSize: 24},
+		}),
+	}
+}
+```
+
+Generate the plugin bridge and record the plugin's dependencies in `go.mod` and `go.sum`:
+
+```bash
+drift plugin sync --tidy
+```
+
+**3. Run it.** The greeting from `drift.yaml` appears on screen:
+
+```bash
+drift run android
+drift run ios          # macOS with Xcode
+drift build xtool      # Linux
+```
+
+On Linux, iOS builds go through xtool; [xtool setup](/docs/guides/xtool-setup) covers installing it and running on a device.
+
+Edit the plugin in `../hello` and run again: with the `replace`, every build uses the plugin's current source, Go and native alike.
+
+**4. Publish it** when it is ready; see [Publishing a plugin](#publishing-a-plugin).
 
 ### Module layout
 
 ```
 hello/
-├── go.mod                  # module github.com/go-drift/drift/examples/plugins/hello
+├── go.mod                  # module example.com/hello
 ├── plugin/                 # build half (drift.yaml names this package)
 │   ├── plugin.go
 │   ├── plugin_test.go
@@ -615,7 +728,7 @@ The app creates one instance of each plugin class per process, in `drift.yaml` o
 | Once per process | `register(host:)`, then `didFinishLaunching(_:options:)` | `onRegister(host)`, when the process starts (`Application.onCreate`), before any Activity, service or receiver; a process may start without an Activity, for a push message or an alarm |
 | View bound | `attach(DriftViewBinding)` / `detach()` around the Drift view controller, which detaches when its scene disconnects | `onAttach(DriftActivityBinding)` / `onDetach()` around each Activity (recreation detaches and attaches again) |
 | Overlays | `binding.overlayView`: above Drift's content and platform views; touches pass through where it is empty | `binding.overlayView`: the window's decor view |
-| App events | `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse` | `binding.addOnNewIntentListener`; the launch intent is `binding.activity.intent`, to act on only when `binding.isNewLaunch` (false for a recreated Activity or one relaunched from Recents) |
+| App events | `openURL` (a URL the app is opened with, such as an OAuth redirect), `continueUserActivity` (universal links, Handoff, Spotlight; on xtool universal links only), `didRegisterForRemoteNotifications`, `didFailToRegisterForRemoteNotifications`, `didReceiveRemoteNotification`, `willPresentNotification`, `didReceiveNotificationResponse`; launch URLs and activities included | `binding.addOnNewIntentListener`; the launch intent is `binding.activity.intent`, to act on only when `binding.isNewLaunch` (false for a recreated Activity or one relaunched from Recents) |
 
 Register channels and observers once, in the registration method. Keep view state (overlays, view references) between attach and detach, and never keep a binding past detach.
 
@@ -840,6 +953,27 @@ Test the runtime half against a fake native side from `pkg/platform` (the hello 
 - `platform.SetNativeBridge(fake)` with a `platform.NativeBridge` implementation captures method calls and answers them through the `reply` callback, in place or later from another goroutine (as an async method would).
 - `platform.HandleEvent(channel, data)` delivers an event as native code would; encode `data` with `platform.DefaultCodec.Encode`.
 - Call `platform.ResetForTest()` in `t.Cleanup` to clear subscriptions, sticky values and queues between tests.
+
+### Publishing a plugin
+
+A plugin is a Go module, published like any other: push it to a repository whose path matches the module path, and tag a version.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+A plugin in a subdirectory of its repository is tagged with that directory as a prefix, such as `hello/v0.1.0`. Its `go.mod` keeps requiring the oldest Drift whose plugin API it uses (see [Module layout](#module-layout)), and must have no `replace` of its own.
+
+Apps then drop the `replace` and require the release:
+
+```bash
+go mod edit -dropreplace=example.com/hello
+go get example.com/hello@v0.1.0
+drift plugin sync --tidy
+```
+
+Until a plugin is published, an app can also use it from a branch: `go get example.com/hello@main` records a pseudo-version.
 
 ## Op reference
 

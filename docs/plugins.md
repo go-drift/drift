@@ -91,7 +91,7 @@ Adding an op means touching: the struct and its four methods plus the constructo
 |---|---|---|
 | Register (once) | `AppDelegate.didFinishLaunching` calls `DriftPlugins.shared.launch` | `DriftApplication.onCreate` (the manifest's `android:name`) calls `PlatformChannelManager.init` and `DriftPlugins.register`, so plugins exist in processes started for a service or receiver |
 | Attach / detach | `DriftViewController.viewDidLoad`; `tearDown` (from `SceneDelegate.sceneDidDisconnect`, or `dismantleUIViewController` on xtool) detaches, as does `deinit`. The display link targets a weak proxy, so the controller is released | `MainActivity.onCreate` / `onDestroy`, with the window's decor view as overlay host; `MainActivity` decides `isNewLaunch` once (not recreated, not from Recents) for Drift's own launch handling and the binding |
-| Events | `AppDelegate`, `NotificationHandler` | `MainActivity.onNewIntent` |
+| Events | `AppDelegate`, `NotificationHandler`; URLs and user activities from `SceneDelegate` (xtool: `DriftApp`'s `onOpenURL` / `onContinueUserActivity`), offered to plugins before `DeepLinkHandler` | `MainActivity.onNewIntent` |
 
 Method calls cross as callbacks keyed by call ID. Go starts the call on the calling thread, never a pre-spawned goroutine (`pkg/platform/registry.go` `invokeNative`; the bridge template's `InvokeMethod`), so native sees whether the caller is the main thread. Native answers through `DriftPlatformReply(callID, ...)` exactly once, in place or later from any thread; Go waits for the reply or `ctx.Done()`, and a late reply is discarded.
 

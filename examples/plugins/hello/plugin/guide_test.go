@@ -14,12 +14,20 @@ func TestGuideQuotesThisPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	quotes := []struct{ file, start, end string }{
-		{"plugin.go", "package plugin", ""},
-		{"ios/HelloPlugin.swift", "import DriftPluginAPI", ""},
-		{"android/HelloPlugin.kt", "package com.example.hello", ""},
-		{"../runtime/hello.go", "package runtime", ""},
-		{"plugin_test.go", "// build runs", "func TestBuildRegistersNativeClasses"},
+	// The guide's walkthrough builds the plugin as example.com/hello, so
+	// hello-app's quotes use that module path.
+	const modulePath, guidePath = "github.com/go-drift/drift/examples/plugins/hello", "example.com/hello"
+	quotes := []struct {
+		file, start, end string
+		walkthrough      bool
+	}{
+		{"plugin.go", "package plugin", "", false},
+		{"ios/HelloPlugin.swift", "import DriftPluginAPI", "", false},
+		{"android/HelloPlugin.kt", "package com.example.hello", "", false},
+		{"../runtime/hello.go", "package runtime", "", false},
+		{"plugin_test.go", "// build runs", "func TestBuildRegistersNativeClasses", false},
+		{"../../hello-app/main.go", "package main", "", true},
+		{"../../hello-app/drift.yaml", "plugins:", "", true},
 	}
 	for _, q := range quotes {
 		src, err := os.ReadFile(q.file)
@@ -27,6 +35,9 @@ func TestGuideQuotesThisPlugin(t *testing.T) {
 			t.Fatal(err)
 		}
 		text := string(src)
+		if q.walkthrough {
+			text = strings.ReplaceAll(text, modulePath, guidePath)
+		}
 		i := strings.Index(text, q.start)
 		if i < 0 {
 			t.Fatalf("%s: no %q", q.file, q.start)
