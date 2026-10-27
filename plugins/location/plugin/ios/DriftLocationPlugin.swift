@@ -8,8 +8,10 @@
 ///
 /// Errors Go maps to its sentinels (runtime package): `permission_denied`,
 /// `location_disabled`, `location_unavailable`, `background_not_configured`
-/// and `always_denied`. A revoked permission fails the update stream with
-/// `permission_denied`.
+/// and `always_denied`. Core Location reads denied while location services
+/// are off, so a denial reads `location_disabled` then, as on Android. Lost
+/// access fails the update stream: `permission_denied` for a revoked
+/// permission, `location_disabled` for services turned off.
 
 import CoreLocation
 import DriftPluginAPI
@@ -39,6 +41,9 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
     private var options = UpdateOptions()
     /// Whether the update stream runs (Go listens and it started).
     private var streaming = false
+    /// Counts the update stream's starts and stops, so a failure reported
+    /// late reaches only the listeners of the stream it belongs to.
+    private var streamGeneration = 0
 
     public override init() {
         super.init()
@@ -65,26 +70,23 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
                 }
             }
             channel.asyncMethod("getLastKnown") { [self] _, result in
-                do {
+                whenEnabled(result) { [self] in
                     try requireAuthorized()
                     result.success(oneShot.location.map(Self.payload))
-                } catch {
-                    result.error(error)
                 }
             }
-            channel.asyncMethod("isEnabled") { _, result in
-                // Apple warns against asking on the main thread.
-                DispatchQueue.global(qos: .userInitiated).async {
-                    result.success(["enabled": CLLocationManager.locationServicesEnabled()])
-                }
+            channel.asyncMethod("isEnabled") { [self] _, result in
+                readServicesEnabled { result.success(["enabled": $0]) }
             }
             channel.method("setUpdateOptions") { [self] args in
                 let next = UpdateOptions(args as? [String: Any] ?? [:])
                 if next.background {
                     try requireBackground()
                 }
+                // A running stream that lost access takes the options too:
+                // its listeners got the failure, and it resumes with them
+                // when access returns.
                 if streaming {
-                    try requireAuthorized()
                     apply(next)
                 }
                 options = next
@@ -92,7 +94,18 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             }
             channel.stream(
                 onListen: { [self] in
-                    try requireAuthorized()
+                    streamGeneration += 1
+                    guard authorized else {
+                        // Not started. Which failure it is (permission or
+                        // services) is read off the main thread.
+                        let generation = streamGeneration
+                        accessError(Self.permissionDenied) { [self] error in
+                            if generation == streamGeneration {
+                                self.host?.sendEventError(Self.channel, error)
+                            }
+                        }
+                        return
+                    }
                     if options.background {
                         try requireBackground()
                     }
@@ -101,6 +114,7 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
                     streaming = true
                 },
                 onCancel: { [self] in
+                    streamGeneration += 1
                     updates.stopUpdatingLocation()
                     streaming = false
                 }
@@ -124,33 +138,60 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
         updates.pausesLocationUpdatesAutomatically = !opts.background
     }
 
+    private static let disabled = DriftCallError("location_disabled", "location services are turned off")
+    private static let permissionDenied = DriftCallError("permission_denied", "location permission not granted; request it first")
+
+    /// Calls back on the main thread with whether location services are on,
+    /// read off it: Apple warns against reading it on the main thread.
+    private func readServicesEnabled(_ completion: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let enabled = CLLocationManager.locationServicesEnabled()
+            DispatchQueue.main.async { completion(enabled) }
+        }
+    }
+
     /// Runs body on the main thread once location services are known to be
     /// on; fails result with `location_disabled` otherwise, or with body's
     /// error.
     private func whenEnabled(_ result: DriftResult, _ body: @escaping () throws -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let enabled = CLLocationManager.locationServicesEnabled()
-            DispatchQueue.main.async {
-                guard enabled else {
-                    result.error(DriftCallError("location_disabled", "location services are turned off"))
-                    return
-                }
-                do {
-                    try body()
-                } catch {
-                    result.error(error)
-                }
+        readServicesEnabled { enabled in
+            guard enabled else {
+                result.error(Self.disabled)
+                return
+            }
+            do {
+                try body()
+            } catch {
+                result.error(error)
             }
         }
     }
 
-    private func requireAuthorized() throws {
+    /// Calls back on the main thread with the error for access Core
+    /// Location denies: `location_disabled` while services are off (it
+    /// then denies whatever the permission), otherwise denied.
+    private func accessError(_ denied: DriftCallError, _ completion: @escaping (DriftCallError) -> Void) {
+        readServicesEnabled { enabled in
+            completion(enabled ? denied : Self.disabled)
+        }
+    }
+
+    /// Whether the app may use location. True implies location services
+    /// are on: while they are off, Core Location reads denied.
+    private var authorized: Bool {
         switch oneShot.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            return
+            return true
         default:
-            throw DriftCallError("permission_denied", "location permission not granted; request it first")
+            return false
         }
+    }
+
+    /// Throws `permission_denied` unless authorized. Call it once location
+    /// services are known to be on (whenEnabled); otherwise the denial may
+    /// be theirs.
+    private func requireAuthorized() throws {
+        guard authorized else { throw Self.permissionDenied }
     }
 
     private func requireBackground() throws {
@@ -191,8 +232,14 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             // Transient: Core Location keeps trying, and the stream goes on.
             return
         case .denied?:
-            // Access was revoked; Core Location stops the updates.
-            host?.sendEventError(Self.channel, DriftCallError("permission_denied", "location permission revoked"))
+            // The permission was revoked or services turned off; the
+            // updates resume if access returns.
+            let generation = streamGeneration
+            accessError(DriftCallError("permission_denied", "location permission revoked")) { [self] error in
+                if generation == streamGeneration {
+                    host?.sendEventError(Self.channel, error)
+                }
+            }
         default:
             host?.sendEventError(Self.channel, error)
         }
