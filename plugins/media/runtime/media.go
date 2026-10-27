@@ -120,7 +120,9 @@ func (p *playback) State() *core.Derived[PlaybackState] {
 }
 
 // Progress is the playback position, duration and buffered length, updated
-// about every 250ms while media is loaded. It changes on the UI thread.
+// about every 250ms while media is loaded, playing or paused, and at once
+// when the state changes or a seek moves the position (Stop's return to
+// the start included). It changes on the UI thread.
 func (p *playback) Progress() *core.Derived[Progress] {
 	return p.readProgress
 }

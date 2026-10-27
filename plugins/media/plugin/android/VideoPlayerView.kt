@@ -11,8 +11,6 @@ import com.drift.runner.DriftPlatformView
 import com.drift.runner.DriftCallError
 import com.drift.runner.DriftPlatformViewEvents
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -49,7 +47,7 @@ class VideoPlayerView(
     override val supportsRegionMask: Boolean get() = true
     private lateinit var playerView: PlayerView
     private val player: ExoPlayer
-    private val main = Handler(Looper.getMainLooper())
+    private val progress: ProgressTicker
     private var showControls = true
 
     init {
@@ -74,28 +72,16 @@ class VideoPlayerView(
         player.repeatMode = if (looping) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
         player.volume = volume
 
-        // Add listener for state and position events
+        // State events, each followed by the progress (PlaybackProgress.kt
+        // says when else progress is sent).
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                val state = when (playbackState) {
-                    Player.STATE_IDLE -> 0
-                    Player.STATE_BUFFERING -> 1
-                    Player.STATE_READY -> if (player.isPlaying) 2 else 4 // Playing or Paused
-                    Player.STATE_ENDED -> 3
-                    else -> 0
-                }
-                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
-                    stopPositionUpdates()
-                }
-                events.send("onPlaybackStateChanged", mapOf("state" to state))
+                sendState()
+                sendProgress()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (player.playbackState == Player.STATE_READY) {
-                    val state = if (isPlaying) 2 else 4 // Playing or Paused
-                    events.send("onPlaybackStateChanged", mapOf("state" to state))
-                    if (isPlaying) startPositionUpdates() else stopPositionUpdates()
-                }
+                if (player.playbackState == Player.STATE_READY) sendState()
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -105,6 +91,7 @@ class VideoPlayerView(
                 ))
             }
         })
+        progress = ProgressTicker(player) { sendProgress() }
 
         // Load media if URL provided
         if (url != null && url.isNotEmpty()) {
@@ -186,28 +173,16 @@ class VideoPlayerView(
         return null
     }
 
-    private var positionRunnable: Runnable? = null
-
-    private fun startPositionUpdates() {
-        stopPositionUpdates()
-        positionRunnable = object : Runnable {
-            override fun run() {
-                if (player.playbackState != Player.STATE_IDLE) {
-                    events.send("onPositionChanged", mapOf(
-                        "positionMs" to player.currentPosition,
-                        "durationMs" to player.duration.coerceAtLeast(0),
-                        "bufferedMs" to player.bufferedPosition,
-                    ))
-                }
-                main.postDelayed(this, 250)
-            }
-        }
-        main.post(positionRunnable!!)
+    private fun sendState() {
+        events.send("onPlaybackStateChanged", mapOf("state" to player.driftState()))
     }
 
-    private fun stopPositionUpdates() {
-        positionRunnable?.let { main.removeCallbacks(it) }
-        positionRunnable = null
+    private fun sendProgress() {
+        events.send("onPositionChanged", mapOf(
+            "positionMs" to player.currentPosition,
+            "durationMs" to player.duration.coerceAtLeast(0),
+            "bufferedMs" to player.bufferedPosition,
+        ))
     }
 
     override fun handle(method: String, args: Map<String, Any?>) {
@@ -226,7 +201,7 @@ class VideoPlayerView(
     }
 
     override fun dispose() {
-        stopPositionUpdates()
+        progress.stop()
         player.release()
         onDispose(this)
     }
@@ -243,9 +218,9 @@ class VideoPlayerView(
     }
 
     fun stop() {
+        // Idle, then the seek reports the position back at zero.
         player.stop()
         player.seekTo(0)
-        events.send("onPlaybackStateChanged", mapOf("state" to 0)) // Idle, position reset to zero
     }
 
     fun seekTo(positionMs: Long) {

@@ -21,7 +21,7 @@ The plugin has two APIs: the `VideoPlayerController` for embedded video with pla
 
 Each controller publishes:
 
-- `State()`, a `*core.Derived[media.PlaybackState]`, and `Progress()`, a `*core.Derived[media.Progress]` (position, duration and buffered length, about every 250ms while media is loaded). Both change on the UI thread, so `core.UseListenable` rebuilds a widget on them.
+- `State()`, a `*core.Derived[media.PlaybackState]`, and `Progress()`, a `*core.Derived[media.Progress]` (position, duration and buffered length: about every 250ms while media is loaded, playing or paused, and at once when the state changes or a seek moves the position, `Stop` included). Both change on the UI thread, so `core.UseListenable` rebuilds a widget on them.
 - `Errors()`, a `*platform.Stream[error]` of playback failures. Like every stream, its handlers run off the UI thread: update widget state inside `drift.Dispatch`.
 
 ## Video Player
