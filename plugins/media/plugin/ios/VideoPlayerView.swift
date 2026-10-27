@@ -14,7 +14,9 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
     let view: UIView
     private let playerVC: AVPlayerViewController
     private let player: AVQueuePlayer
-    private var timeObserver: Any?
+    private lazy var ticker = ProgressTicker(player) { [weak self] in
+        self?.events.send("onPositionChanged", $0.fields)
+    }
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
     private var endOfItemObserver: NSObjectProtocol?
@@ -64,18 +66,14 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
                 } else {
                     state = 4 // Paused
                 }
-                self.stopPositionUpdates()
             case .waitingToPlayAtSpecifiedRate:
                 state = 1 // Buffering
-                self.stopPositionUpdates()
             case .playing:
                 state = 2 // Playing
-                self.startPositionUpdates()
             @unknown default:
                 state = 0 // Idle
-                self.stopPositionUpdates()
             }
-            self.events.send("onPlaybackStateChanged", ["state": state])
+            self.reportState(state)
         }
 
         // Load media if URL provided
@@ -88,34 +86,11 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
         }
     }
 
-    private func startPositionUpdates() {
-        guard timeObserver == nil else { return }
-        let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self = self else { return }
-            let positionMs = time.isNumeric ? Int64(CMTimeGetSeconds(time) * 1000) : 0
-            var durationMs: Int64 = 0
-            var bufferedMs: Int64 = 0
-
-            if let item = self.player.currentItem {
-                if item.duration.isNumeric {
-                    durationMs = Int64(CMTimeGetSeconds(item.duration) * 1000)
-                }
-                if let timeRange = item.loadedTimeRanges.last?.timeRangeValue {
-                    let bufferedEnd = CMTimeAdd(timeRange.start, timeRange.duration)
-                    bufferedMs = Int64(CMTimeGetSeconds(bufferedEnd) * 1000)
-                }
-            }
-
-            self.events.send("onPositionChanged", ["positionMs": positionMs, "durationMs": max(durationMs, 0), "bufferedMs": bufferedMs])
-        }
-    }
-
-    private func stopPositionUpdates() {
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-            timeObserver = nil
-        }
+    /// Reports state to Go, then the progress, at position instead of the
+    /// current time when given.
+    private func reportState(_ state: Int, at position: CMTime? = nil) {
+        events.send("onPlaybackStateChanged", ["state": state])
+        ticker.reportNow(at: position)
     }
 
     /// Loads an AVPlayerItem from a URL, setting up observers and looping.
@@ -135,6 +110,7 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
 
         let item = AVPlayerItem(url: url)
         player.replaceCurrentItem(with: item)
+        ticker.start()
 
         // Observe item status for errors
         itemStatusObservation?.invalidate()
@@ -156,7 +132,7 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
         ) { [weak self] _ in
             guard let self = self else { return }
             self.hasReachedEnd = true
-            self.events.send("onPlaybackStateChanged", ["state": 3]) // Completed
+            self.reportState(3) // Completed
         }
 
         // Create looper if looping is active
@@ -166,7 +142,7 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
     }
 
     func dispose() {
-        stopPositionUpdates()
+        ticker.stop()
         timeControlObservation?.invalidate()
         timeControlObservation = nil
         itemStatusObservation?.invalidate()
@@ -201,16 +177,16 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
         isStopped = true
         hasReachedEnd = false
         player.pause()
-        player.seek(to: .zero) { [weak self] _ in
-            guard let self = self else { return }
-            self.events.send("onPlaybackStateChanged", ["state": 0]) // Idle, position reset to zero
-        }
+        player.seek(to: .zero)
+        // Idle even when already paused, which changes no status.
+        reportState(0, at: .zero)
     }
 
     func seekTo(positionMs: Int64) {
         hasReachedEnd = false
         let time = CMTime(seconds: Double(positionMs) / 1000.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         player.seek(to: time)
+        ticker.reportNow(at: time)
     }
 
     func setVolume(_ volume: Float) {

@@ -15,7 +15,9 @@ private final class AudioPlayerInstance {
     let player: AVQueuePlayer
     /// Sends an event to Go on channel.
     private let send: (_ channel: String, _ data: [String: Any]) -> Void
-    private var timeObserver: Any?
+    private lazy var ticker = ProgressTicker(player) { [weak self] in self?.sendEvent($0) }
+    /// The playback state last reported (runtime PlaybackState).
+    private var state = 0 // Idle
     private var timeControlObservation: NSKeyValueObservation?
     private var itemStatusObservation: NSKeyValueObservation?
     private var endOfItemObserver: NSObjectProtocol?
@@ -46,80 +48,30 @@ private final class AudioPlayerInstance {
                 } else {
                     state = 4 // Paused
                 }
-                self.stopPositionUpdates()
             case .waitingToPlayAtSpecifiedRate:
                 state = 1 // Buffering
-                self.stopPositionUpdates()
             case .playing:
                 state = 2 // Playing
-                self.startPositionUpdates()
             @unknown default:
                 state = 0 // Idle
-                self.stopPositionUpdates()
             }
-            self.sendStateEvent(state: state)
+            self.reportState(state)
         }
     }
 
-    private func startPositionUpdates() {
-        guard timeObserver == nil else { return }
-        let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self = self else { return }
-            let positionMs = time.isNumeric ? Int64(CMTimeGetSeconds(time) * 1000) : 0
-            var durationMs: Int64 = 0
-            var bufferedMs: Int64 = 0
-
-            if let item = self.player.currentItem {
-                if item.duration.isNumeric {
-                    durationMs = Int64(CMTimeGetSeconds(item.duration) * 1000)
-                }
-                if let timeRange = item.loadedTimeRanges.last?.timeRangeValue {
-                    let bufferedEnd = CMTimeAdd(timeRange.start, timeRange.duration)
-                    bufferedMs = Int64(CMTimeGetSeconds(bufferedEnd) * 1000)
-                }
-            }
-
-            self.send(AudioPlayers.eventsChannel, [
-                "playerId": self.id,
-                "playbackState": 2, // Playing
-                "positionMs": positionMs,
-                "durationMs": max(durationMs, 0),
-                "bufferedMs": bufferedMs
-            ])
-        }
+    /// Reports state to Go with the progress, at position instead of the
+    /// current time when given.
+    private func reportState(_ state: Int, at position: CMTime? = nil) {
+        self.state = state
+        ticker.reportNow(at: position)
     }
 
-    private func stopPositionUpdates() {
-        if let observer = timeObserver {
-            player.removeTimeObserver(observer)
-            timeObserver = nil
-        }
-    }
-
-    func sendStateEvent(state: Int) {
-        let currentTime = player.currentTime()
-        let positionMs = currentTime.isNumeric ? Int64(CMTimeGetSeconds(currentTime) * 1000) : 0
-        var durationMs: Int64 = 0
-        var bufferedMs: Int64 = 0
-
-        if let item = player.currentItem {
-            if item.duration.isNumeric {
-                durationMs = Int64(CMTimeGetSeconds(item.duration) * 1000)
-            }
-            if let timeRange = item.loadedTimeRanges.last?.timeRangeValue {
-                let bufferedEnd = CMTimeAdd(timeRange.start, timeRange.duration)
-                bufferedMs = Int64(CMTimeGetSeconds(bufferedEnd) * 1000)
-            }
-        }
-
-        send(AudioPlayers.eventsChannel, [
-            "playerId": id,
-            "playbackState": state,
-            "positionMs": positionMs,
-            "durationMs": max(durationMs, 0),
-            "bufferedMs": bufferedMs
-        ])
+    /// Sends progress to Go: every event carries the state with it.
+    private func sendEvent(_ progress: PlaybackProgress) {
+        var event = progress.fields
+        event["playerId"] = id
+        event["playbackState"] = state
+        send(AudioPlayers.eventsChannel, event)
     }
 
     func load(url: URL) {
@@ -138,6 +90,7 @@ private final class AudioPlayerInstance {
 
         let item = AVPlayerItem(url: url)
         player.replaceCurrentItem(with: item)
+        ticker.start()
 
         // Observe item status for errors
         itemStatusObservation?.invalidate()
@@ -162,7 +115,7 @@ private final class AudioPlayerInstance {
         ) { [weak self] _ in
             guard let self = self else { return }
             self.hasReachedEnd = true
-            self.sendStateEvent(state: 3) // Completed
+            self.reportState(3) // Completed
         }
 
         // Re-create looper if looping is active
@@ -188,16 +141,16 @@ private final class AudioPlayerInstance {
         isStopped = true
         hasReachedEnd = false
         player.pause()
-        player.seek(to: .zero) { [weak self] _ in
-            guard let self = self else { return }
-            self.sendStateEvent(state: 0) // Idle with position reset to zero
-        }
+        player.seek(to: .zero)
+        // Idle even when already paused, which changes no status.
+        reportState(0, at: .zero)
     }
 
     func seekTo(positionMs: Int64) {
         hasReachedEnd = false
         let time = CMTime(seconds: Double(positionMs) / 1000.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         player.seek(to: time)
+        ticker.reportNow(at: time)
     }
 
     func setVolume(_ volume: Float) {
@@ -224,7 +177,7 @@ private final class AudioPlayerInstance {
     }
 
     func dispose() {
-        stopPositionUpdates()
+        ticker.stop()
         timeControlObservation?.invalidate()
         timeControlObservation = nil
         itemStatusObservation?.invalidate()
