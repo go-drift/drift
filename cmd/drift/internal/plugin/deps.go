@@ -23,6 +23,17 @@ type PackageInfo struct {
 	Error string
 }
 
+// notFound reports whether no module in the graph provides the package, so
+// the remedy is to require one: go list's "no required module provides
+// package" (with -mod=mod, "cannot find module providing package"). Any
+// other error, such as a missing go.sum entry for the module that does
+// provide it, is not this.
+func (p *PackageInfo) notFound() bool {
+	return p.Error == "" && p.Module == nil ||
+		strings.Contains(p.Error, "no required module provides package") ||
+		strings.Contains(p.Error, "cannot find module providing package")
+}
+
 // ModuleInfo is the subset of go list module metadata we read.
 type ModuleInfo struct {
 	Path    string
@@ -180,26 +191,71 @@ func isDriftPackage(pkg string) bool {
 	return pkg == protocol.DriftModulePath || strings.HasPrefix(pkg, protocol.DriftModulePath+"/")
 }
 
+// UnresolvedPluginError lists plugin packages that go could not load for a
+// reason other than no module providing them, such as a missing go.sum
+// entry, with go's error for each.
+type UnresolvedPluginError struct {
+	// ProjectRoot is the app's root, named in the go mod tidy hint.
+	ProjectRoot string
+	Packages    []UnresolvedPackage
+}
+
+// UnresolvedPackage is a plugin package and go list's error for it.
+type UnresolvedPackage struct {
+	Package string
+	Err     string
+}
+
+func (e *UnresolvedPluginError) Error() string {
+	var sb strings.Builder
+	tidy := false
+	for i, p := range e.Packages {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		fmt.Fprintf(&sb, "Plugin package %s could not be loaded:\n  %s", p.Package, strings.ReplaceAll(p.Err, "\n", "\n  "))
+		tidy = tidy || needsTidy(p.Err)
+	}
+	if tidy {
+		sb.WriteString(tidyHint(e.ProjectRoot))
+	}
+	return sb.String()
+}
+
 // CheckPluginDeps verifies each configured plugin is reachable through the
-// module graph. All missing entries are collected so one CLI invocation
-// surfaces every fix. cliVersion is the CLI's version; a release names its
-// own drift version in the hint for first-party plugins.
-func CheckPluginDeps(cliVersion string, plugins []ConfiguredPlugin, resolver PackageResolver) ([]*PackageInfo, error) {
+// module graph of the app at projectRoot. All problems are collected so one
+// CLI invocation surfaces every fix: plugins no module provides as a
+// *MissingPluginError, plugins go could not load for another reason as an
+// *UnresolvedPluginError, joined when both occur. cliVersion is the CLI's
+// version; a release names its own drift version in the hint for
+// first-party plugins.
+func CheckPluginDeps(cliVersion, projectRoot string, plugins []ConfiguredPlugin, resolver PackageResolver) ([]*PackageInfo, error) {
 	out := make([]*PackageInfo, len(plugins))
 	var missing []string
+	var unresolved []UnresolvedPackage
 	for i, p := range plugins {
 		info, err := resolver(p.Package)
 		if err != nil {
 			return nil, err
 		}
-		if info == nil || info.Module == nil || info.Error != "" {
+		switch {
+		case info == nil || info.notFound():
 			missing = append(missing, p.Package)
-			continue
+		case info.Error != "":
+			unresolved = append(unresolved, UnresolvedPackage{Package: p.Package, Err: info.Error})
+		default:
+			out[i] = info
 		}
-		out[i] = info
 	}
+	var errs []error
 	if len(missing) > 0 {
-		return nil, &MissingPluginError{CLI: cache.NormalizeVersion(cliVersion), Packages: missing}
+		errs = append(errs, &MissingPluginError{CLI: cache.NormalizeVersion(cliVersion), Packages: missing})
+	}
+	if len(unresolved) > 0 {
+		errs = append(errs, &UnresolvedPluginError{ProjectRoot: projectRoot, Packages: unresolved})
+	}
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

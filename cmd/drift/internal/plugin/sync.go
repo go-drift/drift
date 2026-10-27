@@ -72,7 +72,7 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		}
 	}
 
-	infos, err := CheckPluginDeps(opts.CLIVersion, plugins, NewGoListResolver(opts.ProjectRoot))
+	infos, err := CheckPluginDeps(opts.CLIVersion, opts.ProjectRoot, plugins, NewGoListResolver(opts.ProjectRoot))
 	if err != nil {
 		var missing *MissingPluginError
 		if errors.As(err, &missing) {
@@ -190,7 +190,7 @@ func List(projectRoot, cliVersion string, resolve bool) (*ListResult, error) {
 	}
 
 	resolver := NewGoListResolver(projectRoot)
-	infos, depErr := CheckPluginDeps(cliVersion, plugins, resolver)
+	infos, depErr := CheckPluginDeps(cliVersion, projectRoot, plugins, resolver)
 	if depErr != nil {
 		// We still want to display rows for the resolved subset and mark
 		// missing entries; reset and re-resolve individually.

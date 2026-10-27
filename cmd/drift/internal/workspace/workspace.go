@@ -307,7 +307,7 @@ func resolvePluginOps(ws *Workspace) (pluginOps, error) {
 	}
 
 	resolver := driftpluginCLI.NewGoListResolver(root)
-	infos, err := driftpluginCLI.CheckPluginDeps(cliVersion, plugins, resolver)
+	infos, err := driftpluginCLI.CheckPluginDeps(cliVersion, root, plugins, resolver)
 	if err != nil {
 		return pluginOps{}, err
 	}

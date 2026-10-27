@@ -2,16 +2,23 @@ package plugin
 
 import (
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
 
+// notProvided is go list's result for pkg when no module in the graph
+// provides it.
+func notProvided(pkg string) *PackageInfo {
+	return &PackageInfo{ImportPath: pkg, Error: "no required module provides package " + pkg + "; to add it:\n\tgo get " + pkg}
+}
+
 func TestCheckPluginDepsMissing(t *testing.T) {
 	plugins := []ConfiguredPlugin{{Package: "github.com/foo/missing/plugin"}}
 	resolver := PackageResolver(func(pkg string) (*PackageInfo, error) {
-		return &PackageInfo{ImportPath: pkg, Error: "package not found"}, nil
+		return notProvided(pkg), nil
 	})
-	_, err := CheckPluginDeps("dev", plugins, resolver)
+	_, err := CheckPluginDeps("dev", "", plugins, resolver)
 	var missing *MissingPluginError
 	if !errors.As(err, &missing) {
 		t.Fatalf("expected MissingPluginError, got %T %v", err, err)
@@ -92,9 +99,9 @@ Then commit drift.yaml and tools/drift-plugins/main.go together.`,
 				plugins[i] = ConfiguredPlugin{Package: p}
 			}
 			resolver := PackageResolver(func(pkg string) (*PackageInfo, error) {
-				return &PackageInfo{ImportPath: pkg, Error: "package not found"}, nil
+				return notProvided(pkg), nil
 			})
-			_, err := CheckPluginDeps(tt.cli, plugins, resolver)
+			_, err := CheckPluginDeps(tt.cli, "", plugins, resolver)
 			var missing *MissingPluginError
 			if !errors.As(err, &missing) {
 				t.Fatalf("expected MissingPluginError, got %T %v", err, err)
@@ -106,6 +113,42 @@ Then commit drift.yaml and tools/drift-plugins/main.go together.`,
 	}
 }
 
+// A plugin module that go.mod requires but go.sum has no entry for is not
+// missing: go cannot verify it, and `go mod tidy` adds the entry. `go get
+// ...@latest` would change the version the app pins, and for drift itself
+// could downgrade it.
+func TestCheckPluginDepsMissingGoSum(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not available")
+	}
+	// No network: go reports the missing entry before fetching anything.
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOFLAGS", "-mod=readonly")
+	t.Setenv("GOWORK", "off")
+	app := t.TempDir()
+	writeTree(t, app, map[string]string{
+		"go.mod": "module example.com/app\n\ngo 1.22\n\nrequire example.com/hello v1.0.0\n",
+	})
+	plugins := []ConfiguredPlugin{{Package: "example.com/hello/plugin"}}
+	_, err := CheckPluginDeps("v0.28.0", app, plugins, NewGoListResolver(app))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	var missing *MissingPluginError
+	if errors.As(err, &missing) {
+		t.Errorf("reported as not found: %v", err)
+	}
+	msg := err.Error()
+	for _, want := range []string{"example.com/hello/plugin", "missing go.sum entry", "go mod tidy"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should mention %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "go get") {
+		t.Errorf("error should not suggest go get:\n%s", msg)
+	}
+}
+
 func TestCheckPluginDepsOK(t *testing.T) {
 	plugins := []ConfiguredPlugin{{Package: "github.com/foo/p/plugin"}}
 	resolver := PackageResolver(func(pkg string) (*PackageInfo, error) {
@@ -114,7 +157,7 @@ func TestCheckPluginDepsOK(t *testing.T) {
 			Module:     &ModuleInfo{Path: "github.com/foo/p", Version: "v1.2.3"},
 		}, nil
 	})
-	infos, err := CheckPluginDeps("dev", plugins, resolver)
+	infos, err := CheckPluginDeps("dev", "", plugins, resolver)
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -136,9 +179,9 @@ func TestCheckPluginDepsAggregatesMissing(t *testing.T) {
 				Module:     &ModuleInfo{Path: "github.com/foo/b", Version: "v1"},
 			}, nil
 		}
-		return &PackageInfo{ImportPath: pkg, Error: "package not found"}, nil
+		return notProvided(pkg), nil
 	})
-	_, err := CheckPluginDeps("dev", plugins, resolver)
+	_, err := CheckPluginDeps("dev", "", plugins, resolver)
 	var missing *MissingPluginError
 	if !errors.As(err, &missing) {
 		t.Fatalf("expected MissingPluginError, got %v", err)
