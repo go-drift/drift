@@ -8,8 +8,9 @@
 //
 // Showing notifications needs the user's permission, which Drift itself
 // provides (platform.Notifications.Permission); this plugin declares
-// Android's POST_NOTIFICATIONS for it. Push notifications come from the
-// Firebase plugin; both can be used together.
+// Android's POST_NOTIFICATIONS for it, and SCHEDULE_EXACT_ALARM so the user
+// can allow exact alarms. Push notifications come from the Firebase plugin;
+// both can be used together.
 //
 // The Go API is github.com/go-drift/drift/plugins/notifications/runtime.
 //
@@ -49,6 +50,10 @@ func (notifications) Build(ctx *driftplugin.BuildCtx, _ Config) error {
 	ctx.IOS.Plugin("DriftNotificationsPlugin")
 
 	ctx.Android.Manifest.AddPermission("android.permission.POST_NOTIFICATIONS")
+	// The user grants it in Settings, Alarms & reminders, which lists only
+	// apps that declare it. Not USE_EXACT_ALARM: Google Play allows that
+	// only to alarm and calendar apps.
+	ctx.Android.Manifest.AddPermission("android.permission.SCHEDULE_EXACT_ALARM")
 	ctx.Android.Manifest.AddReceiver(`<receiver android:name="` + androidPackage + `.DriftNotificationReceiver" android:exported="false" />`)
 	ctx.Android.Sources.AddFS(androidPackage, androidSources, "android")
 	ctx.Android.Plugin(androidPackage + ".DriftNotificationsPlugin")

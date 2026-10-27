@@ -308,7 +308,7 @@ The permission is Drift's own, `platform.Notifications.Permission`, shared with 
 
 Limitations:
 
-- Android schedules with `AlarmManager`: exactly when the user lets the app schedule exact alarms (Settings, Alarms & reminders), otherwise within Android's window for inexact alarms. Scheduled notifications are lost when the device restarts.
+- Android schedules with `AlarmManager`: exactly when the user lets the app schedule exact alarms (Settings, Alarms & reminders; the plugin declares `SCHEDULE_EXACT_ALARM`, which lists the app there), otherwise within Android's window for inexact alarms. Scheduled notifications are lost when the device restarts.
 - Android: when the system groups several notifications from the app, tapping the group summary opens the app without an `Opens()` event, as for Firebase.
 - `Deliveries()` reports notifications shown while the app runs; one that fires while the app is closed reaches only `Opens()`, if tapped.
 

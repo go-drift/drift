@@ -25,6 +25,14 @@ func TestBuild(t *testing.T) {
 	}) {
 		t.Error("POST_NOTIFICATIONS not declared")
 	}
+	// Without it canScheduleExactAlarms is always false and the app never
+	// appears in Settings, Alarms & reminders.
+	if !has(func(op protocol.Op) bool {
+		o, ok := op.(*protocol.OpAndroidManifestAddPermission)
+		return ok && o.Name == "android.permission.SCHEDULE_EXACT_ALARM"
+	}) {
+		t.Error("SCHEDULE_EXACT_ALARM not declared")
+	}
 	if !has(func(op protocol.Op) bool {
 		o, ok := op.(*protocol.OpAndroidManifestAddComponent)
 		return ok && o.Tag() == "receiver" && o.Name() == androidPackage+".DriftNotificationReceiver"
