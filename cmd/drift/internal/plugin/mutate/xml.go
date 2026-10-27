@@ -165,21 +165,26 @@ func appendIntentFilter(activity *etree.Element, snippet string) error {
 	return nil
 }
 
+// canonicalIntent is el's identity as an intent filter: its own attributes
+// (android:autoVerify, android:priority, ...) and its children, each with
+// its attributes, in no particular order.
 func canonicalIntent(el *etree.Element) string {
 	var parts []string
 	for _, child := range el.ChildElements() {
-		var bits []string
-		bits = append(bits, child.Tag)
-		var attrs []string
-		for _, a := range child.Attr {
-			attrs = append(attrs, a.FullKey()+"="+a.Value)
-		}
-		sort.Strings(attrs)
-		bits = append(bits, attrs...)
-		parts = append(parts, strings.Join(bits, "|"))
+		parts = append(parts, canonicalTag(child))
 	}
 	sort.Strings(parts)
-	return strings.Join(parts, "##")
+	return canonicalTag(el) + "##" + strings.Join(parts, "##")
+}
+
+// canonicalTag is el's tag and attributes, in no particular order.
+func canonicalTag(el *etree.Element) string {
+	var attrs []string
+	for _, a := range el.Attr {
+		attrs = append(attrs, a.FullKey()+"="+a.Value)
+	}
+	sort.Strings(attrs)
+	return strings.Join(append([]string{el.Tag}, attrs...), "|")
 }
 
 // putComponent adds a <tag> element (service, receiver) from pkg's xml,

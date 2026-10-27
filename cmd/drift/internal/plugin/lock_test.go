@@ -205,6 +205,41 @@ func TestSyncEjectedLockRenamedOpIsNotRemoval(t *testing.T) {
 	}
 }
 
+// A plugin update that adds android:autoVerify to its intent filter adds
+// the new filter to an ejected manifest, and, as for any edit inside a
+// shared file, lists the previous filter for the user to remove.
+func TestEjectedIntentFilterUpdate(t *testing.T) {
+	dir := t.TempDir()
+	seedAndroidScaffold(t, dir)
+	const link = `<intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="https" android:host="example.com"/></intent-filter>`
+	build := func(xml string) []string {
+		t.Helper()
+		ops := []protocol.Op{&protocol.OpAndroidManifestAddIntentFilter{Base: protocol.Base{Pkg: "p"}, Activity: ".MainActivity", XML: xml}}
+		prev, err := ReadLock(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := apply(t, ops, dir, "android", prev); err != nil {
+			t.Fatalf("Apply: %v", err)
+		}
+		_, dropped, err := syncLock(t, dir, ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return dropped
+	}
+	build(link)
+	dropped := build(strings.Replace(link, "<intent-filter>", `<intent-filter android:autoVerify="true">`, 1))
+
+	manifest := readFile(t, filepath.Join(dir, "app/src/main/AndroidManifest.xml"))
+	if !strings.Contains(manifest, `<intent-filter android:autoVerify="true">`) {
+		t.Errorf("updated filter missing:\n%s", manifest)
+	}
+	if len(dropped) != 1 || !strings.Contains(dropped[0], link) {
+		t.Errorf("dropped = %v, want the previous filter", dropped)
+	}
+}
+
 // An op that keeps its key but writes another path leaves the old file
 // behind unless the lock removes it.
 func TestSyncEjectedLockRemovesMovedFile(t *testing.T) {

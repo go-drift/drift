@@ -79,6 +79,41 @@ func TestApplyAndroidManifestSetActivityAttr(t *testing.T) {
 	}
 }
 
+// A filter's own attributes (android:autoVerify, android:priority) are part
+// of what it declares: one that differs from an existing filter only there
+// is a different filter, not a duplicate.
+func TestApplyAndroidManifestIntentFilterAttributes(t *testing.T) {
+	path := writeManifest(t)
+	const link = `<intent-filter>
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="https" android:host="example.com" />
+</intent-filter>`
+	plain := &protocol.OpAndroidManifestAddIntentFilter{Base: protocol.Base{Pkg: "user"}, Activity: ".MainActivity", XML: link}
+	if _, err := applyAndroidManifest(t, path, ManifestOps{IntentFilters: []*protocol.OpAndroidManifestAddIntentFilter{plain}}); err != nil {
+		t.Fatalf("seed plain filter: %v", err)
+	}
+	verified := &protocol.OpAndroidManifestAddIntentFilter{
+		Base:     protocol.Base{Pkg: "p"},
+		Activity: ".MainActivity",
+		XML:      strings.Replace(link, "<intent-filter>", `<intent-filter android:autoVerify="true">`, 1),
+	}
+	ops := ManifestOps{IntentFilters: []*protocol.OpAndroidManifestAddIntentFilter{verified}}
+	for range 2 {
+		if _, err := applyAndroidManifest(t, path, ops); err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+	}
+	body, _ := os.ReadFile(path)
+	if n := strings.Count(string(body), `<intent-filter android:autoVerify="true">`); n != 1 {
+		t.Errorf("want one autoVerify filter, found %d:\n%s", n, body)
+	}
+	if n := strings.Count(string(body), "android.intent.action.VIEW"); n != 2 {
+		t.Errorf("want the plain and the autoVerify filter, found %d VIEW filters:\n%s", n, body)
+	}
+}
+
 func TestApplyAndroidManifestAddService(t *testing.T) {
 	path := writeManifest(t)
 	service := func(exported string) *protocol.OpAndroidManifestAddComponent {
