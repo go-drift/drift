@@ -681,18 +681,20 @@ class NativeWebViewContainer: NSObject, DriftPlatformView, WKNavigationDelegate 
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        PlatformChannelManager.shared.sendEvent(
-            channel: "drift/platform_views",
-            data: [
-                "method": "onWebViewError",
-                "viewId": viewId,
-                "code": webViewErrorCode(for: error),
-                "message": error.localizedDescription
-            ]
-        )
+        sendLoadError(error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        sendLoadError(error)
+    }
+
+    /// Reports a navigation's failure, unless a newer navigation cancelled
+    /// it (that one reports its own start and end).
+    private func sendLoadError(_ error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+            return
+        }
         PlatformChannelManager.shared.sendEvent(
             channel: "drift/platform_views",
             data: [

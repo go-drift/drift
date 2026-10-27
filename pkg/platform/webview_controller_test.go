@@ -103,6 +103,20 @@ func TestWebViewController_Page(t *testing.T) {
 	}
 }
 
+// A failed load is no longer loading. iOS reports one as onPageStarted then
+// onWebViewError (didFailProvisionalNavigation), never onPageFinished.
+func TestWebViewController_PageFailedLoadStopsLoading(t *testing.T) {
+	setupTestBridge(t)
+	c := newWebView(t)
+
+	sendWebViewEvent(t, "onPageStarted", map[string]any{"viewId": c.ViewID(), "url": "https://unreachable.invalid"})
+	sendWebViewEvent(t, "onWebViewError", map[string]any{"viewId": c.ViewID(), "code": "network_error", "message": "A server with the specified hostname could not be found."})
+
+	if got := c.Page().Value(); got.Loading {
+		t.Errorf("after a failed load: page = %+v, want Loading false", got)
+	}
+}
+
 // Load failures stream as errors matching the sentinels, with the
 // platform's message.
 func TestWebViewController_Errors(t *testing.T) {

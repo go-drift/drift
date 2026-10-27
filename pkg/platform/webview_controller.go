@@ -70,12 +70,13 @@ func NewWebViewController() (*WebViewController, error) {
 // Page is the page the web view shows: its URL, and whether it is still
 // loading. It changes on the UI thread, so a widget can rebuild on it with
 // [core.UseListenable]. Each load sets Loading, then clears it when the page
-// finishes.
+// finishes or fails.
 func (c *WebViewController) Page() *core.Derived[WebPage] {
 	return c.readPage
 }
 
-// Errors streams load failures, each matching [ErrWebViewNetwork],
+// Errors streams the page's load failures (not its images' or scripts'),
+// each matching [ErrWebViewNetwork],
 // [ErrWebViewSSL] or [ErrWebViewLoadFailed] under [errors.Is]. Like any
 // stream, its handlers run off the UI thread: update widgets inside
 // drift.Dispatch.
@@ -86,7 +87,21 @@ func (c *WebViewController) Errors() *Stream[error] {
 // setPage sets the page on the UI thread, where its listeners may rebuild
 // widgets. Without a UI thread (tests), it sets it at once.
 func (c *WebViewController) setPage(page WebPage) {
-	set := func() { c.page.Set(page) }
+	c.updatePage(func(WebPage) WebPage { return page })
+}
+
+// failLoad ends the page's load, which failed: it keeps its URL and stops
+// loading. A failed load never finishes on iOS.
+func (c *WebViewController) failLoad() {
+	c.updatePage(func(page WebPage) WebPage {
+		page.Loading = false
+		return page
+	})
+}
+
+// updatePage replaces the page with f of it, as setPage does.
+func (c *WebViewController) updatePage(f func(WebPage) WebPage) {
+	set := func() { c.page.Set(f(c.page.Value())) }
 	if !Dispatch(set) {
 		set()
 	}

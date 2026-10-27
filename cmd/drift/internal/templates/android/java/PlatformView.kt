@@ -328,6 +328,9 @@ class NativeWebViewContainer(
                 error: android.webkit.WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
+                // Called for every resource: only the page's own failure
+                // is a load failure.
+                if (request?.isForMainFrame != true) return
                 val code = webViewErrorCodeString(error?.errorCode ?: 0)
                 val message = error?.description?.toString() ?: "Unknown error"
                 PlatformChannelManager.sendEvent(

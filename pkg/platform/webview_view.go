@@ -62,6 +62,7 @@ func (v *nativeWebView) HandleEvent(method string, args map[string]any) error {
 			return err
 		}
 		if c := v.controllerOrNil(); c != nil {
+			c.failLoad()
 			c.errors.Emit(webViewErrorCodes.NewError(code, message))
 		}
 	default:
