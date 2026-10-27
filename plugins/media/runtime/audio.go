@@ -35,6 +35,11 @@ type AudioPlayerController struct {
 	mu   sync.RWMutex
 	id   int64 // 0 once disposed
 	subs []*platform.Subscription
+	// calls counts calls sent and not yet answered. Native creates a
+	// player on any call but dispose, so dispose goes after them all: the
+	// last call answered sends it when Dispose came first (disposeID).
+	calls     int
+	disposeID int64
 }
 
 // NewAudioPlayerController creates a controller; its native player is
@@ -93,23 +98,34 @@ func (c *AudioPlayerController) Dispose() {
 	c.id = 0
 	subs := c.subs
 	c.subs = nil
-	c.mu.Unlock()
-	if id == 0 {
-		return
+	if id != 0 && c.calls > 0 {
+		c.disposeID, id = id, 0
 	}
+	c.mu.Unlock()
 	for _, sub := range subs {
 		sub.Cancel()
 	}
-	_, _ = audioChannel.Invoke(context.Background(), "dispose", map[string]any{"playerId": id})
+	disposeAudio(id)
+}
+
+// disposeAudio releases native player id; 0 is none.
+func disposeAudio(id int64) {
+	if id != 0 {
+		_, _ = audioChannel.Invoke(context.Background(), "dispose", map[string]any{"playerId": id})
+	}
 }
 
 func (c *AudioPlayerController) invoke(method string, args map[string]any) error {
-	c.mu.RLock()
+	c.mu.Lock()
 	id := c.id
-	c.mu.RUnlock()
+	if id != 0 {
+		c.calls++
+	}
+	c.mu.Unlock()
 	if id == 0 {
 		return platform.ErrDisposed
 	}
+	defer c.answered()
 	if args == nil {
 		args = map[string]any{}
 	}
@@ -118,6 +134,18 @@ func (c *AudioPlayerController) invoke(method string, args map[string]any) error
 		return fmt.Errorf("media audio %s: %w", method, err)
 	}
 	return nil
+}
+
+// answered ends a call, sending the dispose Dispose left to the last one.
+func (c *AudioPlayerController) answered() {
+	c.mu.Lock()
+	c.calls--
+	var id int64
+	if c.calls == 0 {
+		id, c.disposeID = c.disposeID, 0
+	}
+	c.mu.Unlock()
+	disposeAudio(id)
 }
 
 // mine returns data as a map if it is an event for this player.

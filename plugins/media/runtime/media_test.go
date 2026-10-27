@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -166,6 +167,70 @@ func TestAudioDispose(t *testing.T) {
 		t.Errorf("Play after Dispose = %v, want ErrDisposed", err)
 	}
 	send(t, audioEventsChannel, map[string]any{"playerId": id, "playbackState": 2, "positionMs": 0, "durationMs": 0, "bufferedMs": 0})
+}
+
+// audioRegistry models the native audio plugin (AudioPlayers.kt and
+// AudioPlayers.swift): every method but dispose creates the player its
+// playerId names, and dispose releases it.
+type audioRegistry struct {
+	mu       sync.Mutex
+	live     map[float64]bool
+	disposes int
+	// held, when set, receives each call but dispose, which then waits
+	// for release.
+	held    chan struct{}
+	release chan struct{}
+}
+
+func (r *audioRegistry) InvokeMethod(channel, method string, args []byte, reply func([]byte, error)) {
+	decoded, _ := platform.DefaultCodec.Decode(args)
+	m, _ := decoded.(map[string]any)
+	if channel == audioChannelName {
+		r.mu.Lock()
+		if method == "dispose" {
+			delete(r.live, m["playerId"].(float64))
+			r.disposes++
+		} else {
+			r.live[m["playerId"].(float64)] = true
+		}
+		r.mu.Unlock()
+		if method != "dispose" && r.held != nil {
+			r.held <- struct{}{}
+			<-r.release
+		}
+	}
+	reply(platform.DefaultCodec.Encode(nil))
+}
+
+// Dispose during a call sends dispose once, after the call is answered.
+func TestAudioDisposeDuringCall(t *testing.T) {
+	native := &audioRegistry{live: map[float64]bool{}, held: make(chan struct{}), release: make(chan struct{})}
+	platform.SetNativeBridge(native)
+	platform.RegisterDispatch(func(cb func()) { cb() })
+	t.Cleanup(platform.ResetForTest)
+
+	a := NewAudioPlayerController()
+	done := make(chan error)
+	go func() { done <- a.SetVolume(0.5) }()
+	<-native.held
+	a.Dispose()
+	a.Dispose()
+	native.mu.Lock()
+	early := native.disposes
+	native.mu.Unlock()
+	if early != 0 {
+		t.Errorf("dispose sent while a call was unanswered")
+	}
+	close(native.release)
+	if err := <-done; err != nil {
+		t.Fatalf("SetVolume: %v", err)
+	}
+	if native.disposes != 1 || len(native.live) != 0 {
+		t.Errorf("after the call: %d disposes, %d live players; want 1, 0", native.disposes, len(native.live))
+	}
+	if err := a.Play(); !errors.Is(err, platform.ErrDisposed) {
+		t.Errorf("Play after Dispose = %v, want ErrDisposed", err)
+	}
 }
 
 // newVideo creates a video controller, failing the test if it cannot.
