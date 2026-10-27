@@ -292,6 +292,8 @@ enum PlatformViewHandler {
     private static var viewTypes: [Int: String] = [:]
     private static var interceptors: [Int: TouchInterceptorView] = [:]
     private static var maskLayers: [Int: CAShapeLayer] = [:]
+    /// warmUp has run.
+    private static var warmedUp = false
     private static weak var hostView: UIView?
     /// A subview of hostView that platform views stay below (plugin overlays).
     private static weak var overlayView: UIView?
@@ -330,10 +332,13 @@ enum PlatformViewHandler {
     /// Pre-warms expensive platform view classes by creating throwaway
     /// instances, forcing WebKit process spawning early so the cost is
     /// absorbed before the user navigates to pages using them. Plugins warm
-    /// their own views on `driftPlatformViewWarmUpEvent`.
+    /// their own views on `driftPlatformViewWarmUpEvent`. Once per process:
+    /// later calls (each scene's view controller makes one) do nothing.
     ///
     /// Must be called on the main thread.
     static func warmUp() {
+        guard !warmedUp else { return }
+        warmedUp = true
         _ = WKWebView(frame: .zero)
         _ = UITextField()
         PlatformChannelManager.shared.notifyEventObservers(channel: driftPlatformViewWarmUpEvent, data: nil)

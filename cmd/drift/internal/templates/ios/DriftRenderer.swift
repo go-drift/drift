@@ -77,8 +77,9 @@ final class DriftRenderer {
 
     /// One-shot guard for the first-frame post-present event. Set once the
     /// handler is armed on the first frame with content; later frames skip
-    /// registration so `first_frame` fires once.
-    private var firstFrameRendered = false
+    /// registration so `first_frame` fires once per process. Static: each
+    /// scene's view has its own renderer. Main thread only.
+    private static var firstFrameRendered = false
 
     /// Initializes the renderer with the default Metal device.
     init() {
@@ -136,8 +137,8 @@ final class DriftRenderer {
         // pixels" signal iOS exposes. The Simulator SDK has no presented
         // handlers; GPU completion of the frame's command buffer is the
         // closest signal there.
-        if !firstFrameRendered && DriftHasRenderedContent() != 0 {
-            firstFrameRendered = true
+        if !Self.firstFrameRendered && DriftHasRenderedContent() != 0 {
+            Self.firstFrameRendered = true
             let emitFirstFrame = {
                 PlatformChannelManager.shared.sendEvent(
                     "drift/rendering/frame_events",
