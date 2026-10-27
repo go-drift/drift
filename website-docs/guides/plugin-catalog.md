@@ -203,7 +203,7 @@ unsubscribe()
 | `LastKnown(ctx)` | yes | The cached fix, or nil |
 | `IsEnabled(ctx)` | yes | Whether location services are on |
 | `Updates()` | no | A stream of fixes. The platform's updates start with its first listener and stop when the last unsubscribes, so no listener leaves the GPS off and none is left waiting on a stopped stream. A failed start and a failure mid-stream reach `OnError` |
-| `SetUpdateOptions(opts)` | no | The stream's options, one setting for the app: a running stream changes at once, a later one starts with them. A failed call leaves the options and the stream as they were |
+| `SetUpdateOptions(opts)` | no | The stream's options, one setting for the app: a running stream changes at once, a later one starts with them. A running stream that has lost access fails it with `ErrPermissionDenied` or `ErrDisabled`. A failed call leaves the options and the stream as they were |
 
 Functions that wait must be called from a goroutine; from the UI thread they fail with `platform.ErrBlocksUIThread`. Failures match `location.ErrPermissionDenied`, `location.ErrDisabled` (location services off) and `location.ErrUnavailable` (no fix) under `errors.Is`.
 

@@ -78,19 +78,28 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             channel.asyncMethod("isEnabled") { [self] _, result in
                 readServicesEnabled { result.success(["enabled": $0]) }
             }
-            channel.method("setUpdateOptions") { [self] args in
+            channel.asyncMethod("setUpdateOptions") { [self] args, result in
                 let next = UpdateOptions(args as? [String: Any] ?? [:])
                 if next.background {
-                    try requireBackground()
+                    do {
+                        try requireBackground()
+                    } catch {
+                        result.error(error)
+                        return
+                    }
                 }
-                // A running stream that lost access takes the options too:
-                // its listeners got the failure, and it resumes with them
-                // when access returns.
+                // A running stream that lost access fails, as a Listen
+                // would, and keeps its options. Which failure it is
+                // (permission or services) is read off the main thread.
+                if streaming && !authorized {
+                    accessError(Self.permissionDenied) { result.error($0) }
+                    return
+                }
                 if streaming {
                     apply(next)
                 }
                 options = next
-                return nil
+                result.success(nil)
             }
             channel.stream(
                 onListen: { [self] in

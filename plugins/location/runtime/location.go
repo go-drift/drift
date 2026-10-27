@@ -226,8 +226,10 @@ func IsEnabled(ctx context.Context) (bool, error) {
 //
 // A failed call leaves the options and the running stream as they were.
 // It fails with ErrBackgroundNotConfigured or ErrAlwaysDenied for
-// Background without the always: config or the Always permission. A
-// background stream must also start while the app is in the foreground
+// Background without the always: config or the Always permission, and,
+// when the stream is running but has lost access, with ErrPermissionDenied
+// or ErrDisabled. A background stream must also start while the app is in
+// the foreground
 // (Android): with ErrBackgroundStart here when the stream is running, and
 // on the Listen that starts it otherwise, through its OnError. Any
 // goroutine may call it.
