@@ -252,6 +252,11 @@ final class AudioPlayers {
         }
     }
 
+    /// Pauses every player.
+    func pauseAll() {
+        players.values.forEach { $0.pause() }
+    }
+
     private func playerId(_ args: Any?) -> Int {
         ((args as? [String: Any])?["playerId"] as? NSNumber)?.intValue ?? 0
     }

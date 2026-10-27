@@ -11,6 +11,8 @@ import UIKit
 
 final class VideoPlayerView: NSObject, DriftPlatformView {
     private let events: DriftPlatformViewEvents
+    /// Called with this view once disposed.
+    private let onDispose: (VideoPlayerView) -> Void
     let view: UIView
     private let playerVC: AVPlayerViewController
     private let player: AVQueuePlayer
@@ -26,8 +28,9 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
     private var hasReachedEnd: Bool = false
     private var isStopped: Bool = false
 
-    init(params: [String: Any], events: DriftPlatformViewEvents) {
+    init(params: [String: Any], events: DriftPlatformViewEvents, onDispose: @escaping (VideoPlayerView) -> Void) {
         self.events = events
+        self.onDispose = onDispose
 
         MediaSession.activate()
 
@@ -158,6 +161,7 @@ final class VideoPlayerView: NSObject, DriftPlatformView {
         view.removeFromSuperview()
 
         MediaSession.deactivate()
+        onDispose(self)
     }
 
     func play() {
