@@ -67,7 +67,10 @@ var errorCodes = platform.ErrorCodes{
 type Image struct {
 	// Path is the image file's absolute path.
 	Path string
-	// MimeType is the file's type, such as "image/jpeg".
+	// MimeType is the file's type, always one github.com/go-drift/drift/pkg/image
+	// Decode reads: "image/jpeg", "image/png", "image/gif" or "image/webp".
+	// iOS converts every image to JPEG; Android converts a pick in any other
+	// format (HEIC, AVIF) to JPEG.
 	MimeType string
 	// Width and Height are the image's size in pixels as displayed, after
 	// its EXIF orientation: the bounds github.com/go-drift/drift/pkg/image

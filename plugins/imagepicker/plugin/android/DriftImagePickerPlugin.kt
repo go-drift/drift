@@ -6,8 +6,9 @@
  * (PickVisualMedia), neither of which needs a permission, started through
  * the Activity's activityResultRegistry. The camera writes through Drift's
  * FileProvider (`<package>.fileprovider`, the cache directory). Picked
- * images are copied to the cache directory off the main thread. One picker
- * at a time.
+ * images are copied to the cache directory off the main thread, byte for
+ * byte when Drift's image.Decode reads their format, otherwise (HEIC, AVIF)
+ * converted to JPEG, as iOS converts every image. One picker at a time.
  *
  * If any plugin declares CAMERA, Android refuses TakePicture until it is
  * granted, so capture asks for it first.
@@ -21,7 +22,9 @@ import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.media.ExifInterface
 import android.net.Uri
 import androidx.activity.result.PickVisualMediaRequest
@@ -156,12 +159,12 @@ class DriftImagePickerPlugin : DriftPlugin {
         thread(name = "DriftImagePicker") {
             try {
                 val images = uris.map { uri ->
-                    val type = context.contentResolver.getType(uri) ?: "image/jpeg"
-                    val file = newCacheFile(type.substringAfter('/', "jpg"))
-                    val input = context.contentResolver.openInputStream(uri)
-                        ?: throw IllegalStateException("could not open $uri")
-                    input.use { stream -> file.outputStream().use { stream.copyTo(it) } }
-                    describe(file, type)
+                    val type = context.contentResolver.getType(uri)
+                    if (type != null && type in DECODABLE_TYPES) {
+                        describe(copy(uri, type), type)
+                    } else {
+                        describe(convertToJpeg(uri), "image/jpeg")
+                    }
                 }
                 result.success(mapOf("images" to images))
             } catch (e: Exception) {
@@ -170,14 +173,45 @@ class DriftImagePickerPlugin : DriftPlugin {
         }
     }
 
+    /** Copies the image at uri, of the given type, to the cache as it is. */
+    private fun copy(uri: Uri, type: String): File {
+        val file = newCacheFile(type.substringAfter('/'))
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("could not open $uri")
+        input.use { stream -> file.outputStream().use { stream.copyTo(it) } }
+        return file
+    }
+
+    /**
+     * Decodes the image at uri upright (ImageDecoder applies its
+     * orientation) and writes it to the cache as JPEG, at iOS's quality.
+     */
+    private fun convertToJpeg(uri: Uri): File {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        // Software memory: Bitmap.compress cannot read a hardware bitmap.
+        val bitmap = ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+        val file = newCacheFile("jpg")
+        try {
+            val encoded = file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+            if (!encoded) throw IOException("could not encode $uri as JPEG")
+        } catch (e: Exception) {
+            file.delete()
+            throw e
+        } finally {
+            bitmap.recycle()
+        }
+        return file
+    }
+
     private fun newCacheFile(extension: String): File {
         val dir = File(context.cacheDir, "drift_images").apply { mkdirs() }
         return File(dir, "${UUID.randomUUID()}.$extension")
     }
 
     /**
-     * Describes the image file, which keeps its bytes as picked or taken.
-     * Its size is as displayed, as on iOS: a JPEG whose EXIF orientation
+     * Describes the image file. Its size is as displayed, as on iOS: a JPEG whose EXIF orientation
      * turns it a quarter (cameras store pixels as the sensor saw them) has
      * width and height swapped, matching Drift's image.Decode, which
      * applies the orientation to JPEGs.
@@ -204,6 +238,15 @@ class DriftImagePickerPlugin : DriftPlugin {
 
     private companion object {
         const val CHANNEL = "drift/imagepicker"
+
+        /**
+         * The types Drift's image.Decode reads (pkg/image/decode.go), which
+         * picks keep byte for byte; any other is converted to JPEG.
+         */
+        val DECODABLE_TYPES = setOf("image/jpeg", "image/png", "image/gif", "image/webp")
+
+        /** JPEG quality of converted picks, iOS's jpegData(compressionQuality: 0.9). */
+        const val JPEG_QUALITY = 90
 
         /** EXIF orientations that turn the stored pixels by 90 or 270 degrees. */
         val QUARTER_TURNS = setOf(
