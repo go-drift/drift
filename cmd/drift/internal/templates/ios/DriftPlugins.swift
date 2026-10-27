@@ -18,6 +18,9 @@ final class DriftPlugins {
     static let shared = DriftPlugins()
 
     private var plugins: [DriftPlugin] = []
+    /// Each plugin's host, kept as long as the plugins are, so a plugin may
+    /// hold its host weakly.
+    private var hosts: [DriftPluginHost] = []
     private var launched = false
     /// The view controller plugins are attached to. An identity rather than
     /// a reference, so DriftViewController can detach from its deinit.
@@ -41,8 +44,9 @@ final class DriftPlugins {
         launched = true
         let entries = DriftPluginRegistrant.makePlugins()
         plugins = entries.map(\.plugin)
-        for entry in entries {
-            entry.plugin.register(host: PluginHost(host, entry))
+        hosts = entries.map { PluginHost(host, $0) }
+        for (entry, pluginHost) in zip(entries, hosts) {
+            entry.plugin.register(host: pluginHost)
         }
         for plugin in plugins {
             plugin.didFinishLaunching(application, options: options)

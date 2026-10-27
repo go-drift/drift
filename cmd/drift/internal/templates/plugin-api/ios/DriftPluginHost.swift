@@ -170,6 +170,9 @@ public final class DriftSubscription {
     }
 }
 
+/// What a plugin registers with (`DriftPlugin.register(host:)`). It lives as
+/// long as the process, so a plugin may keep it, strongly or weakly, to send
+/// events later.
 public protocol DriftPluginHost: AnyObject {
     /// The plugin's config, as its build half recorded it with
     /// `ctx.NativeConfig`: JSON-like values (numbers are NSNumbers), empty
