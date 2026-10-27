@@ -252,6 +252,41 @@ func TestCheckEjectedIOS(t *testing.T) {
 	}
 }
 
+// Xcode's pbxproj writer quotes a string only when it contains characters
+// outside [A-Za-z0-9_$./] (or sequences such as "//"), so once Xcode saves an
+// ejected project, or the user adds the package with Add Local..., the
+// template's quoted values come back unquoted. Both spellings are the same
+// setting and must pass.
+func TestCheckEjectedIOSAcceptsXcodeQuoting(t *testing.T) {
+	pbxproj := templateText(t, "xcodeproj/project.pbxproj.tmpl")
+	for _, c := range []struct{ quoted, bare string }{
+		{`relativePath = "Drift/Plugins";`, `relativePath = Drift/Plugins;`},
+		{`CODE_SIGN_ENTITLEMENTS = Runner.entitlements;`, `CODE_SIGN_ENTITLEMENTS = "Runner.entitlements";`},
+	} {
+		if !strings.Contains(pbxproj, c.quoted) {
+			t.Fatalf("template no longer contains %q", c.quoted)
+		}
+		pbxproj = strings.ReplaceAll(pbxproj, c.quoted, c.bare)
+	}
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"Runner/AppDelegate.swift":         templateText(t, "ios/AppDelegate.swift"),
+		"Runner/SceneDelegate.swift":       templateText(t, "ios/SceneDelegate.swift"),
+		"Runner/PlatformChannel.swift":     templateText(t, "ios/PlatformChannel.swift"),
+		"Runner/DriftViewController.swift": templateText(t, "ios/DriftViewController.swift"),
+		"Runner.xcodeproj/project.pbxproj": pbxproj,
+		"Runner.entitlements":              templateText(t, "ios/Runner.entitlements"),
+	})
+	entitlementOp := []protocol.Op{&protocol.OpPlistSet{
+		Base:       protocol.Base{Pkg: "p"},
+		PlistEntry: protocol.PlistEntry{File: protocol.PlistEntitlements, Key: "aps-environment"},
+		Value:      "development",
+	}}
+	if err := CheckEjectedIOS(dir, entitlementOp); err != nil {
+		t.Errorf("project saved by Xcode should pass: %v", err)
+	}
+}
+
 func TestCheckEjectedAndroid(t *testing.T) {
 	dir := t.TempDir()
 	mainActivity := "app/src/main/java/com/example/app/MainActivity.kt"

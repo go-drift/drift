@@ -61,7 +61,7 @@ func CheckEjectedIOS(projectDir string, ops []protocol.Op) error {
 	})
 	data, _ := os.ReadFile(filepath.Join(projectDir, "Runner.xcodeproj", "project.pbxproj"))
 	pbxproj := string(data)
-	if !strings.Contains(pbxproj, `relativePath = "Drift/Plugins"`) {
+	if !pbxprojSets(pbxproj, "relativePath", "Drift/Plugins") {
 		problems = append(problems,
 			`Runner.xcodeproj must reference the local Swift package at Drift/Plugins and link its "DriftPlugins" product, `+
 				`which holds the plugin API the app imports (Xcode: File > Add Package Dependencies > Add Local..., select Drift/Plugins)`)
@@ -73,7 +73,7 @@ func CheckEjectedIOS(projectDir string, ops []protocol.Op) error {
 			problems = append(problems, fmt.Sprintf(
 				"%s is required by plugins that add entitlements: create it as an empty plist (<dict/>) next to Runner.xcodeproj", entitlements))
 		}
-		if !strings.Contains(pbxproj, "CODE_SIGN_ENTITLEMENTS = "+entitlements+";") {
+		if !pbxprojSets(pbxproj, "CODE_SIGN_ENTITLEMENTS", entitlements) {
 			problems = append(problems, fmt.Sprintf(
 				"the Runner target must set CODE_SIGN_ENTITLEMENTS = %s in every configuration, so the app signs with the entitlements plugins add "+
 					"(Xcode: Runner target > Build Settings > Code Signing Entitlements)", entitlements))
@@ -103,6 +103,15 @@ func CheckEjectedAndroid(projectDir string, ops []protocol.Op) error {
 		}
 	}
 	return wiringError("Android", projectDir, problems)
+}
+
+// pbxprojSets reports whether pbxproj assigns value to key. Xcode writes a
+// string unquoted when every character is in [A-Za-z0-9_$./] and quoted
+// otherwise, and other tools quote unconditionally, so both spellings count.
+// value must contain no character that needs escaping inside quotes.
+func pbxprojSets(pbxproj, key, value string) bool {
+	return strings.Contains(pbxproj, key+" = "+value+";") ||
+		strings.Contains(pbxproj, key+` = "`+value+`";`)
 }
 
 // editsAny reports whether an op for p's platform edits its shared file
