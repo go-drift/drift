@@ -3,12 +3,13 @@
  *
  * What audio players and video views share in reporting playback to Go:
  * the state as Go numbers it, and when progress (position, duration,
- * buffered) is reported. Progress goes to Go every 250ms while media is
- * loaded (buffering or ready, playing or paused) if it changed, with
- * every state change,
- * and at once when a seek moves the position, Stop's return to the start
+ * buffered) is reported. Progress goes to Go every 250ms while it can
+ * change, playing or loading (the buffered position advancing), if it
+ * changed, and once more when that stops; with every state change; and at
+ * once when a seek moves the position, Stop's return to the start
  * included, so Go's Progress is right after Load, a seek while paused and
- * Stop (runtime/media.go). Main thread only.
+ * Stop (runtime/media.go). Paused with the media buffered (in the
+ * background, say), nothing runs. Main thread only.
  */
 package com.drift.plugin.media
 
@@ -25,19 +26,20 @@ internal fun Player.driftState(): Int = when (playbackState) {
 }
 
 /**
- * Calls report every 250ms while player has media loaded, unless the
- * progress is as last reported (paused with the media buffered, say, or
- * the app in the background), and at once when a seek moves its position.
- * The owner reports with each state change itself.
+ * Calls report every 250ms while player is playing or loading, unless the
+ * progress is as last reported, once more when neither, and at once when a
+ * seek moves its position. The owner reports with each state change itself.
  */
 internal class ProgressTicker(private val player: Player, private val report: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
     /** The position, duration and buffered position this last reported. */
     private var reported: List<Long>? = null
+    /** Whether tick is posted or running. */
+    private var ticking = false
 
     private val tick = object : Runnable {
         override fun run() {
-            if (snapshot() != reported) reportNow()
+            reportIfChanged()
             main.postDelayed(this, INTERVAL_MS)
         }
     }
@@ -49,12 +51,30 @@ internal class ProgressTicker(private val player: Player, private val report: ()
         report()
     }
 
-    private val listener = object : Player.Listener {
-        override fun onPlaybackStateChanged(playbackState: Int) {
+    private fun reportIfChanged() {
+        if (snapshot() != reported) reportNow()
+    }
+
+    /** Ticks while the progress can change; when it stops, reports where it stopped. */
+    private fun updateTicking() {
+        val progressing = player.isPlaying || player.isLoading
+        if (progressing == ticking) return
+        ticking = progressing
+        if (progressing) {
+            main.postDelayed(tick, INTERVAL_MS)
+        } else {
             main.removeCallbacks(tick)
-            if (playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY) {
-                main.postDelayed(tick, INTERVAL_MS)
-            }
+            reportIfChanged()
+        }
+    }
+
+    private val listener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            updateTicking()
+        }
+
+        override fun onIsLoadingChanged(isLoading: Boolean) {
+            updateTicking()
         }
 
         override fun onPositionDiscontinuity(
@@ -68,6 +88,7 @@ internal class ProgressTicker(private val player: Player, private val report: ()
 
     init {
         player.addListener(listener)
+        updateTicking()
     }
 
     /** Stops reporting, before the player is released. */
