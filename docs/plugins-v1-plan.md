@@ -576,12 +576,12 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 - ~~**Bitmap target key names the wrong directory.**~~ Fixed after 6.6: a bitmap claims its name in `drawable-nodpi/` (`protocol.AndroidDrawableDir`, where another file of the name is a duplicate resource) as well as in `drawable/` (a default drawable of the name shadows it). Still open: `WriteXML` into `values*/` claims only the file, so duplicate resource names inside it surface only in Gradle.
 - ~~**Android string values are not escaped** (`mutate/xml.go`), so an apostrophe fails aapt.~~ Fixed in `cef0167`: values are escaped for aapt2, and marked `formatted="false"` when they contain `%`.
 - **`drift plugin sync`'s schema pass does not type-check scalars** (`n: notanint` for an int field passes it; the `Build` pass that follows reports the decode error); a null optional struct is reported as "must be a mapping".
-- **Intent-filter dedup ignores the filter's own attributes** (`canonicalIntent`), so `autoVerify` is lost if an equivalent filter exists.
+- ~~**Intent-filter dedup ignores the filter's own attributes** (`canonicalIntent`), so `autoVerify` is lost if an equivalent filter exists.~~ Fixed after 6.6 (`717ca2d`): the filter's own attributes are part of its identity.
 - **The same package listed twice in drift.yaml** gives a duplicate-import Go error instead of a clear message.
 - **`walkEmbedFS` with root `"."`** flattens subdirectories.
 - **Envelope `AppID` always comes from drift.yaml**, even for ejected projects whose id may differ (Firebase checks against it).
 - **Old Drift-owned support files are never pruned from ejected projects** (`EnsureRunnerSupport`), so projects ejected before this branch keep `MethodHandler.kt`, `DriftOverlayHost.kt` and similar.
-- **`first_frame` fires per view, not per process** (the guard lives on each `SkiaHostView` / `DriftRenderer`), so Activity recreation or scene reconnect emits it again, contradicting `frame_events.go`.
+- ~~**`first_frame` fires per view, not per process** (the guard lives on each `SkiaHostView` / `DriftRenderer`), so Activity recreation or scene reconnect emits it again, contradicting `frame_events.go`.~~ Fixed after 6.6 (`6526e1b` Android, `66ce320` iOS): `first_frame` and the platform view warm-up fire once per process.
 
 **Runtime semantics**
 - **Sticky event replay** can arrive after a newer live event (`pkg/platform/channel.go` Listen).
@@ -598,8 +598,8 @@ Not release blocking: the release-blocking items are [Phase 6](#phase-6-release-
 **Platform and tooling**
 - **System dark mode.** Neither platform reports the system appearance to Go, so apps cannot follow it.
 - **Splash dark mode.** Needs appearance-aware image set and colour set ops on iOS (not on xtool before xtool#219), and a night colour on Android.
-- **Ejected-project file hygiene.** The whole `Info.plist` is re-marshalled (comments stripped), the manifest re-indented, Gradle brace counting ignores strings and comments, and dependency dedup matches exact lines.
-- **Bridge cache entries** under the cache root are never garbage-collected. The bridge log lands in `platform/<p>/logs/plugin-bridge.log` on ejected projects and is missing from eject's `.gitignore` suggestions.
+- **Ejected-project file hygiene.** The whole `Info.plist` is re-marshalled (comments stripped), the manifest re-indented, Gradle brace counting ignores strings and comments (fixed after 6.6, `a1abec2`: the Gradle mutators mask comments and strings), and dependency dedup matches exact lines.
+- ~~**Bridge cache entries** under the cache root are never garbage-collected.~~ Fixed after 6.6 (`4f39a04`): the cache keeps the 16 most recently used bridges, and `drift clean` removes it. Still open: the bridge log lands in `platform/<p>/logs/plugin-bridge.log` on ejected projects and is missing from eject's `.gitignore` suggestions.
 - **The `drift/` channel prefix** is documented as reserved but not enforced. Android's `internal constructor` on host types protects nothing (plugin sources compile into the app module), and `@_spi(DriftHost)` is cosmetic on iOS.
 - **Emulator Play services**: the `pixel_8` google_apis image warns its Play services (25.26) is older than firebase-messaging 25.1.3 asks for (26.12); FCM works anyway.
 - **Engine test races.** `go test -race ./pkg/engine` fails in older `init_test.go` tests (also on `master`): leaked OnInit goroutines dispatch to the global `app` after `swapApp` restores it.
