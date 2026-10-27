@@ -50,6 +50,8 @@ object PlatformViewHandler {
     private var surfaceView: View? = null
     private var overlayController: InputOverlayController? = null
     private val main = Handler(Looper.getMainLooper())
+    /** Whether warmUp has run in this process. Main thread only. */
+    private var warmedUp = false
 
     /**
      * Hosts platform views in [activity]'s [hostView]. Views outlive their
@@ -124,9 +126,15 @@ object PlatformViewHandler {
      * navigates to pages using it. Plugins warm their own views on
      * DRIFT_PLATFORM_VIEW_WARM_UP_EVENT.
      *
+     * Once per process: the SkiaHostView of every Activity calls it when
+     * its engine is ready, and only the first call warms up, so a
+     * recreated Activity (dark mode, locale) does not post the event again.
+     *
      * Must be called on the main thread.
      */
     fun warmUp(context: Context) {
+        if (warmedUp) return
+        warmedUp = true
         try {
             WebView(context).destroy()
         } catch (e: Exception) {

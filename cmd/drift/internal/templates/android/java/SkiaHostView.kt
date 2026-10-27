@@ -45,18 +45,6 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
     @Volatile override var engineReady = false
         private set
 
-    /**
-     * One-shot guard for the "first_frame" event, emitted after the first
-     * renderFrameSync that composited the app's root.
-     *
-     * It does not wait for a View draw (e.g. registerFrameCommitCallback):
-     * a splash holding the window with an OnPreDrawListener suppresses draws
-     * until it sees first_frame, so waiting for one would never end. The
-     * pixels are in the HardwareBuffer when renderFrameSync returns, and the
-     * same Choreographer frame's traversal draws them unless held.
-     */
-    @Volatile private var firstFrameRendered = false
-
     /** Callback to request a new frame. Set by MainActivity after construction. */
     var onFrameNeeded: (() -> Unit)? = null
 
@@ -138,8 +126,8 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
         // Mark this View dirty so onDraw runs during TRAVERSAL
         invalidate()
 
-        if (!firstFrameRendered && slotIndex >= 0 && NativeBridge.hasRenderedContent() != 0) {
-            firstFrameRendered = true
+        if (!firstFrameSent && slotIndex >= 0 && NativeBridge.hasRenderedContent() != 0) {
+            firstFrameSent = true
             PlatformChannelManager.sendEvent(
                 "drift/rendering/frame_events",
                 mapOf("type" to "first_frame")
@@ -286,5 +274,23 @@ class SkiaHostView(context: Context) : View(context), DriftSkiaHost {
     private fun updateDeviceScale() {
         val density = resources.displayMetrics.density.toDouble()
         NativeBridge.setDeviceScale(density)
+    }
+
+    private companion object {
+        /**
+         * One-shot guard for the "first_frame" event, emitted after the
+         * first renderFrameSync that composited the app's root: once per
+         * process (pkg/engine FrameEvents), so not again for the view of a
+         * recreated Activity (dark mode, locale) or a reopened app. UI
+         * thread only (renderFrame).
+         *
+         * It does not wait for a View draw (e.g. registerFrameCommitCallback):
+         * a splash holding the window with an OnPreDrawListener suppresses
+         * draws until it sees first_frame, so waiting for one would never
+         * end. The pixels are in the HardwareBuffer when renderFrameSync
+         * returns, and the same Choreographer frame's traversal draws them
+         * unless held.
+         */
+        var firstFrameSent = false
     }
 }
