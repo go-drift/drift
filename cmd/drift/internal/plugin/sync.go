@@ -17,8 +17,8 @@ import (
 type SyncOptions struct {
 	ProjectRoot string
 	CLIVersion  string
-	// Tidy runs go mod tidy after regenerating the bridge source, before
-	// anything reads the module graph.
+	// Tidy runs go mod tidy after regenerating (or, with no plugins,
+	// removing) the bridge source, before anything reads the module graph.
 	Tidy bool
 }
 
@@ -36,7 +36,9 @@ type SyncResult struct {
 // schema validation against drift.yaml and, if that passes, every plugin's
 // Build (see checkBuilds). It never edits go.mod or go.sum on its own; with
 // Tidy it runs `go mod tidy` after regenerating the bridge source and
-// before resolving the plugins.
+// before resolving the plugins. With no plugins it removes the bridge
+// source, and with Tidy then tidies, dropping the modules only the bridge
+// imported.
 func Sync(opts SyncOptions) (*SyncResult, error) {
 	plugins, err := LoadFromDriftYAML(opts.ProjectRoot)
 	if err != nil {
@@ -53,6 +55,9 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 			}
 			res.BridgeRegenerated = true
 		}
+		if opts.Tidy {
+			return res, goModTidy(opts.ProjectRoot)
+		}
 		return res, nil
 	}
 
@@ -63,12 +68,8 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 		if _, err := writeBridgeSource(opts.ProjectRoot, plugins); err != nil {
 			return res, err
 		}
-		cmd := exec.Command("go", "mod", "tidy")
-		cmd.Dir = opts.ProjectRoot
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return res, fmt.Errorf("go mod tidy: %w", err)
+		if err := goModTidy(opts.ProjectRoot); err != nil {
+			return res, err
 		}
 	}
 
@@ -127,6 +128,19 @@ func Sync(opts SyncOptions) (*SyncResult, error) {
 	}
 	res.Diagnostics, err = checkBuilds(bridge, opts.ProjectRoot, cfg.AppID, plugins)
 	return res, err
+}
+
+// goModTidy runs `go mod tidy` in projectRoot, its output going to the
+// user.
+func goModTidy(projectRoot string) error {
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = projectRoot
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("go mod tidy: %w", err)
+	}
+	return nil
 }
 
 // checkBuilds runs each plugin's Build, as a build would, and returns its

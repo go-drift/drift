@@ -1,9 +1,11 @@
 package plugin
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/go-drift/drift/pkg/plugin/protocol"
@@ -40,6 +42,42 @@ func writeSyncProject(t *testing.T, pluginFiles map[string]string, plugins strin
 		t.Fatalf("tidy plugin: %v\n%s", err, out)
 	}
 	return filepath.Join(dir, "app")
+}
+
+// With the last plugin removed from drift.yaml, sync --tidy deletes the
+// bridge and then tidies, so go.mod drops the module only the bridge
+// imported.
+func TestSyncTidyWithNoPluginsDropsTheModule(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not available")
+	}
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"hello/go.mod":           "module example.com/hello\n\ngo 1.22\n",
+		"hello/plugin/plugin.go": "package plugin\n",
+		"app/go.mod":             "module example.com/app\n\ngo 1.22\n\nrequire example.com/hello v0.0.0\n\nreplace example.com/hello => ../hello\n",
+		"app/drift.yaml":         "app:\n  name: app\n  id: com.example.app\n",
+		"app/main.go":            "package main\n\nfunc main() {}\n",
+		"app/" + BridgeFilePath:  "//go:build drift_tool\n\npackage main\n\nimport _ \"example.com/hello/plugin\"\n\nfunc main() {}\n",
+	})
+	app := filepath.Join(dir, "app")
+
+	res, err := Sync(SyncOptions{ProjectRoot: app, CLIVersion: "dev", Tidy: true})
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if !res.BridgeRegenerated {
+		t.Error("BridgeRegenerated = false, want true: the bridge was removed")
+	}
+	if _, err := os.Stat(filepath.Join(app, BridgeFilePath)); !os.IsNotExist(err) {
+		t.Errorf("bridge still present: %v", err)
+	}
+	if gomod := readFile(t, filepath.Join(app, "go.mod")); strings.Contains(gomod, "require example.com/hello") {
+		t.Errorf("go.mod still requires the plugin module:\n%s", gomod)
+	}
 }
 
 // The plugin guide's walkthrough: an app has just required a local plugin
