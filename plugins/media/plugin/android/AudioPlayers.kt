@@ -184,6 +184,11 @@ internal class AudioPlayers(
         }
     }
 
+    /** Pauses every player. */
+    fun pauseAll() {
+        players.values.forEach { it.player.pause() }
+    }
+
     private fun number(args: Any?, key: String) = (args as? Map<*, *>)?.get(key) as? Number
 
     /**

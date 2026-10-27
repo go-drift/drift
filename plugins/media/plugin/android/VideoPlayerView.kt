@@ -40,6 +40,8 @@ class VideoPlayerView(
     context: Context,
     params: Map<String, Any?>,
     private val events: DriftPlatformViewEvents,
+    /** Called with this view once disposed. */
+    private val onDispose: (VideoPlayerView) -> Unit,
 ) : DriftPlatformView {
 
     private val container = FrameLayout(context)
@@ -226,6 +228,7 @@ class VideoPlayerView(
     override fun dispose() {
         stopPositionUpdates()
         player.release()
+        onDispose(this)
     }
 
     fun play() {
