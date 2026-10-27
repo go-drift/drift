@@ -491,6 +491,8 @@ Up to Drift v0.26 this was `platform.SecureStorage`. Apps moving to the plugin u
 | `KeychainAccessibility` (`AccessibleWhenUnlocked`, ...) | `securestorage.Accessibility` (`securestorage.WhenUnlocked`, `AfterFirstUnlock`, `WhenUnlockedThisDeviceOnly`, `AfterFirstUnlockThisDeviceOnly`) |
 | `BiometricType` (`BiometricTypeFaceID`, ...) | `securestorage.Biometric` (`securestorage.BiometricFaceID`, `BiometricTouchID`, `BiometricFingerprint`, `BiometricFace`, `BiometricNone`; also `BiometricOpticID`) |
 
+On Android the plugin keeps its values in files of its own, so values `platform.SecureStorage` stored there are not read; iOS reads them as before.
+
 ## Thread Safety
 
 Platform services are safe to call from any goroutine, but calls that wait for the user must not run on the UI thread (see [Context conventions](#context-conventions)). When updating UI state from platform callbacks, use `drift.Dispatch`:

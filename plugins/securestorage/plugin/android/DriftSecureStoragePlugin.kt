@@ -224,9 +224,9 @@ class DriftSecureStoragePlugin : DriftPlugin {
     /** A call's arguments. */
     private class Args(args: Any?) {
         private val m = args as? Map<*, *> ?: emptyMap<String, Any?>()
-        private val service = (m["service"] as? String)?.takeIf { it.isNotEmpty() } ?: DEFAULT_FILE
-        val file = service
-        val biometricFile = "${service}_biometric"
+        private val service = m["service"] as? String ?: ""
+        val file = VALUES_FILE_PREFIX + service
+        val biometricFile = BIOMETRIC_FILE_PREFIX + service
         val requireBiometric = m["requireBiometric"] as? Boolean ?: false
         val biometricPrompt = m["biometricPrompt"] as? String ?: "Authenticate to read secure data"
 
@@ -236,7 +236,12 @@ class DriftSecureStoragePlugin : DriftPlugin {
 
     private companion object {
         const val CHANNEL = "drift/securestorage"
-        const val DEFAULT_FILE = "drift_secure_storage"
+        // A service's files are a prefix and its name ("" is the default
+        // service). Neither prefix starts the other, so no two services,
+        // or a service's two files, share a file, and no file is one the
+        // app or a library named.
+        const val VALUES_FILE_PREFIX = "drift_secure_storage.values."
+        const val BIOMETRIC_FILE_PREFIX = "drift_secure_storage.biometric."
         const val TAG = "DriftSecureStorage"
         const val MASTER_KEY_ALIAS = MasterKey.DEFAULT_MASTER_KEY_ALIAS
         const val MASTER_KEY_CIPHER = "AES/GCM/NoPadding"
