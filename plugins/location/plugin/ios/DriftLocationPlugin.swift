@@ -44,6 +44,10 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
     /// Counts the update stream's starts and stops, so a failure reported
     /// late reaches only the listeners of the stream it belongs to.
     private var streamGeneration = 0
+    /// Whether location services are on, as last read. Every read
+    /// (readServicesEnabled) updates it, and one runs on each authorization
+    /// change, which turning services off makes.
+    private var servicesEnabled = true
 
     public override init() {
         super.init()
@@ -78,28 +82,23 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
             channel.asyncMethod("isEnabled") { [self] _, result in
                 readServicesEnabled { result.success(["enabled": $0]) }
             }
-            channel.asyncMethod("setUpdateOptions") { [self] args, result in
+            channel.method("setUpdateOptions") { [self] args in
                 let next = UpdateOptions(args as? [String: Any] ?? [:])
                 if next.background {
-                    do {
-                        try requireBackground()
-                    } catch {
-                        result.error(error)
-                        return
-                    }
+                    try requireBackground()
                 }
                 // A running stream that lost access fails, as a Listen
                 // would, and keeps its options. Which failure it is
-                // (permission or services) is read off the main thread.
+                // (permission or services) comes from the last services
+                // read, since the main thread must not read them.
                 if streaming && !authorized {
-                    accessError(Self.permissionDenied) { result.error($0) }
-                    return
+                    throw servicesEnabled ? Self.permissionDenied : Self.disabled
                 }
                 if streaming {
                     apply(next)
                 }
                 options = next
-                result.success(nil)
+                return nil
             }
             channel.stream(
                 onListen: { [self] in
@@ -152,10 +151,13 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
 
     /// Calls back on the main thread with whether location services are on,
     /// read off it: Apple warns against reading it on the main thread.
-    private func readServicesEnabled(_ completion: @escaping (Bool) -> Void) {
+    private func readServicesEnabled(_ completion: @escaping (Bool) -> Void = { _ in }) {
         DispatchQueue.global(qos: .userInitiated).async {
             let enabled = CLLocationManager.locationServicesEnabled()
-            DispatchQueue.main.async { completion(enabled) }
+            DispatchQueue.main.async { [self] in
+                servicesEnabled = enabled
+                completion(enabled)
+            }
         }
     }
 
@@ -213,6 +215,13 @@ public final class DriftLocationPlugin: NSObject, DriftPlugin, CLLocationManager
     }
 
     // MARK: - CLLocationManagerDelegate
+
+    public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        // Both managers report each change; one read serves them.
+        if manager === updates {
+            readServicesEnabled()
+        }
+    }
 
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
