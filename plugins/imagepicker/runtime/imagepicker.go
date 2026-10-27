@@ -70,7 +70,8 @@ type Image struct {
 	// MimeType is the file's type, always one github.com/go-drift/drift/pkg/image
 	// Decode reads: "image/jpeg", "image/png", "image/gif" or "image/webp".
 	// iOS converts every image to JPEG; Android converts a pick in any other
-	// format (HEIC, AVIF) to JPEG.
+	// format (HEIC, AVIF) to JPEG, scaled down if its decoded pixels would
+	// outgrow the app's memory class (ActivityManager.getMemoryClass).
 	MimeType string
 	// Width and Height are the image's size in pixels as displayed, after
 	// its EXIF orientation: the bounds github.com/go-drift/drift/pkg/image

@@ -8,7 +8,8 @@
  * FileProvider (`<package>.fileprovider`, the cache directory). Picked
  * images are copied to the cache directory off the main thread, byte for
  * byte when Drift's image.Decode reads their format, otherwise (HEIC, AVIF)
- * converted to JPEG, as iOS converts every image. One picker at a time.
+ * converted to JPEG, as iOS converts every image, scaled down if its
+ * bitmap would outgrow the app's memory class. One picker at a time.
  *
  * If any plugin declares CAMERA, Android refuses TakePicture until it is
  * granted, so capture asks for it first.
@@ -19,6 +20,7 @@
 package com.drift.plugin.imagepicker
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.pm.PackageManager
@@ -43,6 +45,8 @@ import java.io.File
 import java.io.IOException
 import java.util.UUID
 import kotlin.concurrent.thread
+import kotlin.math.max
+import kotlin.math.sqrt
 
 class DriftImagePickerPlugin : DriftPlugin {
     private lateinit var context: Context
@@ -185,12 +189,24 @@ class DriftImagePickerPlugin : DriftPlugin {
     /**
      * Decodes the image at uri upright (ImageDecoder applies its
      * orientation) and writes it to the cache as JPEG, at iOS's quality.
+     * An image whose bitmap would outgrow the app's memory class is scaled
+     * down to fit it, keeping its aspect ratio: at full size a large pick
+     * (a 200 MP HEIC is 800 MB of bitmap) runs the process out of memory,
+     * in this bitmap or when Go decodes the JPEG to the same size.
      */
     private fun convertToJpeg(uri: Uri): File {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
-        // Software memory: Bitmap.compress cannot read a hardware bitmap.
-        val bitmap = ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+        val memoryClassBytes = context.getSystemService(ActivityManager::class.java).memoryClass * 1024.0 * 1024.0
+        val maxPixels = memoryClassBytes / BYTES_PER_PIXEL
+        val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            // Software memory: Bitmap.compress cannot read a hardware bitmap.
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            val width = info.size.width
+            val height = info.size.height
+            val scale = sqrt(maxPixels / (width.toDouble() * height))
+            if (scale < 1) {
+                decoder.setTargetSize(max(1, (width * scale).toInt()), max(1, (height * scale).toInt()))
+            }
         }
         val file = newCacheFile("jpg")
         try {
@@ -247,6 +263,12 @@ class DriftImagePickerPlugin : DriftPlugin {
 
         /** JPEG quality of converted picks, iOS's jpegData(compressionQuality: 0.9). */
         const val JPEG_QUALITY = 90
+
+        /**
+         * Bytes per pixel of a converted pick's ARGB_8888 bitmap, and of
+         * the RGBA image Go decodes from its JPEG.
+         */
+        const val BYTES_PER_PIXEL = 4
 
         /** EXIF orientations that turn the stored pixels by 90 or 270 degrees. */
         val QUARTER_TURNS = setOf(
