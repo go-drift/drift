@@ -29,6 +29,8 @@ Everything runs in a temporary directory with its own module, build and
 Drift caches, so rehearsal versions never reach the real module cache. The
 Skia libraries come from DRIFT_SKIA_DIR when set, else from this checkout's
 third_party/drift_skia (a rehearsal version has no published Skia assets).
+With --real, DRIFT_SKIA_DIR is unset, so the CLI downloads the release's
+Skia assets as a user's would.
 
 Options:
   --real              Install the published release instead of a rehearsal
@@ -81,7 +83,11 @@ export GOCACHE="$work/gocache"
 export GOFLAGS=-modcacherw
 export GOWORK=off
 export DRIFT_CACHE_DIR="$work/drift-cache"
-export DRIFT_SKIA_DIR="${DRIFT_SKIA_DIR:-$repo/third_party/drift_skia}"
+if [[ "$real" == "true" ]]; then
+  unset DRIFT_SKIA_DIR
+else
+  export DRIFT_SKIA_DIR="${DRIFT_SKIA_DIR:-$repo/third_party/drift_skia}"
+fi
 unset GOPRIVATE GONOPROXY
 
 step() { printf '\n==> %s\n' "$*"; }
