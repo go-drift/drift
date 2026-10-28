@@ -146,13 +146,13 @@ Requires a connected device or running emulator.
 drift run ios
 ```
 
-Runs on "iPhone 15" by default. Specify a different simulator:
+Runs on the booted iPhone simulator, or if none is booted, the iPhone on the newest installed iOS runtime. Specify a different simulator by name or UDID:
 
 ```bash
-drift run ios --simulator "iPhone 16"
+drift run ios --simulator "iPhone 17"
 ```
 
-List available simulators with `xcrun simctl list devices`.
+A name installed on several iOS runtimes picks the booted one, else the newest; pass a UDID for a specific runtime. List available simulators with `drift devices`.
 
 ### iOS Device (macOS)
 
@@ -307,8 +307,8 @@ engine:
 | `drift run android` | Run on Android device/emulator |
 | `drift run android --device <name or serial>` | Run on a specific Android device |
 | `drift run android --watch` | Run with automatic rebuild on changes |
-| `drift run ios` | Run on iOS simulator (default: iPhone 15) |
-| `drift run ios --simulator "<name>"` | Run on specific iOS simulator |
+| `drift run ios` | Run on iOS simulator (default: booted iPhone, else newest runtime) |
+| `drift run ios --simulator "<name or UDID>"` | Run on specific iOS simulator |
 | `drift run ios --device --team-id ID` | Run on physical iOS device |
 | `drift run xtool` | Run iOS from Linux via xtool |
 | `drift run xtool --device UDID` | Run on a specific iOS device via xtool |
@@ -353,18 +353,18 @@ export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973
 - Enable USB debugging on your device
 - Or start an emulator via Android Studio
 
-### iOS: "no simulator found"
+### iOS: "simulator ... not found"
 
-List available simulators:
+The error lists the available iPhone simulators. `drift devices` lists them too:
 
 ```bash
-xcrun simctl list devices
+drift devices
 ```
 
-Use the exact name in quotes:
+Use the exact name in quotes, or a UDID:
 
 ```bash
-drift run ios --simulator "iPhone 16"
+drift run ios --simulator "iPhone 17"
 ```
 
 ## Next Steps

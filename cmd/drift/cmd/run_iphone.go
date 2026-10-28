@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/go-drift/drift/cmd/drift/internal/config"
 	"github.com/go-drift/drift/cmd/drift/internal/workspace"
@@ -14,7 +16,7 @@ import (
 type iosRunOptions struct {
 	device    bool
 	deviceID  string
-	simulator string
+	simulator string // name or UDID; empty picks one (resolveIOSSimulator)
 	teamID    string
 	noLogs    bool
 	watch     bool
@@ -23,9 +25,7 @@ type iosRunOptions struct {
 // parseIOSRunArgs parses iOS-specific flags from the argument list and returns
 // the resolved options.
 func parseIOSRunArgs(args []string) iosRunOptions {
-	opts := iosRunOptions{
-		simulator: "iPhone 15",
-	}
+	var opts iosRunOptions
 	id, present := parseDeviceFlag(args)
 	if present {
 		opts.device = true
@@ -68,6 +68,15 @@ func runIOS(ws *workspace.Workspace, cfg *config.Resolved, args []string, opts r
 
 // runIOSSimulator builds and runs on iOS simulator.
 func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOptions, noFetch bool) error {
+	sims, err := loadIOSSimulators()
+	if err != nil {
+		return err
+	}
+	sim, err := resolveIOSSimulator(sims, opts.simulator)
+	if err != nil {
+		return err
+	}
+
 	buildOpts := iosBuildOptions{buildOptions: buildOptions{noFetch: noFetch}, release: false, device: false}
 	if err := buildIOS(ws, buildOpts); err != nil {
 		return err
@@ -76,7 +85,7 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 	fmt.Println()
 	fmt.Println("Running on iOS Simulator...")
 
-	if err := bootSimulator(opts.simulator); err != nil {
+	if err := bootSimulator(sim); err != nil {
 		return err
 	}
 
@@ -86,11 +95,11 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 		return fmt.Errorf("xcode project not found in workspace - create one in %s", ws.IOSDir)
 	}
 
-	if err := xcodebuildForSimulator(ws, opts.simulator); err != nil {
+	if err := xcodebuildForSimulator(ws, sim.UDID); err != nil {
 		return err
 	}
 
-	if err := installIOSSimulatorApp(ws, opts.simulator); err != nil {
+	if err := installIOSSimulatorApp(ws, sim.UDID); err != nil {
 		return err
 	}
 
@@ -99,10 +108,10 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 
 	// Start log streaming before launch so startup logs are captured.
 	if !opts.noLogs {
-		go streamIOSSimulatorLogs(ctx, opts.simulator, cfg.AppID)
+		go streamIOSSimulatorLogs(ctx, sim.UDID, cfg.AppID)
 	}
 
-	if err := launchIOSSimulatorApp(cfg.AppID, opts.simulator); err != nil {
+	if err := launchIOSSimulatorApp(cfg.AppID, sim.UDID); err != nil {
 		return err
 	}
 
@@ -120,20 +129,20 @@ func runIOSSimulator(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunO
 			noFetch:     noFetch,
 		}
 		return watchAndRun(ctx, ws, func() error {
-			exec.Command("xcrun", "simctl", "terminate", opts.simulator, cfg.AppID).Run()
+			exec.Command("xcrun", "simctl", "terminate", sim.UDID, cfg.AppID).Run()
 			if err := ws.Refresh(); err != nil {
 				return err
 			}
 			if err := compileGoForIOS(compileCfg); err != nil {
 				return err
 			}
-			if err := xcodebuildForSimulator(ws, opts.simulator); err != nil {
+			if err := xcodebuildForSimulator(ws, sim.UDID); err != nil {
 				return err
 			}
-			if err := installIOSSimulatorApp(ws, opts.simulator); err != nil {
+			if err := installIOSSimulatorApp(ws, sim.UDID); err != nil {
 				return err
 			}
-			return launchIOSSimulatorApp(cfg.AppID, opts.simulator)
+			return launchIOSSimulatorApp(cfg.AppID, sim.UDID)
 		})
 	}
 
@@ -233,17 +242,19 @@ func runIOSDevice(ws *workspace.Workspace, cfg *config.Resolved, opts iosRunOpti
 // iOS helper functions
 // --------------------------------------------------------------------
 
-// bootSimulator boots the named iOS Simulator. If the simulator is already
+// bootSimulator boots the iOS Simulator. If the simulator is already
 // booted (exit code 149), the error is silently ignored.
-func bootSimulator(name string) error {
-	fmt.Printf("  Booting %s...\n", name)
-	cmd := exec.Command("xcrun", "simctl", "boot", name)
+func bootSimulator(sim iosSimulator) error {
+	fmt.Printf("  Booting %s...\n", sim)
+	cmd := exec.Command("xcrun", "simctl", "boot", sim.UDID)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		// Exit code 149 means simulator is already booted
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 149 {
 			// Already booted, continue
 		} else {
-			return fmt.Errorf("failed to boot simulator %s: %w", name, err)
+			return fmt.Errorf("failed to boot simulator %s: %w\n%s", sim, err, strings.TrimSpace(stderr.String()))
 		}
 	}
 	return nil
@@ -268,14 +279,15 @@ func showSimulator() {
 	fmt.Println("  Warning: could not open Device Hub or Simulator; continuing without a simulator window")
 }
 
-// xcodebuildForSimulator runs xcodebuild targeting the named iOS Simulator.
-func xcodebuildForSimulator(ws *workspace.Workspace, simulator string) error {
+// xcodebuildForSimulator runs xcodebuild targeting the iOS Simulator with
+// the given UDID.
+func xcodebuildForSimulator(ws *workspace.Workspace, udid string) error {
 	xcodeproj := filepath.Join(ws.IOSDir, "Runner.xcodeproj")
 	buildArgs := []string{
 		"-project", xcodeproj,
 		"-scheme", "Runner",
 		"-configuration", "Debug",
-		"-destination", fmt.Sprintf("platform=iOS Simulator,name=%s", simulator),
+		"-destination", "platform=iOS Simulator,id=" + udid,
 		"-derivedDataPath", filepath.Join(ws.BuildDir, "DerivedData"),
 	}
 	buildArgs = append(buildArgs, simulatorArchBuildSettings()...)
@@ -290,11 +302,11 @@ func xcodebuildForSimulator(ws *workspace.Workspace, simulator string) error {
 	return nil
 }
 
-// installIOSSimulatorApp installs the built .app bundle into the named iOS
-// Simulator using simctl.
-func installIOSSimulatorApp(ws *workspace.Workspace, simulator string) error {
+// installIOSSimulatorApp installs the built .app bundle into the iOS
+// Simulator with the given UDID using simctl.
+func installIOSSimulatorApp(ws *workspace.Workspace, udid string) error {
 	appPath := filepath.Join(ws.BuildDir, "DerivedData", "Build", "Products", "Debug-iphonesimulator", "Runner.app")
-	cmd := exec.Command("xcrun", "simctl", "install", simulator, appPath)
+	cmd := exec.Command("xcrun", "simctl", "install", udid, appPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -303,10 +315,10 @@ func installIOSSimulatorApp(ws *workspace.Workspace, simulator string) error {
 	return nil
 }
 
-// launchIOSSimulatorApp launches the app by bundle ID in the named iOS
-// Simulator using simctl.
-func launchIOSSimulatorApp(appID, simulator string) error {
-	cmd := exec.Command("xcrun", "simctl", "launch", simulator, appID)
+// launchIOSSimulatorApp launches the app by bundle ID in the iOS Simulator
+// with the given UDID using simctl.
+func launchIOSSimulatorApp(appID, udid string) error {
+	cmd := exec.Command("xcrun", "simctl", "launch", udid, appID)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

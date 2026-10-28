@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -324,69 +323,26 @@ func formatDeviceListCached(devices []ios.DeviceEntry, names []string) string {
 }
 
 func listIOSSimulators() error {
-	cmd := exec.Command("xcrun", "simctl", "list", "devices", "available", "--json")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	if err := cmd.Run(); err != nil {
+	sims, err := loadIOSSimulators()
+	if err != nil {
 		return err
 	}
 
-	var result struct {
-		Devices map[string][]struct {
-			Name  string `json:"name"`
-			State string `json:"state"`
-			UDID  string `json:"udid"`
-		} `json:"devices"`
-	}
-	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
-		return fmt.Errorf("failed to parse simctl output: %w", err)
-	}
-
-	bootedCount := 0
 	fmt.Println("  Booted:")
-	for runtime, devices := range result.Devices {
-		if !strings.Contains(runtime, "iOS") {
-			continue
-		}
-		// Extract a readable runtime name (e.g. "iOS 17.2") from the identifier.
-		runtimeName := runtime
-		if i := strings.LastIndex(runtime, "SimRuntime."); i != -1 {
-			runtimeName = strings.ReplaceAll(runtime[i+len("SimRuntime."):], "-", " ")
-			// Collapse "iOS 17 2" into "iOS 17.2": put a dot before the last segment.
-			if parts := strings.SplitN(runtimeName, " ", 3); len(parts) == 3 {
-				runtimeName = parts[0] + " " + parts[1] + "." + parts[2]
-			}
-		}
-		for _, d := range devices {
-			if d.State == "Booted" {
-				bootedCount++
-				fmt.Printf("    [%d] %s (%s)\n", bootedCount, d.Name, runtimeName)
-			}
+	booted := 0
+	for _, s := range sims {
+		if s.Booted {
+			booted++
+			fmt.Printf("    [%d] %s (%s)\n", booted, s.Name, s.Runtime)
 		}
 	}
-	if bootedCount == 0 {
+	if booted == 0 {
 		fmt.Println("    (none)")
 	}
 
 	fmt.Println()
-	fmt.Println("  Available (run with 'drift run ios --simulator \"<name>\"'):")
-
-	availableCount := 0
-	for _, devices := range result.Devices {
-		for _, d := range devices {
-			if strings.Contains(d.Name, "iPhone") && availableCount < 5 {
-				availableCount++
-				fmt.Printf("    • %s\n", d.Name)
-			}
-		}
-	}
-	if availableCount == 0 {
-		fmt.Println("    (none)")
-	} else {
-		fmt.Println("    ...")
-	}
+	fmt.Println("  Available (run with 'drift run ios --simulator \"<name or UDID>\"'):")
+	fmt.Println(formatIOSSimulators(sims))
 
 	return nil
 }

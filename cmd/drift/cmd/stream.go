@@ -104,8 +104,8 @@ func streamDeviceLogs(ctx context.Context, processName string, device ios.Device
 }
 
 // streamIOSSimulatorLogs streams logs from a simulator app, filtered by
-// process name and subsystem (bundle ID). simulator should be a simulator
-// name or "booted" for the active simulator.
+// process name and subsystem (bundle ID). simulator is a simulator UDID or
+// "booted" for the active simulator.
 func streamIOSSimulatorLogs(ctx context.Context, simulator, appID string) {
 	args := []string{"simctl", "spawn", simulator,
 		"log", "stream",

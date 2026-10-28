@@ -30,7 +30,8 @@ Flags:
   --no-logs          Launch without streaming logs
   --no-fetch         Disable auto-download of missing Skia libraries
   --device [ID]      Target a specific device by name, serial, or UDID
-  --simulator NAME   Run on a specific iOS simulator (default: iPhone 15)
+  --simulator NAME   Run on an iOS simulator by name or UDID (default: the
+                     booted iPhone, else the iPhone on the newest runtime)
   --team-id TEAM_ID  Apple Developer Team ID for code signing (required for --device)
 
 For Android devices:
@@ -39,7 +40,9 @@ For Android devices:
   drift run android --device sdk_gphone64_x86_64 Target by model name
 
 For iOS simulators:
-  drift run ios --simulator "iPhone 15"
+  drift run ios                            Booted iPhone, else newest runtime
+  drift run ios --simulator "iPhone 17"    By name (booted, else newest runtime)
+  drift run ios --simulator <UDID>         A specific runtime's simulator
 
 For physical iOS devices:
   drift run ios --device --team-id ABC123XYZ
